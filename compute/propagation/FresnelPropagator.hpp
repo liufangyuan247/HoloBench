@@ -56,8 +56,8 @@ struct FresnelDiagnostics final {
 /// Representable-domain exception and safety semantics:
 /// - Exact zero inputs (e.g. z = 0 or fx = 0) evaluate deterministically to exact 0.0 phase.
 /// - If all factors are non-zero but a phase product (carrier phase, quadratic phase, adjacent phase step)
-///   underflows below the minimum representable double range (below denorm_min or ldexp rounds to 0.0),
-///   std::underflow_error is thrown instead of silently flushing the phase to 0.0.
+///   has exact magnitude strictly below double denorm_min (including products that ldexp would round up to denorm_min),
+///   std::underflow_error is thrown instead of silently flushing or rounding the phase.
 /// - If intermediate phase or paraxial products exceed finite double capacity, std::overflow_error is thrown.
 /// - If input parameters or field dimensions are invalid, std::invalid_argument is thrown.
 /// - Strong exception safety: in all failure modes, the input field is left bitwise unmodified.

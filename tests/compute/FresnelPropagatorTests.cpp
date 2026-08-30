@@ -579,6 +579,96 @@ TEST_CASE("Fresnel throws underflow_error when non-zero carrier phase underflows
     checkSamplesExactly(field, original);
 }
 
+TEST_CASE("Fresnel throws underflow_error when non-zero carrier phase magnitude is below denorm_min even if ldexp rounds up") {
+    // Distance = denorm_min, lambda = 10.0:
+    // carrierPhase = 2 * pi * denorm_min / 10 = (pi / 5) * denorm_min ~ 0.6283185307 * denorm_min < denorm_min.
+    // In round-to-nearest double arithmetic, std::ldexp(0.6283185307, -1074) rounds up to denorm_min.
+    // The propagator must strictly reject this sub-denorm_min underflow with std::underflow_error and leave field bitwise unmodified.
+    constexpr double distance = std::numeric_limits<double>::denorm_min();
+    constexpr double lambda = 10.0;
+    constexpr double pitch = 10e-6;
+    field::ComplexField2D field(8, 8, pitch, pitch, lambda, 1.0);
+    fillDeterministic(field);
+    const auto original = copySamples(field);
+
+    fft::CpuFftBackend backend;
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
+
+    // Positive distance
+    CHECK_THROWS_AS(
+        propagator.propagateInPlace(field, distance),
+        std::underflow_error);
+    checkSamplesExactly(field, original);
+
+    // Negative distance
+    CHECK_THROWS_AS(
+        propagator.propagateInPlace(field, -distance),
+        std::underflow_error);
+    checkSamplesExactly(field, original);
+}
+
+TEST_CASE("Fresnel throws underflow_error when non-zero quadratic phase magnitude is below denorm_min even if ldexp rounds up") {
+    // Distance = denorm_min, lambda = 1.0 -> carrierPhase = 2 * pi * denorm_min > denorm_min (carrier phase valid).
+    // Choose pitch such that at fx(bin 1) = sqrt(0.75 / pi), quadratic phase is pi * lambda * distance * fx^2 = 0.75 * denorm_min < denorm_min.
+    // std::ldexp(0.75, -1074) would round up to denorm_min without pre-ldexp magnitude checking.
+    // The propagator must strictly reject this with std::underflow_error and leave field bitwise unmodified.
+    constexpr double distance = std::numeric_limits<double>::denorm_min();
+    constexpr double lambda = 1.0;
+    const double fx1 = std::sqrt(0.75 / std::numbers::pi);
+    const double pitch = 1.0 / (8.0 * fx1);
+
+    field::ComplexField2D field(8, 8, pitch, pitch, lambda, 1.0);
+    fillDeterministic(field);
+    const auto original = copySamples(field);
+
+    fft::CpuFftBackend backend;
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
+
+    // Positive distance
+    CHECK_THROWS_AS(
+        propagator.propagateInPlace(field, distance),
+        std::underflow_error);
+    checkSamplesExactly(field, original);
+
+    // Negative distance
+    CHECK_THROWS_AS(
+        propagator.propagateInPlace(field, -distance),
+        std::underflow_error);
+    checkSamplesExactly(field, original);
+}
+
+TEST_CASE("Fresnel accepts exact denorm_min representable phase boundary without throwing") {
+    // Distance = denorm_min, lambda = 2 * pi:
+    // carrierPhase = 2 * pi * denorm_min / (2 * pi) = denorm_min (exact minimum representable positive subnormal).
+    // Large pitch ensures quadratic phase at non-zero frequency bins is well above denorm_min.
+    constexpr double distance = std::numeric_limits<double>::denorm_min();
+    constexpr double lambda = 2.0 * std::numbers::pi;
+    constexpr double pitch = 0.01;
+
+    field::ComplexField2D field(8, 8, pitch, pitch, lambda, 1.0);
+    fillDeterministic(field);
+    const auto original = copySamples(field);
+
+    fft::CpuFftBackend backend;
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
+
+    // Positive distance propagation must succeed
+    CHECK_NOTHROW([&]() {
+        const auto diag = propagator.propagateInPlace(field, distance);
+        CHECK(diag.propagatedBinCount == 64);
+        CHECK(std::isfinite(diag.maxAdjacentPhaseStepRadians));
+    }());
+
+    // Negative distance propagation with exact -denorm_min carrier phase must succeed
+    auto fieldNeg = field;
+    fillDeterministic(fieldNeg);
+    CHECK_NOTHROW([&]() {
+        const auto diag = propagator.propagateInPlace(fieldNeg, -distance);
+        CHECK(diag.propagatedBinCount == 64);
+        CHECK(std::isfinite(diag.maxAdjacentPhaseStepRadians));
+    }());
+}
+
 TEST_CASE("Fresnel balanced-extreme spectral bin evaluates exact phase despite intermediate underflow/overflow") {
     // Parameters where:
     // lambda = 2.0e-200, distance = 3.0e-200 -> lambda * distance = 6.0e-400 (underflows to 0.0 in double)

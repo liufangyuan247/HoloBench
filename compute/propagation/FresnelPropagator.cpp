@@ -46,23 +46,33 @@ void validateFiniteSamples(const field::ComplexField2D& value, const char* messa
 /// using frexp/ldexp mantissa-exponent decomposition.
 ///
 /// Exception semantics:
-/// - Returns exact 0.0 if and only if at least one numerator is exact 0.0.
+/// - Returns exact 0.0 if and only if at least one numerator is exact 0.0 (with finite non-zero denominators).
 /// - Throws std::overflow_error if any factor is non-finite, denominator is 0.0, or product exceeds double range.
-/// - Throws std::underflow_error if all factors are non-zero but the true result underflows the minimum
-///   representable double range (below denorm_min or ldexp rounds to zero).
+/// - Throws std::underflow_error if all factors are non-zero but the exact product magnitude is strictly
+///   less than std::numeric_limits<double>::denorm_min() (preventing silent underflow and round-up-to-denorm_min).
 [[nodiscard]] double stableProduct(
     std::initializer_list<double> numerators,
     std::initializer_list<double> denominators = {}) {
-    double mTotal = 1.0;
-    int expTotal = 0;
-
     for (double num : numerators) {
         if (!std::isfinite(num)) {
             throw std::overflow_error("Factor in stableProduct is non-finite");
         }
+    }
+    for (double den : denominators) {
+        if (!std::isfinite(den) || den == 0.0) {
+            throw std::overflow_error("Denominator in stableProduct is non-finite or zero");
+        }
+    }
+    for (double num : numerators) {
         if (num == 0.0) {
             return 0.0;
         }
+    }
+
+    double mTotal = 1.0;
+    int expTotal = 0;
+
+    for (double num : numerators) {
         int exp = 0;
         double m = std::frexp(num, &exp);
         mTotal *= m;
@@ -72,9 +82,6 @@ void validateFiniteSamples(const field::ComplexField2D& value, const char* messa
     }
 
     for (double den : denominators) {
-        if (!std::isfinite(den) || den == 0.0) {
-            throw std::overflow_error("Denominator in stableProduct is non-finite or zero");
-        }
         int exp = 0;
         double m = std::frexp(den, &exp);
         mTotal /= m;
@@ -91,7 +98,9 @@ void validateFiniteSamples(const field::ComplexField2D& value, const char* messa
         throw std::overflow_error("Fresnel phase product exceeds finite double range");
     }
 
-    if (expTotal < std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits - 2) {
+    constexpr int minDenormExp =
+        std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits + 1;
+    if (expTotal < minDenormExp || (expTotal == minDenormExp && std::abs(mTotal) < 0.5)) {
         throw std::underflow_error("Fresnel phase product underflows double range");
     }
 
