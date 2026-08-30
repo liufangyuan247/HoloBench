@@ -59,3 +59,11 @@ This file records active physical assumptions, sign conventions, and validity do
 - The fundamental Gaussian-beam source is the scalar paraxial solution: `waistRadiusMetres` is the $1/e$ complex-amplitude radius, $z_R=\pi n w_0^2/\lambda_0$, and the phase includes positive carrier/curvature terms and negative Gouy phase. It is not claimed accurate when the waist approaches the wavelength or in a vector/high-NA regime.
 - Binary circular, rectangular, and double-slit apertures classify sample centers; samples exactly on an aperture boundary are transmitted. M2 does not infer fractional pixel coverage or anti-aliased edge transmission.
 - The ideal thin-lens field element is the lossless paraxial phase screen $\exp[-ik((x-x_c)^2+(y-y_c)^2)/(2f)]$. It preserves pointwise intensity and does not model thickness, material dispersion, Fresnel loss, aberrations, or finite clear aperture unless a separate aperture mask is applied.
+- The Fraunhofer far-field propagator computes paraxial monochromatic diffraction between parallel transverse planes:
+  \[
+  U_{\text{out}}(x_2, y_2, z) = \frac{e^{ikz} e^{i\frac{k}{2z}(x_2^2 + y_2^2)}}{i \lambda z} \iint U_{\text{in}}(x_1, y_1) e^{-i \frac{2\pi}{\lambda z}(x_2 x_1 + y_2 y_1)} \, dx_1 dy_1
+  \]
+  where $\lambda = \lambda_0 / n$ and $k = 2\pi n / \lambda_0$.
+- The output grid pitch scales proportionally to distance: $\Delta x_{\text{out}} = \frac{\lambda z}{N_x \Delta x_{\text{in}}}$, $\Delta y_{\text{out}} = \frac{\lambda z}{N_y \Delta y_{\text{in}}}$.
+- The discrete Fraunhofer implementation enforces exact spatial centering at $(x=0, y=0)$ and strictly conserves integrated intensity $\sum |U_2|^2 \Delta x_{\text{out}} \Delta y_{\text{out}} = \sum |U_1|^2 \Delta x_{\text{in}} \Delta y_{\text{in}}$ via Parseval's theorem.
+- Fraunhofer propagation requires strictly positive finite propagation distance $z > 0$ and far-field conditions $z \gg D^2/\lambda$.

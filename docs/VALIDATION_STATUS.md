@@ -6,7 +6,7 @@
 | Project JSON round trip | Validated | Deterministic round-trip & version rejection tests (`ProjectDocumentTests.cpp`, `SceneProjectAdapterTests.cpp`) | Project persistence |
 | OpenGL context & 3D bench | Validated | 120-frame smoke run (exit 0, 0 GL errors, AMD Radeon Pro 5300M, GL 4.6/GLSL 4.60); camera & gizmo unit tests (`CameraTests.cpp`, `GizmoTests.cpp`) | Interactive UI shell |
 | Geometric optics (M1) | Validated | 92/92 deterministic tests across `dev` and `core-ci` presets (`ThinLensTests.cpp`, `SnellTests.cpp`, `GeometricElementsTests.cpp`, `NumericalApertureTests.cpp`, `BenchTracerTests.cpp`) | Interactive ray tracing |
-| Wave optics (M2) | Not implemented | None | Prohibited |
+| Wave optics (M2 ASM & Fraunhofer) | In progress | 135/135 deterministic tests across `core-ci` (`AngularSpectrumPropagatorTests.cpp`, `FraunhoferPropagatorTests.cpp`, `FraunhoferDiffractionTests.cpp`, `FieldElementTests.cpp`, `WaveSourceTests.cpp`) | CPU reference solvers |
 | Holography (M4–M5) | Not implemented | None | Prohibited |
 
 ## M1 Validation Breakdown
@@ -33,15 +33,16 @@
 - Off-axis paraxial validity warnings triggered when ray angle exceeds paraxial threshold ($> 0.1$ rad).
 - Rear-aperture clipping warnings triggered when marginal rays exceed downstream element clear apertures.
 
+## M2 Wave Optics Validation Breakdown
+
+### 1. Fraunhofer Propagator & Independent Diffraction Oracles (`FraunhoferPropagatorTests.cpp`, `FraunhoferDiffractionTests.cpp`)
+- **Single slit**: Analytic $\operatorname{sinc}^2\left(\frac{\pi w x}{\lambda z}\right) \operatorname{sinc}^2\left(\frac{\pi h y}{\lambda z}\right)$ profile, on-axis peak intensity $I_0 = \frac{w^2 h^2}{(\lambda z)^2}$ within 0.5%, first null position $x = \frac{\lambda z}{w}$ within $5\times 10^{-4}$ relative intensity, and sidelobe cross-section profile within 1.5% tolerance.
+- **Double slit**: Analytic $\operatorname{sinc}^2\left(\frac{\pi w x}{\lambda z}\right)\cos^2\left(\frac{\pi d x}{\lambda z}\right)$ Young's interference fringes and envelope, peak intensity $4\frac{w^2 h^2}{(\lambda z)^2}$ within 0.5%, fringe spacing $\Delta x = \frac{\lambda z}{d}$, and envelope null $x = \frac{\lambda z}{w}$.
+- **Circular aperture (Airy disc)**: Analytic $[2 J_1(v)/v]^2$ pattern, on-axis peak intensity $\left(\frac{\pi D^2}{4 \lambda z}\right)^2$, first dark ring radius matching $r_1 \approx 1.21966989 \frac{\lambda z}{D}$ within half an output pixel ($\le 0.51 \Delta x_{\text{out}}$), and secondary ring peak intensity $I/I_0 \approx 0.0175$.
+- **Energy conservation**: Discrete integrated intensity strictly conserved under Parseval relation $\sum |U_2|^2 \Delta x_{\text{out}} \Delta y_{\text{out}} = \sum |U_1|^2 \Delta x_{\text{in}} \Delta y_{\text{in}}$ within $10^{-12}$ relative tolerance across varying medium refractive indices.
+- **Centered spatial alignment & exception safety**: On-axis delta input generates centered spherical quadratic phase, uniform input focuses to output center bin, and throwing FFT backends leave input fields unmodified.
+
 ## Build and CI Execution Status
 
 - **Local Build & Tests**:
-  - `dev` preset: 92/92 deterministic tests passing.
-  - `core-ci` preset: 92/92 deterministic tests passing (headless, no OpenGL dependency).
-  - `app-ci` preset: Compiles cleanly with strict `warnings-as-errors`.
-- **OpenGL Smoke Test**:
-  - 120-frame run on AMD Radeon Pro 5300M with OpenGL 4.6 Core / GLSL 4.60: completed with exit code 0 and 0 reported OpenGL debug errors.
-- **GitHub Actions Remote CI**:
-  - Run [33332649845](https://github.com/liufangyuan247/HoloBench/actions/runs/33332649845): all four jobs pass.
-  - Windows and Ubuntu `core-ci`: warnings-as-errors build and 92/92 deterministic tests pass.
-  - Windows and Ubuntu `app-ci`: warnings-as-errors application compilation passes; the Windows job explicitly binds Glad generation to Python 3.14.7 with pinned Jinja2 3.1.6 and MarkupSafe 3.0.3 dependencies.
+  - `core-ci` preset: 135/135 deterministic tests passing with warnings-as-errors.

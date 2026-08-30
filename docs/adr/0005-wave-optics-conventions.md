@@ -39,6 +39,14 @@ k_z=\sqrt{k^2-k_x^2-k_y^2},\qquad H=e^{+ik_z z}.
 
 By default, bins with `kx^2 + ky^2 > k^2` are set to zero. Retaining decaying evanescent waves and negative-distance evanescent back-propagation require a future explicitly named policy; they must not occur implicitly.
 
+Fraunhofer far-field propagation evaluates the paraxial Fourier diffraction integral:
+
+\[
+U_{\text{out}}(x_2, y_2, z) = \frac{e^{ikz} e^{i\frac{k}{2z}(x_2^2 + y_2^2)}}{i \lambda z} \iint U_{\text{in}}(x_1, y_1) e^{-i \frac{2\pi}{\lambda z}(x_2 x_1 + y_2 y_1)} \, dx_1 dy_1.
+\]
+
+The discrete transform uses the unshifted native 2D forward DFT on input samples and rescales coordinates such that $\Delta x_{\text{out}} = \frac{\lambda z}{N_x \Delta x_{\text{in}}}$ and $\Delta y_{\text{out}} = \frac{\lambda z}{N_y \Delta y_{\text{in}}}$, returning a centered `ComplexField2D` with $(x=0, y=0)$ at the center sample $(N_x/2, N_y/2)$.
+
 The sampled field is a finite periodic domain. M2 does not claim open-boundary propagation: callers must choose adequate padding or an explicit apodization mask, and results susceptible to wrap-around must be reported as such. PML and automatic band-limited resampling are deferred.
 
 Scalar intensity is proportional to `abs(U)^2`. The discrete plane integral is `sum(abs(U)^2) dx dy`; absolute watts require a separately documented amplitude calibration and impedance convention.
