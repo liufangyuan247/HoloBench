@@ -37,6 +37,9 @@ jobs:
       - name: Set up MSVC environment
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
+      - name: Install pinned Glad generator dependencies
+        if: runner.os == 'Windows'
+        run: python3 -m pip install --disable-pip-version-check "Jinja2==3.1.6" "MarkupSafe==3.0.3"
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
