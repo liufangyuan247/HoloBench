@@ -65,4 +65,13 @@ This file records active physical assumptions, sign conventions, and validity do
   - Pointwise wrapped phase is normalized to the unique half-open interval $\phi(x,y) \in [-\pi, +\pi)$ rad, mapping the negative real axis uniformly to $-\pi$ rad regardless of imaginary zero sign ($\pm 0$). Phase is undefined for exact zero amplitude or sub-threshold samples ($I < I_{\min}$), returning `PhaseResult` with deterministic 0.0 rad phase and a pointwise `validityMask` where 0 denotes invalid/undefined phase.
   - Discrete transverse plane integrated relative intensity is $\sum I(x,y)\Delta x\Delta y$ (units: $\text{field-amplitude-squared}\cdot\text{m}^2$). Absolute radiometric power (Watts) requires separate optical impedance and source calibration.
   - Observables reject non-finite inputs (NaN, Inf) and invalid bounds ($\text{floor}_{\text{dB}} > 0$, $I_{\text{ref}} \le 0$) via `std::invalid_argument`, and arithmetic overflows throw `std::overflow_error` to prevent downstream UI/validation poisoning.
-
+- The Fresnel transfer-function propagator (`FresnelTransferFunctionPropagator`, alias `FresnelPropagator`) computes paraxial scalar propagation using $H(f_x, f_y) = \exp(+ikz)\exp(-i\pi\lambda z(f_x^2+f_y^2))$, where $\lambda = \lambda_0 / n$ is the medium wavelength in metres and $k = 2\pi n / \lambda_0$. Output spatial sampling matches the input grid ($\Delta x_2 = \Delta x_1, \Delta y_2 = \Delta y_1$). It is a paraxial approximation valid for small propagation angles ($\lambda^2 (f_x^2 + f_y^2) \ll 1$) and is not claimed exact for high-NA wide angles. All spatial frequency bins retain $|H| = 1$ without evanescent wave attenuation. It emits `FresnelDiagnostics` containing:
+  - `propagatedBinCount`: total number of propagated frequency bins ($N_x \times N_y$).
+  - `mediumWavelengthMetres`: medium wavelength $\lambda = \lambda_0 / n$ ($\text{m}$).
+  - `periodicBoundary`: always `true`, documenting the periodic boundary assumed by DFT.
+  - `automaticPadding`: always `false`, indicating no implicit zero-padding was applied.
+  - `nonPropagatingBinCount`: number of bins exceeding exact Helmholtz cutoff $f_x^2 + f_y^2 > 1/\lambda^2$.
+  - `nonPropagatingSpectralEnergyFraction`: fraction of forward-FFT spectral energy in non-propagating bins (0.0 for zero-energy fields).
+  - `maximumParaxialParameter`: $\max \lambda \sqrt{f_x^2 + f_y^2}$ across all grid frequency bins (dimensionless).
+  - `maxAdjacentPhaseStepRadians`: maximum unwrapped quadratic phase step $\Delta\psi$ between adjacent discrete frequency bins along $X$ or $Y$ ($\text{rad}$).
+  - `transferFunctionUndersampled`: boolean flag indicating whether $\Delta\psi > \pi\text{ rad}$ (transfer-function frequency-domain phase aliasing).

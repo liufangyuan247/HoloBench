@@ -51,6 +51,7 @@ holobench_set_warnings(holobench_core)
 add_library(holobench_compute STATIC
     compute/fft/CpuFftBackend.cpp
     compute/propagation/AngularSpectrumPropagator.cpp
+    compute/propagation/FresnelPropagator.cpp
 )
 add_library(HoloBench::Compute ALIAS holobench_compute)
 target_include_directories(holobench_compute PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -176,6 +177,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/core/FieldObservablesTests.cpp
         tests/compute/AngularSpectrumPropagatorTests.cpp
         tests/compute/CpuFftBackendTests.cpp
+        tests/compute/FresnelPropagatorTests.cpp
         tests/analytic/BenchTracerTests.cpp
         tests/analytic/GeometricElementsTests.cpp
         tests/analytic/FieldElementTests.cpp
