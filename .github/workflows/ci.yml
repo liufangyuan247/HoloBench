@@ -34,12 +34,17 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Set up Python for Glad generation
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14.7'
       - name: Set up MSVC environment
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
       - name: Install pinned Glad generator dependencies
         if: runner.os == 'Windows'
-        run: python3 -m pip install --disable-pip-version-check "Jinja2==3.1.6" "MarkupSafe==3.0.3"
+        run: python -m pip install --disable-pip-version-check "Jinja2==3.1.6" "MarkupSafe==3.0.3"
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
@@ -60,7 +65,14 @@ jobs:
             libxkbcommon-dev \
             libdrm-dev \
             libgbm-dev
-      - name: Configure
+      - name: Configure Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $pythonExecutable = (Get-Command python).Source
+          cmake --preset app-ci "-DPython_EXECUTABLE=$pythonExecutable"
+      - name: Configure Linux
+        if: runner.os == 'Linux'
         run: cmake --preset app-ci
       - name: Build
         run: cmake --build --preset app-ci --target holobench_app
