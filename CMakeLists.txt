@@ -115,7 +115,7 @@ if(HOLOBENCH_BUILD_APP)
         ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
         ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
     )
-    target_include_directories(holobench_imgui PUBLIC
+    target_include_directories(holobench_imgui SYSTEM PUBLIC
         ${imgui_SOURCE_DIR}
         ${imgui_SOURCE_DIR}/backends
     )
