@@ -21,7 +21,7 @@ namespace {
     const bool isPositiveBin = index <= (sampleCount - 1) / 2;
     const auto magnitude = isPositiveBin ? index : sampleCount - index;
     const double frequencyMagnitude = static_cast<double>(magnitude)
-        / static_cast<double>(sampleCount) / pitchMetres;
+        / (static_cast<double>(sampleCount) * pitchMetres);
     return isPositiveBin ? frequencyMagnitude : -frequencyMagnitude;
 }
 
@@ -36,6 +36,9 @@ void validateFiniteSamples(const field::ComplexField2D& value, const char* messa
 void validateInput(const field::ComplexField2D& value, double distanceMetres, const fft::IFftBackend& backend) {
     if (!std::isfinite(distanceMetres)) {
         throw std::invalid_argument("Fresnel propagation distance must be finite");
+    }
+    if (value.width() == 0 || value.height() == 0) {
+        throw std::invalid_argument("Fresnel field dimensions must be non-zero");
     }
     if (!backend.supportsDimensions(value.width(), value.height())) {
         throw std::invalid_argument("FFT backend does not support the field dimensions");
@@ -71,27 +74,57 @@ void validateInput(const field::ComplexField2D& value, double distanceMetres, co
     const double absoluteDistance = std::abs(distanceMetres);
     if (absoluteDistance != 0.0) {
         if (absoluteDistance > std::numeric_limits<double>::max() / wavenumber) {
-            throw std::overflow_error("Fresnel propagation phase exceeds the finite double range");
+            throw std::overflow_error("Fresnel propagation carrier phase exceeds the finite double range");
         }
         const double maxFx = 0.5 / pitchX;
         const double maxFy = 0.5 / pitchY;
-        const double maxFreqSq = maxFx * maxFx + maxFy * maxFy;
-        const double piLambda = std::numbers::pi * mediumWavelength;
-        if (piLambda > 0.0 && maxFreqSq > 0.0) {
-            if (absoluteDistance > std::numeric_limits<double>::max() / (piLambda * maxFreqSq)) {
-                throw std::overflow_error("Fresnel propagation phase exceeds the finite double range");
-            }
+        if (!std::isfinite(maxFx) || !std::isfinite(maxFy)) {
+            throw std::overflow_error("Fresnel spatial frequency exceeds the finite double range");
+        }
+        const double maxFxSq = maxFx * maxFx;
+        const double maxFySq = maxFy * maxFy;
+        if (!std::isfinite(maxFxSq) || !std::isfinite(maxFySq)) {
+            throw std::overflow_error("Fresnel spatial frequency squared exceeds the finite double range");
+        }
+        const double maxFreqSq = maxFxSq + maxFySq;
+        if (!std::isfinite(maxFreqSq)) {
+            throw std::overflow_error("Fresnel total spatial frequency squared exceeds the finite double range");
+        }
+        const double piLambdaZ = std::numbers::pi * mediumWavelength * absoluteDistance;
+        if (!std::isfinite(piLambdaZ)) {
+            throw std::overflow_error("Fresnel propagation quadratic factor exceeds the finite double range");
+        }
+        if (maxFreqSq > 0.0 && piLambdaZ > std::numeric_limits<double>::max() / maxFreqSq) {
+            throw std::overflow_error("Fresnel propagation quadratic phase exceeds the finite double range");
         }
     }
 }
 
+[[nodiscard]] double computeMaxAdjacentPhaseStep(
+    std::size_t sampleCount,
+    double pitchMetres,
+    double mediumWavelengthMetres,
+    double distanceMetres) noexcept {
+    if (sampleCount <= 1 || distanceMetres == 0.0) {
+        return 0.0;
+    }
+    const auto maxMagIndex = sampleCount / 2;
+    if (maxMagIndex == 0) {
+        return 0.0;
+    }
+    const double deltaF = 1.0 / (static_cast<double>(sampleCount) * pitchMetres);
+    const double deltaFreqSq = (2.0 * static_cast<double>(maxMagIndex) - 1.0) * deltaF * deltaF;
+    return std::numbers::pi * mediumWavelengthMetres * std::abs(distanceMetres) * deltaFreqSq;
+}
+
 } // namespace
 
-FresnelPropagator::FresnelPropagator(fft::IFftBackend& fftBackend) noexcept
+FresnelTransferFunctionPropagator::FresnelTransferFunctionPropagator(
+    fft::IFftBackend& fftBackend) noexcept
     : fftBackend_(fftBackend) {
 }
 
-FresnelDiagnostics FresnelPropagator::propagateInPlace(
+FresnelDiagnostics FresnelTransferFunctionPropagator::propagateInPlace(
     field::ComplexField2D& field,
     double distanceMetres) {
     validateInput(field, distanceMetres, fftBackend_);
@@ -103,9 +136,27 @@ FresnelDiagnostics FresnelPropagator::propagateInPlace(
     const double mediumWavelength =
         propagated.vacuumWavelengthMetres() / propagated.refractiveIndex();
     const double wavenumber = propagated.mediumWavenumberRadiansPerMetre();
+    const double carrierPhase = wavenumber * distanceMetres;
     const double piLambdaZ = std::numbers::pi * mediumWavelength * distanceMetres;
-    const double kz = wavenumber * distanceMetres;
+    const double helmholtzCutoffSq = 1.0 / (mediumWavelength * mediumWavelength);
+
     FresnelDiagnostics diagnostics;
+    diagnostics.propagatedBinCount = propagated.sampleCount();
+    diagnostics.mediumWavelengthMetres = mediumWavelength;
+    diagnostics.periodicBoundary = true;
+    diagnostics.automaticPadding = false;
+
+    const double stepX = computeMaxAdjacentPhaseStep(
+        propagated.width(), propagated.pitchXMetres(), mediumWavelength, distanceMetres);
+    const double stepY = computeMaxAdjacentPhaseStep(
+        propagated.height(), propagated.pitchYMetres(), mediumWavelength, distanceMetres);
+    diagnostics.maxAdjacentPhaseStepRadians = std::max(stepX, stepY);
+    diagnostics.transferFunctionUndersampled =
+        diagnostics.maxAdjacentPhaseStepRadians > std::numbers::pi;
+
+    double totalSpectralEnergy = 0.0;
+    double nonPropagatingSpectralEnergy = 0.0;
+    double maxParaxialSq = 0.0;
 
     for (std::size_t y = 0; y < propagated.height(); ++y) {
         const double fy = unshiftedFrequencyCyclesPerMetre(
@@ -115,12 +166,37 @@ FresnelDiagnostics FresnelPropagator::propagateInPlace(
             const double fx = unshiftedFrequencyCyclesPerMetre(
                 x, propagated.width(), propagated.pitchXMetres());
             const double fxSq = fx * fx;
-            const double phase = kz - piLambdaZ * (fxSq + fySq);
-            auto& spectralSample = propagated.at(x, y);
+            const double fTransverseSq = fxSq + fySq;
 
-            spectralSample *= std::polar(1.0, phase);
-            ++diagnostics.propagatedBinCount;
+            if (fTransverseSq > maxParaxialSq) {
+                maxParaxialSq = fTransverseSq;
+            }
+
+            const auto& spectralSample = propagated.at(x, y);
+            const double energy = std::norm(spectralSample);
+            totalSpectralEnergy += energy;
+
+            if (fTransverseSq > helmholtzCutoffSq) {
+                ++diagnostics.nonPropagatingBinCount;
+                nonPropagatingSpectralEnergy += energy;
+            }
+
+            const double rawPhase = carrierPhase - piLambdaZ * fTransverseSq;
+            if (!std::isfinite(rawPhase)) {
+                throw std::overflow_error("Fresnel phase is non-finite");
+            }
+            const double phase = std::remainder(rawPhase, 2.0 * std::numbers::pi);
+            propagated.at(x, y) *= std::polar(1.0, phase);
         }
+    }
+
+    diagnostics.maximumParaxialParameter = mediumWavelength * std::sqrt(maxParaxialSq);
+
+    if (totalSpectralEnergy > 0.0 && std::isfinite(totalSpectralEnergy)) {
+        diagnostics.nonPropagatingSpectralEnergyFraction =
+            nonPropagatingSpectralEnergy / totalSpectralEnergy;
+    } else {
+        diagnostics.nonPropagatingSpectralEnergyFraction = 0.0;
     }
 
     validateFiniteSamples(propagated, "Fresnel transfer function produced a non-finite spectrum");

@@ -101,10 +101,15 @@ TEST_CASE("Fresnel zero-distance propagation is an FFT round trip") {
     const auto original = copySamples(value);
 
     fft::CpuFftBackend backend;
-    propagation::FresnelPropagator propagator(backend);
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
     const auto diagnostics = propagator.propagateInPlace(value, 0.0);
 
     CHECK(diagnostics.propagatedBinCount == value.sampleCount());
+    CHECK(diagnostics.mediumWavelengthMetres == doctest::Approx(vacuumWavelengthMetres));
+    CHECK(diagnostics.periodicBoundary == true);
+    CHECK(diagnostics.automaticPadding == false);
+    CHECK(diagnostics.maxAdjacentPhaseStepRadians == doctest::Approx(0.0));
+    CHECK(diagnostics.transferFunctionUndersampled == false);
     checkSamplesNear(value, original, 2e-12);
 }
 
@@ -118,8 +123,9 @@ TEST_CASE("Fresnel DC plane wave gains the locked positive forward phase") {
 
     fft::CpuFftBackend backend;
     propagation::FresnelPropagator propagator(backend);
-    propagator.propagateInPlace(value, distance);
+    const auto diagnostics = propagator.propagateInPlace(value, distance);
 
+    CHECK(diagnostics.mediumWavelengthMetres == doctest::Approx(vacuumWavelengthMetres / refractiveIndex));
     std::vector<field::ComplexField2D::Sample> expected = original;
     for (auto& sample : expected) {
         sample *= expectedTransfer;
@@ -144,7 +150,7 @@ TEST_CASE("Fresnel single transverse spectral bin gains its analytic parabolic p
     const auto expectedTransfer = std::polar(1.0, phase);
 
     fft::CpuFftBackend backend;
-    propagation::FresnelPropagator propagator(backend);
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
     propagator.propagateInPlace(value, distance);
 
     std::vector<field::ComplexField2D::Sample> expected = original;
@@ -154,13 +160,115 @@ TEST_CASE("Fresnel single transverse spectral bin gains its analytic parabolic p
     checkSamplesNear(value, expected, 2e-10);
 }
 
+TEST_CASE("Fresnel negative-Nyquist bin in even dimension acquires its exact analytic phase") {
+    // Width=8, Height=4. Nyquist bin for width is index 4 (N/2), which maps to frequency -1 / (2 * pitch).
+    constexpr std::size_t xBin = 4;
+    constexpr std::size_t yBin = 0;
+    constexpr double pitch = 2e-6;
+    constexpr double distance = 0.5e-3;
+    auto value = makeField(8, 4, pitch);
+    fillSpectralBin(value, xBin, yBin);
+    const auto original = copySamples(value);
+
+    const double fxNyquist = -1.0 / (2.0 * pitch);
+    const double k = value.mediumWavenumberRadiansPerMetre();
+    const double mediumWavelength = value.vacuumWavelengthMetres() / value.refractiveIndex();
+    const double phase = k * distance - std::numbers::pi * mediumWavelength * distance * (fxNyquist * fxNyquist);
+    const auto expectedTransfer = std::polar(1.0, phase);
+
+    fft::CpuFftBackend backend;
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
+    propagator.propagateInPlace(value, distance);
+
+    std::vector<field::ComplexField2D::Sample> expected = original;
+    for (auto& sample : expected) {
+        sample *= expectedTransfer;
+    }
+    checkSamplesNear(value, expected, 2e-10);
+}
+
+TEST_CASE("Fresnel medium wavelength scaling matches analytic phase when n != 1") {
+    constexpr double refractiveIndex = 1.333; // Water index
+    constexpr std::size_t xBin = 2;
+    constexpr std::size_t yBin = 1;
+    constexpr double pitch = 3e-6;
+    constexpr double distance = 1.2e-3;
+    auto value = makeField(16, 8, pitch, refractiveIndex);
+    fillSpectralBin(value, xBin, yBin);
+    const auto original = copySamples(value);
+
+    const double fx = static_cast<double>(xBin) / (static_cast<double>(value.width()) * pitch);
+    const double fy = static_cast<double>(yBin) / (static_cast<double>(value.height()) * pitch);
+    const double mediumWavelength = vacuumWavelengthMetres / refractiveIndex;
+    const double k = 2.0 * std::numbers::pi * refractiveIndex / vacuumWavelengthMetres;
+    const double phase = k * distance - std::numbers::pi * mediumWavelength * distance * (fx * fx + fy * fy);
+    const auto expectedTransfer = std::polar(1.0, phase);
+
+    fft::CpuFftBackend backend;
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
+    const auto diagnostics = propagator.propagateInPlace(value, distance);
+
+    CHECK(diagnostics.mediumWavelengthMetres == doctest::Approx(mediumWavelength));
+    std::vector<field::ComplexField2D::Sample> expected = original;
+    for (auto& sample : expected) {
+        sample *= expectedTransfer;
+    }
+    checkSamplesNear(value, expected, 2e-10);
+}
+
+TEST_CASE("Fresnel respects rectangular pitch without swapping fx and fy") {
+    constexpr double pitchX = 4e-6;
+    constexpr double pitchY = 10e-6;
+    constexpr double distance = 0.8e-3;
+    constexpr std::size_t width = 16;
+    constexpr std::size_t height = 8;
+
+    // Field A: pure X excitation (xBin = 2, yBin = 0)
+    field::ComplexField2D fieldA(width, height, pitchX, pitchY, vacuumWavelengthMetres, 1.0);
+    fillSpectralBin(fieldA, 2, 0);
+    const auto originalA = copySamples(fieldA);
+
+    // Field B: pure Y excitation (xBin = 0, yBin = 2)
+    field::ComplexField2D fieldB(width, height, pitchX, pitchY, vacuumWavelengthMetres, 1.0);
+    fillSpectralBin(fieldB, 0, 2);
+    const auto originalB = copySamples(fieldB);
+
+    const double fx = 2.0 / (static_cast<double>(width) * pitchX);   // 2 / 64um = 31250 m^-1
+    const double fy = 2.0 / (static_cast<double>(height) * pitchY);  // 2 / 80um = 25000 m^-1
+    const double k = fieldA.mediumWavenumberRadiansPerMetre();
+    const double lambda = fieldA.vacuumWavelengthMetres();
+
+    const double phaseA = k * distance - std::numbers::pi * lambda * distance * (fx * fx);
+    const double phaseB = k * distance - std::numbers::pi * lambda * distance * (fy * fy);
+
+    fft::CpuFftBackend backend;
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
+    propagator.propagateInPlace(fieldA, distance);
+    propagator.propagateInPlace(fieldB, distance);
+
+    std::vector<field::ComplexField2D::Sample> expectedA = originalA;
+    for (auto& sample : expectedA) {
+        sample *= std::polar(1.0, phaseA);
+    }
+    std::vector<field::ComplexField2D::Sample> expectedB = originalB;
+    for (auto& sample : expectedB) {
+        sample *= std::polar(1.0, phaseB);
+    }
+
+    checkSamplesNear(fieldA, expectedA, 2e-10);
+    checkSamplesNear(fieldB, expectedB, 2e-10);
+
+    // Verify that phaseA != phaseB to confirm asymmetric rectangular geometry
+    CHECK(std::abs(phaseA - phaseB) > 0.01);
+}
+
 TEST_CASE("Fresnel conserves integrated intensity unconditionally across all bins") {
     auto value = makeField(32, 16, 10e-6);
     fillDeterministic(value);
     const double before = integratedIntensity(value);
 
     fft::CpuFftBackend backend;
-    propagation::FresnelPropagator propagator(backend);
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
     const auto diagnostics = propagator.propagateInPlace(value, 0.0123);
     const double after = integratedIntensity(value);
 
@@ -174,7 +282,7 @@ TEST_CASE("Fresnel positive and negative propagation are reversible") {
     const auto original = copySamples(value);
 
     fft::CpuFftBackend backend;
-    propagation::FresnelPropagator propagator(backend);
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
     propagator.propagateInPlace(value, 0.0042);
     propagator.propagateInPlace(value, -0.0042);
 
@@ -190,13 +298,13 @@ TEST_CASE("Fresnel agrees closely with ASM in the low-NA paraxial regime") {
     auto asmField = fresnelField;
 
     fft::CpuFftBackend backend;
-    propagation::FresnelPropagator fresnelPropagator(backend);
+    propagation::FresnelTransferFunctionPropagator fresnelPropagator(backend);
     propagation::AngularSpectrumPropagator asmPropagator(backend);
 
-    fresnelPropagator.propagateInPlace(fresnelField, distance);
+    const auto diagnostics = fresnelPropagator.propagateInPlace(fresnelField, distance);
     asmPropagator.propagateInPlace(asmField, distance);
 
-    // In paraxial regime, difference is O(kz * (lambda * f)^4 / 8), which is << 1e-5
+    CHECK(diagnostics.maximumParaxialParameter < 0.01);
     const auto asmSamples = copySamples(asmField);
     checkSamplesNear(fresnelField, asmSamples, 1e-5);
 }
@@ -210,7 +318,7 @@ TEST_CASE("Fresnel exhibits pronounced divergence from ASM in the high-NA / wide
     auto asmField = fresnelField;
 
     fft::CpuFftBackend backend;
-    propagation::FresnelPropagator fresnelPropagator(backend);
+    propagation::FresnelTransferFunctionPropagator fresnelPropagator(backend);
     propagation::AngularSpectrumPropagator asmPropagator(backend);
 
     fresnelPropagator.propagateInPlace(fresnelField, distance);
@@ -231,10 +339,10 @@ TEST_CASE("Fresnel retains non-evanescent unitary phase for sub-wavelength bins 
     auto asmField = fresnelField;
 
     fft::CpuFftBackend backend;
-    propagation::FresnelPropagator fresnelPropagator(backend);
+    propagation::FresnelTransferFunctionPropagator fresnelPropagator(backend);
     propagation::AngularSpectrumPropagator asmPropagator(backend);
 
-    fresnelPropagator.propagateInPlace(fresnelField, 1e-6);
+    const auto fresnelDiagnostics = fresnelPropagator.propagateInPlace(fresnelField, 1e-6);
     const auto asmDiagnostics = asmPropagator.propagateInPlace(asmField, 1e-6);
 
     // ASM filters evanescent bin to 0
@@ -243,10 +351,62 @@ TEST_CASE("Fresnel retains non-evanescent unitary phase for sub-wavelength bins 
         CHECK(std::abs(sample) < 1e-12);
     }
 
-    // Fresnel preserves full unit modulus for all bins
+    // Fresnel preserves full unit modulus for all bins and flags nonPropagating diagnostics
+    CHECK(fresnelDiagnostics.nonPropagatingBinCount > 0);
+    CHECK(fresnelDiagnostics.nonPropagatingSpectralEnergyFraction > 0.999);
     for (const auto& sample : fresnelField.samples()) {
         CHECK(std::abs(sample) == doctest::Approx(1.0).epsilon(1e-12));
     }
+}
+
+TEST_CASE("Fresnel diagnostics report zero non-propagating energy for low-frequency fields") {
+    constexpr double pitch = 50e-6; // Max frequency = 0.5 / 50um = 10000 m^-1 << 1/532nm
+    auto value = makeField(16, 16, pitch);
+    fillDeterministic(value);
+
+    fft::CpuFftBackend backend;
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
+    const auto diagnostics = propagator.propagateInPlace(value, 1e-3);
+
+    CHECK(diagnostics.nonPropagatingBinCount == 0);
+    CHECK(diagnostics.nonPropagatingSpectralEnergyFraction == 0.0);
+    CHECK(diagnostics.maximumParaxialParameter < 0.01);
+}
+
+TEST_CASE("Fresnel diagnostics handle all-zero fields deterministically") {
+    auto value = makeField(8, 8, 10e-6);
+    value.fill({0.0, 0.0});
+
+    fft::CpuFftBackend backend;
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
+    const auto diagnostics = propagator.propagateInPlace(value, 1e-3);
+
+    CHECK(diagnostics.propagatedBinCount == 64);
+    CHECK(diagnostics.nonPropagatingSpectralEnergyFraction == 0.0);
+    for (const auto& sample : value.samples()) {
+        CHECK(sample == field::ComplexField2D::Sample{0.0, 0.0});
+    }
+}
+
+TEST_CASE("Fresnel diagnostics detect transfer-function undersampling threshold accurately") {
+    fft::CpuFftBackend backend;
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
+
+    // Case A: Well-sampled (large pitch, small distance)
+    // N = 32, pitch = 50um, z = 0.001 m -> max adjacent phase step << pi
+    auto wellSampledField = makeField(32, 32, 50e-6);
+    fillDeterministic(wellSampledField);
+    const auto diagWellSampled = propagator.propagateInPlace(wellSampledField, 1e-3);
+    CHECK(diagWellSampled.maxAdjacentPhaseStepRadians < std::numbers::pi);
+    CHECK(diagWellSampled.transferFunctionUndersampled == false);
+
+    // Case B: Undersampled (small pitch, large distance)
+    // N = 16, pitch = 1um, z = 0.05 m -> max adjacent phase step >> pi
+    auto undersampledField = makeField(16, 16, 1e-6);
+    fillDeterministic(undersampledField);
+    const auto diagUndersampled = propagator.propagateInPlace(undersampledField, 0.05);
+    CHECK(diagUndersampled.maxAdjacentPhaseStepRadians > std::numbers::pi);
+    CHECK(diagUndersampled.transferFunctionUndersampled == true);
 }
 
 TEST_CASE("Fresnel rejects invalid input and backend failures without changing the field") {
@@ -255,9 +415,14 @@ TEST_CASE("Fresnel rejects invalid input and backend failures without changing t
     const auto original = copySamples(value);
 
     fft::CpuFftBackend cpuBackend;
-    propagation::FresnelPropagator cpuPropagator(cpuBackend);
+    propagation::FresnelTransferFunctionPropagator cpuPropagator(cpuBackend);
     CHECK_THROWS_AS(
         cpuPropagator.propagateInPlace(value, std::numeric_limits<double>::quiet_NaN()),
+        std::invalid_argument);
+    checkSamplesExactly(value, original);
+
+    CHECK_THROWS_AS(
+        cpuPropagator.propagateInPlace(value, std::numeric_limits<double>::infinity()),
         std::invalid_argument);
     checkSamplesExactly(value, original);
 
@@ -270,17 +435,17 @@ TEST_CASE("Fresnel rejects invalid input and backend failures without changing t
     fillDeterministic(value);
     const auto beforeBackendFailure = copySamples(value);
     ThrowingBackend throwingBackend;
-    propagation::FresnelPropagator throwingPropagator(throwingBackend);
+    propagation::FresnelTransferFunctionPropagator throwingPropagator(throwingBackend);
     CHECK_THROWS_AS(throwingPropagator.propagateInPlace(value, 1e-3), std::runtime_error);
     checkSamplesExactly(value, beforeBackendFailure);
 }
 
-TEST_CASE("Fresnel rejects unsupported dimensions and phase overflow before mutation") {
+TEST_CASE("Fresnel rejects unsupported dimensions, invalid pitches, and phase overflow before mutation") {
     auto unsupported = makeField(3, 4);
     fillDeterministic(unsupported);
     const auto unsupportedBefore = copySamples(unsupported);
     fft::CpuFftBackend backend;
-    propagation::FresnelPropagator propagator(backend);
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
     CHECK_THROWS_AS(propagator.propagateInPlace(unsupported, 1e-3), std::invalid_argument);
     checkSamplesExactly(unsupported, unsupportedBefore);
 
