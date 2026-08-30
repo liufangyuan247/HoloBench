@@ -64,7 +64,7 @@ private:
     fft::IFftBackend& fftBackend_;
 };
 
-/// Backward-compatibility alias for FresnelTransferFunctionPropagator.
+/// Convenience short alias for FresnelTransferFunctionPropagator.
 using FresnelPropagator = FresnelTransferFunctionPropagator;
 
 } // namespace holobench::compute::propagation

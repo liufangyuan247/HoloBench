@@ -72,6 +72,19 @@ void checkSamplesNear(
     }
 }
 
+void checkRelativeError(
+    double actual,
+    double expected,
+    double relativeTolerance,
+    double zeroThreshold = 1e-15) {
+    if (std::abs(expected) <= zeroThreshold) {
+        CHECK(std::abs(actual - expected) <= zeroThreshold);
+    } else {
+        const double relErr = std::abs(actual - expected) / std::abs(expected);
+        CHECK(relErr <= relativeTolerance);
+    }
+}
+
 void checkSamplesExactly(
     const field::ComplexField2D& actual,
     const std::vector<field::ComplexField2D::Sample>& expected) {
@@ -105,10 +118,10 @@ TEST_CASE("Fresnel zero-distance propagation is an FFT round trip") {
     const auto diagnostics = propagator.propagateInPlace(value, 0.0);
 
     CHECK(diagnostics.propagatedBinCount == value.sampleCount());
-    CHECK(diagnostics.mediumWavelengthMetres == doctest::Approx(vacuumWavelengthMetres));
+    checkRelativeError(diagnostics.mediumWavelengthMetres, vacuumWavelengthMetres, 1e-12);
     CHECK(diagnostics.periodicBoundary == true);
     CHECK(diagnostics.automaticPadding == false);
-    CHECK(diagnostics.maxAdjacentPhaseStepRadians == doctest::Approx(0.0));
+    checkRelativeError(diagnostics.maxAdjacentPhaseStepRadians, 0.0, 1e-12);
     CHECK(diagnostics.transferFunctionUndersampled == false);
     checkSamplesNear(value, original, 2e-12);
 }
@@ -125,7 +138,7 @@ TEST_CASE("Fresnel DC plane wave gains the locked positive forward phase") {
     propagation::FresnelPropagator propagator(backend);
     const auto diagnostics = propagator.propagateInPlace(value, distance);
 
-    CHECK(diagnostics.mediumWavelengthMetres == doctest::Approx(vacuumWavelengthMetres / refractiveIndex));
+    checkRelativeError(diagnostics.mediumWavelengthMetres, vacuumWavelengthMetres / refractiveIndex, 1e-12);
     std::vector<field::ComplexField2D::Sample> expected = original;
     for (auto& sample : expected) {
         sample *= expectedTransfer;
@@ -208,7 +221,7 @@ TEST_CASE("Fresnel medium wavelength scaling matches analytic phase when n != 1"
     propagation::FresnelTransferFunctionPropagator propagator(backend);
     const auto diagnostics = propagator.propagateInPlace(value, distance);
 
-    CHECK(diagnostics.mediumWavelengthMetres == doctest::Approx(mediumWavelength));
+    checkRelativeError(diagnostics.mediumWavelengthMetres, mediumWavelength, 1e-12);
     std::vector<field::ComplexField2D::Sample> expected = original;
     for (auto& sample : expected) {
         sample *= expectedTransfer;
@@ -273,7 +286,7 @@ TEST_CASE("Fresnel conserves integrated intensity unconditionally across all bin
     const double after = integratedIntensity(value);
 
     CHECK(diagnostics.propagatedBinCount == value.sampleCount());
-    CHECK(after == doctest::Approx(before).epsilon(2e-12));
+    checkRelativeError(after, before, 2e-12);
 }
 
 TEST_CASE("Fresnel positive and negative propagation are reversible") {
@@ -355,7 +368,7 @@ TEST_CASE("Fresnel retains non-evanescent unitary phase for sub-wavelength bins 
     CHECK(fresnelDiagnostics.nonPropagatingBinCount > 0);
     CHECK(fresnelDiagnostics.nonPropagatingSpectralEnergyFraction > 0.999);
     for (const auto& sample : fresnelField.samples()) {
-        CHECK(std::abs(sample) == doctest::Approx(1.0).epsilon(1e-12));
+        checkRelativeError(std::abs(sample), 1.0, 1e-12);
     }
 }
 
@@ -483,7 +496,7 @@ TEST_CASE("Fresnel calculates correct non-propagating energy fraction for finite
 
     CHECK(diagnostics.nonPropagatingBinCount > 0);
     // Equal energy in propagating and non-propagating modes -> fraction must be exactly 0.5
-    CHECK(diagnostics.nonPropagatingSpectralEnergyFraction == doctest::Approx(0.5).epsilon(1e-12));
+    checkRelativeError(diagnostics.nonPropagatingSpectralEnergyFraction, 0.5, 1e-12);
     CHECK(diagnostics.nonPropagatingSpectralEnergyFraction != 0.0);
 
     // Verify all output samples remain finite and non-zero
@@ -511,13 +524,14 @@ TEST_CASE("Fresnel stably evaluates Helmholtz cutoff when lambda squared underfl
     const auto diagnostics = propagator.propagateInPlace(field, 0.0);
 
     CHECK(diagnostics.nonPropagatingBinCount > 0);
-    CHECK(diagnostics.nonPropagatingSpectralEnergyFraction == doctest::Approx(1.0).epsilon(1e-12));
+    checkRelativeError(diagnostics.nonPropagatingSpectralEnergyFraction, 1.0, 1e-12);
 }
 
 TEST_CASE("Fresnel enforces strong exception safety when intermediate diagnostics overflow") {
-    // Create a field where spatial frequency or paraxial parameter is near range limit
-    constexpr double tinyPitch = 1e-300;
-    field::ComplexField2D field(8, 8, tinyPitch, tinyPitch, vacuumWavelengthMetres, 1.0);
+    // Create a field where spatial frequency or paraxial parameter overflows double range
+    constexpr double hugeLambda = 1e200;
+    constexpr double tinyPitch = 1e-150;
+    field::ComplexField2D field(8, 8, tinyPitch, tinyPitch, hugeLambda, 1.0);
     fillDeterministic(field);
     const auto original = copySamples(field);
 
@@ -527,4 +541,70 @@ TEST_CASE("Fresnel enforces strong exception safety when intermediate diagnostic
     // Maximum paraxial parameter (lambda / pitch) overflows double range -> must throw overflow_error
     CHECK_THROWS_AS(propagator.propagateInPlace(field, 0.0), std::overflow_error);
     checkSamplesExactly(field, original);
+}
+
+TEST_CASE("Fresnel balanced-extreme spectral bin evaluates exact phase despite intermediate underflow/overflow") {
+    // Parameters where:
+    // lambda = 2.0e-200, distance = 3.0e-200 -> lambda * distance = 6.0e-400 (underflows to 0.0 in double)
+    // pitch = 1.0e-200 -> fx = 2 / (8 * 1e-200) = 2.5e199 -> fx^2 = 6.25e398 (overflows to Inf in double)
+    // But the true product pi * lambda * distance * fx^2 = pi * 6e-400 * 6.25e398 = 0.375*pi (balanced and finite).
+    constexpr double lambda = 2.0e-200;
+    constexpr double distance = 3.0e-200;
+    constexpr double pitch = 1.0e-200;
+    constexpr std::size_t width = 8;
+    constexpr std::size_t height = 4;
+    constexpr std::size_t xBin = 2;
+    constexpr std::size_t yBin = 1;
+
+    // Direct confirmation that naive double multiplication underflows / overflows
+    REQUIRE((lambda * distance) == 0.0);
+    const double fxNaive = static_cast<double>(xBin) / (static_cast<double>(width) * pitch);
+    REQUIRE(!std::isfinite(fxNaive * fxNaive));
+
+    field::ComplexField2D value(width, height, pitch, pitch, lambda, 1.0);
+    fillSpectralBin(value, xBin, yBin);
+    const auto original = copySamples(value);
+
+    // Analytic phase calculation:
+    // kz = 2*pi*(z/lambda) = 3*pi
+    // psi_x = pi * lambda * z * fx^2 = pi * (2e-200) * (3e-200) * (2.5e199)^2 = 0.375*pi
+    // psi_y = pi * lambda * z * fy^2 = pi * (2e-200) * (3e-200) * (2.5e199)^2 = 0.375*pi
+    // psi_quad = psi_x + psi_y = 0.75*pi
+    // rawPhase = kz - psi_quad = 3*pi - 0.75*pi = 2.25*pi
+    // wrapped phase = remainder(2.25*pi, 2*pi) = 0.25*pi = pi/4
+    const double expectedPhase = std::numbers::pi / 4.0;
+    const auto expectedTransfer = std::polar(1.0, expectedPhase);
+
+    fft::CpuFftBackend backend;
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
+
+    const auto diagnostics = propagator.propagateInPlace(value, distance);
+
+    // Verify diagnostics:
+    // Max adjacent phase step in Y: N_y=4, maxMagIndex=2, indexFactor = 2*2-1 = 3.
+    // deltaFy = 1 / (4 * 1e-200) = 2.5e199.
+    // stepY = pi * lambda * z * 3 * deltaFy^2 = pi * 6e-400 * 3 * 6.25e398 = 1.125*pi
+    const double expectedMaxPhaseStep = 1.125 * std::numbers::pi;
+    checkRelativeError(diagnostics.maxAdjacentPhaseStepRadians, expectedMaxPhaseStep, 1e-12);
+    CHECK(diagnostics.transferFunctionUndersampled == true);
+    CHECK(diagnostics.maxAdjacentPhaseStepRadians > 0.0);
+
+    // Verify propagated field matches analytic phase
+    std::vector<field::ComplexField2D::Sample> expected = original;
+    for (auto& sample : expected) {
+        sample *= expectedTransfer;
+    }
+    checkSamplesNear(value, expected, 2e-12);
+
+    // Verify reversibility (+z then -z returns to original)
+    propagator.propagateInPlace(value, -distance);
+    checkSamplesNear(value, original, 5e-12);
+
+    // Verify strong exception safety with throwing backend
+    auto testField = value;
+    const auto beforeThrow = copySamples(testField);
+    ThrowingBackend throwingBackend;
+    propagation::FresnelTransferFunctionPropagator throwingPropagator(throwingBackend);
+    CHECK_THROWS_AS(throwingPropagator.propagateInPlace(testField, distance), std::runtime_error);
+    checkSamplesExactly(testField, beforeThrow);
 }
