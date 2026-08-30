@@ -1,0 +1,28 @@
+{
+  "complex_phasor_convention": "exp(-i*omega*t), forward propagation exp(+i*k*z)",
+  "format_version": 1,
+  "generator": "waveprop.rs.angular_spectrum",
+  "height": 32,
+  "input_pitch_x_metres": 8e-06,
+  "input_pitch_y_metres": 1.2e-05,
+  "name": "asm_rectangular_tilted_gaussian",
+  "options": {
+    "bandlimit": false,
+    "pad": false
+  },
+  "output_pitch_x_metres": 7.999999999999978e-06,
+  "output_pitch_y_metres": 1.1999999999999994e-05,
+  "package_versions": {
+    "numpy": "2.4.4",
+    "pyffs": "2.2.3",
+    "scipy": "1.18.1",
+    "torch": "2.13.0",
+    "torchvision": "0.28.0",
+    "waveprop": "0.0.12"
+  },
+  "propagation_distance_metres": 0.0125,
+  "refractive_index": 1.0,
+  "row_major_order": "y then x",
+  "vacuum_wavelength_metres": 5.32e-07,
+  "width": 64
+}

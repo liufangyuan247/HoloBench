@@ -1,0 +1,28 @@
+{
+  "complex_phasor_convention": "exp(-i*omega*t), forward propagation exp(+i*k*z)",
+  "format_version": 1,
+  "generator": "waveprop.fresnel.fresnel_conv",
+  "height": 64,
+  "input_pitch_x_metres": 1e-05,
+  "input_pitch_y_metres": 1e-05,
+  "name": "fresnel_tf_square_gaussian",
+  "options": {
+    "carrier_note": "distance/wavelength = 20000, so exp(+i*k*z) = 1",
+    "pad": false
+  },
+  "output_pitch_x_metres": 1.0000000000000026e-05,
+  "output_pitch_y_metres": 1.0000000000000026e-05,
+  "package_versions": {
+    "numpy": "2.4.4",
+    "pyffs": "2.2.3",
+    "scipy": "1.18.1",
+    "torch": "2.13.0",
+    "torchvision": "0.28.0",
+    "waveprop": "0.0.12"
+  },
+  "propagation_distance_metres": 0.01,
+  "refractive_index": 1.0,
+  "row_major_order": "y then x",
+  "vacuum_wavelength_metres": 5e-07,
+  "width": 64
+}

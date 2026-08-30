@@ -1,0 +1,29 @@
+{
+  "complex_phasor_convention": "exp(-i*omega*t), forward propagation exp(+i*k*z)",
+  "format_version": 1,
+  "generator": "waveprop.fraunhofer.fraunhofer",
+  "height": 32,
+  "input_pitch_x_metres": 8e-06,
+  "input_pitch_y_metres": 1e-05,
+  "name": "fraunhofer_rectangular_double_slit",
+  "options": {
+    "centre_separation_metres": 9.6e-05,
+    "slit_height_metres": 0.00016,
+    "slit_width_metres": 3.2e-05
+  },
+  "output_pitch_x_metres": 0.0012363281249999983,
+  "output_pitch_y_metres": 0.0019781250000000007,
+  "package_versions": {
+    "numpy": "2.4.4",
+    "pyffs": "2.2.3",
+    "scipy": "1.18.1",
+    "torch": "2.13.0",
+    "torchvision": "0.28.0",
+    "waveprop": "0.0.12"
+  },
+  "propagation_distance_metres": 1.0,
+  "refractive_index": 1.0,
+  "row_major_order": "y then x",
+  "vacuum_wavelength_metres": 6.33e-07,
+  "width": 64
+}
