@@ -8,4 +8,7 @@ CMakeLists.txt text eol=lf
 *.cpp text eol=lf
 *.hpp text eol=lf
 *.json text eol=lf
+*.py text eol=lf
+*.txt text eol=lf
+*.csv text eol=lf
 *.yml text eol=lf
