@@ -61,8 +61,9 @@ This file records active physical assumptions, sign conventions, and validity do
 - The ideal thin-lens field element is the lossless paraxial phase screen $\exp[-ik((x-x_c)^2+(y-y_c)^2)/(2f)]$. It preserves pointwise intensity and does not model thickness, material dispersion, Fresnel loss, aberrations, or finite clear aperture unless a separate aperture mask is applied.
 - Sampled field observables in `core/field/`:
   - Pointwise linear intensity is $I(x,y) = |U(x,y)|^2 = \operatorname{Re}(U)^2 + \operatorname{Im}(U)^2$.
-  - Pointwise natural log intensity is $I_{\ln}(x,y) = \ln(\max(I(x,y), \text{floor}))$, requiring $\text{floor} > 0$.
-  - Pointwise decibel log intensity is $I_{\text{dB}}(x,y) = 10\log_{10}(\max(I(x,y), \text{floor}) / I_0)$, requiring $\text{floor} > 0$ and $I_0 > 0$.
-  - Pointwise wrapped phase is $\phi(x,y) = \operatorname{atan2}(\operatorname{Im}(U), \operatorname{Re}(U)) \in [-\pi, +\pi]$ rad with standard IEEE 754 branch cut along the negative real axis; exact zero field produces $0.0$ rad.
-  - Discrete plane power integral is $P = \sum I(x,y)\Delta x\Delta y$ (in $\text{intensity}\cdot\text{m}^2$).
-  - Observables reject non-finite inputs (NaN, Inf) and non-positive floors/references via `std::invalid_argument`, and arithmetic overflows throw `std::overflow_error` to prevent downstream UI/validation poisoning.
+  - Pointwise natural log intensity is $I_{\ln}(x,y) = \ln(\max(I(x,y), I_{\min}))$, requiring $I_{\min} > 0$.
+  - Pointwise decibel log intensity is $I_{\text{dB}}(x,y) = \max(10(\log_{10} I(x,y) - \log_{10} I_{\text{ref}}), \text{floor}_{\text{dB}})$, requiring $I_{\text{ref}} > 0$ and $\text{floor}_{\text{dB}} \le 0$; exact zero intensity directly evaluates to $\text{floor}_{\text{dB}}$, and stable log differences prevent division underflow/overflow.
+  - Pointwise wrapped phase is normalized to the unique half-open interval $\phi(x,y) \in [-\pi, +\pi)$ rad, mapping the negative real axis uniformly to $-\pi$ rad regardless of imaginary zero sign ($\pm 0$). Phase is undefined for exact zero amplitude or sub-threshold samples ($I < I_{\min}$), returning `PhaseResult` with deterministic 0.0 rad phase and a pointwise `validityMask` where 0 denotes invalid/undefined phase.
+  - Discrete plane integrated intensity is $P = \sum I(x,y)\Delta x\Delta y$ (units: $\text{field-amplitude-squared}\cdot\text{m}^2$). Absolute radiometric power (Watts) requires separate optical impedance and source calibration.
+  - Observables reject non-finite inputs (NaN, Inf) and invalid bounds ($I_{\min} \le 0$, $\text{floor}_{\text{dB}} > 0$, $I_{\text{ref}} \le 0$) via `std::invalid_argument`, and arithmetic overflows throw `std::overflow_error` to prevent downstream UI/validation poisoning.
+

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <numbers>
 #include <stdexcept>
 #include <string>
 
@@ -12,6 +13,18 @@ namespace {
 void requirePositiveFinite(double value, const char* name) {
     if (!std::isfinite(value) || value <= 0.0) {
         throw std::invalid_argument(std::string(name) + " must be positive and finite");
+    }
+}
+
+void requireNonNegativeFinite(double value, const char* name) {
+    if (!std::isfinite(value) || value < 0.0) {
+        throw std::invalid_argument(std::string(name) + " must be non-negative and finite");
+    }
+}
+
+void requireNonPositiveFinite(double value, const char* name) {
+    if (!std::isfinite(value) || value > 0.0) {
+        throw std::invalid_argument(std::string(name) + " must be non-positive (<= 0) and finite");
     }
 }
 
@@ -46,8 +59,8 @@ ScalarField2D computeIntensity(const ComplexField2D& field) {
     return result;
 }
 
-ScalarField2D computeNaturalLogIntensity(const ComplexField2D& field, double floorValue) {
-    requirePositiveFinite(floorValue, "floor value");
+ScalarField2D computeNaturalLogIntensity(const ComplexField2D& field, double minimumIntensity) {
+    requirePositiveFinite(minimumIntensity, "minimum intensity");
 
     auto result = ScalarField2D::createMatching(field);
     const auto sourceSamples = field.samples();
@@ -56,7 +69,7 @@ ScalarField2D computeNaturalLogIntensity(const ComplexField2D& field, double flo
 
     for (std::size_t i = 0; i < count; ++i) {
         const double intensity = calculateIntensityChecked(sourceSamples[i], i);
-        const double clamped = std::max(intensity, floorValue);
+        const double clamped = std::max(intensity, minimumIntensity);
         const double logValue = std::log(clamped);
         if (!std::isfinite(logValue)) {
             throw std::overflow_error(
@@ -69,49 +82,80 @@ ScalarField2D computeNaturalLogIntensity(const ComplexField2D& field, double flo
 
 ScalarField2D computeDecibelIntensity(
     const ComplexField2D& field,
-    double floorValue,
+    double floorDecibels,
     double referenceIntensity) {
-    requirePositiveFinite(floorValue, "floor value");
+    requireNonPositiveFinite(floorDecibels, "floor decibels");
     requirePositiveFinite(referenceIntensity, "reference intensity");
 
     auto result = ScalarField2D::createMatching(field);
     const auto sourceSamples = field.samples();
     auto destSamples = result.samples();
     const std::size_t count = sourceSamples.size();
+    const double log10Ref = std::log10(referenceIntensity);
 
     for (std::size_t i = 0; i < count; ++i) {
         const double intensity = calculateIntensityChecked(sourceSamples[i], i);
-        const double clamped = std::max(intensity, floorValue);
-        const double ratio = clamped / referenceIntensity;
-        const double dbValue = 10.0 * std::log10(ratio);
-        if (!std::isfinite(dbValue)) {
-            throw std::overflow_error(
-                "decibel intensity calculation overflowed double precision at index " + std::to_string(i));
+        if (intensity == 0.0) {
+            destSamples[i] = floorDecibels;
+        } else {
+            const double logDiff = std::log10(intensity) - log10Ref;
+            const double dbValue = 10.0 * logDiff;
+            if (!std::isfinite(dbValue)) {
+                throw std::overflow_error(
+                    "decibel intensity calculation overflowed double precision at index " + std::to_string(i));
+            }
+            destSamples[i] = std::max(dbValue, floorDecibels);
         }
-        destSamples[i] = dbValue;
     }
     return result;
 }
 
-ScalarField2D computeWrappedPhase(const ComplexField2D& field) {
-    auto result = ScalarField2D::createMatching(field);
+PhaseResult computeWrappedPhase(const ComplexField2D& field, double minimumIntensity) {
+    requireNonNegativeFinite(minimumIntensity, "minimum intensity");
+
+    auto phaseField = ScalarField2D::createMatching(field);
     const auto sourceSamples = field.samples();
-    auto destSamples = result.samples();
+    auto phaseSamples = phaseField.samples();
     const std::size_t count = sourceSamples.size();
+
+    std::vector<uint8_t> validity(count, 0);
+
+    constexpr double pi = std::numbers::pi;
 
     for (std::size_t i = 0; i < count; ++i) {
         const auto& sample = sourceSamples[i];
-        requireFiniteSample(sample, i);
-        if (sample.real() == 0.0 && sample.imag() == 0.0) {
-            destSamples[i] = 0.0;
-        } else {
-            destSamples[i] = std::atan2(sample.imag(), sample.real());
+        const double intensity = calculateIntensityChecked(sample, i);
+
+        // Exact zero or below threshold has undefined phase
+        if (intensity == 0.0 || intensity < minimumIntensity) {
+            phaseSamples[i] = 0.0;
+            validity[i] = 0;
+            continue;
         }
+
+        // Calculate normalized phase in [-pi, +pi)
+        double angle = 0.0;
+        if (sample.real() < 0.0 && sample.imag() == 0.0) {
+            // Unify negative real axis (+0.0 or -0.0 imag) to -pi
+            angle = -pi;
+        } else {
+            angle = std::atan2(sample.imag(), sample.real());
+            if (angle >= pi || angle < -pi) {
+                angle = -pi;
+            }
+        }
+
+        phaseSamples[i] = angle;
+        validity[i] = 1;
     }
-    return result;
+
+    return PhaseResult{
+        .wrappedPhaseRadians = std::move(phaseField),
+        .validityMask = std::move(validity),
+    };
 }
 
-double computeIntegratedPower(const ComplexField2D& field) {
+double computeIntegratedIntensity(const ComplexField2D& field) {
     const auto sourceSamples = field.samples();
     const std::size_t count = sourceSamples.size();
 
@@ -120,19 +164,19 @@ double computeIntegratedPower(const ComplexField2D& field) {
         const double intensity = calculateIntensityChecked(sourceSamples[i], i);
         sum += intensity;
         if (!std::isfinite(sum)) {
-            throw std::overflow_error("integrated power accumulation overflowed double precision");
+            throw std::overflow_error("integrated intensity accumulation overflowed double precision");
         }
     }
 
     const double dArea = field.pitchXMetres() * field.pitchYMetres();
-    const double totalPower = sum * dArea;
-    if (!std::isfinite(totalPower)) {
-        throw std::overflow_error("integrated power scaling overflowed double precision");
+    const double totalIntensity = sum * dArea;
+    if (!std::isfinite(totalIntensity)) {
+        throw std::overflow_error("integrated intensity scaling overflowed double precision");
     }
-    return totalPower;
+    return totalIntensity;
 }
 
-double computeIntegratedPower(const ScalarField2D& intensityField) {
+double computeIntegratedIntensity(const ScalarField2D& intensityField) {
     const auto sourceSamples = intensityField.samples();
     const std::size_t count = sourceSamples.size();
 
@@ -145,16 +189,16 @@ double computeIntegratedPower(const ScalarField2D& intensityField) {
         }
         sum += val;
         if (!std::isfinite(sum)) {
-            throw std::overflow_error("integrated power accumulation overflowed double precision");
+            throw std::overflow_error("integrated intensity accumulation overflowed double precision");
         }
     }
 
     const double dArea = intensityField.pitchXMetres() * intensityField.pitchYMetres();
-    const double totalPower = sum * dArea;
-    if (!std::isfinite(totalPower)) {
-        throw std::overflow_error("integrated power scaling overflowed double precision");
+    const double totalIntensity = sum * dArea;
+    if (!std::isfinite(totalIntensity)) {
+        throw std::overflow_error("integrated intensity scaling overflowed double precision");
     }
-    return totalPower;
+    return totalIntensity;
 }
 
 } // namespace holobench::field
