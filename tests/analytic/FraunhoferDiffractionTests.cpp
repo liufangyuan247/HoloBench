@@ -130,7 +130,14 @@ TEST_CASE("Single slit Fraunhofer diffraction matches the independent sinc^2 ana
 
     fft::CpuFftBackend backend;
     propagation::FraunhoferPropagator propagator(backend);
-    const auto output = propagator.propagate(field, distance);
+    propagation::FraunhoferOptions options;
+    options.illuminatedExtentXMetres = effectiveWidth;
+    options.illuminatedExtentYMetres = effectiveHeight;
+    const auto result = propagator.propagate(field, distance, options);
+    const auto& output = result.field;
+
+    CHECK(result.diagnostics.supportSource == propagation::FraunhoferSupportSource::CallerProvidedExtents);
+    CHECK(result.diagnostics.isExact == false);
 
     const auto centerX = output.width() / 2;
     const auto centerY = output.height() / 2;
@@ -186,7 +193,11 @@ TEST_CASE("Double slit Fraunhofer diffraction matches the independent sinc^2*cos
 
     fft::CpuFftBackend backend;
     propagation::FraunhoferPropagator propagator(backend);
-    const auto output = propagator.propagate(field, distance);
+    propagation::FraunhoferOptions options;
+    options.illuminatedExtentXMetres = separation + effectiveSlitWidth;
+    options.illuminatedExtentYMetres = effectiveSlitHeight;
+    const auto result = propagator.propagate(field, distance, options);
+    const auto& output = result.field;
 
     const auto centerX = output.width() / 2;
     const auto centerY = output.height() / 2;
@@ -240,7 +251,16 @@ TEST_CASE("Circular aperture Fraunhofer diffraction matches the Airy pattern and
 
     fft::CpuFftBackend backend;
     propagation::FraunhoferPropagator propagator(backend);
-    const auto output = propagator.propagate(field, distance);
+    propagation::FraunhoferOptions options;
+    options.illuminatedDiameterMetres = diameter;
+    const auto result = propagator.propagate(field, distance, options);
+    const auto& output = result.field;
+
+    CHECK(result.diagnostics.supportSource == propagation::FraunhoferSupportSource::CallerProvidedDiameter);
+    CHECK(result.diagnostics.effectiveSupportDiameterMetres == doctest::Approx(diameter).epsilon(1e-14));
+    const double expectedNf = (diameter * diameter) / (vacuumWavelength * distance);
+    CHECK(result.diagnostics.fresnelNumber == doctest::Approx(expectedNf).epsilon(1e-12));
+    CHECK(result.diagnostics.farFieldConditionSatisfied == (expectedNf < 0.1));
 
     const auto centerX = output.width() / 2;
     const auto centerY = output.height() / 2;
@@ -307,7 +327,8 @@ TEST_CASE("Fraunhofer propagation scales correctly with medium refractive index"
 
     fft::CpuFftBackend backend;
     propagation::FraunhoferPropagator propagator(backend);
-    const auto output = propagator.propagate(field, distance);
+    const auto result = propagator.propagate(field, distance);
+    const auto& output = result.field;
 
     const double lambdaMedium = vacuumWavelength / refractiveIndex;
     const double expectedFirstNullX = (lambdaMedium * distance) / effectiveWidth;

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
+#include <string>
 
 #include "core/field/ComplexField2D.hpp"
 
@@ -11,10 +13,60 @@ class IFftBackend;
 namespace holobench::compute::propagation {
 
 /**
+ * @brief Source of illuminated support extent used for Fraunhofer far-field diagnostics.
+ */
+enum class FraunhoferSupportSource {
+    CallerProvidedDiameter,
+    CallerProvidedExtents,
+    FullGridExtentConservative
+};
+
+/**
+ * @brief Options supplied to the Fraunhofer propagator.
+ */
+struct FraunhoferOptions final {
+    std::optional<double> illuminatedDiameterMetres = std::nullopt;
+    std::optional<double> illuminatedExtentXMetres = std::nullopt;
+    std::optional<double> illuminatedExtentYMetres = std::nullopt;
+};
+
+/**
+ * @brief Diagnostic metadata generated during Fraunhofer propagation.
+ *
+ * Exposes sampling, boundary conditions, and far-field approximation validity.
+ * Fraunhofer propagation is an approximate paraxial far-field solver, NOT an exact wave solver.
+ */
+struct FraunhoferDiagnostics final {
+    double mediumWavelengthMetres = 0.0;
+    double outputPitchXMetres = 0.0;
+    double outputPitchYMetres = 0.0;
+    bool periodicBoundary = true;
+    bool automaticPadding = false;
+    double effectiveSupportDiameterMetres = 0.0;
+    FraunhoferSupportSource supportSource = FraunhoferSupportSource::FullGridExtentConservative;
+    double fresnelNumber = 0.0;
+    bool farFieldConditionSatisfied = false;
+    std::string warning;
+    bool isExact = false;
+};
+
+/**
+ * @brief Result of Fraunhofer propagation containing the output field and diagnostics.
+ */
+struct FraunhoferResult final {
+    field::ComplexField2D field;
+    FraunhoferDiagnostics diagnostics;
+};
+
+/**
  * @brief Far-field Fraunhofer scalar wave propagator.
  *
  * Implements monochromatic, coherent, scalar far-field Fraunhofer propagation
  * between parallel transverse planes separated by distance z > 0 in a homogeneous medium.
+ *
+ * IMPORTANT: The Fraunhofer diffraction formulation is a paraxial far-field approximation
+ * valid when z >> D^2 / lambda (Fresnel number N_F = D^2 / (lambda * z) << 1). It is NOT an exact
+ * wave solver.
  *
  * Under the convention E(x,y,z,t) = Re{U(x,y,z) exp(-i omega t)} and +Z exp(+i k z):
  *
@@ -34,9 +86,10 @@ class FraunhoferPropagator final {
 public:
     explicit FraunhoferPropagator(fft::IFftBackend& fftBackend) noexcept;
 
-    field::ComplexField2D propagate(
+    [[nodiscard]] FraunhoferResult propagate(
         const field::ComplexField2D& field,
-        double distanceMetres) const;
+        double distanceMetres,
+        const FraunhoferOptions& options = {}) const;
 
 private:
     fft::IFftBackend& fftBackend_;
