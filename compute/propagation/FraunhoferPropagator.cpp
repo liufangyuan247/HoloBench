@@ -4,6 +4,7 @@
 #include <cmath>
 #include <complex>
 #include <cstdint>
+#include <initializer_list>
 #include <limits>
 #include <numbers>
 #include <stdexcept>
@@ -21,6 +22,114 @@ void validateFiniteSamples(const field::ComplexField2D& value, const char* messa
     for (const auto& sample : value.samples()) {
         if (!std::isfinite(sample.real()) || !std::isfinite(sample.imag())) {
             throw std::overflow_error(message);
+        }
+    }
+}
+
+/// Evaluates products and quotients without transient overflow/underflow. A mathematically non-zero
+/// result outside the representable double domain is reported rather than silently rounded to zero.
+[[nodiscard]] double stableProduct(
+    std::initializer_list<double> numerators,
+    std::initializer_list<double> denominators = {}) {
+    for (const double numerator : numerators) {
+        if (!std::isfinite(numerator)) {
+            throw std::overflow_error("Fraunhofer product contains a non-finite numerator");
+        }
+    }
+    for (const double denominator : denominators) {
+        if (!std::isfinite(denominator) || denominator == 0.0) {
+            throw std::overflow_error("Fraunhofer product contains a non-finite or zero denominator");
+        }
+    }
+    for (const double numerator : numerators) {
+        if (numerator == 0.0) {
+            return 0.0;
+        }
+    }
+
+    double mantissa = 1.0;
+    int exponent = 0;
+    for (const double numerator : numerators) {
+        int factorExponent = 0;
+        const double factorMantissa = std::frexp(numerator, &factorExponent);
+        mantissa *= factorMantissa;
+        int normalizationExponent = 0;
+        mantissa = std::frexp(mantissa, &normalizationExponent);
+        exponent += factorExponent + normalizationExponent;
+    }
+    for (const double denominator : denominators) {
+        int factorExponent = 0;
+        const double factorMantissa = std::frexp(denominator, &factorExponent);
+        mantissa /= factorMantissa;
+        int normalizationExponent = 0;
+        mantissa = std::frexp(mantissa, &normalizationExponent);
+        exponent += normalizationExponent - factorExponent;
+    }
+
+    if (mantissa == 0.0) {
+        throw std::underflow_error("Fraunhofer product underflows the double domain");
+    }
+    if (exponent > std::numeric_limits<double>::max_exponent) {
+        throw std::overflow_error("Fraunhofer product exceeds the finite double domain");
+    }
+
+    constexpr int minimumDenormalExponent =
+        std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits + 1;
+    if (exponent < minimumDenormalExponent
+        || (exponent == minimumDenormalExponent && std::abs(mantissa) < 0.5)) {
+        throw std::underflow_error("Fraunhofer product underflows the double domain");
+    }
+
+    const double result = std::ldexp(mantissa, exponent);
+    if (!std::isfinite(result)) {
+        throw std::overflow_error("Fraunhofer product exceeds the finite double domain");
+    }
+    if (result == 0.0) {
+        throw std::underflow_error("Fraunhofer product underflows the double domain");
+    }
+    return result;
+}
+
+[[nodiscard]] bool supportCoordinateContained(double coordinate, double halfExtent) noexcept {
+    const double scale = std::max(std::abs(coordinate), halfExtent);
+    const double roundoffAllowance = 16.0 * std::numeric_limits<double>::epsilon() * scale;
+    return std::abs(coordinate) <= halfExtent + roundoffAllowance;
+}
+
+void validateClaimedSupport(
+    const field::ComplexField2D& value,
+    const FraunhoferOptions& options) {
+    const bool hasDiameter = options.illuminatedDiameterMetres.has_value();
+    const bool hasExtents = options.illuminatedExtentXMetres.has_value()
+        && options.illuminatedExtentYMetres.has_value();
+    if (!hasDiameter && !hasExtents) {
+        return;
+    }
+
+    const double halfDiameter = hasDiameter ? 0.5 * *options.illuminatedDiameterMetres : 0.0;
+    const double halfExtentX = hasExtents ? 0.5 * *options.illuminatedExtentXMetres : 0.0;
+    const double halfExtentY = hasExtents ? 0.5 * *options.illuminatedExtentYMetres : 0.0;
+
+    for (std::size_t yIndex = 0; yIndex < value.height(); ++yIndex) {
+        const double y = value.yCoordinateMetres(yIndex);
+        for (std::size_t xIndex = 0; xIndex < value.width(); ++xIndex) {
+            const auto& sample = value.at(xIndex, yIndex);
+            if (sample.real() == 0.0 && sample.imag() == 0.0) {
+                continue;
+            }
+
+            const double x = value.xCoordinateMetres(xIndex);
+            if (hasDiameter) {
+                const double radius = std::hypot(x, y);
+                if (!supportCoordinateContained(radius, halfDiameter)) {
+                    throw std::invalid_argument(
+                        "Fraunhofer illuminated diameter excludes a non-zero input sample");
+                }
+            } else if (!supportCoordinateContained(x, halfExtentX)
+                || !supportCoordinateContained(y, halfExtentY)) {
+                throw std::invalid_argument(
+                    "Fraunhofer illuminated extents exclude a non-zero input sample");
+            }
         }
     }
 }
@@ -71,6 +180,8 @@ void validateInput(
         }
     }
 
+    validateClaimedSupport(value, options);
+
     const double lambda = value.vacuumWavelengthMetres() / value.refractiveIndex();
     if (!std::isfinite(lambda) || lambda <= 0.0) {
         throw std::invalid_argument("Fraunhofer medium wavelength must be positive and finite");
@@ -81,9 +192,7 @@ void validateInput(
         throw std::invalid_argument("Fraunhofer medium wavenumber must be positive and finite");
     }
 
-    if (distanceMetres > std::numeric_limits<double>::max() / wavenumber) {
-        throw std::overflow_error("Fraunhofer propagation phase exceeds the finite double range");
-    }
+    static_cast<void>(stableProduct({wavenumber, distanceMetres}));
 
     const auto width = value.width();
     const auto height = value.height();
@@ -96,18 +205,15 @@ void validateInput(
         throw std::invalid_argument("Fraunhofer input grid dimensions and pitches must be positive and finite");
     }
 
-    const double lambdaZ = lambda * distanceMetres;
-    if (!std::isfinite(lambdaZ) || lambdaZ <= 0.0) {
-        throw std::overflow_error("Fraunhofer propagation optical distance (lambda * z) overflowed or non-positive");
-    }
+    const double lambdaZ = stableProduct({lambda, distanceMetres});
 
-    const double pitchXOut = lambdaZ / denomX;
-    const double pitchYOut = lambdaZ / denomY;
+    const double pitchXOut = stableProduct({lambdaZ}, {denomX});
+    const double pitchYOut = stableProduct({lambdaZ}, {denomY});
     if (!std::isfinite(pitchXOut) || pitchXOut <= 0.0 || !std::isfinite(pitchYOut) || pitchYOut <= 0.0) {
         throw std::overflow_error("Fraunhofer output pitch computation overflowed or resulted in a non-positive value");
     }
 
-    const double areaScale = (pitchXIn * pitchYIn) / lambdaZ;
+    const double areaScale = stableProduct({pitchXIn, pitchYIn}, {lambdaZ});
     if (!std::isfinite(areaScale) || areaScale <= 0.0) {
         throw std::overflow_error("Fraunhofer amplitude scale computation overflowed or resulted in a non-positive value");
     }
@@ -125,12 +231,7 @@ void validateInput(
         throw std::overflow_error("Fraunhofer effective support diameter computation overflowed or is non-positive");
     }
 
-    const double fresnelRatio = effectiveD / lambdaZ;
-    if (!std::isfinite(fresnelRatio) || fresnelRatio <= 0.0) {
-        throw std::overflow_error("Fraunhofer Fresnel number intermediate ratio computation overflowed");
-    }
-
-    const double fresnelNumber = fresnelRatio * effectiveD;
+    const double fresnelNumber = stableProduct({effectiveD, effectiveD}, {lambda, distanceMetres});
     if (!std::isfinite(fresnelNumber) || fresnelNumber < 0.0) {
         throw std::overflow_error("Fraunhofer Fresnel number computation overflowed");
     }
@@ -140,15 +241,19 @@ void validateInput(
     const double maxX = static_cast<double>(mMaxX) * pitchXOut;
     const double maxY = static_cast<double>(mMaxY) * pitchYOut;
     const double maxR = std::hypot(maxX, maxY);
-    const double maxParaxialParam = maxR / distanceMetres;
+    const double maxParaxialParam = stableProduct({maxR}, {distanceMetres});
     if (!std::isfinite(maxParaxialParam) || maxParaxialParam < 0.0) {
         throw std::overflow_error("Fraunhofer maximum paraxial parameter computation overflowed");
     }
 
     const double factorX = (mMaxX > 0) ? static_cast<double>(2 * mMaxX - 1) : 0.0;
     const double factorY = (mMaxY > 0) ? static_cast<double>(2 * mMaxY - 1) : 0.0;
-    const double maxStepX = (std::numbers::pi * factorX * pitchXOut) / denomX;
-    const double maxStepY = (std::numbers::pi * factorY * pitchYOut) / denomY;
+    const double maxStepX = (factorX == 0.0)
+        ? 0.0
+        : stableProduct({std::numbers::pi, factorX, pitchXOut}, {denomX});
+    const double maxStepY = (factorY == 0.0)
+        ? 0.0
+        : stableProduct({std::numbers::pi, factorY, pitchYOut}, {denomY});
     const double maxAdjacentPhaseStep = std::max(maxStepX, maxStepY);
     if (!std::isfinite(maxAdjacentPhaseStep) || maxAdjacentPhaseStep < 0.0) {
         throw std::overflow_error("Fraunhofer maximum adjacent phase step computation overflowed");
@@ -178,9 +283,9 @@ FraunhoferResult FraunhoferPropagator::propagate(
     const double pitchYIn = field.pitchYMetres();
     const double denomX = static_cast<double>(width) * pitchXIn;
     const double denomY = static_cast<double>(height) * pitchYIn;
-    const double lambdaZ = lambda * distanceMetres;
-    const double pitchXOut = lambdaZ / denomX;
-    const double pitchYOut = lambdaZ / denomY;
+    const double lambdaZ = stableProduct({lambda, distanceMetres});
+    const double pitchXOut = stableProduct({lambdaZ}, {denomX});
+    const double pitchYOut = stableProduct({lambdaZ}, {denomY});
 
     // Forward FFT on a copy of the input field to guarantee strong exception safety.
     auto transformed = field;
@@ -189,13 +294,13 @@ FraunhoferResult FraunhoferPropagator::propagate(
 
     field::ComplexField2D output(width, height, pitchXOut, pitchYOut, lambda0, n);
 
-    const double amplitudeScale = (pitchXIn * pitchYIn) / lambdaZ;
-    const double quadraticPhaseFactor = wavenumber / (2.0 * distanceMetres);
+    const double amplitudeScale = stableProduct({pitchXIn, pitchYIn}, {lambdaZ});
+    const double quadraticPhaseFactor = stableProduct({wavenumber}, {2.0, distanceMetres});
     if (!std::isfinite(quadraticPhaseFactor) || quadraticPhaseFactor <= 0.0) {
         throw std::overflow_error("Fraunhofer quadratic phase factor computation overflowed");
     }
 
-    const double axialPhase = wavenumber * distanceMetres - std::numbers::pi / 2.0;
+    const double axialPhase = stableProduct({wavenumber, distanceMetres}) - std::numbers::pi / 2.0;
     if (!std::isfinite(axialPhase)) {
         throw std::overflow_error("Fraunhofer axial phase computation overflowed");
     }
@@ -226,7 +331,13 @@ FraunhoferResult FraunhoferPropagator::propagate(
                 * (static_cast<double>(static_cast<std::int64_t>(p) - static_cast<std::int64_t>(centerX))
                     * static_cast<double>(centerX) / static_cast<double>(width));
 
-            const double quadPhase = quadraticPhaseFactor * (xOut * xOut + yOut * yOut);
+            const double quadPhaseX = (xOut == 0.0)
+                ? 0.0
+                : stableProduct({quadraticPhaseFactor, xOut, xOut});
+            const double quadPhaseY = (yOut == 0.0)
+                ? 0.0
+                : stableProduct({quadraticPhaseFactor, yOut, yOut});
+            const double quadPhase = quadPhaseX + quadPhaseY;
             if (!std::isfinite(quadPhase)) {
                 throw std::overflow_error("Fraunhofer quadratic phase sample overflowed");
             }
@@ -238,22 +349,33 @@ FraunhoferResult FraunhoferPropagator::propagate(
 
             const double reducedPhase = std::remainder(totalPhase, 2.0 * std::numbers::pi);
             const auto& fftSample = transformed.at(u, v);
+            if (fftSample.real() != 0.0 || fftSample.imag() != 0.0) {
+                static_cast<void>(stableProduct({amplitudeScale, std::abs(fftSample)}));
+            }
             output.at(p, q) = (amplitudeScale * fftSample) * std::polar(1.0, reducedPhase);
+            if ((fftSample.real() != 0.0 || fftSample.imag() != 0.0)
+                && output.at(p, q).real() == 0.0 && output.at(p, q).imag() == 0.0) {
+                throw std::underflow_error("Fraunhofer output sample underflows the complex double domain");
+            }
         }
     }
 
     validateFiniteSamples(output, "Fraunhofer propagation produced non-finite output samples");
 
     const double maxR = std::hypot(maxX, maxY);
-    const double maxParaxial = maxR / distanceMetres;
+    const double maxParaxial = stableProduct({maxR}, {distanceMetres});
     if (!std::isfinite(maxParaxial)) {
         throw std::overflow_error("Fraunhofer maximum paraxial parameter exceeds the finite double range");
     }
 
     const double factorX = (mMaxX > 0) ? static_cast<double>(2 * mMaxX - 1) : 0.0;
     const double factorY = (mMaxY > 0) ? static_cast<double>(2 * mMaxY - 1) : 0.0;
-    const double maxPhaseStepX = (std::numbers::pi * factorX * pitchXOut) / denomX;
-    const double maxPhaseStepY = (std::numbers::pi * factorY * pitchYOut) / denomY;
+    const double maxPhaseStepX = (factorX == 0.0)
+        ? 0.0
+        : stableProduct({std::numbers::pi, factorX, pitchXOut}, {denomX});
+    const double maxPhaseStepY = (factorY == 0.0)
+        ? 0.0
+        : stableProduct({std::numbers::pi, factorY, pitchYOut}, {denomY});
     const double maxAdjacentPhaseStep = std::max(maxPhaseStepX, maxPhaseStepY);
     if (!std::isfinite(maxAdjacentPhaseStep)) {
         throw std::overflow_error("Fraunhofer maximum adjacent phase step exceeds the finite double range");
@@ -285,9 +407,12 @@ FraunhoferResult FraunhoferPropagator::propagate(
         diagnostics.supportSource = FraunhoferSupportSource::FullGridExtentConservative;
     }
 
-    diagnostics.fresnelNumber = (diagnostics.effectiveSupportDiameterMetres / lambdaZ)
-        * diagnostics.effectiveSupportDiameterMetres;
+    diagnostics.fresnelNumber = stableProduct(
+        {diagnostics.effectiveSupportDiameterMetres, diagnostics.effectiveSupportDiameterMetres},
+        {lambda, distanceMetres});
     diagnostics.fresnelNumberBelowThreshold = (diagnostics.fresnelNumber < 0.1);
+    diagnostics.farFieldConditionSatisfied = diagnostics.fresnelNumberBelowThreshold
+        && diagnostics.paraxialParameterBelowThreshold;
 
     std::vector<std::string> warningParts;
     if (!diagnostics.fresnelNumberBelowThreshold) {

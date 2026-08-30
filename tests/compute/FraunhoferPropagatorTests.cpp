@@ -194,6 +194,9 @@ TEST_CASE("Fraunhofer propagator diagnostics report Fresnel number and support s
 
     auto input = makeField(width, height, pitch, 1.0);
     fillDeterministic(input);
+    auto compactInput = input;
+    compactInput.fill({0.0, 0.0});
+    compactInput.at(width / 2, height / 2) = {1.0, 0.0};
 
     fft::CpuFftBackend backend;
     propagation::FraunhoferPropagator propagator(backend);
@@ -202,7 +205,7 @@ TEST_CASE("Fraunhofer propagator diagnostics report Fresnel number and support s
     {
         propagation::FraunhoferOptions options;
         options.illuminatedDiameterMetres = 100e-6;
-        const auto res = propagator.propagate(input, distance, options);
+        const auto res = propagator.propagate(compactInput, distance, options);
         CHECK(res.diagnostics.supportSource == propagation::FraunhoferSupportSource::CallerProvidedDiameter);
         CHECK(std::abs(res.diagnostics.effectiveSupportDiameterMetres - 100e-6) / 100e-6 < 1e-12);
         const double expectedNf = (100e-6 * 100e-6) / (vacuumWavelengthMetres * distance);
@@ -288,6 +291,34 @@ TEST_CASE("Fraunhofer propagator diagnostics report Fresnel number and support s
         nanExtent.illuminatedExtentYMetres = std::numeric_limits<double>::quiet_NaN();
         CHECK_THROWS_AS((void)propagator.propagate(input, distance, nanExtent), std::invalid_argument);
         checkSamplesExactly(input, inputBefore);
+    }
+
+    // 5. A caller cannot understate centred circular or rectangular support to manufacture a
+    //    favourable Fresnel number. Every exact non-zero sample participates in validation.
+    {
+        auto adversarial = makeField(width, height, pitch, 1.0);
+        adversarial.fill({0.0, 0.0});
+        adversarial.at(width / 2 + 3, height / 2) = {1.0, 0.0}; // x = +30 um
+        const auto adversarialBefore = copySamples(adversarial);
+
+        propagation::FraunhoferOptions understatedDiameter;
+        understatedDiameter.illuminatedDiameterMetres = 40e-6; // radius 20 um excludes x=30 um
+        CHECK_THROWS_AS(
+            (void)propagator.propagate(adversarial, distance, understatedDiameter),
+            std::invalid_argument);
+        checkSamplesExactly(adversarial, adversarialBefore);
+
+        propagation::FraunhoferOptions understatedExtents;
+        understatedExtents.illuminatedExtentXMetres = 40e-6;
+        understatedExtents.illuminatedExtentYMetres = 40e-6;
+        CHECK_THROWS_AS(
+            (void)propagator.propagate(adversarial, distance, understatedExtents),
+            std::invalid_argument);
+        checkSamplesExactly(adversarial, adversarialBefore);
+
+        propagation::FraunhoferOptions exactBoundary;
+        exactBoundary.illuminatedDiameterMetres = 60e-6;
+        CHECK_NOTHROW((void)propagator.propagate(adversarial, distance, exactBoundary));
     }
 }
 
@@ -699,14 +730,50 @@ TEST_CASE("Fraunhofer propagator rejects unsupported dimensions and phase overfl
         std::overflow_error);
     checkSamplesExactly(hugeDistanceField, hugeBefore);
 
-    // Quadratic phase intermediate overflow
+    // The first unrepresentable non-zero intermediate is the pitch-area product, so the failure is
+    // classified as underflow rather than being mislabeled as quadratic-phase overflow.
     field::ComplexField2D tinyPitchField(16, 16, 1e-200, 1e-200, vacuumWavelengthMetres, 1.0);
     fillDeterministic(tinyPitchField);
     const auto tinyBefore = copySamples(tinyPitchField);
     CHECK_THROWS_AS(
         (void)propagator.propagate(tinyPitchField, 1.0),
-        std::overflow_error);
+        std::underflow_error);
     checkSamplesExactly(tinyPitchField, tinyBefore);
+}
+
+TEST_CASE("Fraunhofer propagator reports optical-distance and output-amplitude underflow explicitly") {
+    DirectDftBackend backend;
+    propagation::FraunhoferPropagator propagator(backend);
+
+    // lambda*z is mathematically non-zero but below denorm_min.
+    field::ComplexField2D opticalDistanceUnderflow(1, 1, 1.0, 1.0, 1e-200, 1.0);
+    opticalDistanceUnderflow.at(0, 0) = {1.0, 0.0};
+    const auto opticalDistanceBefore = copySamples(opticalDistanceUnderflow);
+    CHECK_THROWS_AS(
+        (void)propagator.propagate(opticalDistanceUnderflow, 1e-200),
+        std::underflow_error);
+    checkSamplesExactly(opticalDistanceUnderflow, opticalDistanceBefore);
+
+    // The geometric factors remain finite, but scaling a non-zero Fourier coefficient would produce
+    // a complex magnitude below denorm_min.
+    field::ComplexField2D amplitudeUnderflow(
+        1, 1, 1e-100, 1e-100, vacuumWavelengthMetres, 1.0);
+    amplitudeUnderflow.at(0, 0) = {1e-200, 0.0};
+    const auto amplitudeBefore = copySamples(amplitudeUnderflow);
+    CHECK_THROWS_AS(
+        (void)propagator.propagate(amplitudeUnderflow, 1.0),
+        std::underflow_error);
+    checkSamplesExactly(amplitudeUnderflow, amplitudeBefore);
+
+    // The exact denorm_min output boundary remains representable and must not be rejected. With
+    // lambda=4 m and z=1 m the carrier phase is zero; pitch=2^-536 gives pitch^2/(lambda*z)=2^-1074.
+    const double exactBoundaryPitch = std::ldexp(1.0, -536);
+    field::ComplexField2D exactBoundary(
+        1, 1, exactBoundaryPitch, exactBoundaryPitch, 4.0, 1.0);
+    exactBoundary.at(0, 0) = {1.0, 0.0};
+    const auto exactResult = propagator.propagate(exactBoundary, 1.0);
+    CHECK(exactResult.field.at(0, 0).real() == std::numeric_limits<double>::denorm_min());
+    CHECK(exactResult.field.at(0, 0).imag() == 0.0);
 }
 
 TEST_CASE("Fraunhofer propagator exact discrete adjacent quadratic phase step on even and odd grids") {
@@ -809,7 +876,8 @@ TEST_CASE("Fraunhofer propagator three independent diagnostic dimensions and com
         constexpr double distance = 0.05; // 5 cm
 
         auto input = makeField(size, size, pitch, 1.0);
-        fillDeterministic(input);
+        input.fill({0.0, 0.0});
+        input.at(size / 2, size / 2) = {1.0, 0.0};
 
         propagation::FraunhoferOptions options;
         options.illuminatedDiameterMetres = 40e-6; // NF = (40um)^2 / (532nm * 0.05m) = 0.06015 < 0.1
@@ -819,6 +887,7 @@ TEST_CASE("Fraunhofer propagator three independent diagnostic dimensions and com
         CHECK(res.diagnostics.fresnelNumberBelowThreshold == true);
         CHECK(res.diagnostics.maximumParaxialParameter < 0.1);
         CHECK(res.diagnostics.paraxialParameterBelowThreshold == true);
+        CHECK(res.diagnostics.farFieldConditionSatisfied == true);
         CHECK(res.diagnostics.maxAdjacentPhaseStepRadians <= std::numbers::pi);
         CHECK(res.diagnostics.quadraticPhaseUndersampled == false);
         CHECK(res.diagnostics.warning.empty());
@@ -831,7 +900,8 @@ TEST_CASE("Fraunhofer propagator three independent diagnostic dimensions and com
         constexpr double distance = 0.05;
 
         auto input = makeField(size, size, pitch, 1.0);
-        fillDeterministic(input);
+        input.fill({0.0, 0.0});
+        input.at(size / 2, size / 2) = {1.0, 0.0};
 
         propagation::FraunhoferOptions options;
         options.illuminatedDiameterMetres = 100e-6; // NF = (100um)^2 / (532nm * 0.05m) = 0.3759 >= 0.1
@@ -840,6 +910,7 @@ TEST_CASE("Fraunhofer propagator three independent diagnostic dimensions and com
         CHECK(res.diagnostics.fresnelNumber >= 0.1);
         CHECK(res.diagnostics.fresnelNumberBelowThreshold == false);
         CHECK(res.diagnostics.paraxialParameterBelowThreshold == true);
+        CHECK(res.diagnostics.farFieldConditionSatisfied == false);
         CHECK(res.diagnostics.quadraticPhaseUndersampled == false);
 
         CHECK_FALSE(res.diagnostics.warning.empty());
@@ -855,7 +926,8 @@ TEST_CASE("Fraunhofer propagator three independent diagnostic dimensions and com
         constexpr double distance = 30e-6; // 30 um -> quadratic phase step ~ 0.748 pi <= pi
 
         auto input = makeField(size, size, pitch, 1.0);
-        fillDeterministic(input);
+        input.fill({0.0, 0.0});
+        input.at(size / 2, size / 2) = {1.0, 0.0};
 
         propagation::FraunhoferOptions options;
         options.illuminatedDiameterMetres = 1e-6; // NF = (1um)^2 / (532nm * 30um) = 0.0627 < 0.1
@@ -864,6 +936,7 @@ TEST_CASE("Fraunhofer propagator three independent diagnostic dimensions and com
         CHECK(res.diagnostics.fresnelNumberBelowThreshold == true);
         CHECK(res.diagnostics.maximumParaxialParameter >= 0.1);
         CHECK(res.diagnostics.paraxialParameterBelowThreshold == false);
+        CHECK(res.diagnostics.farFieldConditionSatisfied == false);
         CHECK(res.diagnostics.maxAdjacentPhaseStepRadians <= std::numbers::pi);
         CHECK(res.diagnostics.quadraticPhaseUndersampled == false);
 
@@ -880,7 +953,8 @@ TEST_CASE("Fraunhofer propagator three independent diagnostic dimensions and com
         constexpr double distance = 0.5; // 0.5 m -> max adjacent phase step ~ 3.22 pi > pi
 
         auto input = makeField(size, size, pitch, 1.0);
-        fillDeterministic(input);
+        input.fill({0.0, 0.0});
+        input.at(size / 2, size / 2) = {1.0, 0.0};
 
         propagation::FraunhoferOptions options;
         options.illuminatedDiameterMetres = 100e-6; // NF = (100um)^2 / (532nm * 0.5m) = 0.0376 < 0.1
@@ -888,6 +962,7 @@ TEST_CASE("Fraunhofer propagator three independent diagnostic dimensions and com
         const auto res = propagator.propagate(input, distance, options);
         CHECK(res.diagnostics.fresnelNumberBelowThreshold == true);
         CHECK(res.diagnostics.paraxialParameterBelowThreshold == true);
+        CHECK(res.diagnostics.farFieldConditionSatisfied == true);
         CHECK(res.diagnostics.maxAdjacentPhaseStepRadians > std::numbers::pi);
         CHECK(res.diagnostics.quadraticPhaseUndersampled == true);
 
@@ -912,6 +987,7 @@ TEST_CASE("Fraunhofer propagator three independent diagnostic dimensions and com
         const auto res = propagator.propagate(input, distance, options);
         CHECK(res.diagnostics.fresnelNumberBelowThreshold == false);
         CHECK(res.diagnostics.paraxialParameterBelowThreshold == false);
+        CHECK(res.diagnostics.farFieldConditionSatisfied == false);
         CHECK(res.diagnostics.quadraticPhaseUndersampled == true);
 
         CHECK_FALSE(res.diagnostics.warning.empty());

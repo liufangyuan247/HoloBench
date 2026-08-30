@@ -26,11 +26,15 @@ enum class FraunhoferSupportSource {
  *
  * Support extent configuration modes:
  * - Default: All fields nullopt -> conservative full-grid extent D = hypot(Nx*dx, Ny*dy).
- * - Diameter mode: illuminatedDiameterMetres specified, both extent fields nullopt.
- * - Extents mode: both illuminatedExtentXMetres and illuminatedExtentYMetres specified, diameter nullopt.
+ * - Diameter mode: illuminatedDiameterMetres specified, both extent fields nullopt. The diameter
+ *   describes a circle centred on the sampled-field origin and must contain every non-zero sample.
+ * - Extents mode: both illuminatedExtentXMetres and illuminatedExtentYMetres specified, diameter
+ *   nullopt. The extents describe an axis-aligned rectangle centred on the sampled-field origin and
+ *   must contain every non-zero sample.
  *
- * Any coexisting diameter and extent or incomplete single-axis extent is ambiguous and rejected
- * with std::invalid_argument.
+ * Any coexisting diameter and extent, incomplete single-axis extent, or support claim that excludes
+ * a non-zero input sample is rejected with std::invalid_argument. Support is evaluated on the
+ * discrete sample centres; samples are not treated as finite-area pixels.
  */
 struct FraunhoferOptions final {
     std::optional<double> illuminatedDiameterMetres = std::nullopt;
@@ -47,8 +51,8 @@ struct FraunhoferOptions final {
  * Physical validation criteria:
  * - Far-field Fresnel condition: Governed by the Fresnel number N_F = D^2 / (lambda * z).
  *   Far-field Fraunhofer diffraction requires N_F << 1 (fresnelNumberBelowThreshold tracks N_F < 0.1).
- *   When caller provides support dimensions (CallerProvidedDiameter or CallerProvidedExtents), it is
- *   treated as an unverified/unvalidated caller assumption.
+ *   Caller-provided support dimensions (CallerProvidedDiameter or CallerProvidedExtents) are checked
+ *   against every non-zero discrete input sample before they can affect this diagnostic.
  * - Paraxial small-angle criterion: Governed by the maximum propagation angle across the discrete grid,
  *   maximumParaxialParameter = lambda * sqrt(fx_max^2 + fy_max^2) = max(r_out) / z.
  *   The paraxial approximation assumes this parameter is << 1 (paraxialParameterBelowThreshold tracks < 0.1).
@@ -76,8 +80,8 @@ struct FraunhoferDiagnostics final {
     /// Effective illuminated support diameter D in metres used for Fresnel number evaluation.
     double effectiveSupportDiameterMetres = 0.0;
 
-    /// Provenance of the effective illuminated support diameter.
-    /// Note: caller-provided diameter or extents are treated as unvalidated assumptions.
+    /// Provenance of the effective illuminated support diameter. Caller-provided support is validated
+    /// against every non-zero discrete input sample before propagation.
     FraunhoferSupportSource supportSource = FraunhoferSupportSource::FullGridExtentConservative;
 
     /// Fresnel number N_F = D^2 / (lambda * z) evaluated with the effective support diameter.
@@ -93,6 +97,11 @@ struct FraunhoferDiagnostics final {
     /// True if maximumParaxialParameter < 0.1, indicating that propagation angles satisfy the paraxial small-angle limit.
     bool paraxialParameterBelowThreshold = false;
 
+    /// True only when the validated support has N_F < 0.1 and the complete sampled angular grid
+    /// remains paraxial (< 0.1). Output quadratic-phase sampling is reported independently because
+    /// it affects complex phase fidelity but not Fraunhofer intensity.
+    bool farFieldConditionSatisfied = false;
+
     /// Maximum unwrapped phase change (radians) between adjacent discrete samples in either X or Y direction
     /// in the output spherical quadratic phase factor exp(i * k / (2*z) * (x^2 + y^2)), evaluated using the exact
     /// discrete maximum index difference (2*m_max - 1) on both even and odd grids.
@@ -103,7 +112,8 @@ struct FraunhoferDiagnostics final {
     bool quadraticPhaseUndersampled = false;
 
     /// Text warning describing far-field condition violations (N_F >= 0.1), paraxial small-angle violations (>= 0.1),
-    /// or output quadratic phase aliasing (> pi). Empty if all conditions are satisfied.
+    /// or output quadratic phase aliasing (> pi). Empty only if both model applicability and complex
+    /// output-phase sampling conditions are satisfied.
     std::string warning;
 
     /// Always false for Fraunhofer propagator (paraxial far-field approximation, not an exact Helmholtz solver).

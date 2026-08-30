@@ -111,12 +111,12 @@ double circularApertureAnalyticIntensity(
 
 TEST_CASE("Single slit Fraunhofer diffraction matches the independent sinc^2 analytic oracle") {
     constexpr std::size_t sampleCount = 512;
-    constexpr double pitchIn = 2e-6; // 2 um pitch -> 1.024 mm domain
-    constexpr double halfWidth = 16e-6;  // 17 transmitted samples -> effective width = 34 um
-    constexpr double halfHeight = 32e-6; // 33 transmitted samples -> effective height = 66 um
-    constexpr double effectiveWidth = 17.0 * pitchIn; // 34 um
-    constexpr double effectiveHeight = 33.0 * pitchIn; // 66 um
-    constexpr double distance = 0.6; // 0.6 m propagation distance (NF ~ 0.0173 <= 0.02)
+    constexpr double pitchIn = 4e-6; // 4 um pitch keeps the full discrete angular grid paraxial
+    constexpr double halfWidth = 32e-6;  // 17 transmitted samples -> effective width = 68 um
+    constexpr double halfHeight = 64e-6; // 33 transmitted samples -> effective height = 132 um
+    constexpr double effectiveWidth = 17.0 * pitchIn; // 68 um
+    constexpr double effectiveHeight = 33.0 * pitchIn; // 132 um
+    constexpr double distance = 3.0; // NF ~ 0.0138 and max paraxial parameter ~ 0.094
 
     field::ComplexField2D field(
         sampleCount, sampleCount, pitchIn, pitchIn, vacuumWavelength, 1.0);
@@ -140,6 +140,8 @@ TEST_CASE("Single slit Fraunhofer diffraction matches the independent sinc^2 ana
     CHECK(result.diagnostics.isExact == false);
     REQUIRE(result.diagnostics.fresnelNumberBelowThreshold);
     REQUIRE(result.diagnostics.fresnelNumber <= 0.02);
+    REQUIRE(result.diagnostics.paraxialParameterBelowThreshold);
+    REQUIRE(result.diagnostics.farFieldConditionSatisfied);
     CHECK(result.diagnostics.warning.find("Fresnel number") == std::string::npos);
 
     const auto centerX = output.width() / 2;
@@ -185,13 +187,13 @@ TEST_CASE("Single slit Fraunhofer diffraction matches the independent sinc^2 ana
 
 TEST_CASE("Double slit Fraunhofer diffraction matches the independent sinc^2*cos^2 analytic oracle") {
     constexpr std::size_t sampleCount = 512;
-    constexpr double pitchIn = 1e-6; // 1 um pitch -> 512 um domain
-    constexpr double slitWidth = 16e-6; // half width = 8 um -> 17 transmitted samples = 17 um effective width
-    constexpr double slitHeight = 32e-6; // half height = 16 um -> 33 transmitted samples = 33 um effective height
-    constexpr double effectiveSlitWidth = 17.0 * pitchIn;  // 17 um
-    constexpr double effectiveSlitHeight = 33.0 * pitchIn; // 33 um
-    constexpr double separation = 64e-6; // 64 um slit center separation (64 samples)
-    constexpr double distance = 0.8; // 0.8 m propagation distance (NF ~ 0.0180 <= 0.02)
+    constexpr double pitchIn = 4e-6; // 4 um pitch keeps the full discrete angular grid paraxial
+    constexpr double slitWidth = 64e-6; // 17 transmitted samples = 68 um effective width
+    constexpr double slitHeight = 128e-6; // 33 transmitted samples = 132 um effective height
+    constexpr double effectiveSlitWidth = 17.0 * pitchIn;  // 68 um
+    constexpr double effectiveSlitHeight = 33.0 * pitchIn; // 132 um
+    constexpr double separation = 256e-6; // 64-sample slit-centre separation
+    constexpr double distance = 12.0; // NF ~ 0.0192 and max paraxial parameter ~ 0.094
 
     field::ComplexField2D field(
         sampleCount, sampleCount, pitchIn, pitchIn, vacuumWavelength, 1.0);
@@ -215,6 +217,8 @@ TEST_CASE("Double slit Fraunhofer diffraction matches the independent sinc^2*cos
     CHECK(result.diagnostics.supportSource == propagation::FraunhoferSupportSource::CallerProvidedExtents);
     REQUIRE(result.diagnostics.fresnelNumberBelowThreshold);
     REQUIRE(result.diagnostics.fresnelNumber <= 0.02);
+    REQUIRE(result.diagnostics.paraxialParameterBelowThreshold);
+    REQUIRE(result.diagnostics.farFieldConditionSatisfied);
     CHECK(result.diagnostics.warning.find("Fresnel number") == std::string::npos);
 
     const auto centerX = output.width() / 2;
@@ -284,9 +288,9 @@ TEST_CASE("Double slit Fraunhofer diffraction matches the independent sinc^2*cos
 
 TEST_CASE("Circular aperture Fraunhofer diffraction matches the Airy pattern and 1.22 lambda*z/D first dark ring") {
     constexpr std::size_t sampleCount = 1024;
-    constexpr double pitchIn = 1e-6; // 1 um pitch -> 1.024 mm domain
-    constexpr double diameter = 64e-6; // 32 samples radius
-    constexpr double distance = 0.5; // 0.5 m distance (NF ~ 0.0154 <= 0.02)
+    constexpr double pitchIn = 4e-6; // 4 um pitch keeps the full discrete angular grid paraxial
+    constexpr double diameter = 256e-6; // 32-sample radius
+    constexpr double distance = 6.5; // NF ~ 0.0190 and max paraxial parameter ~ 0.094
 
     field::ComplexField2D field(
         sampleCount, sampleCount, pitchIn, pitchIn, vacuumWavelength, 1.0);
@@ -311,6 +315,8 @@ TEST_CASE("Circular aperture Fraunhofer diffraction matches the Airy pattern and
     CHECK(std::abs(result.diagnostics.fresnelNumber - expectedNf) / expectedNf < 1e-12);
     REQUIRE(result.diagnostics.fresnelNumberBelowThreshold);
     REQUIRE(result.diagnostics.fresnelNumber <= 0.02);
+    REQUIRE(result.diagnostics.paraxialParameterBelowThreshold);
+    REQUIRE(result.diagnostics.farFieldConditionSatisfied);
     CHECK(result.diagnostics.warning.find("Fresnel number") == std::string::npos);
 
     const auto centerX = output.width() / 2;
@@ -343,11 +349,22 @@ TEST_CASE("Circular aperture Fraunhofer diffraction matches the Airy pattern and
     }
 
     REQUIRE(firstMinIndex != 0);
-    const double numericalFirstDarkRingRadius = output.xCoordinateMetres(firstMinIndex);
+    const double previousIntensity = std::norm(output.at(firstMinIndex - 1, centerY));
     const double minIntensity = std::norm(output.at(firstMinIndex, centerY));
+    const double nextIntensity = std::norm(output.at(firstMinIndex + 1, centerY));
+    const double curvature = previousIntensity - 2.0 * minIntensity + nextIntensity;
+    REQUIRE(curvature > 0.0);
+    const double subPixelOffset = 0.5 * (previousIntensity - nextIntensity) / curvature;
+    REQUIRE(std::abs(subPixelOffset) <= 1.0);
+    const double numericalFirstDarkRingRadius =
+        (static_cast<double>(firstMinIndex - centerX) + subPixelOffset) * pitchXOut;
 
-    // The detected first dark ring matches the analytic 1.21967 lambda*z/D radius within half a sampling pixel
-    CHECK(std::abs(numericalFirstDarkRingRadius - expectedFirstDarkRingRadius) <= 0.51 * pitchXOut);
+    // Quadratic sub-pixel localization of the measured numerical minimum makes the first-zero
+    // comparison a dimensionless physical gate rather than a grid-resolution-sized allowance.
+    const double firstDarkRingRelativeError =
+        std::abs(numericalFirstDarkRingRadius - expectedFirstDarkRingRadius)
+        / expectedFirstDarkRingRadius;
+    CHECK(firstDarkRingRelativeError < 0.005);
     CHECK(minIntensity / numericalPeak < 0.001);
 
     // Verify radial profile across main lobe and secondary ring
@@ -415,6 +432,8 @@ TEST_CASE("Fraunhofer propagation scales correctly with medium refractive index"
 
     REQUIRE(result.diagnostics.fresnelNumberBelowThreshold);
     REQUIRE(result.diagnostics.fresnelNumber <= 0.02);
+    REQUIRE(result.diagnostics.paraxialParameterBelowThreshold);
+    REQUIRE(result.diagnostics.farFieldConditionSatisfied);
     CHECK(output.refractiveIndex() == refractiveIndex);
     CHECK(nullIntensity / peakIntensity < 0.0005);
 }
