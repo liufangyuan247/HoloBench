@@ -61,3 +61,20 @@ jobs:
         run: cmake --preset app-ci
       - name: Build
         run: cmake --build --preset app-ci --target holobench_app
+      - name: Annotate Windows build failure
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $diagnosticLines = @(& cmake --build --preset app-ci --target holobench_app --verbose 2>&1)
+          $diagnosticExitCode = $LASTEXITCODE
+          $diagnosticLines | ForEach-Object { Write-Output $_ }
+
+          if ($diagnosticExitCode -eq 0) {
+            Write-Output '::warning title=Windows app build retry succeeded::The initial build failed, but the verbose diagnostic retry succeeded.'
+            exit 0
+          }
+
+          $diagnosticTail = ($diagnosticLines | Select-Object -Last 120 | ForEach-Object { $_.ToString() }) -join "`n"
+          $escapedDiagnostic = $diagnosticTail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+          Write-Output "::error title=Windows app verbose build failed::$escapedDiagnostic"
+          exit $diagnosticExitCode
