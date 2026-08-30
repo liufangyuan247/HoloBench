@@ -238,14 +238,13 @@ FraunhoferResult FraunhoferPropagator::propagate(
 
     diagnostics.fresnelNumber = (diagnostics.effectiveSupportDiameterMetres / (lambda * distanceMetres))
         * diagnostics.effectiveSupportDiameterMetres;
+    diagnostics.fresnelNumberBelowThreshold = (diagnostics.fresnelNumber < 0.1);
 
-    if (diagnostics.fresnelNumber < 0.1) {
-        diagnostics.farFieldConditionSatisfied = true;
+    if (diagnostics.fresnelNumberBelowThreshold) {
         diagnostics.warning.clear();
     } else {
-        diagnostics.farFieldConditionSatisfied = false;
         diagnostics.warning = "Fresnel number D^2/(lambda*z) is " + std::to_string(diagnostics.fresnelNumber)
-            + " (>= 0.1); far-field condition z >> D^2/lambda is violated, leading to significant phase and amplitude inaccuracy.";
+            + " (>= 0.1); far-field condition N_F << 1 is not satisfied, leading to significant near-field phase and amplitude discrepancies.";
     }
 
     return FraunhoferResult{std::move(output), std::move(diagnostics)};

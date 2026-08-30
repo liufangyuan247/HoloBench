@@ -41,8 +41,15 @@ struct FraunhoferOptions final {
 /**
  * @brief Diagnostic metadata generated during Fraunhofer propagation.
  *
- * Exposes sampling, boundary conditions, and far-field approximation validity.
+ * Exposes sampling, boundary conditions, and far-field / paraxial approximation validity.
  * Fraunhofer propagation is an approximate paraxial far-field solver, NOT an exact wave solver.
+ *
+ * Approximation domain notes:
+ * - Near-field / far-field criterion: Governed by the Fresnel number N_F = D^2 / (lambda * z).
+ *   Far-field Fraunhofer diffraction requires N_F << 1 (fresnelNumberBelowThreshold tracks N_F < 0.1).
+ *   When caller provides support dimensions, it is treated as an unverified assumption.
+ * - Paraxial criterion: Governed by propagation angles and grid aspect ratio theta ~ D / (2*z) << 1 rad.
+ *   This is geometric and distinct from the wavelength-dependent Fresnel number.
  */
 struct FraunhoferDiagnostics final {
     double mediumWavelengthMetres = 0.0;
@@ -53,7 +60,7 @@ struct FraunhoferDiagnostics final {
     double effectiveSupportDiameterMetres = 0.0;
     FraunhoferSupportSource supportSource = FraunhoferSupportSource::FullGridExtentConservative;
     double fresnelNumber = 0.0;
-    bool farFieldConditionSatisfied = false;
+    bool fresnelNumberBelowThreshold = false;
     std::string warning;
     bool isExact = false;
 };

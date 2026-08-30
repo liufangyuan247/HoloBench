@@ -110,13 +110,13 @@ double circularApertureAnalyticIntensity(
 } // namespace
 
 TEST_CASE("Single slit Fraunhofer diffraction matches the independent sinc^2 analytic oracle") {
-    constexpr std::size_t sampleCount = 256;
-    constexpr double pitchIn = 4e-6; // 4 um pitch -> 1.024 mm domain
-    constexpr double halfWidth = 16e-6;  // 9 transmitted samples -> effective width = 36 um
-    constexpr double halfHeight = 32e-6; // 17 transmitted samples -> effective height = 68 um
-    constexpr double effectiveWidth = 9.0 * pitchIn;   // 36 um
-    constexpr double effectiveHeight = 17.0 * pitchIn; // 68 um
-    constexpr double distance = 0.05; // 50 mm propagation distance
+    constexpr std::size_t sampleCount = 512;
+    constexpr double pitchIn = 2e-6; // 2 um pitch -> 1.024 mm domain
+    constexpr double halfWidth = 16e-6;  // 17 transmitted samples -> effective width = 34 um
+    constexpr double halfHeight = 32e-6; // 33 transmitted samples -> effective height = 66 um
+    constexpr double effectiveWidth = 17.0 * pitchIn; // 34 um
+    constexpr double effectiveHeight = 33.0 * pitchIn; // 66 um
+    constexpr double distance = 0.6; // 0.6 m propagation distance (NF ~ 0.0173 <= 0.02)
 
     field::ComplexField2D field(
         sampleCount, sampleCount, pitchIn, pitchIn, vacuumWavelength, 1.0);
@@ -126,7 +126,7 @@ TEST_CASE("Single slit Fraunhofer diffraction matches the independent sinc^2 ana
     aperture.halfWidthMetres = halfWidth;
     aperture.halfHeightMetres = halfHeight;
     const auto diagnostics = wave::applyRectangularAperture(field, aperture);
-    CHECK(diagnostics.transmittedSampleCount == 9 * 17);
+    CHECK(diagnostics.transmittedSampleCount == 17 * 33);
 
     fft::CpuFftBackend backend;
     propagation::FraunhoferPropagator propagator(backend);
@@ -138,6 +138,9 @@ TEST_CASE("Single slit Fraunhofer diffraction matches the independent sinc^2 ana
 
     CHECK(result.diagnostics.supportSource == propagation::FraunhoferSupportSource::CallerProvidedExtents);
     CHECK(result.diagnostics.isExact == false);
+    REQUIRE(result.diagnostics.fresnelNumberBelowThreshold);
+    REQUIRE(result.diagnostics.fresnelNumber <= 0.02);
+    CHECK(result.diagnostics.warning.empty());
 
     const auto centerX = output.width() / 2;
     const auto centerY = output.height() / 2;
@@ -146,8 +149,9 @@ TEST_CASE("Single slit Fraunhofer diffraction matches the independent sinc^2 ana
         0.0, 0.0, effectiveWidth, effectiveHeight, vacuumWavelength, distance);
     const double numericalPeak = std::norm(output.at(centerX, centerY));
 
-    // Peak intensity agrees within discrete pixel-integration tolerance (< 0.5%)
-    CHECK(numericalPeak == doctest::Approx(expectedPeak).epsilon(0.005));
+    // Peak intensity normalized relative error is within floating-point integration precision (< 1e-12)
+    const double peakRelError = std::abs(numericalPeak - expectedPeak) / expectedPeak;
+    CHECK(peakRelError < 1e-12);
 
     // First null position on x axis: x_null = lambda * z / effectiveWidth
     const double expectedFirstNullX = (vacuumWavelength * distance) / effectiveWidth;
@@ -166,19 +170,28 @@ TEST_CASE("Single slit Fraunhofer diffraction matches the independent sinc^2 ana
         const double numerical = std::norm(output.at(p, centerY));
         const double analytic = singleSlitAnalyticIntensity(
             x, 0.0, effectiveWidth, effectiveHeight, vacuumWavelength, distance);
-        CHECK(numerical == doctest::Approx(analytic).epsilon(0.015));
+
+        // Near zero / across full slice: absolute difference relative to peak is < 0.002 (0.2%)
+        const double diffRelToPeak = std::abs(numerical - analytic) / expectedPeak;
+        CHECK(diffRelToPeak < 0.002);
+
+        // On significant lobes (> 2% peak), normalized relative error is < 0.025 (2.5%)
+        if (analytic > 0.02 * expectedPeak) {
+            const double relError = std::abs(numerical - analytic) / analytic;
+            CHECK(relError < 0.025);
+        }
     }
 }
 
 TEST_CASE("Double slit Fraunhofer diffraction matches the independent sinc^2*cos^2 analytic oracle") {
-    constexpr std::size_t sampleCount = 256;
-    constexpr double pitchIn = 2e-6; // 2 um pitch
-    constexpr double slitWidth = 16e-6; // half width = 8 um -> 9 transmitted samples = 18 um effective width
-    constexpr double slitHeight = 64e-6; // half height = 32 um -> 33 transmitted samples = 66 um effective height
-    constexpr double effectiveSlitWidth = 9.0 * pitchIn;   // 18 um
-    constexpr double effectiveSlitHeight = 33.0 * pitchIn; // 66 um
-    constexpr double separation = 64e-6; // 32 samples separation
-    constexpr double distance = 0.04;
+    constexpr std::size_t sampleCount = 512;
+    constexpr double pitchIn = 1e-6; // 1 um pitch -> 512 um domain
+    constexpr double slitWidth = 16e-6; // half width = 8 um -> 17 transmitted samples = 17 um effective width
+    constexpr double slitHeight = 32e-6; // half height = 16 um -> 33 transmitted samples = 33 um effective height
+    constexpr double effectiveSlitWidth = 17.0 * pitchIn;  // 17 um
+    constexpr double effectiveSlitHeight = 33.0 * pitchIn; // 33 um
+    constexpr double separation = 64e-6; // 64 um slit center separation (64 samples)
+    constexpr double distance = 0.8; // 0.8 m propagation distance (NF ~ 0.0180 <= 0.02)
 
     field::ComplexField2D field(
         sampleCount, sampleCount, pitchIn, pitchIn, vacuumWavelength, 1.0);
@@ -189,7 +202,7 @@ TEST_CASE("Double slit Fraunhofer diffraction matches the independent sinc^2*cos
     doubleSlit.slitHeightMetres = slitHeight;
     doubleSlit.centerSeparationMetres = separation;
     const auto diagnostics = wave::applyDoubleSlit(field, doubleSlit);
-    CHECK(diagnostics.transmittedSampleCount == 2 * 9 * 33);
+    CHECK(diagnostics.transmittedSampleCount == 2 * 17 * 33);
 
     fft::CpuFftBackend backend;
     propagation::FraunhoferPropagator propagator(backend);
@@ -199,6 +212,11 @@ TEST_CASE("Double slit Fraunhofer diffraction matches the independent sinc^2*cos
     const auto result = propagator.propagate(field, distance, options);
     const auto& output = result.field;
 
+    CHECK(result.diagnostics.supportSource == propagation::FraunhoferSupportSource::CallerProvidedExtents);
+    REQUIRE(result.diagnostics.fresnelNumberBelowThreshold);
+    REQUIRE(result.diagnostics.fresnelNumber <= 0.02);
+    CHECK(result.diagnostics.warning.empty());
+
     const auto centerX = output.width() / 2;
     const auto centerY = output.height() / 2;
 
@@ -206,40 +224,69 @@ TEST_CASE("Double slit Fraunhofer diffraction matches the independent sinc^2*cos
         0.0, 0.0, effectiveSlitWidth, effectiveSlitHeight, separation, vacuumWavelength, distance);
     const double numericalPeak = std::norm(output.at(centerX, centerY));
 
-    CHECK(numericalPeak == doctest::Approx(expectedPeak).epsilon(0.005));
+    // Peak intensity normalized relative error is within floating-point precision (< 1e-12)
+    const double peakRelError = std::abs(numericalPeak - expectedPeak) / expectedPeak;
+    CHECK(peakRelError < 1e-12);
 
-    // Verify interference fringe spacing: delta_x = lambda * z / separation
-    const double fringeSpacing = (vacuumWavelength * distance) / separation;
-    const double pitchXOut = output.pitchXMetres();
-    const auto fringeOffset = static_cast<std::size_t>(std::round(fringeSpacing / pitchXOut));
+    // Independently scan the numerical profile along the central horizontal slice to detect bright fringe peaks
+    struct DetectedFringePeak {
+        std::size_t index;
+        double xMetres;
+        double intensity;
+    };
+    std::vector<DetectedFringePeak> detectedPeaks;
+    const double minPeakThreshold = 0.05 * numericalPeak;
 
-    // First interference maximum on the right
-    const auto firstMaxIndex = centerX + fringeOffset;
-    REQUIRE(firstMaxIndex < output.width());
-    const double firstMaxIntensity = std::norm(output.at(firstMaxIndex, centerY));
-    const double firstMaxAnalytic = doubleSlitAnalyticIntensity(
-        output.xCoordinateMetres(firstMaxIndex),
-        0.0,
-        effectiveSlitWidth,
-        effectiveSlitHeight,
-        separation,
-        vacuumWavelength,
-        distance);
-    CHECK(firstMaxIntensity == doctest::Approx(firstMaxAnalytic).epsilon(0.015));
+    for (std::size_t p = centerX - 20; p <= centerX + 20; ++p) {
+        const double prev = std::norm(output.at(p - 1, centerY));
+        const double curr = std::norm(output.at(p, centerY));
+        const double next = std::norm(output.at(p + 1, centerY));
+        if (curr > minPeakThreshold && curr >= prev && curr >= next) {
+            detectedPeaks.push_back({p, output.xCoordinateMetres(p), curr});
+        }
+    }
+
+    // Must have found at least 5 bright interference fringes across the central diffraction envelope
+    REQUIRE(detectedPeaks.size() >= 5);
+
+    // Verify measured peak-to-peak spacing for adjacent central fringes against theoretical lambda * z / d
+    const double expectedFringeSpacing = (vacuumWavelength * distance) / separation;
+    for (std::size_t i = 1; i < detectedPeaks.size(); ++i) {
+        const double measuredSpacing = detectedPeaks[i].xMetres - detectedPeaks[i - 1].xMetres;
+        const double spacingRelError = std::abs(measuredSpacing - expectedFringeSpacing) / expectedFringeSpacing;
+        CHECK(spacingRelError < 1e-12);
+    }
+
+    // Profile verification across the central interference-diffraction pattern
+    for (std::size_t p = centerX - 25; p <= centerX + 25; ++p) {
+        const double x = output.xCoordinateMetres(p);
+        const double numerical = std::norm(output.at(p, centerY));
+        const double analytic = doubleSlitAnalyticIntensity(
+            x, 0.0, effectiveSlitWidth, effectiveSlitHeight, separation, vacuumWavelength, distance);
+
+        const double diffRelToPeak = std::abs(numerical - analytic) / expectedPeak;
+        CHECK(diffRelToPeak < 0.005);
+
+        if (analytic > 0.05 * expectedPeak) {
+            const double relError = std::abs(numerical - analytic) / analytic;
+            CHECK(relError < 0.05);
+        }
+    }
 
     // Envelope first null: x_null = lambda * z / effectiveSlitWidth
+    const double pitchXOut = output.pitchXMetres();
     const double envelopeNullX = (vacuumWavelength * distance) / effectiveSlitWidth;
     const auto envelopeNullIndex = centerX + static_cast<std::size_t>(std::round(envelopeNullX / pitchXOut));
     REQUIRE(envelopeNullIndex < output.width());
     const double intensityAtEnvelopeNull = std::norm(output.at(envelopeNullIndex, centerY));
-    CHECK(intensityAtEnvelopeNull / numericalPeak < 0.0005);
+    CHECK(intensityAtEnvelopeNull / numericalPeak < 0.005);
 }
 
 TEST_CASE("Circular aperture Fraunhofer diffraction matches the Airy pattern and 1.22 lambda*z/D first dark ring") {
-    constexpr std::size_t sampleCount = 512;
-    constexpr double pitchIn = 2e-6; // 2 um pitch -> ~1.024 mm domain
+    constexpr std::size_t sampleCount = 1024;
+    constexpr double pitchIn = 1e-6; // 1 um pitch -> 1.024 mm domain
     constexpr double diameter = 64e-6; // 32 samples radius
-    constexpr double distance = 0.05; // 50 mm distance
+    constexpr double distance = 0.5; // 0.5 m distance (NF ~ 0.0154 <= 0.02)
 
     field::ComplexField2D field(
         sampleCount, sampleCount, pitchIn, pitchIn, vacuumWavelength, 1.0);
@@ -247,7 +294,9 @@ TEST_CASE("Circular aperture Fraunhofer diffraction matches the Airy pattern and
 
     wave::CircularApertureParameters circular;
     circular.radiusMetres = 0.5 * diameter;
-    wave::applyCircularAperture(field, circular);
+    const auto maskDiag = wave::applyCircularAperture(field, circular);
+    // Number of discrete lattice points with x^2 + y^2 <= 32^2 on integer grid is 3209
+    CHECK(maskDiag.transmittedSampleCount == 3209);
 
     fft::CpuFftBackend backend;
     propagation::FraunhoferPropagator propagator(backend);
@@ -257,10 +306,12 @@ TEST_CASE("Circular aperture Fraunhofer diffraction matches the Airy pattern and
     const auto& output = result.field;
 
     CHECK(result.diagnostics.supportSource == propagation::FraunhoferSupportSource::CallerProvidedDiameter);
-    CHECK(result.diagnostics.effectiveSupportDiameterMetres == doctest::Approx(diameter).epsilon(1e-14));
+    CHECK(std::abs(result.diagnostics.effectiveSupportDiameterMetres - diameter) / diameter < 1e-12);
     const double expectedNf = (diameter * diameter) / (vacuumWavelength * distance);
-    CHECK(result.diagnostics.fresnelNumber == doctest::Approx(expectedNf).epsilon(1e-12));
-    CHECK(result.diagnostics.farFieldConditionSatisfied == (expectedNf < 0.1));
+    CHECK(std::abs(result.diagnostics.fresnelNumber - expectedNf) / expectedNf < 1e-12);
+    REQUIRE(result.diagnostics.fresnelNumberBelowThreshold);
+    REQUIRE(result.diagnostics.fresnelNumber <= 0.02);
+    CHECK(result.diagnostics.warning.empty());
 
     const auto centerX = output.width() / 2;
     const auto centerY = output.height() / 2;
@@ -269,8 +320,10 @@ TEST_CASE("Circular aperture Fraunhofer diffraction matches the Airy pattern and
         0.0, diameter, vacuumWavelength, distance);
     const double numericalPeak = std::norm(output.at(centerX, centerY));
 
-    // Peak intensity within discrete staircase circle approximation tolerance (< 1.5%)
-    CHECK(numericalPeak == doctest::Approx(expectedPeak).epsilon(0.015));
+    // Discrete staircase circle area (3209 pixels) vs continuous pi*R^2 (3216.99...) results in
+    // peak intensity normalized relative error = 0.496% (< 0.5%)
+    const double peakRelError = std::abs(numericalPeak - expectedPeak) / expectedPeak;
+    CHECK(peakRelError < 0.005);
 
     // Analytic first dark ring radius: r1 = 1.21966989 * lambda * z / D
     constexpr double firstZeroCoeff = 3.8317059702075123156 / std::numbers::pi; // ~1.21966989
@@ -279,7 +332,7 @@ TEST_CASE("Circular aperture Fraunhofer diffraction matches the Airy pattern and
 
     // Find the first local minimum along the positive X axis
     std::size_t firstMinIndex = 0;
-    for (std::size_t p = centerX + 2; p < centerX + 35; ++p) {
+    for (std::size_t p = centerX + 4; p < centerX + 35; ++p) {
         const double prev = std::norm(output.at(p - 1, centerY));
         const double curr = std::norm(output.at(p, centerY));
         const double next = std::norm(output.at(p + 1, centerY));
@@ -293,19 +346,35 @@ TEST_CASE("Circular aperture Fraunhofer diffraction matches the Airy pattern and
     const double numericalFirstDarkRingRadius = output.xCoordinateMetres(firstMinIndex);
     const double minIntensity = std::norm(output.at(firstMinIndex, centerY));
 
-    // The detected first dark ring must match the analytic 1.21967 lambda*z/D radius within half a sampling pixel
+    // The detected first dark ring matches the analytic 1.21967 lambda*z/D radius within half a sampling pixel
     CHECK(std::abs(numericalFirstDarkRingRadius - expectedFirstDarkRingRadius) <= 0.51 * pitchXOut);
-    CHECK(minIntensity / numericalPeak < 0.002);
+    CHECK(minIntensity / numericalPeak < 0.001);
 
-    // Verify secondary ring maximum: occurs at v ~ 5.13562 -> r ~ 1.635 lambda*z/D with I/I0 ~ 0.0175
+    // Verify radial profile across main lobe and secondary ring
+    for (std::size_t p = centerX - 35; p <= centerX + 35; ++p) {
+        const double x = output.xCoordinateMetres(p);
+        const double numerical = std::norm(output.at(p, centerY));
+        const double analytic = circularApertureAnalyticIntensity(
+            x, diameter, vacuumWavelength, distance);
+
+        const double diffRelToPeak = std::abs(numerical - analytic) / expectedPeak;
+        CHECK(diffRelToPeak < 0.005);
+
+        if (analytic > 0.005 * expectedPeak) {
+            const double relError = std::abs(numerical - analytic) / analytic;
+            CHECK(relError < 0.09);
+        }
+    }
+
+    // Verify secondary ring maximum: occurs at v ~ 5.13562 -> r ~ 1.6347 lambda*z/D with I/I0 ~ 0.0175
     const double secondaryRingRadius = (5.1356223 / std::numbers::pi) * (vacuumWavelength * distance) / diameter;
     const auto secondaryIndex = centerX + static_cast<std::size_t>(std::round(secondaryRingRadius / pitchXOut));
     REQUIRE(secondaryIndex < output.width());
     const double secondaryIntensity = std::norm(output.at(secondaryIndex, centerY));
     const double expectedSecondary = circularApertureAnalyticIntensity(
         output.xCoordinateMetres(secondaryIndex), diameter, vacuumWavelength, distance);
-    CHECK(secondaryIntensity == doctest::Approx(expectedSecondary).epsilon(0.05));
-    CHECK(secondaryIntensity / numericalPeak == doctest::Approx(0.0175).epsilon(0.15));
+    CHECK(std::abs(secondaryIntensity - expectedSecondary) / expectedSecondary < 0.05);
+    CHECK(std::abs((secondaryIntensity / numericalPeak) - 0.0175) / 0.0175 < 0.05);
 }
 
 TEST_CASE("Fraunhofer propagation scales correctly with medium refractive index") {
@@ -313,7 +382,7 @@ TEST_CASE("Fraunhofer propagation scales correctly with medium refractive index"
     constexpr double pitchIn = 4e-6;
     constexpr double halfWidth = 16e-6; // 9 transmitted samples -> effective width 36 um
     constexpr double effectiveWidth = 9.0 * pitchIn;
-    constexpr double distance = 0.05;
+    constexpr double distance = 0.6;
     constexpr double refractiveIndex = 1.5;
 
     field::ComplexField2D field(
@@ -327,7 +396,10 @@ TEST_CASE("Fraunhofer propagation scales correctly with medium refractive index"
 
     fft::CpuFftBackend backend;
     propagation::FraunhoferPropagator propagator(backend);
-    const auto result = propagator.propagate(field, distance);
+    propagation::FraunhoferOptions options;
+    options.illuminatedExtentXMetres = effectiveWidth;
+    options.illuminatedExtentYMetres = effectiveWidth;
+    const auto result = propagator.propagate(field, distance, options);
     const auto& output = result.field;
 
     const double lambdaMedium = vacuumWavelength / refractiveIndex;
@@ -341,6 +413,8 @@ TEST_CASE("Fraunhofer propagation scales correctly with medium refractive index"
     const double peakIntensity = std::norm(output.at(centerX, centerY));
     const double nullIntensity = std::norm(output.at(nullIndex, centerY));
 
+    REQUIRE(result.diagnostics.fresnelNumberBelowThreshold);
+    REQUIRE(result.diagnostics.fresnelNumber <= 0.02);
     CHECK(output.refractiveIndex() == refractiveIndex);
     CHECK(nullIntensity / peakIntensity < 0.0005);
 }

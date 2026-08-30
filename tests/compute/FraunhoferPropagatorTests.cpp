@@ -172,12 +172,12 @@ TEST_CASE("Fraunhofer propagator assigns exact output sampling pitch and metadat
     CHECK(output.height() == height);
     CHECK(output.vacuumWavelengthMetres() == vacuumWavelengthMetres);
     CHECK(output.refractiveIndex() == refractiveIndex);
-    CHECK(output.pitchXMetres() == doctest::Approx(expectedPitchXOut).epsilon(1e-14));
-    CHECK(output.pitchYMetres() == doctest::Approx(expectedPitchYOut).epsilon(1e-14));
+    CHECK(std::abs(output.pitchXMetres() - expectedPitchXOut) / expectedPitchXOut < 1e-12);
+    CHECK(std::abs(output.pitchYMetres() - expectedPitchYOut) / expectedPitchYOut < 1e-12);
 
-    CHECK(diagnostics.mediumWavelengthMetres == doctest::Approx(lambdaMedium).epsilon(1e-14));
-    CHECK(diagnostics.outputPitchXMetres == doctest::Approx(expectedPitchXOut).epsilon(1e-14));
-    CHECK(diagnostics.outputPitchYMetres == doctest::Approx(expectedPitchYOut).epsilon(1e-14));
+    CHECK(std::abs(diagnostics.mediumWavelengthMetres - lambdaMedium) / lambdaMedium < 1e-12);
+    CHECK(std::abs(diagnostics.outputPitchXMetres - expectedPitchXOut) / expectedPitchXOut < 1e-12);
+    CHECK(std::abs(diagnostics.outputPitchYMetres - expectedPitchYOut) / expectedPitchYOut < 1e-12);
     CHECK(diagnostics.periodicBoundary == true);
     CHECK(diagnostics.automaticPadding == false);
     CHECK(diagnostics.isExact == false);
@@ -202,10 +202,10 @@ TEST_CASE("Fraunhofer propagator diagnostics report Fresnel number and support s
         options.illuminatedDiameterMetres = 100e-6;
         const auto res = propagator.propagate(input, distance, options);
         CHECK(res.diagnostics.supportSource == propagation::FraunhoferSupportSource::CallerProvidedDiameter);
-        CHECK(res.diagnostics.effectiveSupportDiameterMetres == doctest::Approx(100e-6).epsilon(1e-14));
+        CHECK(std::abs(res.diagnostics.effectiveSupportDiameterMetres - 100e-6) / 100e-6 < 1e-12);
         const double expectedNf = (100e-6 * 100e-6) / (vacuumWavelengthMetres * distance);
-        CHECK(res.diagnostics.fresnelNumber == doctest::Approx(expectedNf).epsilon(1e-12));
-        CHECK(res.diagnostics.farFieldConditionSatisfied == true);
+        CHECK(std::abs(res.diagnostics.fresnelNumber - expectedNf) / expectedNf < 1e-12);
+        CHECK(res.diagnostics.fresnelNumberBelowThreshold == true);
         CHECK(res.diagnostics.warning.empty());
     }
 
@@ -217,10 +217,10 @@ TEST_CASE("Fraunhofer propagator diagnostics report Fresnel number and support s
         const auto res = propagator.propagate(input, distance, options);
         CHECK(res.diagnostics.supportSource == propagation::FraunhoferSupportSource::CallerProvidedExtents);
         const double expectedD = std::hypot(5e-3, 5e-3);
-        CHECK(res.diagnostics.effectiveSupportDiameterMetres == doctest::Approx(expectedD).epsilon(1e-14));
+        CHECK(std::abs(res.diagnostics.effectiveSupportDiameterMetres - expectedD) / expectedD < 1e-12);
         const double expectedNf = (expectedD * expectedD) / (vacuumWavelengthMetres * distance);
-        CHECK(res.diagnostics.fresnelNumber == doctest::Approx(expectedNf).epsilon(1e-12));
-        CHECK(res.diagnostics.farFieldConditionSatisfied == false);
+        CHECK(std::abs(res.diagnostics.fresnelNumber - expectedNf) / expectedNf < 1e-12);
+        CHECK(res.diagnostics.fresnelNumberBelowThreshold == false);
         CHECK_FALSE(res.diagnostics.warning.empty());
     }
 
@@ -229,7 +229,7 @@ TEST_CASE("Fraunhofer propagator diagnostics report Fresnel number and support s
         const auto res = propagator.propagate(input, distance);
         CHECK(res.diagnostics.supportSource == propagation::FraunhoferSupportSource::FullGridExtentConservative);
         const double gridExtent = std::hypot(static_cast<double>(width) * pitch, static_cast<double>(height) * pitch);
-        CHECK(res.diagnostics.effectiveSupportDiameterMetres == doctest::Approx(gridExtent).epsilon(1e-14));
+        CHECK(std::abs(res.diagnostics.effectiveSupportDiameterMetres - gridExtent) / gridExtent < 1e-12);
     }
 
     // 4. Conflicting and incomplete options are rejected with invalid_argument, leaving input untouched
@@ -310,7 +310,7 @@ TEST_CASE("Fraunhofer propagator handles extreme finite support and rejects over
         CHECK(std::isfinite(res.diagnostics.effectiveSupportDiameterMetres));
         CHECK(std::isfinite(res.diagnostics.fresnelNumber));
         CHECK(res.diagnostics.fresnelNumber > 0.0);
-        CHECK(res.diagnostics.farFieldConditionSatisfied == false);
+        CHECK(res.diagnostics.fresnelNumberBelowThreshold == false);
         CHECK(res.diagnostics.warning.find("inf") == std::string::npos);
         CHECK(res.diagnostics.warning.find("nan") == std::string::npos);
         CHECK(res.diagnostics.warning.find("Fresnel number") != std::string::npos);
@@ -325,7 +325,7 @@ TEST_CASE("Fraunhofer propagator handles extreme finite support and rejects over
         CHECK(std::isfinite(res.diagnostics.effectiveSupportDiameterMetres));
         CHECK(std::isfinite(res.diagnostics.fresnelNumber));
         CHECK(res.diagnostics.fresnelNumber > 0.0);
-        CHECK(res.diagnostics.farFieldConditionSatisfied == false);
+        CHECK(res.diagnostics.fresnelNumberBelowThreshold == false);
     }
 
     // 3. Overflowing caller support diameter throws overflow_error, leaving input untouched
@@ -387,8 +387,8 @@ TEST_CASE("Fraunhofer propagator off-axis plane-wave carrier locates peak and si
         const auto expectedP = static_cast<std::size_t>(static_cast<std::int64_t>(centerX) + kx);
         const auto expectedQ = static_cast<std::size_t>(static_cast<std::int64_t>(centerY) + ky);
 
-        CHECK(output.xCoordinateMetres(expectedP) == doctest::Approx(expectedXPeak).epsilon(1e-12));
-        CHECK(output.yCoordinateMetres(expectedQ) == doctest::Approx(expectedYPeak).epsilon(1e-12));
+        CHECK(std::abs(output.xCoordinateMetres(expectedP) - expectedXPeak) < 1e-12);
+        CHECK(std::abs(output.yCoordinateMetres(expectedQ) - expectedYPeak) < 1e-12);
 
         const double peakIntensity = std::norm(output.at(expectedP, expectedQ));
         CHECK(peakIntensity > 0.0);
@@ -422,8 +422,14 @@ TEST_CASE("Fraunhofer propagator off-axis plane-wave carrier locates peak and si
         const auto result = propagator.propagate(input, distance);
         const auto& output = result.field;
 
+        const double expectedXPeak = vacuumWavelengthMetres * distance * fx;
+        const double expectedYPeak = vacuumWavelengthMetres * distance * fy;
+
         const auto expectedP = static_cast<std::size_t>(static_cast<std::int64_t>(centerX) + kx);
         const auto expectedQ = static_cast<std::size_t>(static_cast<std::int64_t>(centerY) + ky);
+
+        CHECK(std::abs(output.xCoordinateMetres(expectedP) - expectedXPeak) < 1e-12);
+        CHECK(std::abs(output.yCoordinateMetres(expectedQ) - expectedYPeak) < 1e-12);
 
         const double peakIntensity = std::norm(output.at(expectedP, expectedQ));
         CHECK(peakIntensity > 0.0);
@@ -471,7 +477,7 @@ TEST_CASE("Fraunhofer propagator operates correctly on odd dimensions via direct
                 const double x = output.xCoordinateMetres(p);
                 const auto sample = output.at(p, q);
 
-                CHECK(std::abs(sample) == doctest::Approx(expectedMagnitude).epsilon(1e-12));
+                CHECK(std::abs(std::abs(sample) - expectedMagnitude) / expectedMagnitude < 1e-12);
 
                 const double expectedPhase = wavenumber * distance - std::numbers::pi / 2.0
                     + (wavenumber / (2.0 * distance)) * (x * x + y * y);
@@ -546,7 +552,7 @@ TEST_CASE("Fraunhofer propagator operates correctly on odd dimensions via direct
         const auto result = propagator.propagate(input, distance);
         const double outPower = integratedIntensity(result.field);
 
-        CHECK(outPower == doctest::Approx(inPower).epsilon(1e-12));
+        CHECK(std::abs(outPower - inPower) / inPower < 1e-12);
     }
 }
 
@@ -561,7 +567,7 @@ TEST_CASE("Fraunhofer propagator strictly conserves integrated intensity (Parsev
     const auto result = propagator.propagate(input, 0.25);
     const double outputPower = integratedIntensity(result.field);
 
-    CHECK(outputPower == doctest::Approx(inputPower).epsilon(1e-12));
+    CHECK(std::abs(outputPower - inputPower) / inputPower < 1e-12);
 }
 
 TEST_CASE("Fraunhofer propagator centered delta input generates centered spherical quadratic phase") {
@@ -591,7 +597,7 @@ TEST_CASE("Fraunhofer propagator centered delta input generates centered spheric
             const double x = output.xCoordinateMetres(p);
             const auto sample = output.at(p, q);
 
-            CHECK(std::abs(sample) == doctest::Approx(expectedMagnitude).epsilon(1e-12));
+            CHECK(std::abs(std::abs(sample) - expectedMagnitude) / expectedMagnitude < 1e-12);
 
             const double expectedPhase = wavenumber * distance - std::numbers::pi / 2.0
                 + (wavenumber / (2.0 * distance)) * (x * x + y * y);
