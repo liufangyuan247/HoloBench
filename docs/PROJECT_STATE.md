@@ -43,13 +43,13 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
     - Circular aperture Airy disc: peak intensity error $< 0.5\%$ (discrete staircase circle area), first dark ring radius $1.21967 \lambda z / D$ within half an output pixel ($0.51 \Delta x_{\text{out}}$), secondary peak within $5\%$ at $N_F \approx 0.0154$.
     - Diagnostics report Fresnel number $N_F$, support source provenance, maximum paraxial parameter $\lambda\sqrt{f_{x,\max}^2+f_{y,\max}^2}$, and exact discrete maximum adjacent quadratic phase step across even ($2m-1=N-1$) and odd ($2m-1=N-2$) grids with multi-condition combined warning reporting.
   - **Field Sources & Elements**: Plane wave and fundamental paraxial Gaussian beam sources; binary circular, rectangular, and double-slit aperture masks; ideal thin-lens quadratic phase screen.
-  - **Test Suite Status**: 182/182 deterministic unit tests passing across `dev` and `core-ci` presets (124 baseline + 15 observables + 25 Fresnel TF + 18 Fraunhofer).
+  - **External Golden Cross-Validation**: Three complete complex fields independently generated with `waveprop 0.0.12` validate ASM, Fresnel TF, and Fraunhofer propagation. Tests check coordinate conventions, normalized complex-field error, peak-normalized maximum error, and independent intensity errors; the Python validation environment is never linked into runtime binaries.
+  - **Test Suite Status**: 185/185 deterministic unit tests passing across `dev` and headless `core-ci`, including three external `waveprop` cross-validation cases; the strict `app-ci` build and 120-frame OpenGL smoke test also pass on the reference AMD Radeon Pro 5300M.
 
 ## In progress / Remaining for M2
 
 - M2 remains **in progress**; the following components are still pending before M2 milestone completion:
   - Portable GPU FFT and wave propagation backend (with CPU-reference parity).
-  - External independent golden cross-validation against `waveprop` or `TorchOptics` (without linking GPL/external tools into runtime binaries).
   - Interactive 1024x1024 wave propagation benchmark (< 50 ms target on reference GPU).
   - Detector field visualization and UI inspector for complex field amplitude, phase, and log-intensity maps.
 
@@ -63,8 +63,8 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 
 ## Next five tasks
 
-1. Implement portable GPU FFT and wave propagation backend.
-2. Implement cross-validation against waveprop / TorchOptics reference data.
-3. Integrate detector intensity, log-intensity, and phase rendering views into ImGui / OpticalBenchRenderer.
-4. Execute and record the 1024x1024 GPU propagation performance benchmark.
-5. Prepare M2 release tag and cross-platform remote CI verification.
+1. Define and implement the portable GPU FFT and wave-propagation backend with CPU-reference parity tests.
+2. Integrate detector intensity, log-intensity, and wrapped-phase views into ImGui without moving physical calculations into the rendering layer.
+3. Execute and record the 1024x1024 GPU propagation performance benchmark.
+4. Run the complete `dev`, `core-ci`, and `app-ci` gates plus the OpenGL smoke test on the integrated M2 branch.
+5. Prepare the M2 release tag and verify Windows/Ubuntu remote CI.

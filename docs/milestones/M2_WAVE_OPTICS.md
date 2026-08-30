@@ -23,7 +23,7 @@ Deliver a validated scalar-wave vertical slice spanning a sampled complex field,
 - [x] Single-slit and double-slit profiles match independent analytic oracles (on-axis peak within $10^{-12}$ relative error, first null relative intensity $\le 5\times 10^{-4}$, single-slit sidelobes within 2.5% tolerance, double-slit measured fringe spacing $\Delta x = \lambda z/d$ within $10^{-12}$ relative error at $N_F \le 0.02$).
 - [x] Circular-aperture Airy minima and radial profile meet documented tolerances (first dark ring radius $r_1 \approx 1.21966989 \frac{\lambda z}{D}$ within $0.51 \Delta x_{\text{out}}$, on-axis peak within 0.5% matching discrete circle pixel area, secondary peak within 5% at $N_F \le 0.02$).
 - [x] Propagating-spectrum energy is conserved within the declared numerical tolerance ($< 2\times 10^{-12}$ for Fresnel and $< 10^{-12}$ for Fraunhofer under Parseval).
-- [ ] At least three cases cross-validate against waveprop or TorchOptics without linking those tools into runtime binaries.
+- [x] Three complete-field cases cross-validate ASM, Fresnel TF, and Fraunhofer propagation against `waveprop 0.0.12` without linking validation tools into runtime binaries.
 - [ ] GPU and CPU backends agree within a documented error bound.
 - [ ] The named 1024x1024 interactive propagation benchmark is below 50 ms on the reference GPU.
 - [ ] Windows and Ubuntu warnings-as-errors CI, local smoke tests, documentation, and project compatibility checks pass.

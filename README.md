@@ -2,7 +2,7 @@
 
 HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator, and a long-term R&D tool for CHIMERA-like holographic printing.
 
-**Milestone status**: **M0 (Engineering Foundation)** and **M1 (3D Optical Bench & Geometric Optics)** are complete. The next milestone is **M2 (Scalar Wave Optics & Angular Spectrum Method)**. For the current repository state and roadmap, see [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
+**Milestone status**: **M0 (Engineering Foundation)** and **M1 (3D Optical Bench & Geometric Optics)** are complete. **M2 (Scalar Wave Optics & Propagation Solvers)** is in progress. For the current repository state and roadmap, see [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
 
 ## M1 Features
 
@@ -11,6 +11,14 @@ HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator
 - **Physical Analysis & Diagnostics**: Real, virtual, and collimated/infinity image plane prediction, Numerical Aperture (NA) cone visualization, and automated warnings for off-axis paraxial approximations and rear-aperture clipping.
 - **Interactive 3D Bench UI**: Orbit/pan/zoom 3D camera, metric world grid, ray segment renderer, `+Z` forward-orientation gizmos for optical components, and Dear ImGui property inspector.
 - **Project Serialization**: Versioned JSON document model with semantic and byte-stable round-trip persistence.
+
+## M2 Features (In Progress)
+
+- **Sampled Wave Fields**: Complex and scalar 2D fields with explicit SI sampling, wavelength, and refractive-index metadata.
+- **CPU Reference Solvers**: Deterministic radix-2 FFT, Angular Spectrum Method, Fresnel transfer-function propagation, and Fraunhofer far-field propagation.
+- **Wave Sources & Elements**: Plane waves, Gaussian beams, circular/rectangular/double-slit apertures, and ideal thin-lens phase screens.
+- **Field Observables**: Linear intensity, decibel intensity, wrapped phase with validity masking, and integrated relative intensity.
+- **Independent Validation**: Analytic diffraction oracles plus three full-field cross-validation cases generated with `waveprop 0.0.12`; validation tooling is not a runtime dependency.
 
 ## Physical Assumptions & Limitations (M1)
 
@@ -30,7 +38,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and deterministic test suite (92/92 tests passing):
+Standard dev build and deterministic test suite (185/185 tests passing):
 
 ```powershell
 cmake --preset dev
@@ -38,7 +46,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 92/92 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 185/185 tests passing):
 
 ```powershell
 cmake --preset core-ci
