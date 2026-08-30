@@ -37,7 +37,8 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 - `ComplexField2D`, a backend-neutral FFT interface, and the deterministic radix-2 CPU FFT reference are implemented.
 - The backend-neutral CPU Angular Spectrum Method reference implements the locked positive propagation phase, native FFT-order frequency mapping, default evanescent filtering, and strong exception safety.
 - Forward plane-wave and full fundamental Gaussian-beam sources implement refractive-index-aware carrier phase, Rayleigh-range beam-radius evolution, wavefront curvature, and Gouy phase. A 256x256 CPU ASM cross-check recovers the analytic $\sqrt{2}w_0$ radius after one Rayleigh range.
-- The complete 116-test suite passes under Clang and MSVC warnings-as-errors builds.
+- Sample-center binary circular, rectangular, and double-slit masks use an explicit boundary-transmission rule; the ideal thin-lens field element applies the locked negative quadratic phase and preserves pointwise intensity.
+- The complete 124-test suite passes under Clang and MSVC warnings-as-errors builds.
 - Add detector intensity and phase visualization.
 - Implement analytical validation cases (single slit, rectangular aperture, circular Airy disc, paraxial vs non-paraxial ASM propagation).
 
@@ -50,8 +51,8 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 
 ## Next five tasks
 
-1. Add aperture masks and ideal thin-lens phase with diffraction validation cases.
-2. Implement Fraunhofer and Fresnel propagators with slit and Airy-profile validation.
+1. Implement Fraunhofer and Fresnel propagators with slit and Airy-profile validation.
+2. Add independent single-slit, double-slit, and circular-aperture diffraction oracles.
 3. Implement detector intensity, log-intensity, and wrapped-phase observables.
 4. Implement and cross-validate the portable GPU FFT/propagation backend.
 5. Add detector field visualization and complex field phase/amplitude inspection in the UI.

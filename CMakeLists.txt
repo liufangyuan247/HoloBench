@@ -66,6 +66,7 @@ add_library(holobench_optics STATIC
     optics/scene/NumericalAperture.cpp
     optics/scene/OpticalBenchScene.cpp
     optics/scene/SceneProjectAdapter.cpp
+    optics/wave/FieldElements.cpp
     optics/wave/FieldSources.cpp
 )
 add_library(HoloBench::Optics ALIAS holobench_optics)
@@ -174,6 +175,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/compute/CpuFftBackendTests.cpp
         tests/analytic/BenchTracerTests.cpp
         tests/analytic/GeometricElementsTests.cpp
+        tests/analytic/FieldElementTests.cpp
         tests/analytic/NumericalApertureTests.cpp
         tests/analytic/SnellTests.cpp
         tests/analytic/ThinLensTests.cpp
