@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <numbers>
 #include <stdexcept>
