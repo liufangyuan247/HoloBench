@@ -38,6 +38,8 @@ FetchContent_MakeAvailable(nlohmann_json)
 
 add_library(holobench_core STATIC
     core/field/ComplexField2D.cpp
+    core/field/FieldObservables.cpp
+    core/field/ScalarField2D.cpp
     core/project/ProjectDocument.cpp
 )
 add_library(HoloBench::Core ALIAS holobench_core)
@@ -171,6 +173,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/test_main.cpp
         tests/core/UnitsTests.cpp
         tests/core/ComplexFieldTests.cpp
+        tests/core/FieldObservablesTests.cpp
         tests/compute/AngularSpectrumPropagatorTests.cpp
         tests/compute/CpuFftBackendTests.cpp
         tests/analytic/BenchTracerTests.cpp
