@@ -39,3 +39,23 @@ The generated fields use waveprop 0.0.12's `exp(+i k z)` spatial propagation
 convention. HoloBench's locked convention is documented in ADR 0005. Any
 future package or parameter change must regenerate the data and update the
 manifest in the same commit.
+
+## Locked comparison gates
+
+The C++ tests compare the complete complex field using normalized L2 error and
+maximum absolute error divided by the reference peak. They independently
+compare intensity with the same two metrics. The initial Windows double-
+precision reference measurements were:
+
+| Case | Complex L2 | Complex max/peak | Intensity L2 | Intensity max/peak | Gate |
+|---|---:|---:|---:|---:|---:|
+| ASM rectangular Gaussian | 6.37e-12 | 2.33e-12 | 2.64e-12 | 1.90e-12 | complex 5e-11; intensity 1e-10 |
+| Fresnel TF Gaussian | 1.84e-11 | 1.73e-11 | 1.01e-12 | 6.41e-13 | complex 5e-11; intensity 1e-10 |
+| Fraunhofer double slit | 1.65e-9 | 2.04e-9 | 6.24e-16 | 8.26e-16 | complex 5e-9; intensity 1e-10 |
+
+The Fraunhofer complex discrepancy is a nearly pure phase effect from the two
+implementations' different double-precision range reduction of the 1 metre
+longitudinal carrier (`k*z` is approximately 9.9e6 radians). Its intensity
+agreement remains at machine precision, so the separate intensity gate guards
+against using carrier-phase tolerance to hide an amplitude or normalization
+error.

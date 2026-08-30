@@ -190,11 +190,20 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/WaveSourceTests.cpp
         tests/project/ProjectDocumentTests.cpp
         tests/project/SceneProjectAdapterTests.cpp
+        tests/validation/WavepropCrossValidationTests.cpp
         render/Camera.cpp
         tests/render/CameraTests.cpp
         tests/render/GizmoTests.cpp
     )
     target_link_libraries(holobench_tests PRIVATE HoloBench::Core HoloBench::Compute HoloBench::Optics doctest::doctest glm::glm)
+    set(HOLOBENCH_WAVEPROP_GOLDEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/validation/waveprop/goldens")
+    file(COPY
+        "${CMAKE_CURRENT_SOURCE_DIR}/validation/waveprop/goldens/"
+        DESTINATION "${HOLOBENCH_WAVEPROP_GOLDEN_DIR}"
+    )
+    target_compile_definitions(holobench_tests PRIVATE
+        HOLOBENCH_WAVEPROP_GOLDEN_DIR="${HOLOBENCH_WAVEPROP_GOLDEN_DIR}"
+    )
     holobench_set_warnings(holobench_tests)
 
     include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
