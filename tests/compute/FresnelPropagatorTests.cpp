@@ -463,7 +463,7 @@ TEST_CASE("Fresnel calculates correct non-propagating energy fraction for finite
     // The robust scaled sum-of-squares algorithm correctly evaluates the fraction instead of silently reporting 0.0.
     constexpr double pitch = 100e-9; // Sub-wavelength grid where high-frequency bins are non-propagating
     auto value = makeField(8, 8, pitch);
-    
+
     // Fill with two spectral modes of equal magnitude 1e200:
     // Mode A: DC (x=0, y=0), transverse freq = 0 <= 1/lambda (propagating)
     // Mode B: xBin=3, yBin=0, transverse freq = 3 / (8 * 100nm) = 3.75e6 > 1/532nm = 1.88e6 (non-propagating)
@@ -528,4 +528,3 @@ TEST_CASE("Fresnel enforces strong exception safety when intermediate diagnostic
     CHECK_THROWS_AS(propagator.propagateInPlace(field, 0.0), std::overflow_error);
     checkSamplesExactly(field, original);
 }
-
