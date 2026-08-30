@@ -76,15 +76,13 @@ TEST_CASE("PhaseResult enforces invariant between wrappedPhase and validityMask"
     // Matching size succeeds
     std::vector<std::uint8_t> validMask(6, 1);
     validMask[2] = 0;
-    REQUIRE_NOTHROW({
-        field::PhaseResult result(phaseField, validMask);
-        CHECK(result.wrappedPhaseRadians().sampleCount() == 6);
-        CHECK(result.validityMask().size() == 6);
-        CHECK(result.isValid(0, 0) == true);
-        CHECK(result.isValid(2, 0) == false);
-        CHECK(result.isValid(2) == false);
-        CHECK(result.isValid(5) == true);
-    });
+    const field::PhaseResult result(phaseField, validMask);
+    CHECK(result.wrappedPhaseRadians().sampleCount() == 6);
+    CHECK(result.validityMask().size() == 6);
+    CHECK(result.isValid(0, 0) == true);
+    CHECK(result.isValid(2, 0) == false);
+    CHECK(result.isValid(2) == false);
+    CHECK(result.isValid(5) == true);
 
     // Mismatched size (smaller) throws invalid_argument
     std::vector<std::uint8_t> tooSmallMask(5, 1);
@@ -99,7 +97,6 @@ TEST_CASE("PhaseResult enforces invariant between wrappedPhase and validityMask"
     CHECK_THROWS_AS(static_cast<void>(field::PhaseResult(phaseField, emptyMask)), std::invalid_argument);
 
     // Bounds checking on isValid
-    field::PhaseResult result(phaseField, validMask);
     CHECK_THROWS_AS(static_cast<void>(result.isValid(3, 0)), std::out_of_range);
     CHECK_THROWS_AS(static_cast<void>(result.isValid(0, 2)), std::out_of_range);
     CHECK_THROWS_AS(static_cast<void>(result.isValid(4, 5)), std::out_of_range);
@@ -157,19 +154,15 @@ TEST_CASE("computeIntensity enforces exact denorm_min boundary and rejects round
     exactField.at(0, 0) = {std::ldexp(1.0, kHalfDenormMinExp), 0.0};
     exactField.at(1, 0) = {0.0, std::ldexp(1.0, kHalfDenormMinExp)};
 
-    REQUIRE_NOTHROW({
-        const auto exactIntensity = field::computeIntensity(exactField);
-        CHECK(exactIntensity.at(0, 0) == denormMin);
-        CHECK(exactIntensity.at(1, 0) == denormMin);
-    });
+    const auto exactIntensity = field::computeIntensity(exactField);
+    CHECK(exactIntensity.at(0, 0) == denormMin);
+    CHECK(exactIntensity.at(1, 0) == denormMin);
 
     // Subnormal intensity strictly above denorm_min (e.g. amplitude ldexp(1.0, kHalfDenormMinExp + 1), intensity = 4 * denorm_min)
     field::ComplexField2D subnormalField(1, 1, 1e-4, 1e-4, 532e-9, 1.0);
     subnormalField.at(0, 0) = {std::ldexp(1.0, kHalfDenormMinExp + 1), 0.0};
-    REQUIRE_NOTHROW({
-        const auto subIntensity = field::computeIntensity(subnormalField);
-        CHECK(subIntensity.at(0, 0) == std::ldexp(1.0, kDenormMinExp + 2));
-    });
+    const auto subIntensity = field::computeIntensity(subnormalField);
+    CHECK(subIntensity.at(0, 0) == std::ldexp(1.0, kDenormMinExp + 2));
 
     // Round-up-to-denorm_min counterexamples:
     // Mathematical true value is in (0, denorm_min), but standard IEEE rounding of std::norm would round up to denorm_min.
@@ -629,15 +622,12 @@ TEST_CASE("observables detect and reject floating point overflow") {
     CHECK_THROWS_AS(static_cast<void>(field::computeIntegratedIntensity(hugeField)), std::overflow_error);
 
     // computeDecibelIntensity and computeWrappedPhase handle 1e200 without overflow
-    CHECK_NOTHROW({
-        const auto db = field::computeDecibelIntensity(hugeField, -120.0, 1.0);
-        CHECK(db.at(0, 0) == doctest::Approx(4000.0));
-    });
-    CHECK_NOTHROW({
-        const auto phase = field::computeWrappedPhase(hugeField);
-        CHECK(phase.isValid(0, 0) == true);
-        CHECK(phase.wrappedPhaseRadians().at(0, 0) == doctest::Approx(0.0));
-    });
+    const auto db = field::computeDecibelIntensity(hugeField, -120.0, 1.0);
+    CHECK(db.at(0, 0) == doctest::Approx(4000.0));
+
+    const auto phase = field::computeWrappedPhase(hugeField);
+    CHECK(phase.isValid(0, 0) == true);
+    CHECK(phase.wrappedPhaseRadians().at(0, 0) == doctest::Approx(0.0));
 
     // ScalarField2D integrated intensity overflow
     field::ScalarField2D hugeScalar(1, 1, 1e100, 1e100, 532e-9, 1.0);
