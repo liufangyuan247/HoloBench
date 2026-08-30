@@ -33,6 +33,19 @@
 - Off-axis paraxial validity warnings triggered when ray angle exceeds paraxial threshold ($> 0.1$ rad).
 - Rear-aperture clipping warnings triggered when marginal rays exceed downstream element clear apertures.
 
+## M2 Wave Optics Validation Breakdown (In Progress)
+
+### 1. Fresnel Transfer-Function Propagator (`FresnelPropagatorTests.cpp`)
+- $z=0$ identity: Verified that $z=0$ propagation performs an exact FFT round-trip within $2\times 10^{-12}$ precision across all bins.
+- DC plane-wave phase: Verified that uniform fields acquire the exact longitudinal carrier phase $\exp(+ikz)$ (specifically tested $\pi/2$ phase at $z = \lambda/4$).
+- Single spectral bin: Analytic quadratic dispersion phase $\exp(+i[kz - \pi\lambda z(f_x^2+f_y^2)])$ verified against discrete frequency grid within $2\times 10^{-10}$.
+- Energy conservation: Unconditional Parseval energy / integrated intensity $\sum |U|^2 \Delta x \Delta y$ conservation verified within $2\times 10^{-12}$ relative tolerance.
+- Reversibility: Positive distance forward propagation followed by negative distance back-propagation returns to the initial state within $5\times 10^{-12}$.
+- Paraxial agreement with ASM: Verified tight agreement with exact Angular Spectrum Method (ASM) under low-NA conditions ($< 10^{-5}$ sample difference).
+- High-NA divergence: Demonstrated explicit divergence from ASM when spatial frequencies leave the paraxial regime ($> 0.1$ sample difference).
+- Evanescent behavior: Verified that sub-wavelength spatial frequencies retain unitary modulus $|H|=1$ under Fresnel propagation while ASM filters them to zero.
+- Robustness & exception safety: Validated rejection of non-finite inputs, unsupported grid dimensions, phase overflow, and verified strong exception safety on backend failures.
+
 ## Build and CI Execution Status
 
 - **Local Build & Tests**:

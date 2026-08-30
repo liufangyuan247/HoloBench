@@ -7,6 +7,12 @@
 - **Unmodeled physical effects**: Monochromatic rays only; no Fresnel coefficients (amplitude/power splitting across reflection/transmission), no polarization/Stokes parameters, and no recursive multi-bounce ray tracing.
 - **Interface media specification**: For planar dielectric interfaces, `nIncident` and `nTransmitted` are supplied by the caller according to the propagation side and are not automatically swapped for reverse-incident rays.
 
+## Wave optics models (M2 in progress)
+
+- **Fresnel transfer-function propagator paraxial limitations**: The quadratic phase transfer function $H(f_x, f_y) = \exp(+ikz)\exp[-i\pi\lambda z (f_x^2+f_y^2)]$ is a paraxial approximation valid when $\lambda^2(f_x^2+f_y^2) \ll 1$. It diverges from exact Helmholtz solutions at high NA / wide angles and must not be used as an exact solver.
+- **No evanescent wave attenuation in Fresnel TF**: Unlike ASM, the Fresnel transfer function does not cut off or attenuate evanescent spatial frequencies ($\sqrt{f_x^2+f_y^2} > n/\lambda_0$); all spectral bins retain unit modulus $|H|=1$.
+- **Periodic boundary and sampling**: Output grid sampling is fixed to input sampling ($\Delta x_2 = \Delta x_1$). Callers must provide adequate zero-padding to avoid wrap-around aliasing over long propagation distances.
+
 ## Platform & runtime
 
 - Requires an OpenGL 4.6 Core context; macOS is unsupported.
