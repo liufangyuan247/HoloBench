@@ -65,8 +65,9 @@ private:
  * @brief Computes linear intensity I(x, y) = |U(x, y)|^2 = Re(U)^2 + Im(U)^2 for every sample.
  *
  * Exact zero samples (0.0 + 0.0i) evaluate to 0.0. If a non-zero sample has a true mathematical intensity
- * strictly below double-precision denorm_min (2^-1074), an explicit std::underflow_error is thrown before
- * final rounding, while exact denorm_min and representable subnormals are returned accurately.
+ * strictly below double-precision denorm_min (std::numeric_limits<double>::denorm_min()), an explicit
+ * std::underflow_error is thrown before final rounding, while exact denorm_min and representable subnormals
+ * are returned accurately.
  *
  * @param field The input complex field.
  * @return ScalarField2D Pointwise linear intensity with matching dimensions and physical metadata.
@@ -129,8 +130,8 @@ private:
  * (e.g. huge amplitude with tiny pitch, or tiny amplitude with huge pitch) whose mathematical result is
  * representable in double precision evaluate accurately.
  * Exact zero fields evaluate to 0.0. If the mathematical non-zero integrated intensity is strictly less than
- * double precision denorm_min (2^-1074), an explicit std::underflow_error is thrown before final rounding,
- * while exact denorm_min and representable subnormals are returned accurately.
+ * double precision denorm_min (std::numeric_limits<double>::denorm_min()), an explicit std::underflow_error
+ * is thrown before final rounding, while exact denorm_min and representable subnormals are returned accurately.
  *
  * Units are [field-amplitude-squared * m^2].
  * Conversion to absolute radiometric power (Watts) requires calibrated optical impedance and source normalization.
@@ -148,8 +149,8 @@ private:
  *
  * Evaluated via scaled sum and base-2 exponent decomposition to avoid premature area product underflow/overflow.
  * Exact zero fields evaluate to 0.0. If non-zero total integrated intensity is strictly less than
- * double precision denorm_min (2^-1074), an explicit std::underflow_error is thrown before final rounding,
- * while exact denorm_min and representable subnormals are returned accurately.
+ * double precision denorm_min (std::numeric_limits<double>::denorm_min()), an explicit std::underflow_error
+ * is thrown before final rounding, while exact denorm_min and representable subnormals are returned accurately.
  *
  * Units are [field-amplitude-squared * m^2].
  * Conversion to absolute radiometric power (Watts) requires calibrated optical impedance and source normalization.

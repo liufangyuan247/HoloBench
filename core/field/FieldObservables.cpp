@@ -10,6 +10,25 @@
 namespace holobench::field {
 namespace {
 
+constexpr int kMinSubnormalFrexpExp =
+    std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits + 1;
+constexpr int kMaxFrexpExp = std::numeric_limits<double>::max_exponent;
+constexpr double kMinFrexpMantissa = 1.0 / static_cast<double>(std::numeric_limits<double>::radix);
+
+constexpr bool isFrexpUnderflow(double mantissa, int exponent) noexcept {
+    if (exponent < kMinSubnormalFrexpExp) {
+        return true;
+    }
+    if (exponent == kMinSubnormalFrexpExp && (mantissa < 0.0 ? -mantissa : mantissa) < kMinFrexpMantissa) {
+        return true;
+    }
+    return false;
+}
+
+constexpr bool isFrexpOverflow(int exponent) noexcept {
+    return exponent > kMaxFrexpExp;
+}
+
 void requirePositiveFinite(double value, const char* name) {
     if (!std::isfinite(value) || value <= 0.0) {
         throw std::invalid_argument(std::string(name) + " must be positive and finite");
@@ -52,11 +71,11 @@ double calculateIntensityChecked(const std::complex<double>& sample, std::size_t
     const double mS = std::frexp(sumSquares, &expS);
     const int finalExp = expS + 2 * expM;
 
-    if (finalExp < -1073) {
+    if (isFrexpUnderflow(mS, finalExp)) {
         throw std::underflow_error(
             "intensity calculation underflowed double precision at index " + std::to_string(index));
     }
-    if (finalExp > 1024) {
+    if (isFrexpOverflow(finalExp)) {
         throw std::overflow_error(
             "intensity calculation overflowed double precision at index " + std::to_string(index));
     }
@@ -214,10 +233,10 @@ double computeIntegratedIntensity(const ComplexField2D& field) {
     const double normProd = std::frexp(mProd, &expProd);
     const int finalExp = expS + 2 * expM + expX + expY + expProd;
 
-    if (finalExp < -1073) {
+    if (isFrexpUnderflow(normProd, finalExp)) {
         throw std::underflow_error("integrated intensity calculation underflowed double precision");
     }
-    if (finalExp > 1024) {
+    if (isFrexpOverflow(finalExp)) {
         throw std::overflow_error("integrated intensity calculation overflowed double precision");
     }
 
@@ -269,10 +288,10 @@ double computeIntegratedIntensity(const ScalarField2D& intensityField) {
     const double normProd = std::frexp(mProd, &expProd);
     const int finalExp = expS + expM + expX + expY + expProd;
 
-    if (finalExp < -1073) {
+    if (isFrexpUnderflow(normProd, finalExp)) {
         throw std::underflow_error("integrated intensity calculation underflowed double precision");
     }
-    if (finalExp > 1024) {
+    if (isFrexpOverflow(finalExp)) {
         throw std::overflow_error("integrated intensity calculation overflowed double precision");
     }
 

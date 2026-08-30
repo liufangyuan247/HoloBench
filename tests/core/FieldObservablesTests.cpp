@@ -145,11 +145,17 @@ TEST_CASE("computeIntensity computes accurate pointwise intensity and preserves 
 
 TEST_CASE("computeIntensity enforces exact denorm_min boundary and rejects round-up underflow") {
     constexpr double denormMin = std::numeric_limits<double>::denorm_min();
+    constexpr int kMinExp = std::numeric_limits<double>::min_exponent;
+    constexpr int kDigits = std::numeric_limits<double>::digits;
+    // Smallest subnormal has base-2 exponent (min_exponent - digits).
+    // An amplitude whose square equals denorm_min has half that exponent.
+    constexpr int kDenormMinExp = kMinExp - kDigits;
+    constexpr int kHalfDenormMinExp = kDenormMinExp / 2;
 
-    // Exact denorm_min positive cases (2^-537 squared = 2^-1074 = denorm_min)
+    // Exact denorm_min positive cases (ldexp(1.0, kHalfDenormMinExp)^2 = denorm_min)
     field::ComplexField2D exactField(2, 1, 1e-4, 1e-4, 532e-9, 1.0);
-    exactField.at(0, 0) = {std::ldexp(1.0, -537), 0.0};
-    exactField.at(1, 0) = {0.0, std::ldexp(1.0, -537)};
+    exactField.at(0, 0) = {std::ldexp(1.0, kHalfDenormMinExp), 0.0};
+    exactField.at(1, 0) = {0.0, std::ldexp(1.0, kHalfDenormMinExp)};
 
     REQUIRE_NOTHROW({
         const auto exactIntensity = field::computeIntensity(exactField);
@@ -157,34 +163,34 @@ TEST_CASE("computeIntensity enforces exact denorm_min boundary and rejects round
         CHECK(exactIntensity.at(1, 0) == denormMin);
     });
 
-    // Subnormal intensity strictly above denorm_min (e.g. 2^-536 squared = 2^-1072 = 4 * denorm_min)
+    // Subnormal intensity strictly above denorm_min (e.g. amplitude ldexp(1.0, kHalfDenormMinExp + 1), intensity = 4 * denorm_min)
     field::ComplexField2D subnormalField(1, 1, 1e-4, 1e-4, 532e-9, 1.0);
-    subnormalField.at(0, 0) = {std::ldexp(1.0, -536), 0.0};
+    subnormalField.at(0, 0) = {std::ldexp(1.0, kHalfDenormMinExp + 1), 0.0};
     REQUIRE_NOTHROW({
         const auto subIntensity = field::computeIntensity(subnormalField);
-        CHECK(subIntensity.at(0, 0) == std::ldexp(1.0, -1072));
+        CHECK(subIntensity.at(0, 0) == std::ldexp(1.0, kDenormMinExp + 2));
     });
 
     // Round-up-to-denorm_min counterexamples:
     // Mathematical true value is in (0, denorm_min), but standard IEEE rounding of std::norm would round up to denorm_min.
-    // 1. Single real component: (0.75 * 2^-537)^2 = 0.5625 * 2^-1074 < denorm_min
+    // 1. Single real component: (0.75 * 2^kHalfDenormMinExp)^2 = 0.5625 * denorm_min < denorm_min
     field::ComplexField2D roundUpReal(1, 1, 1e-4, 1e-4, 532e-9, 1.0);
-    roundUpReal.at(0, 0) = {std::ldexp(0.75, -537), 0.0};
+    roundUpReal.at(0, 0) = {std::ldexp(0.75, kHalfDenormMinExp), 0.0};
     CHECK_THROWS_AS(static_cast<void>(field::computeIntensity(roundUpReal)), std::underflow_error);
 
-    // 2. Single imaginary component: (0.75 * 2^-537)^2 = 0.5625 * 2^-1074 < denorm_min
+    // 2. Single imaginary component: (0.75 * 2^kHalfDenormMinExp)^2 = 0.5625 * denorm_min < denorm_min
     field::ComplexField2D roundUpImag(1, 1, 1e-4, 1e-4, 532e-9, 1.0);
-    roundUpImag.at(0, 0) = {0.0, std::ldexp(0.75, -537)};
+    roundUpImag.at(0, 0) = {0.0, std::ldexp(0.75, kHalfDenormMinExp)};
     CHECK_THROWS_AS(static_cast<void>(field::computeIntensity(roundUpImag)), std::underflow_error);
 
-    // 3. Two components: (0.6 * 2^-537)^2 + (0.5 * 2^-537)^2 = 0.61 * 2^-1074 < denorm_min
+    // 3. Two components: (0.6 * 2^kHalfDenormMinExp)^2 + (0.5 * 2^kHalfDenormMinExp)^2 = 0.61 * denorm_min < denorm_min
     field::ComplexField2D roundUpTwoComp(1, 1, 1e-4, 1e-4, 532e-9, 1.0);
-    roundUpTwoComp.at(0, 0) = {std::ldexp(0.6, -537), std::ldexp(0.5, -537)};
+    roundUpTwoComp.at(0, 0) = {std::ldexp(0.6, kHalfDenormMinExp), std::ldexp(0.5, kHalfDenormMinExp)};
     CHECK_THROWS_AS(static_cast<void>(field::computeIntensity(roundUpTwoComp)), std::underflow_error);
 
-    // 4. Equal components: (0.5 * 2^-537)^2 + (0.5 * 2^-537)^2 = 0.5 * 2^-1074 = 2^-1075 < denorm_min
+    // 4. Equal components: (0.5 * 2^kHalfDenormMinExp)^2 + (0.5 * 2^kHalfDenormMinExp)^2 = 0.5 * denorm_min < denorm_min
     field::ComplexField2D roundUpEqualComp(1, 1, 1e-4, 1e-4, 532e-9, 1.0);
-    roundUpEqualComp.at(0, 0) = {std::ldexp(0.5, -537), std::ldexp(0.5, -537)};
+    roundUpEqualComp.at(0, 0) = {std::ldexp(0.5, kHalfDenormMinExp), std::ldexp(0.5, kHalfDenormMinExp)};
     CHECK_THROWS_AS(static_cast<void>(field::computeIntensity(roundUpEqualComp)), std::underflow_error);
 
     // Extreme deep underflow field (1e-200)
@@ -461,6 +467,11 @@ TEST_CASE("computeIntegratedIntensity scales accurately with transverse grid pit
 
 TEST_CASE("computeIntegratedIntensity evaluates balanced extreme scale fields without intermediate underflow/overflow") {
     constexpr double denormMin = std::numeric_limits<double>::denorm_min();
+    constexpr int kMinExp = std::numeric_limits<double>::min_exponent;
+    constexpr int kDigits = std::numeric_limits<double>::digits;
+    constexpr int kMaxExp = std::numeric_limits<double>::max_exponent;
+    constexpr int kDenormMinExp = kMinExp - kDigits;
+    constexpr int kHalfDenormMinExp = kDenormMinExp / 2;
 
     // Balanced ComplexField2D: huge amplitude 1e160 x tiny pitch 1e-160 x 1e-160
     // Mathematical integral = (1e160)^2 * (1e-160 * 1e-160) = 1.0
@@ -475,12 +486,13 @@ TEST_CASE("computeIntegratedIntensity evaluates balanced extreme scale fields wi
     CHECK(field::computeIntegratedIntensity(tinyAmpHugePitch) == doctest::Approx(1.0));
 
     // Balanced ComplexField2D with denorm_min amplitude:
-    // amplitude = denorm_min (2^-1074), pitchX = pitchY = 2^1023
-    // Mathematical integral = (2^-1074)^2 * 2^1023 * 2^1023 = 2^-2148 * 2^2046 = 2^-102
-    const double pitch1023 = std::ldexp(1.0, 1023);
-    field::ComplexField2D denormComplex(1, 1, pitch1023, pitch1023, 532e-9, 1.0);
+    // amplitude = denorm_min (2^kDenormMinExp), pitchX = pitchY = 2^(kMaxExp - 1)
+    // Mathematical integral = (2^kDenormMinExp)^2 * 2^(2 * (kMaxExp - 1))
+    const double pitchMaxFinite = std::ldexp(1.0, kMaxExp - 1);
+    field::ComplexField2D denormComplex(1, 1, pitchMaxFinite, pitchMaxFinite, 532e-9, 1.0);
     denormComplex.at(0, 0) = {denormMin, 0.0};
-    const double expectedComplexResult = std::ldexp(1.0, -102);
+    const int expectedExp = 2 * kDenormMinExp + 2 * (kMaxExp - 1);
+    const double expectedComplexResult = std::ldexp(1.0, expectedExp);
     const double actualComplexResult = field::computeIntegratedIntensity(denormComplex);
     CHECK(actualComplexResult == expectedComplexResult);
     CHECK(actualComplexResult == doctest::Approx(expectedComplexResult));
@@ -498,45 +510,46 @@ TEST_CASE("computeIntegratedIntensity evaluates balanced extreme scale fields wi
     CHECK(field::computeIntegratedIntensity(tinyScalarHugePitch) == doctest::Approx(1.0));
 
     // Balanced ScalarField2D with denorm_min intensity:
-    // intensity = denorm_min (2^-1074), pitchX = pitchY = 2^537
-    // Mathematical integral = 2^-1074 * 2^537 * 2^537 = 2^0 = 1.0
-    const double pitch537 = std::ldexp(1.0, 537);
-    field::ScalarField2D denormScalar(1, 1, pitch537, pitch537, 532e-9, 1.0);
+    // intensity = denorm_min (2^kDenormMinExp), pitchX = pitchY = 2^(-kHalfDenormMinExp)
+    // Mathematical integral = 2^kDenormMinExp * 2^(-2 * kHalfDenormMinExp) = 2^0 = 1.0
+    const double pitchBalanced = std::ldexp(1.0, -kHalfDenormMinExp);
+    field::ScalarField2D denormScalar(1, 1, pitchBalanced, pitchBalanced, 532e-9, 1.0);
     denormScalar.at(0, 0) = denormMin;
     const double actualScalarResult = field::computeIntegratedIntensity(denormScalar);
     CHECK(actualScalarResult == 1.0);
     CHECK(actualScalarResult == doctest::Approx(1.0));
 
     // Representable exact denorm_min result return without underflow_error:
-    // 1. ScalarField2D: scalar intensity = 2^-1000, pitchX = 2^-50, pitchY = 2^-24 -> total = 2^-1074 = denorm_min
-    field::ScalarField2D subnormalScalar(1, 1, std::ldexp(1.0, -50), std::ldexp(1.0, -24), 532e-9, 1.0);
-    subnormalScalar.at(0, 0) = std::ldexp(1.0, -1000);
+    // 1. ScalarField2D: scalar intensity = 2^(kDenormMinExp + 74), pitchX = 2^-50, pitchY = 2^-24 -> total = 2^kDenormMinExp = denorm_min
+    constexpr int kIntensityExp = kDenormMinExp + 74;
+    constexpr int kPitchXExp = -50;
+    constexpr int kPitchYExp = kDenormMinExp - kIntensityExp - kPitchXExp;
+    field::ScalarField2D subnormalScalar(1, 1, std::ldexp(1.0, kPitchXExp), std::ldexp(1.0, kPitchYExp), 532e-9, 1.0);
+    subnormalScalar.at(0, 0) = std::ldexp(1.0, kIntensityExp);
     const double subnormalResult = field::computeIntegratedIntensity(subnormalScalar);
     CHECK(subnormalResult == denormMin);
 
-    // 2. ComplexField2D: amplitude = 2^-500 (|U|^2 = 2^-1000), pitchX = 2^-50, pitchY = 2^-24 -> total = 2^-1074 = denorm_min
-    field::ComplexField2D exactDenormComplex(1, 1, std::ldexp(1.0, -50), std::ldexp(1.0, -24), 532e-9, 1.0);
-    exactDenormComplex.at(0, 0) = {std::ldexp(1.0, -500), 0.0};
+    // 2. ComplexField2D: amplitude = 2^(kIntensityExp / 2), pitchX = 2^kPitchXExp, pitchY = 2^kPitchYExp -> total = 2^kDenormMinExp = denorm_min
+    field::ComplexField2D exactDenormComplex(1, 1, std::ldexp(1.0, kPitchXExp), std::ldexp(1.0, kPitchYExp), 532e-9, 1.0);
+    exactDenormComplex.at(0, 0) = {std::ldexp(1.0, kIntensityExp / 2), 0.0};
     const double exactComplexIntegral = field::computeIntegratedIntensity(exactDenormComplex);
     CHECK(exactComplexIntegral == denormMin);
 
     // Round-up-to-denorm_min counterexamples for integrated intensity:
     // Mathematical true value is in (0, denorm_min), but standard IEEE rounding would round up to denorm_min.
-    // 1. ScalarField2D: intensity = 0.75 * 2^-1000, pitchX = 2^-50, pitchY = 2^-24 -> total = 0.75 * 2^-1074 < denorm_min
-    field::ScalarField2D roundUpScalar(1, 1, std::ldexp(1.0, -50), std::ldexp(1.0, -24), 532e-9, 1.0);
-    roundUpScalar.at(0, 0) = std::ldexp(0.75, -1000);
+    // 1. ScalarField2D: intensity = 0.75 * 2^kIntensityExp -> total = 0.75 * denorm_min < denorm_min
+    field::ScalarField2D roundUpScalar(1, 1, std::ldexp(1.0, kPitchXExp), std::ldexp(1.0, kPitchYExp), 532e-9, 1.0);
+    roundUpScalar.at(0, 0) = std::ldexp(0.75, kIntensityExp);
     CHECK_THROWS_AS(static_cast<void>(field::computeIntegratedIntensity(roundUpScalar)), std::underflow_error);
 
-    // 2. ComplexField2D single component: amplitude = 0.75 * 2^-500 (|U|^2 = 0.5625 * 2^-1000), pitchX = 2^-50, pitchY = 2^-24
-    //    total = 0.5625 * 2^-1074 < denorm_min
-    field::ComplexField2D roundUpComplexSingle(1, 1, std::ldexp(1.0, -50), std::ldexp(1.0, -24), 532e-9, 1.0);
-    roundUpComplexSingle.at(0, 0) = {std::ldexp(0.75, -500), 0.0};
+    // 2. ComplexField2D single component: amplitude = 0.75 * 2^(kIntensityExp / 2) -> total = 0.5625 * denorm_min < denorm_min
+    field::ComplexField2D roundUpComplexSingle(1, 1, std::ldexp(1.0, kPitchXExp), std::ldexp(1.0, kPitchYExp), 532e-9, 1.0);
+    roundUpComplexSingle.at(0, 0) = {std::ldexp(0.75, kIntensityExp / 2), 0.0};
     CHECK_THROWS_AS(static_cast<void>(field::computeIntegratedIntensity(roundUpComplexSingle)), std::underflow_error);
 
-    // 3. ComplexField2D two components: u = 0.6 * 2^-500, v = 0.5 * 2^-500 (|U|^2 = 0.61 * 2^-1000), pitchX = 2^-50, pitchY = 2^-24
-    //    total = 0.61 * 2^-1074 < denorm_min
-    field::ComplexField2D roundUpComplexTwo(1, 1, std::ldexp(1.0, -50), std::ldexp(1.0, -24), 532e-9, 1.0);
-    roundUpComplexTwo.at(0, 0) = {std::ldexp(0.6, -500), std::ldexp(0.5, -500)};
+    // 3. ComplexField2D two components: u = 0.6 * 2^(kIntensityExp / 2), v = 0.5 * 2^(kIntensityExp / 2) -> total = 0.61 * denorm_min < denorm_min
+    field::ComplexField2D roundUpComplexTwo(1, 1, std::ldexp(1.0, kPitchXExp), std::ldexp(1.0, kPitchYExp), 532e-9, 1.0);
+    roundUpComplexTwo.at(0, 0) = {std::ldexp(0.6, kIntensityExp / 2), std::ldexp(0.5, kIntensityExp / 2)};
     CHECK_THROWS_AS(static_cast<void>(field::computeIntegratedIntensity(roundUpComplexTwo)), std::underflow_error);
 
     // True underflow on non-zero field throws std::underflow_error
