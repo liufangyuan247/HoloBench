@@ -20,6 +20,16 @@ TEST_CASE("complex field validates metadata and uses row-major centered coordina
     CHECK(value.refractiveIndex() == 1.5);
     CHECK(value.mediumWavenumberRadiansPerMetre() == doctest::Approx(2.0 * 3.14159265358979323846 * 1.5 / 500e-9));
 
+    field::ComplexField2D balancedExtreme(
+        1,
+        1,
+        1.0,
+        1.0,
+        std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::max());
+    CHECK(balancedExtreme.mediumWavenumberRadiansPerMetre()
+        == doctest::Approx(2.0 * 3.14159265358979323846));
+
     CHECK(value.xCoordinateMetres(0) == doctest::Approx(-1.0));
     CHECK(value.xCoordinateMetres(2) == doctest::Approx(0.0));
     CHECK(value.xCoordinateMetres(3) == doctest::Approx(0.5));

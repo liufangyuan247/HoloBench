@@ -41,7 +41,7 @@ ComplexField2D::ComplexField2D(
 }
 
 double ComplexField2D::mediumWavenumberRadiansPerMetre() const noexcept {
-    return 2.0 * std::numbers::pi * refractiveIndex_ / vacuumWavelengthMetres_;
+    return 2.0 * std::numbers::pi * (refractiveIndex_ / vacuumWavelengthMetres_);
 }
 
 double ComplexField2D::xCoordinateMetres(std::size_t xIndex) const {
