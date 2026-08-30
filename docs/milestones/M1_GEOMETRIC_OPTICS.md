@@ -54,4 +54,4 @@ Deliver the first physically validated product vertical slice: a user can inspec
 - [x] Real and virtual image visualization is correctly distinguished (`BenchTracerTests.cpp`).
 - [x] OpenGL debug error count remains zero during the benchmark smoke run (0 errors on AMD Radeon Pro 5300M).
 - [x] Project-owned code builds with warnings as errors across `dev` and `app-ci` presets.
-- [ ] Windows and Linux GitHub Actions CI execution: Workflows are configured in `.github/workflows/`; remote execution on GitHub runners is pending git push (local dev/core-ci passes 92/92).
+- [x] Windows and Linux GitHub Actions CI execution: all four Windows/Ubuntu core and application jobs pass in run [33332649845](https://github.com/liufangyuan247/HoloBench/actions/runs/33332649845); local dev/core-ci and MSVC suites pass 92/92.

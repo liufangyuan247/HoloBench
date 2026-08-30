@@ -23,6 +23,7 @@ Next: **M2 — Scalar Wave Optics & Angular Spectrum Method (ASM)**
   - **Image Diagnostics**: Real, virtual, and infinity/collimated image plane evaluation, Numerical Aperture (NA) cone calculation, off-axis paraxial validity warnings, and rear-aperture clipping warnings.
   - **3D Bench Visualization**: Interactive orbit/pan/zoom camera, metric world grid, dynamic ray segment renderer, `+Z` forward-orientation gizmos for lenses and screens, and Dear ImGui property inspector.
   - **Verification & Test Suite**: 92/92 deterministic unit tests passing across `dev` and `core-ci` presets (`ThinLensTests`, `SnellTests`, `GeometricElementsTests`, `NumericalApertureTests`, `BenchTracerTests`, `CameraTests`, `GizmoTests`, `UnitsTests`, `ProjectDocumentTests`, `SceneProjectAdapterTests`).
+  - **Cross-platform CI**: GitHub Actions run [33332649845](https://github.com/liufangyuan247/HoloBench/actions/runs/33332649845) passes all four gates: Windows and Ubuntu core build/tests plus Windows and Ubuntu application compilation with warnings as errors.
   - **First-run workspace**: the empty DockSpace is initialized with Optical Bench in the center, Inspector on the right (25%), and Validation at the bottom (20%); a layout restored from `imgui.ini` is preserved.
   - **OpenGL Smoke Test**: 120-frame headless/automated smoke run passes with exit code 0 and zero reported OpenGL errors on AMD Radeon Pro 5300M (OpenGL 4.6.0 Core, GLSL 4.60).
   - **GPU Throughput Benchmark**: Measured at 1920x1080 with 5,000 rays (10,000 displayed line segments), 60 warmup frames, 300 measured frames, `vsync=0`, and `gpu_sync=true` (`glFinish` per frame):
@@ -42,7 +43,7 @@ Next: **M2 — Scalar Wave Optics & Angular Spectrum Method (ASM)**
 - **Paraxial approximation**: Thin-lens solver assumes small incident angles and paraxial proximity.
 - **Unmodeled physics**: Monochromatic rays only; no Fresnel transmission/reflection coefficients, no polarization, no wave diffraction, and no recursive multi-bounce ray tracing.
 - **Planar interface conventions**: `nIncident` and `nTransmitted` are supplied by the caller according to the propagation side and are not automatically swapped for reverse-incident rays.
-- **CI remote runs**: Windows and Linux GitHub Actions workflows are configured in repository; remote workflow execution on GitHub runners is pending git push.
+- **Platform scope**: Automated build coverage is Windows and Ubuntu; macOS remains unsupported because the application requires an OpenGL 4.6 Core context.
 
 ## Next five tasks
 

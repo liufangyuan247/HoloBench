@@ -10,8 +10,8 @@
 ## Platform & runtime
 
 - Requires an OpenGL 4.6 Core context; macOS is unsupported.
-- Local verification has been executed on Windows Clang/Ninja.
-- Remote CI workflows for Windows and Linux are configured in the repository; execution on remote GitHub Actions runners is pending git push (remote CI status is not claimed as verified).
+- Local verification has been executed on Windows Clang/Ninja and MSVC/Ninja with warnings as errors.
+- Remote GitHub Actions verification passes on Windows and Ubuntu for both core build/tests and application compilation ([run 33332649845](https://github.com/liufangyuan247/HoloBench/actions/runs/33332649845)).
 
 ## Architecture & data
 

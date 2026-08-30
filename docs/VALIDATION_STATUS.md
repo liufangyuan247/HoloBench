@@ -42,4 +42,6 @@
 - **OpenGL Smoke Test**:
   - 120-frame run on AMD Radeon Pro 5300M with OpenGL 4.6 Core / GLSL 4.60: completed with exit code 0 and 0 reported OpenGL debug errors.
 - **GitHub Actions Remote CI**:
-  - Windows and Linux workflow configurations defined in `.github/workflows/`. Remote runner execution is pending git push.
+  - Run [33332649845](https://github.com/liufangyuan247/HoloBench/actions/runs/33332649845): all four jobs pass.
+  - Windows and Ubuntu `core-ci`: warnings-as-errors build and 92/92 deterministic tests pass.
+  - Windows and Ubuntu `app-ci`: warnings-as-errors application compilation passes; the Windows job explicitly binds Glad generation to Python 3.14.7 with pinned Jinja2 3.1.6 and MarkupSafe 3.0.3 dependencies.
