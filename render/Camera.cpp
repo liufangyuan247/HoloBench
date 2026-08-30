@@ -15,7 +15,7 @@ constexpr float kMaxDistance = 100.0F;
 constexpr float kMaxPitch = glm::radians(89.0F);
 constexpr float kDefaultFovY = glm::radians(45.0F);
 
-[[nodiscard]] constexpr bool isFiniteVec3(const glm::vec3& v) noexcept {
+[[nodiscard]] bool isFiniteVec3(const glm::vec3& v) noexcept {
     return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
 }
 

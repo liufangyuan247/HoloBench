@@ -163,8 +163,9 @@ Application::Application()
     tracerOptions_.maxPropagationDistanceMetres = 2.0;
     tracerOptions_.includeVirtualExtensions = true;
     tracerOptions_.virtualExtensionDistanceMetres = 1.0;
-    std::strncpy(projectPathBuffer_, "holobench_scene.json", sizeof(projectPathBuffer_) - 1);
-    projectPathBuffer_[sizeof(projectPathBuffer_) - 1] = '\0';
+    constexpr char kDefaultProjectPath[] = "holobench_scene.json";
+    static_assert(sizeof(kDefaultProjectPath) <= sizeof(projectPathBuffer_));
+    std::copy_n(kDefaultProjectPath, sizeof(kDefaultProjectPath), projectPathBuffer_);
 }
 
 Application::~Application() {

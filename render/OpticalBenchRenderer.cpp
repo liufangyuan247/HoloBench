@@ -586,7 +586,7 @@ bool OpticalBenchRenderer::updateScene(
         std::numeric_limits<std::size_t>::max() / sizeof(BenchVertex)
     });
 
-    if (kMaxAllowedVertices <= kBaseEstimatedVertices) {
+    if constexpr (kMaxAllowedVertices <= kBaseEstimatedVertices) {
         return false;
     }
 
