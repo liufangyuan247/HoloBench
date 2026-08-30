@@ -40,16 +40,37 @@ double calculateIntensityChecked(const std::complex<double>& sample, std::size_t
     if (sample.real() == 0.0 && sample.imag() == 0.0) {
         return 0.0;
     }
-    const double intensity = std::norm(sample);
-    if (!std::isfinite(intensity)) {
-        throw std::overflow_error(
-            "intensity calculation overflowed double precision at index " + std::to_string(index));
-    }
-    if (intensity == 0.0) {
+    const double maxAmp = std::max(std::abs(sample.real()), std::abs(sample.imag()));
+    int expM = 0;
+    std::frexp(maxAmp, &expM);
+
+    const double u = std::ldexp(sample.real(), -expM);
+    const double v = std::ldexp(sample.imag(), -expM);
+    const double sumSquares = u * u + v * v;
+
+    int expS = 0;
+    const double mS = std::frexp(sumSquares, &expS);
+    const int finalExp = expS + 2 * expM;
+
+    if (finalExp < -1073) {
         throw std::underflow_error(
             "intensity calculation underflowed double precision at index " + std::to_string(index));
     }
-    return intensity;
+    if (finalExp > 1024) {
+        throw std::overflow_error(
+            "intensity calculation overflowed double precision at index " + std::to_string(index));
+    }
+
+    const double result = std::ldexp(mS, finalExp);
+    if (!std::isfinite(result)) {
+        throw std::overflow_error(
+            "intensity calculation overflowed double precision at index " + std::to_string(index));
+    }
+    if (result == 0.0) {
+        throw std::underflow_error(
+            "intensity calculation underflowed double precision at index " + std::to_string(index));
+    }
+    return result;
 }
 
 } // namespace
@@ -189,9 +210,18 @@ double computeIntegratedIntensity(const ComplexField2D& field) {
     const double mY = std::frexp(field.pitchYMetres(), &expY);
 
     const double mProd = mS * mX * mY;
-    const int totalExp = expS + 2 * expM + expX + expY;
+    int expProd = 0;
+    const double normProd = std::frexp(mProd, &expProd);
+    const int finalExp = expS + 2 * expM + expX + expY + expProd;
 
-    const double result = std::ldexp(mProd, totalExp);
+    if (finalExp < -1073) {
+        throw std::underflow_error("integrated intensity calculation underflowed double precision");
+    }
+    if (finalExp > 1024) {
+        throw std::overflow_error("integrated intensity calculation overflowed double precision");
+    }
+
+    const double result = std::ldexp(normProd, finalExp);
     if (!std::isfinite(result)) {
         throw std::overflow_error("integrated intensity calculation overflowed double precision");
     }
@@ -235,9 +265,18 @@ double computeIntegratedIntensity(const ScalarField2D& intensityField) {
     const double mY = std::frexp(intensityField.pitchYMetres(), &expY);
 
     const double mProd = mS * mX * mY;
-    const int totalExp = expS + expM + expX + expY;
+    int expProd = 0;
+    const double normProd = std::frexp(mProd, &expProd);
+    const int finalExp = expS + expM + expX + expY + expProd;
 
-    const double result = std::ldexp(mProd, totalExp);
+    if (finalExp < -1073) {
+        throw std::underflow_error("integrated intensity calculation underflowed double precision");
+    }
+    if (finalExp > 1024) {
+        throw std::overflow_error("integrated intensity calculation overflowed double precision");
+    }
+
+    const double result = std::ldexp(normProd, finalExp);
     if (!std::isfinite(result)) {
         throw std::overflow_error("integrated intensity calculation overflowed double precision");
     }

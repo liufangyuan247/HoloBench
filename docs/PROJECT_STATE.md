@@ -33,12 +33,12 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 - **M2 Scalar Wave Optics (Implemented Components)**:
   - **Conventions & Foundation**: Fourier sign, normalization, complex phasor time convention, grid sampling, periodic boundary, and evanescent-wave policy locked in [ADR 0005](adr/0005-wave-optics-conventions.md).
   - **Complex & Scalar Fields**: `ComplexField2D`, `ScalarField2D`, backend-neutral FFT interface, and deterministic radix-2 CPU FFT reference.
-  - **Field Observables**: Pointwise linear intensity ($I=|U|^2$), decibel log intensity ($I_{\text{dB}}$ with explicit floor and zero handling), wrapped phase in unique $[-\pi, +\pi)$ rad interval with `validityMask` tracking sub-threshold samples, and transverse Riemann plane integrated relative intensity.
+  - **Field Observables**: Pointwise linear intensity ($I=|U|^2$ with strict pre-rounding sub-denorm_min underflow detection), decibel log intensity ($I_{\text{dB}}$ with explicit floor and zero handling), wrapped phase in unique $[-\pi, +\pi)$ rad interval with `validityMask` tracking sub-threshold samples, and transverse Riemann plane integrated relative intensity with exact denorm_min domain boundaries.
   - **Angular Spectrum Method (ASM)**: CPU reference propagator with positive propagation phase, native FFT frequency indexing, evanescent cutoff, and Gaussian beam verification ($\sqrt{2}w_0$ at one Rayleigh range).
   - **Fresnel Transfer-Function Propagator**: Quadratic phase transfer function $H(f_x, f_y) = \exp(+ikz)\exp[-i\pi\lambda z(f_x^2+f_y^2)]$, non-propagating energy tracking, sampling phase aliasing diagnostics ($\Delta\psi > \pi$), and low-NA ASM agreement.
   - **Fraunhofer Propagator & Independent Oracles**: Scaled Fourier diffraction integral $\Delta x_{\text{out}} = \frac{\lambda z}{N_x \Delta x_{\text{in}}}$, Parseval energy conservation, range-reduced phase evaluation, Fresnel number $N_F$ far-field warnings, and independent analytical oracles for single-slit sinc$^2$, double-slit Young interference, and circular aperture Airy disc patterns.
   - **Field Sources & Elements**: Plane wave and fundamental paraxial Gaussian beam sources; binary circular, rectangular, and double-slit aperture masks; ideal thin-lens quadratic phase screen.
-  - **Test Suite Status**: 170/170 deterministic unit tests passing across `dev` and `core-ci` presets (124 baseline + 11 observables + 19 Fresnel TF + 16 Fraunhofer).
+  - **Test Suite Status**: 174/174 deterministic unit tests passing across `dev` and `core-ci` presets (124 baseline + 15 observables + 19 Fresnel TF + 16 Fraunhofer).
 
 ## In progress / Remaining for M2
 
