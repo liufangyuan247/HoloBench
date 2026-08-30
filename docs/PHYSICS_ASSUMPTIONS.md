@@ -44,12 +44,15 @@ This file records active physical assumptions, sign conventions, and validity do
 - **No Wave Diffraction / Interference**: Optical rays follow rectilinear geometric paths; wave interference and diffraction are deferred to M2.
 - **No Recursive Branching**: Rays terminate upon absorption or screen impact; multi-bounce splitting is not performed in M1.
 
-## M2 Wave Optics (To Be Locked Before Implementation)
+## M2 Scalar Wave Optics Assumptions
 
-The following conventions must be locked in ADR 0005 prior to M2 solver implementation:
-- Complex phasor time-harmonic convention ($e^{-i\omega t}$ vs. $e^{i\omega t}$).
-- Discrete Fourier Transform (DFT/FFT) forward/inverse sign convention and normalization factor ($1/N$ vs. $1/\sqrt{N}$).
-- 2D grid spatial sampling pitch ($\Delta x, \Delta y$), grid centering (DC at $[0,0]$ vs. shifted to center), and even/odd grid dimension policy.
-- Boundary conditions: Absorbing boundary layers (PML / apodization mask) vs. periodic wrap-around.
-- Evanescent wave filtering policy in the Angular Spectrum Method ($k_x^2 + k_y^2 > k_0^2$).
-- Energy conservation and detector intensity integration conventions.
+[ADR 0005](adr/0005-wave-optics-conventions.md) locks the complete convention. Its active summary is:
+
+- The physical field is $\operatorname{Re}\{Ue^{-i\omega t}\}$, so forward `+Z` propagation uses $e^{+ik_z z}$.
+- Forward DFT uses the negative exponential without scaling; inverse DFT uses the positive exponential and divides by $N_xN_y$.
+- Spatial storage is row-major with `x` fastest and centered coordinates `(index - floor(N/2)) * pitch`; spectra remain in unshifted FFT order internally.
+- `lambda0` is vacuum wavelength, the propagation medium has explicit homogeneous index $n$, and $k=2\pi n/\lambda_0$.
+- The finite grid is periodic. Padding/apodization is explicit, not silently inferred, and M2 does not claim open boundaries.
+- Default ASM propagation removes evanescent bins instead of allowing unstable negative-distance exponential growth.
+- Scalar intensity is proportional to $|U|^2$ and its discrete plane integral is $\sum |U|^2\Delta x\Delta y$; absolute radiometric calibration is separate.
+- The deterministic CPU reference uses double-precision complex samples. GPU implementations must document precision and validate against it.

@@ -4,9 +4,9 @@ Last updated: 2026-08-31
 
 ## Current milestone
 
-**M1 — 3D Optical Bench + Geometric Optics: complete**
+**M2 — Scalar Wave Optics & Angular Spectrum Method (ASM): in progress**
 
-Next: **M2 — Scalar Wave Optics & Angular Spectrum Method (ASM)**
+Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 
 ## Completed
 
@@ -33,9 +33,10 @@ Next: **M2 — Scalar Wave Optics & Angular Spectrum Method (ASM)**
 
 ## In progress / Next up (M2)
 
-- Lock Fourier sign, normalization, complex phasor time convention, grid sampling, and boundary conditions in an ADR.
+- Fourier sign, normalization, complex phasor time convention, grid sampling, periodic boundary, and evanescent-wave policy are locked in [ADR 0005](adr/0005-wave-optics-conventions.md).
+- `ComplexField2D`, a backend-neutral FFT interface, and the deterministic radix-2 CPU FFT reference are implemented and pass the 100-test Clang and MSVC warnings-as-errors suites.
 - Implement deterministic CPU reference for 2D Angular Spectrum Method (ASM) scalar diffraction.
-- Add 2D complex optical field data structure and detector intensity visualization.
+- Add detector intensity and phase visualization.
 - Implement analytical validation cases (single slit, rectangular aperture, circular Airy disc, paraxial vs non-paraxial ASM propagation).
 
 ## Known limitations (M1)
@@ -47,8 +48,8 @@ Next: **M2 — Scalar Wave Optics & Angular Spectrum Method (ASM)**
 
 ## Next five tasks
 
-1. Lock wave optics conventions (phasor sign, FFT normalization, boundary absorption) in ADR 0005.
-2. Implement 2D complex field buffer and Fourier transform backend interface (`compute/`).
-3. Build deterministic CPU reference solver for Angular Spectrum Method (ASM) propagation.
-4. Implement analytical diffraction validation tests (1D slit, 2D aperture, lens focus).
-5. Add detector intensity rendering and complex field phase/amplitude inspector in the UI.
+1. Build the deterministic CPU reference solver for Angular Spectrum Method (ASM) propagation.
+2. Add plane-wave and Gaussian-beam sources with analytic propagation oracles.
+3. Add aperture masks and ideal thin-lens phase with diffraction validation cases.
+4. Implement and cross-validate the portable GPU FFT/propagation backend.
+5. Add detector intensity rendering and complex field phase/amplitude inspection in the UI.
