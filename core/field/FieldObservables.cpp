@@ -37,10 +37,17 @@ void requireFiniteSample(const std::complex<double>& sample, std::size_t index) 
 
 double calculateIntensityChecked(const std::complex<double>& sample, std::size_t index) {
     requireFiniteSample(sample, index);
+    if (sample.real() == 0.0 && sample.imag() == 0.0) {
+        return 0.0;
+    }
     const double intensity = std::norm(sample);
     if (!std::isfinite(intensity)) {
         throw std::overflow_error(
             "intensity calculation overflowed double precision at index " + std::to_string(index));
+    }
+    if (intensity == 0.0) {
+        throw std::underflow_error(
+            "intensity calculation underflowed double precision at index " + std::to_string(index));
     }
     return intensity;
 }
@@ -73,12 +80,19 @@ ScalarField2D computeDecibelIntensity(
     const double log10Ref = std::log10(referenceIntensity);
 
     for (std::size_t i = 0; i < count; ++i) {
-        const double intensity = calculateIntensityChecked(sourceSamples[i], i);
-        if (intensity == 0.0) {
+        const auto& sample = sourceSamples[i];
+        requireFiniteSample(sample, i);
+
+        if (sample.real() == 0.0 && sample.imag() == 0.0) {
             destSamples[i] = floorDecibels;
         } else {
-            const double logDiff = std::log10(intensity) - log10Ref;
-            const double dbValue = 10.0 * logDiff;
+            const double a = std::abs(sample.real());
+            const double b = std::abs(sample.imag());
+            const double maxComp = std::max(a, b);
+            const double minComp = std::min(a, b);
+            const double r = minComp / maxComp;
+            const double log10Amp = std::log10(maxComp) + 0.5 * std::log10(1.0 + r * r);
+            const double dbValue = 20.0 * log10Amp - 10.0 * log10Ref;
             if (!std::isfinite(dbValue)) {
                 throw std::overflow_error(
                     "decibel intensity calculation overflowed double precision at index " + std::to_string(i));
@@ -100,16 +114,27 @@ PhaseResult computeWrappedPhase(const ComplexField2D& field, double minimumInten
     std::vector<std::uint8_t> validity(count, 0);
 
     constexpr double pi = std::numbers::pi;
+    const double sqrtThreshold = (minimumIntensity > 0.0) ? std::sqrt(minimumIntensity) : 0.0;
 
     for (std::size_t i = 0; i < count; ++i) {
         const auto& sample = sourceSamples[i];
-        const double intensity = calculateIntensityChecked(sample, i);
+        requireFiniteSample(sample, i);
 
-        // Exact zero or below threshold has undefined phase
-        if (intensity == 0.0 || intensity < minimumIntensity) {
+        // Exact zero check
+        if (sample.real() == 0.0 && sample.imag() == 0.0) {
             phaseSamples[i] = 0.0;
             validity[i] = 0;
             continue;
+        }
+
+        // If threshold > 0, check magnitude against sqrt(threshold)
+        if (minimumIntensity > 0.0) {
+            const double mag = std::hypot(sample.real(), sample.imag());
+            if (mag < sqrtThreshold) {
+                phaseSamples[i] = 0.0;
+                validity[i] = 0;
+                continue;
+            }
         }
 
         // Calculate normalized phase in [-pi, +pi)
@@ -135,46 +160,93 @@ double computeIntegratedIntensity(const ComplexField2D& field) {
     const auto sourceSamples = field.samples();
     const std::size_t count = sourceSamples.size();
 
-    double sum = 0.0;
+    double maxAmp = 0.0;
     for (std::size_t i = 0; i < count; ++i) {
-        const double intensity = calculateIntensityChecked(sourceSamples[i], i);
-        sum += intensity;
-        if (!std::isfinite(sum)) {
-            throw std::overflow_error("integrated intensity accumulation overflowed double precision");
-        }
+        const auto& sample = sourceSamples[i];
+        requireFiniteSample(sample, i);
+        maxAmp = std::max({maxAmp, std::abs(sample.real()), std::abs(sample.imag())});
     }
 
-    const double dArea = field.pitchXMetres() * field.pitchYMetres();
-    const double totalIntensity = sum * dArea;
-    if (!std::isfinite(totalIntensity)) {
-        throw std::overflow_error("integrated intensity scaling overflowed double precision");
+    if (maxAmp == 0.0) {
+        return 0.0;
     }
-    return totalIntensity;
+
+    int expM = 0;
+    std::frexp(maxAmp, &expM);
+    const double scale = std::ldexp(1.0, -expM);
+
+    double sum = 0.0;
+    for (std::size_t i = 0; i < count; ++i) {
+        const double u = sourceSamples[i].real() * scale;
+        const double v = sourceSamples[i].imag() * scale;
+        sum += (u * u + v * v);
+    }
+
+    int expS = 0;
+    int expX = 0;
+    int expY = 0;
+    const double mS = std::frexp(sum, &expS);
+    const double mX = std::frexp(field.pitchXMetres(), &expX);
+    const double mY = std::frexp(field.pitchYMetres(), &expY);
+
+    const double mProd = mS * mX * mY;
+    const int totalExp = expS + 2 * expM + expX + expY;
+
+    const double result = std::ldexp(mProd, totalExp);
+    if (!std::isfinite(result)) {
+        throw std::overflow_error("integrated intensity calculation overflowed double precision");
+    }
+    if (result == 0.0) {
+        throw std::underflow_error("integrated intensity calculation underflowed double precision");
+    }
+    return result;
 }
 
 double computeIntegratedIntensity(const ScalarField2D& intensityField) {
     const auto sourceSamples = intensityField.samples();
     const std::size_t count = sourceSamples.size();
 
-    double sum = 0.0;
+    double maxVal = 0.0;
     for (std::size_t i = 0; i < count; ++i) {
         const double val = sourceSamples[i];
         if (!std::isfinite(val) || val < 0.0) {
             throw std::invalid_argument(
                 "intensity field contains invalid (negative or non-finite) sample at index " + std::to_string(i));
         }
-        sum += val;
-        if (!std::isfinite(sum)) {
-            throw std::overflow_error("integrated intensity accumulation overflowed double precision");
-        }
+        maxVal = std::max(maxVal, val);
     }
 
-    const double dArea = intensityField.pitchXMetres() * intensityField.pitchYMetres();
-    const double totalIntensity = sum * dArea;
-    if (!std::isfinite(totalIntensity)) {
-        throw std::overflow_error("integrated intensity scaling overflowed double precision");
+    if (maxVal == 0.0) {
+        return 0.0;
     }
-    return totalIntensity;
+
+    int expM = 0;
+    std::frexp(maxVal, &expM);
+    const double scale = std::ldexp(1.0, -expM);
+
+    double sum = 0.0;
+    for (std::size_t i = 0; i < count; ++i) {
+        sum += (sourceSamples[i] * scale);
+    }
+
+    int expS = 0;
+    int expX = 0;
+    int expY = 0;
+    const double mS = std::frexp(sum, &expS);
+    const double mX = std::frexp(intensityField.pitchXMetres(), &expX);
+    const double mY = std::frexp(intensityField.pitchYMetres(), &expY);
+
+    const double mProd = mS * mX * mY;
+    const int totalExp = expS + expM + expX + expY;
+
+    const double result = std::ldexp(mProd, totalExp);
+    if (!std::isfinite(result)) {
+        throw std::overflow_error("integrated intensity calculation overflowed double precision");
+    }
+    if (result == 0.0) {
+        throw std::underflow_error("integrated intensity calculation underflowed double precision");
+    }
+    return result;
 }
 
 } // namespace holobench::field

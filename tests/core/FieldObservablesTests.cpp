@@ -143,6 +143,23 @@ TEST_CASE("computeIntensity computes accurate pointwise intensity and preserves 
     }
 }
 
+TEST_CASE("computeIntensity throws std::underflow_error for non-zero unrepresentable intensity") {
+    field::ComplexField2D underflowField(3, 1, 1e-4, 1e-4, 532e-9, 1.0);
+    underflowField.at(0, 0) = {1e-200, 0.0};
+    underflowField.at(1, 0) = {0.0, 1e-200};
+    underflowField.at(2, 0) = {1e-200, 1e-200};
+
+    CHECK_THROWS_AS(static_cast<void>(field::computeIntensity(underflowField)), std::underflow_error);
+
+    // Subnormal intensity within double precision range (e.g. 1e-160 squared = 1e-320 > 0) computes without throwing
+    field::ComplexField2D subnormalField(1, 1, 1e-4, 1e-4, 532e-9, 1.0);
+    subnormalField.at(0, 0) = {1e-160, 0.0};
+    CHECK_NOTHROW({
+        const auto subIntensity = field::computeIntensity(subnormalField);
+        CHECK(subIntensity.at(0, 0) > 0.0);
+    });
+}
+
 TEST_CASE("computeDecibelIntensity evaluates relative dB with stable log differences and floor clamping") {
     field::ComplexField2D field(5, 1, 1e-4, 1e-4, 532e-9, 1.0);
     field.at(0, 0) = {10.0, 0.0};            // I = 100, reference = 1.0 -> +20 dB
@@ -172,25 +189,45 @@ TEST_CASE("computeDecibelIntensity evaluates relative dB with stable log differe
 }
 
 TEST_CASE("computeDecibelIntensity handles extreme finite reference and intensity without division overflow/underflow") {
-    // Huge intensity with tiny reference: I = 10^200, reference = 10^-200
-    // Quotient I/reference = 10^400 would overflow double if divided directly.
-    // Using log difference: 10 * (200 - (-200)) = +4000 dB.
+    // Huge amplitude with tiny reference: amplitude = 10^100, reference = 10^-200
+    // Log difference: 20 * 100 - 10 * (-200) = 2000 - (-2000) = +4000 dB.
     field::ComplexField2D extremeHighField(1, 1, 1e-4, 1e-4, 532e-9, 1.0);
-    extremeHighField.at(0, 0) = {1e100, 0.0}; // I = (1e100)^2 = 1e200
+    extremeHighField.at(0, 0) = {1e100, 0.0};
 
     constexpr double tinyReference = 1e-200;
     const auto dbHigh = field::computeDecibelIntensity(extremeHighField, -10000.0, tinyReference);
     CHECK(dbHigh.at(0, 0) == doctest::Approx(4000.0));
 
-    // Tiny intensity with huge reference: I = 10^-200, reference = 10^200
-    // Quotient I/reference = 10^-400 would underflow double to 0.0.
-    // Clamps cleanly to floorDecibels.
+    // Tiny amplitude with huge reference: amplitude = 10^-100, reference = 10^200
+    // 20 * (-100) - 10 * 200 = -2000 - 2000 = -4000 dB, clamped cleanly to floorDecibels.
     field::ComplexField2D extremeLowField(1, 1, 1e-4, 1e-4, 532e-9, 1.0);
-    extremeLowField.at(0, 0) = {1e-100, 0.0}; // I = 1e-200
+    extremeLowField.at(0, 0) = {1e-100, 0.0};
 
     constexpr double hugeReference = 1e200;
     const auto dbLow = field::computeDecibelIntensity(extremeLowField, -120.0, hugeReference);
     CHECK(dbLow.at(0, 0) == doctest::Approx(-120.0));
+
+    // 1e-200 amplitude with floor = -5000 dB and reference = 1.0 evaluates to approx -4000 dB without squaring underflow
+    field::ComplexField2D tinyAmpField(2, 1, 1e-4, 1e-4, 532e-9, 1.0);
+    tinyAmpField.at(0, 0) = {1e-200, 0.0};
+    tinyAmpField.at(1, 0) = {0.0, 0.0}; // exact zero
+
+    const auto dbTiny = field::computeDecibelIntensity(tinyAmpField, -5000.0, 1.0);
+    CHECK(dbTiny.at(0, 0) == doctest::Approx(-4000.0));
+    CHECK(dbTiny.at(1, 0) == doctest::Approx(-5000.0));
+
+    // Huge amplitude 1e200 with reference = 1.0 evaluates to +4000 dB
+    field::ComplexField2D hugeAmpField(1, 1, 1e-4, 1e-4, 532e-9, 1.0);
+    hugeAmpField.at(0, 0) = {1e200, 0.0};
+    const auto dbHuge = field::computeDecibelIntensity(hugeAmpField, -120.0, 1.0);
+    CHECK(dbHuge.at(0, 0) == doctest::Approx(4000.0));
+
+    // Subnormal amplitude support with deep floor
+    field::ComplexField2D subnormalAmpField(1, 1, 1e-4, 1e-4, 532e-9, 1.0);
+    constexpr double denormMin = std::numeric_limits<double>::denorm_min();
+    subnormalAmpField.at(0, 0) = {denormMin, 0.0};
+    const auto dbSubnormal = field::computeDecibelIntensity(subnormalAmpField, -10000.0, 1.0);
+    CHECK(dbSubnormal.at(0, 0) == doctest::Approx(20.0 * std::log10(denormMin)));
 }
 
 TEST_CASE("computeWrappedPhase normalizes to minus pi to plus pi interval and produces validity mask") {
@@ -280,6 +317,50 @@ TEST_CASE("computeWrappedPhase normalizes to minus pi to plus pi interval and pr
     CHECK_THROWS_AS(static_cast<void>(phaseResult.isValid(12)), std::out_of_range);
 }
 
+TEST_CASE("computeWrappedPhase supports subnormal and extreme finite amplitudes with exact zero masking") {
+    field::ComplexField2D field(4, 1, 1e-4, 1e-4, 532e-9, 1.0);
+    constexpr double pi = std::numbers::pi;
+    constexpr double denormMin = std::numeric_limits<double>::denorm_min();
+
+    field.at(0, 0) = {1e-200, 0.0};
+    field.at(1, 0) = {-1e-200, 0.0};
+    field.at(2, 0) = {denormMin, denormMin};
+    field.at(3, 0) = {1e200, 1e200};
+
+    const auto phaseResult = field::computeWrappedPhase(field, 0.0);
+    CHECK(phaseResult.isValid(0, 0) == true);
+    CHECK(phaseResult.wrappedPhaseRadians().at(0, 0) == doctest::Approx(0.0));
+
+    CHECK(phaseResult.isValid(1, 0) == true);
+    CHECK(phaseResult.wrappedPhaseRadians().at(1, 0) == doctest::Approx(-pi));
+
+    CHECK(phaseResult.isValid(2, 0) == true);
+    CHECK(phaseResult.wrappedPhaseRadians().at(2, 0) == doctest::Approx(pi / 4.0));
+
+    CHECK(phaseResult.isValid(3, 0) == true);
+    CHECK(phaseResult.wrappedPhaseRadians().at(3, 0) == doctest::Approx(pi / 4.0));
+}
+
+TEST_CASE("computeWrappedPhase handles threshold comparison and exact equality stably") {
+    // Sub-threshold intensity test with explicit minimumIntensity = 1e-300 (sqrt = 1e-150)
+    field::ComplexField2D field(3, 1, 1e-4, 1e-4, 532e-9, 1.0);
+    field.at(0, 0) = {2e-150, 0.0};   // magnitude 2e-150 > sqrt(1e-300) -> valid
+    field.at(1, 0) = {1e-150, 0.0};   // magnitude 1e-150 == sqrt(1e-300) -> valid (exact equality)
+    field.at(2, 0) = {0.5e-150, 0.0}; // magnitude 0.5e-150 < sqrt(1e-300) -> invalid (sub-threshold)
+
+    constexpr double minimumIntensity = 1e-300;
+    const auto threshPhase = field::computeWrappedPhase(field, minimumIntensity);
+
+    CHECK(threshPhase.isValid(0, 0) == true);
+    CHECK(threshPhase.wrappedPhaseRadians().at(0, 0) == doctest::Approx(0.0));
+
+    CHECK(threshPhase.isValid(1, 0) == true);
+    CHECK(threshPhase.wrappedPhaseRadians().at(1, 0) == doctest::Approx(0.0));
+
+    CHECK(threshPhase.isValid(2, 0) == false);
+    CHECK(threshPhase.wrappedPhaseRadians().at(2, 0) == 0.0);
+}
+
 TEST_CASE("computeWrappedPhase handles all-zero field sub-threshold intensity and determinism") {
     // All-zero field test
     field::ComplexField2D zeroField(3, 3, 1e-4, 1e-4, 532e-9, 1.0);
@@ -341,6 +422,41 @@ TEST_CASE("computeIntegratedIntensity scales accurately with transverse grid pit
     const double integrated1 = field::computeIntegratedIntensity(field);
     const double integrated2 = field::computeIntegratedIntensity(field);
     CHECK(integrated1 == integrated2);
+}
+
+TEST_CASE("computeIntegratedIntensity evaluates balanced extreme scale fields without intermediate underflow/overflow") {
+    // Balanced ComplexField2D: huge amplitude 1e160 x tiny pitch 1e-160 x 1e-160
+    // Mathematical integral = (1e160)^2 * (1e-160 * 1e-160) = 1.0
+    field::ComplexField2D hugeAmpTinyPitch(1, 1, 1e-160, 1e-160, 532e-9, 1.0);
+    hugeAmpTinyPitch.at(0, 0) = {1e160, 0.0};
+    CHECK(field::computeIntegratedIntensity(hugeAmpTinyPitch) == doctest::Approx(1.0));
+
+    // Balanced ComplexField2D: tiny amplitude 1e-160 x huge pitch 1e160 x 1e160
+    // Mathematical integral = (1e-160)^2 * (1e160 * 1e160) = 1.0
+    field::ComplexField2D tinyAmpHugePitch(1, 1, 1e160, 1e160, 532e-9, 1.0);
+    tinyAmpHugePitch.at(0, 0) = {1e-160, 0.0};
+    CHECK(field::computeIntegratedIntensity(tinyAmpHugePitch) == doctest::Approx(1.0));
+
+    // Balanced ScalarField2D: huge intensity 1e300 x tiny pitch 1e-150 x 1e-150
+    // Mathematical integral = 1e300 * 1e-300 = 1.0
+    field::ScalarField2D hugeScalarTinyPitch(1, 1, 1e-150, 1e-150, 532e-9, 1.0);
+    hugeScalarTinyPitch.at(0, 0) = 1e300;
+    CHECK(field::computeIntegratedIntensity(hugeScalarTinyPitch) == doctest::Approx(1.0));
+
+    // Balanced ScalarField2D: tiny intensity 1e-300 x huge pitch 1e150 x 1e150
+    // Mathematical integral = 1e-300 * 1e300 = 1.0
+    field::ScalarField2D tinyScalarHugePitch(1, 1, 1e150, 1e150, 532e-9, 1.0);
+    tinyScalarHugePitch.at(0, 0) = 1e-300;
+    CHECK(field::computeIntegratedIntensity(tinyScalarHugePitch) == doctest::Approx(1.0));
+
+    // True underflow on non-zero field throws std::underflow_error
+    field::ComplexField2D underflowComplex(1, 1, 1.0, 1.0, 532e-9, 1.0);
+    underflowComplex.at(0, 0) = {1e-200, 0.0}; // integral = 1e-400 underflows double
+    CHECK_THROWS_AS(static_cast<void>(field::computeIntegratedIntensity(underflowComplex)), std::underflow_error);
+
+    field::ScalarField2D underflowScalar(1, 1, 1e-100, 1e-100, 532e-9, 1.0);
+    underflowScalar.at(0, 0) = 1e-300; // integral = 1e-500 underflows double
+    CHECK_THROWS_AS(static_cast<void>(field::computeIntegratedIntensity(underflowScalar)), std::underflow_error);
 }
 
 TEST_CASE("observables strictly reject non-finite inputs and invalid parameters") {
@@ -407,7 +523,21 @@ TEST_CASE("observables detect and reject floating point overflow") {
     hugeField.at(0, 0) = {1e200, 0.0};
 
     CHECK_THROWS_AS(static_cast<void>(field::computeIntensity(hugeField)), std::overflow_error);
-    CHECK_THROWS_AS(static_cast<void>(field::computeDecibelIntensity(hugeField, -120.0, 1.0)), std::overflow_error);
-    CHECK_THROWS_AS(static_cast<void>(field::computeWrappedPhase(hugeField)), std::overflow_error);
     CHECK_THROWS_AS(static_cast<void>(field::computeIntegratedIntensity(hugeField)), std::overflow_error);
+
+    // computeDecibelIntensity and computeWrappedPhase handle 1e200 without overflow
+    CHECK_NOTHROW({
+        const auto db = field::computeDecibelIntensity(hugeField, -120.0, 1.0);
+        CHECK(db.at(0, 0) == doctest::Approx(4000.0));
+    });
+    CHECK_NOTHROW({
+        const auto phase = field::computeWrappedPhase(hugeField);
+        CHECK(phase.isValid(0, 0) == true);
+        CHECK(phase.wrappedPhaseRadians().at(0, 0) == doctest::Approx(0.0));
+    });
+
+    // ScalarField2D integrated intensity overflow
+    field::ScalarField2D hugeScalar(1, 1, 1e100, 1e100, 532e-9, 1.0);
+    hugeScalar.at(0, 0) = 1e300; // integral = 1e500 overflows double
+    CHECK_THROWS_AS(static_cast<void>(field::computeIntegratedIntensity(hugeScalar)), std::overflow_error);
 }

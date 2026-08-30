@@ -64,20 +64,26 @@ private:
 /**
  * @brief Computes linear intensity I(x, y) = |U(x, y)|^2 = Re(U)^2 + Im(U)^2 for every sample.
  *
+ * Exact zero samples (0.0 + 0.0i) evaluate to 0.0. If a non-zero sample has an intensity that is
+ * unrepresentable in double precision (e.g. underflowing below subnormal double precision),
+ * an explicit std::underflow_error is thrown instead of silently returning zero.
+ *
  * @param field The input complex field.
  * @return ScalarField2D Pointwise linear intensity with matching dimensions and physical metadata.
  * @throws std::invalid_argument If any sample in the field contains NaN or Inf.
  * @throws std::overflow_error If intensity calculation overflows double precision.
+ * @throws std::underflow_error If non-zero sample intensity underflows double precision to zero.
  */
 [[nodiscard]] ScalarField2D computeIntensity(const ComplexField2D& field);
 
 /**
- * @brief Computes decibel (dB) log intensity I_dB(x, y) = max(10 * log10(|U(x, y)|^2 / referenceIntensity), floorDecibels).
+ * @brief Computes decibel (dB) log intensity I_dB(x, y) = max(20 * log10(|U(x, y)|) - 10 * log10(referenceIntensity), floorDecibels).
  *
  * The output represents logarithmic intensity in decibels (dB) relative to referenceIntensity,
- * clamped from below by floorDecibels (dB <= 0). Evaluated via stable log differences:
- * 10 * (log10(I) - log10(referenceIntensity)) to prevent intermediate quotient underflow/overflow.
- * Exact zero intensity is directly assigned floorDecibels without division.
+ * clamped from below by floorDecibels (dB <= 0). Evaluated via stable amplitude logarithm:
+ * 20 * log10(|U|) - 10 * log10(referenceIntensity) without squaring first, preventing premature
+ * intermediate underflow/overflow across extreme amplitudes (including subnormals).
+ * Exact zero amplitude (0 + 0i) is directly assigned floorDecibels.
  *
  * @param field The input complex field.
  * @param floorDecibels Finite non-positive lower bound in decibels (must be <= 0.0).
@@ -85,7 +91,7 @@ private:
  * @return ScalarField2D Pointwise decibel intensity with matching dimensions and physical metadata.
  * @throws std::invalid_argument If floorDecibels is positive or non-finite, if referenceIntensity is non-positive
  *                               or non-finite, or if any sample is non-finite.
- * @throws std::overflow_error If intensity calculation or decibel conversion overflows double precision.
+ * @throws std::overflow_error If decibel conversion overflows double precision.
  */
 [[nodiscard]] ScalarField2D computeDecibelIntensity(
     const ComplexField2D& field,
@@ -98,16 +104,18 @@ private:
  * All angles are normalized to the unique half-open principal interval [-pi, +pi).
  * Points on the negative real axis (whether imag is +0.0 or -0.0) are uniformly mapped to -pi rad.
  *
- * Physical phase is undefined for exact zero amplitude (0 + 0i) or samples where intensity < minimumIntensity.
- * For undefined/sub-threshold samples, the returned validityMask entry is set to 0 and the phase is
- * deterministically set to 0.0 rad. Only samples with validityMask == 1 represent valid optical phases.
+ * For minimumIntensity == 0.0, only exact zero amplitude (0 + 0i) has undefined phase; all non-zero
+ * finite samples (including subnormals) produce valid phase angles.
+ * For minimumIntensity > 0.0, amplitude magnitude is stably compared against sqrt(minimumIntensity)
+ * using std::hypot without squaring first to avoid premature underflow. Samples with magnitude >= sqrt(minimumIntensity)
+ * are valid (validityMask == 1), while samples with magnitude < sqrt(minimumIntensity) are invalid (validityMask == 0).
+ * For undefined/sub-threshold samples, the phase is deterministically set to 0.0 rad.
  *
  * @param field The input complex field.
  * @param minimumIntensity Non-negative finite intensity threshold below which phase is considered undefined.
  *                         Exact zero (0 + 0i) is always invalid regardless of threshold.
  * @return PhaseResult Struct containing wrappedPhaseRadians (ScalarField2D) and sample validityMask.
  * @throws std::invalid_argument If minimumIntensity is negative or non-finite, or if any sample is non-finite.
- * @throws std::overflow_error If intermediate intensity calculation overflows double precision.
  */
 [[nodiscard]] PhaseResult computeWrappedPhase(
     const ComplexField2D& field,
@@ -116,19 +124,30 @@ private:
 /**
  * @brief Computes discrete integrated relative intensity across the transverse plane: sum(|U(x, y)|^2) * dx * dy.
  *
- * Represents the discrete transverse plane integral of field intensity.
+ * Evaluated via scaled sum-of-squares and base-2 exponent decomposition to avoid intermediate underflow
+ * or overflow during single-sample squaring or area product (dx * dy). Balanced extreme scale fields
+ * (e.g. huge amplitude with tiny pitch, or tiny amplitude with huge pitch) whose mathematical result is
+ * representable in double precision evaluate accurately.
+ * Exact zero fields evaluate to 0.0. If the mathematical non-zero integrated intensity cannot be represented
+ * in double precision, an explicit exception is thrown.
+ *
  * Units are [field-amplitude-squared * m^2].
  * Conversion to absolute radiometric power (Watts) requires calibrated optical impedance and source normalization.
  *
  * @param field The input complex field.
  * @return double Total integrated relative intensity across the grid.
  * @throws std::invalid_argument If any complex sample in the field contains NaN or Inf.
- * @throws std::overflow_error If intermediate summation or area scaling overflows double precision.
+ * @throws std::overflow_error If integrated intensity calculation overflows double precision.
+ * @throws std::underflow_error If non-zero integrated intensity calculation underflows double precision to zero.
  */
 [[nodiscard]] double computeIntegratedIntensity(const ComplexField2D& field);
 
 /**
  * @brief Computes discrete integrated relative intensity from an existing linear intensity field: sum(I(x, y)) * dx * dy.
+ *
+ * Evaluated via scaled sum and base-2 exponent decomposition to avoid premature area product underflow/overflow.
+ * Exact zero fields evaluate to 0.0. If non-zero total integrated intensity underflows double precision,
+ * an explicit std::underflow_error is thrown.
  *
  * Units are [field-amplitude-squared * m^2].
  * Conversion to absolute radiometric power (Watts) requires calibrated optical impedance and source normalization.
@@ -136,7 +155,8 @@ private:
  * @param intensityField The input linear intensity field.
  * @return double Total integrated relative intensity across the grid.
  * @throws std::invalid_argument If any intensity sample is negative, NaN, or Inf.
- * @throws std::overflow_error If intermediate summation or area scaling overflows double precision.
+ * @throws std::overflow_error If integrated intensity calculation overflows double precision.
+ * @throws std::underflow_error If non-zero integrated intensity calculation underflows double precision to zero.
  */
 [[nodiscard]] double computeIntegratedIntensity(const ScalarField2D& intensityField);
 
