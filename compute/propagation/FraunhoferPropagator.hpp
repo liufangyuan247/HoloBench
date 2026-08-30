@@ -23,6 +23,14 @@ enum class FraunhoferSupportSource {
 
 /**
  * @brief Options supplied to the Fraunhofer propagator.
+ *
+ * Support extent configuration modes:
+ * - Default: All fields nullopt -> conservative full-grid extent D = hypot(Nx*dx, Ny*dy).
+ * - Diameter mode: illuminatedDiameterMetres specified, both extent fields nullopt.
+ * - Extents mode: both illuminatedExtentXMetres and illuminatedExtentYMetres specified, diameter nullopt.
+ *
+ * Any coexisting diameter and extent or incomplete single-axis extent is ambiguous and rejected
+ * with std::invalid_argument.
  */
 struct FraunhoferOptions final {
     std::optional<double> illuminatedDiameterMetres = std::nullopt;

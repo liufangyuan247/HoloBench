@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <limits>
 #include <numbers>
 #include <stdexcept>
@@ -39,19 +40,29 @@ void validateInput(
         }
     }
 
-    if (options.illuminatedDiameterMetres.has_value()) {
+    const bool hasDiameter = options.illuminatedDiameterMetres.has_value();
+    const bool hasExtentX = options.illuminatedExtentXMetres.has_value();
+    const bool hasExtentY = options.illuminatedExtentYMetres.has_value();
+
+    if (hasDiameter && (hasExtentX || hasExtentY)) {
+        throw std::invalid_argument(
+            "Fraunhofer options cannot specify both illuminated diameter and extents");
+    }
+
+    if (hasDiameter) {
         const double d = *options.illuminatedDiameterMetres;
         if (!std::isfinite(d) || d <= 0.0) {
             throw std::invalid_argument("Fraunhofer illuminated diameter must be positive and finite");
         }
-    }
-    if (options.illuminatedExtentXMetres.has_value()) {
+    } else if (hasExtentX || hasExtentY) {
+        if (!hasExtentX || !hasExtentY) {
+            throw std::invalid_argument(
+                "Fraunhofer options must specify both X and Y extents when using extents mode");
+        }
         const double ex = *options.illuminatedExtentXMetres;
         if (!std::isfinite(ex) || ex <= 0.0) {
             throw std::invalid_argument("Fraunhofer illuminated X extent must be positive and finite");
         }
-    }
-    if (options.illuminatedExtentYMetres.has_value()) {
         const double ey = *options.illuminatedExtentYMetres;
         if (!std::isfinite(ey) || ey <= 0.0) {
             throw std::invalid_argument("Fraunhofer illuminated Y extent must be positive and finite");
@@ -78,15 +89,43 @@ void validateInput(
         throw std::invalid_argument("Fraunhofer input grid dimensions and pitches must be positive and finite");
     }
 
-    const double pitchXOut = (lambda * distanceMetres) / denomX;
-    const double pitchYOut = (lambda * distanceMetres) / denomY;
+    const double lambdaZ = lambda * distanceMetres;
+    if (!std::isfinite(lambdaZ) || lambdaZ <= 0.0) {
+        throw std::overflow_error("Fraunhofer propagation optical distance (lambda * z) overflowed or non-positive");
+    }
+
+    const double pitchXOut = lambdaZ / denomX;
+    const double pitchYOut = lambdaZ / denomY;
     if (!std::isfinite(pitchXOut) || pitchXOut <= 0.0 || !std::isfinite(pitchYOut) || pitchYOut <= 0.0) {
         throw std::overflow_error("Fraunhofer output pitch computation overflowed or resulted in a non-positive value");
     }
 
-    const double areaScale = (value.pitchXMetres() * value.pitchYMetres()) / (lambda * distanceMetres);
+    const double areaScale = (value.pitchXMetres() * value.pitchYMetres()) / lambdaZ;
     if (!std::isfinite(areaScale) || areaScale <= 0.0) {
         throw std::overflow_error("Fraunhofer amplitude scale computation overflowed or resulted in a non-positive value");
+    }
+
+    double effectiveD = 0.0;
+    if (hasDiameter) {
+        effectiveD = *options.illuminatedDiameterMetres;
+    } else if (hasExtentX && hasExtentY) {
+        effectiveD = std::hypot(*options.illuminatedExtentXMetres, *options.illuminatedExtentYMetres);
+    } else {
+        effectiveD = std::hypot(denomX, denomY);
+    }
+
+    if (!std::isfinite(effectiveD) || effectiveD <= 0.0) {
+        throw std::overflow_error("Fraunhofer effective support diameter computation overflowed or is non-positive");
+    }
+
+    const double fresnelRatio = effectiveD / lambdaZ;
+    if (!std::isfinite(fresnelRatio) || fresnelRatio <= 0.0) {
+        throw std::overflow_error("Fraunhofer Fresnel number intermediate ratio computation overflowed");
+    }
+
+    const double fresnelNumber = fresnelRatio * effectiveD;
+    if (!std::isfinite(fresnelNumber) || fresnelNumber < 0.0) {
+        throw std::overflow_error("Fraunhofer Fresnel number computation overflowed");
     }
 }
 
@@ -185,9 +224,9 @@ FraunhoferResult FraunhoferPropagator::propagate(
     if (options.illuminatedDiameterMetres.has_value()) {
         diagnostics.effectiveSupportDiameterMetres = *options.illuminatedDiameterMetres;
         diagnostics.supportSource = FraunhoferSupportSource::CallerProvidedDiameter;
-    } else if (options.illuminatedExtentXMetres.has_value() || options.illuminatedExtentYMetres.has_value()) {
-        const double extX = options.illuminatedExtentXMetres.value_or(0.0);
-        const double extY = options.illuminatedExtentYMetres.value_or(0.0);
+    } else if (options.illuminatedExtentXMetres.has_value() && options.illuminatedExtentYMetres.has_value()) {
+        const double extX = *options.illuminatedExtentXMetres;
+        const double extY = *options.illuminatedExtentYMetres;
         diagnostics.effectiveSupportDiameterMetres = std::hypot(extX, extY);
         diagnostics.supportSource = FraunhoferSupportSource::CallerProvidedExtents;
     } else {
@@ -197,8 +236,8 @@ FraunhoferResult FraunhoferPropagator::propagate(
         diagnostics.supportSource = FraunhoferSupportSource::FullGridExtentConservative;
     }
 
-    diagnostics.fresnelNumber = (diagnostics.effectiveSupportDiameterMetres * diagnostics.effectiveSupportDiameterMetres)
-        / (lambda * distanceMetres);
+    diagnostics.fresnelNumber = (diagnostics.effectiveSupportDiameterMetres / (lambda * distanceMetres))
+        * diagnostics.effectiveSupportDiameterMetres;
 
     if (diagnostics.fresnelNumber < 0.1) {
         diagnostics.farFieldConditionSatisfied = true;

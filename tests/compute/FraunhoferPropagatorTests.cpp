@@ -232,19 +232,117 @@ TEST_CASE("Fraunhofer propagator diagnostics report Fresnel number and support s
         CHECK(res.diagnostics.effectiveSupportDiameterMetres == doctest::Approx(gridExtent).epsilon(1e-14));
     }
 
-    // 4. Invalid options reject non-positive/non-finite values
+    // 4. Conflicting and incomplete options are rejected with invalid_argument, leaving input untouched
     {
+        const auto inputBefore = copySamples(input);
+
+        // Diameter cannot coexist with X extent
+        propagation::FraunhoferOptions diamAndExtX;
+        diamAndExtX.illuminatedDiameterMetres = 100e-6;
+        diamAndExtX.illuminatedExtentXMetres = 100e-6;
+        CHECK_THROWS_AS((void)propagator.propagate(input, distance, diamAndExtX), std::invalid_argument);
+        checkSamplesExactly(input, inputBefore);
+
+        // Diameter cannot coexist with Y extent
+        propagation::FraunhoferOptions diamAndExtY;
+        diamAndExtY.illuminatedDiameterMetres = 100e-6;
+        diamAndExtY.illuminatedExtentYMetres = 100e-6;
+        CHECK_THROWS_AS((void)propagator.propagate(input, distance, diamAndExtY), std::invalid_argument);
+        checkSamplesExactly(input, inputBefore);
+
+        // Diameter cannot coexist with both extents
+        propagation::FraunhoferOptions diamAndBoth;
+        diamAndBoth.illuminatedDiameterMetres = 100e-6;
+        diamAndBoth.illuminatedExtentXMetres = 100e-6;
+        diamAndBoth.illuminatedExtentYMetres = 100e-6;
+        CHECK_THROWS_AS((void)propagator.propagate(input, distance, diamAndBoth), std::invalid_argument);
+        checkSamplesExactly(input, inputBefore);
+
+        // Extents mode requires BOTH X and Y (incomplete single-axis extent is rejected)
+        propagation::FraunhoferOptions onlyExtX;
+        onlyExtX.illuminatedExtentXMetres = 100e-6;
+        CHECK_THROWS_AS((void)propagator.propagate(input, distance, onlyExtX), std::invalid_argument);
+        checkSamplesExactly(input, inputBefore);
+
+        propagation::FraunhoferOptions onlyExtY;
+        onlyExtY.illuminatedExtentYMetres = 100e-6;
+        CHECK_THROWS_AS((void)propagator.propagate(input, distance, onlyExtY), std::invalid_argument);
+        checkSamplesExactly(input, inputBefore);
+
+        // Non-positive or non-finite values are rejected
         propagation::FraunhoferOptions badDiameter;
         badDiameter.illuminatedDiameterMetres = -1e-4;
         CHECK_THROWS_AS((void)propagator.propagate(input, distance, badDiameter), std::invalid_argument);
+        checkSamplesExactly(input, inputBefore);
 
-        propagation::FraunhoferOptions zeroExtentX;
-        zeroExtentX.illuminatedExtentXMetres = 0.0;
-        CHECK_THROWS_AS((void)propagator.propagate(input, distance, zeroExtentX), std::invalid_argument);
+        propagation::FraunhoferOptions zeroExtent;
+        zeroExtent.illuminatedExtentXMetres = 0.0;
+        zeroExtent.illuminatedExtentYMetres = 100e-6;
+        CHECK_THROWS_AS((void)propagator.propagate(input, distance, zeroExtent), std::invalid_argument);
+        checkSamplesExactly(input, inputBefore);
 
-        propagation::FraunhoferOptions nanExtentY;
-        nanExtentY.illuminatedExtentYMetres = std::numeric_limits<double>::quiet_NaN();
-        CHECK_THROWS_AS((void)propagator.propagate(input, distance, nanExtentY), std::invalid_argument);
+        propagation::FraunhoferOptions nanExtent;
+        nanExtent.illuminatedExtentXMetres = 100e-6;
+        nanExtent.illuminatedExtentYMetres = std::numeric_limits<double>::quiet_NaN();
+        CHECK_THROWS_AS((void)propagator.propagate(input, distance, nanExtent), std::invalid_argument);
+        checkSamplesExactly(input, inputBefore);
+    }
+}
+
+TEST_CASE("Fraunhofer propagator handles extreme finite support and rejects overflow without Inf or NaN") {
+    constexpr std::size_t width = 16;
+    constexpr std::size_t height = 16;
+    constexpr double pitch = 10e-6;
+    constexpr double distance = 1.0;
+
+    auto input = makeField(width, height, pitch, 1.0);
+    fillDeterministic(input);
+    const auto inputBefore = copySamples(input);
+
+    fft::CpuFftBackend backend;
+    propagation::FraunhoferPropagator propagator(backend);
+
+    // 1. Large finite support within double range produces finite diagnostics without Inf or NaN
+    {
+        propagation::FraunhoferOptions options;
+        options.illuminatedDiameterMetres = 1e50;
+        const auto res = propagator.propagate(input, distance, options);
+        CHECK(std::isfinite(res.diagnostics.effectiveSupportDiameterMetres));
+        CHECK(std::isfinite(res.diagnostics.fresnelNumber));
+        CHECK(res.diagnostics.fresnelNumber > 0.0);
+        CHECK(res.diagnostics.farFieldConditionSatisfied == false);
+        CHECK(res.diagnostics.warning.find("inf") == std::string::npos);
+        CHECK(res.diagnostics.warning.find("nan") == std::string::npos);
+        CHECK(res.diagnostics.warning.find("Fresnel number") != std::string::npos);
+    }
+
+    // 2. Large finite 2D extents produce finite diagnostics
+    {
+        propagation::FraunhoferOptions options;
+        options.illuminatedExtentXMetres = 1e40;
+        options.illuminatedExtentYMetres = 1e40;
+        const auto res = propagator.propagate(input, distance, options);
+        CHECK(std::isfinite(res.diagnostics.effectiveSupportDiameterMetres));
+        CHECK(std::isfinite(res.diagnostics.fresnelNumber));
+        CHECK(res.diagnostics.fresnelNumber > 0.0);
+        CHECK(res.diagnostics.farFieldConditionSatisfied == false);
+    }
+
+    // 3. Overflowing caller support diameter throws overflow_error, leaving input untouched
+    {
+        propagation::FraunhoferOptions options;
+        options.illuminatedDiameterMetres = 1e200; // D^2 = 1e400 > DBL_MAX
+        CHECK_THROWS_AS((void)propagator.propagate(input, distance, options), std::overflow_error);
+        checkSamplesExactly(input, inputBefore);
+    }
+
+    // 4. Overflowing caller support extents hypot throws overflow_error, leaving input untouched
+    {
+        propagation::FraunhoferOptions options;
+        options.illuminatedExtentXMetres = 1e308;
+        options.illuminatedExtentYMetres = 1e308;
+        CHECK_THROWS_AS((void)propagator.propagate(input, distance, options), std::overflow_error);
+        checkSamplesExactly(input, inputBefore);
     }
 }
 
