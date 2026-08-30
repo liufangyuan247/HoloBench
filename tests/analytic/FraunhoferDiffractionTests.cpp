@@ -140,7 +140,7 @@ TEST_CASE("Single slit Fraunhofer diffraction matches the independent sinc^2 ana
     CHECK(result.diagnostics.isExact == false);
     REQUIRE(result.diagnostics.fresnelNumberBelowThreshold);
     REQUIRE(result.diagnostics.fresnelNumber <= 0.02);
-    CHECK(result.diagnostics.warning.empty());
+    CHECK(result.diagnostics.warning.find("Fresnel number") == std::string::npos);
 
     const auto centerX = output.width() / 2;
     const auto centerY = output.height() / 2;
@@ -215,7 +215,7 @@ TEST_CASE("Double slit Fraunhofer diffraction matches the independent sinc^2*cos
     CHECK(result.diagnostics.supportSource == propagation::FraunhoferSupportSource::CallerProvidedExtents);
     REQUIRE(result.diagnostics.fresnelNumberBelowThreshold);
     REQUIRE(result.diagnostics.fresnelNumber <= 0.02);
-    CHECK(result.diagnostics.warning.empty());
+    CHECK(result.diagnostics.warning.find("Fresnel number") == std::string::npos);
 
     const auto centerX = output.width() / 2;
     const auto centerY = output.height() / 2;
@@ -311,7 +311,7 @@ TEST_CASE("Circular aperture Fraunhofer diffraction matches the Airy pattern and
     CHECK(std::abs(result.diagnostics.fresnelNumber - expectedNf) / expectedNf < 1e-12);
     REQUIRE(result.diagnostics.fresnelNumberBelowThreshold);
     REQUIRE(result.diagnostics.fresnelNumber <= 0.02);
-    CHECK(result.diagnostics.warning.empty());
+    CHECK(result.diagnostics.warning.find("Fresnel number") == std::string::npos);
 
     const auto centerX = output.width() / 2;
     const auto centerY = output.height() / 2;

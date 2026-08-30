@@ -41,6 +41,7 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
     - Single slit: peak intensity error $< 10^{-12}$, profile relative error $< 2.5\%$, null suppression $< 0.05\%$ of peak at $N_F \approx 0.0173$.
     - Double slit: peak intensity error $< 10^{-12}$, measured fringe spacing $\Delta x = \lambda z / d$ error $< 10^{-12}$, profile relative error $< 5\%$, envelope null $< 0.5\%$ at $N_F \approx 0.0180$.
     - Circular aperture Airy disc: peak intensity error $< 0.5\%$ (discrete staircase circle area), first dark ring radius $1.21967 \lambda z / D$ within half an output pixel ($0.51 \Delta x_{\text{out}}$), secondary peak within $5\%$ at $N_F \approx 0.0154$.
+    - Diagnostics report Fresnel number $N_F$, support source provenance, maximum paraxial parameter $\lambda\sqrt{f_{x,\max}^2+f_{y,\max}^2}$, and exact discrete maximum adjacent quadratic phase step across even ($2m-1=N-1$) and odd ($2m-1=N-2$) grids with multi-condition combined warning reporting.
   - **Field Sources & Elements**: Plane wave and fundamental paraxial Gaussian beam sources; binary circular, rectangular, and double-slit aperture masks; ideal thin-lens quadratic phase screen.
   - **Test Suite Status**: 174/174 deterministic unit tests passing across `dev` and `core-ci` presets (124 baseline + 15 observables + 19 Fresnel TF + 16 Fraunhofer).
 

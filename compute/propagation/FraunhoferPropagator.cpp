@@ -9,6 +9,8 @@
 #include <stdexcept>
 #include <string>
 
+#include <vector>
+
 #include "compute/fft/IFftBackend.hpp"
 #include "core/field/ComplexField2D.hpp"
 
@@ -83,8 +85,13 @@ void validateInput(
         throw std::overflow_error("Fraunhofer propagation phase exceeds the finite double range");
     }
 
-    const double denomX = static_cast<double>(value.width()) * value.pitchXMetres();
-    const double denomY = static_cast<double>(value.height()) * value.pitchYMetres();
+    const auto width = value.width();
+    const auto height = value.height();
+    const double pitchXIn = value.pitchXMetres();
+    const double pitchYIn = value.pitchYMetres();
+
+    const double denomX = static_cast<double>(width) * pitchXIn;
+    const double denomY = static_cast<double>(height) * pitchYIn;
     if (denomX <= 0.0 || denomY <= 0.0 || !std::isfinite(denomX) || !std::isfinite(denomY)) {
         throw std::invalid_argument("Fraunhofer input grid dimensions and pitches must be positive and finite");
     }
@@ -100,7 +107,7 @@ void validateInput(
         throw std::overflow_error("Fraunhofer output pitch computation overflowed or resulted in a non-positive value");
     }
 
-    const double areaScale = (value.pitchXMetres() * value.pitchYMetres()) / lambdaZ;
+    const double areaScale = (pitchXIn * pitchYIn) / lambdaZ;
     if (!std::isfinite(areaScale) || areaScale <= 0.0) {
         throw std::overflow_error("Fraunhofer amplitude scale computation overflowed or resulted in a non-positive value");
     }
@@ -127,6 +134,25 @@ void validateInput(
     if (!std::isfinite(fresnelNumber) || fresnelNumber < 0.0) {
         throw std::overflow_error("Fraunhofer Fresnel number computation overflowed");
     }
+
+    const std::size_t mMaxX = std::max(width / 2, (width > 0) ? (width - 1 - width / 2) : 0);
+    const std::size_t mMaxY = std::max(height / 2, (height > 0) ? (height - 1 - height / 2) : 0);
+    const double maxX = static_cast<double>(mMaxX) * pitchXOut;
+    const double maxY = static_cast<double>(mMaxY) * pitchYOut;
+    const double maxR = std::hypot(maxX, maxY);
+    const double maxParaxialParam = maxR / distanceMetres;
+    if (!std::isfinite(maxParaxialParam) || maxParaxialParam < 0.0) {
+        throw std::overflow_error("Fraunhofer maximum paraxial parameter computation overflowed");
+    }
+
+    const double factorX = (mMaxX > 0) ? static_cast<double>(2 * mMaxX - 1) : 0.0;
+    const double factorY = (mMaxY > 0) ? static_cast<double>(2 * mMaxY - 1) : 0.0;
+    const double maxStepX = (std::numbers::pi * factorX * pitchXOut) / denomX;
+    const double maxStepY = (std::numbers::pi * factorY * pitchYOut) / denomY;
+    const double maxAdjacentPhaseStep = std::max(maxStepX, maxStepY);
+    if (!std::isfinite(maxAdjacentPhaseStep) || maxAdjacentPhaseStep < 0.0) {
+        throw std::overflow_error("Fraunhofer maximum adjacent phase step computation overflowed");
+    }
 }
 
 } // namespace
@@ -150,8 +176,11 @@ FraunhoferResult FraunhoferPropagator::propagate(
 
     const double pitchXIn = field.pitchXMetres();
     const double pitchYIn = field.pitchYMetres();
-    const double pitchXOut = (lambda * distanceMetres) / (static_cast<double>(width) * pitchXIn);
-    const double pitchYOut = (lambda * distanceMetres) / (static_cast<double>(height) * pitchYIn);
+    const double denomX = static_cast<double>(width) * pitchXIn;
+    const double denomY = static_cast<double>(height) * pitchYIn;
+    const double lambdaZ = lambda * distanceMetres;
+    const double pitchXOut = lambdaZ / denomX;
+    const double pitchYOut = lambdaZ / denomY;
 
     // Forward FFT on a copy of the input field to guarantee strong exception safety.
     auto transformed = field;
@@ -160,7 +189,7 @@ FraunhoferResult FraunhoferPropagator::propagate(
 
     field::ComplexField2D output(width, height, pitchXOut, pitchYOut, lambda0, n);
 
-    const double amplitudeScale = (pitchXIn * pitchYIn) / (lambda * distanceMetres);
+    const double amplitudeScale = (pitchXIn * pitchYIn) / lambdaZ;
     const double quadraticPhaseFactor = wavenumber / (2.0 * distanceMetres);
     if (!std::isfinite(quadraticPhaseFactor) || quadraticPhaseFactor <= 0.0) {
         throw std::overflow_error("Fraunhofer quadratic phase factor computation overflowed");
@@ -171,8 +200,10 @@ FraunhoferResult FraunhoferPropagator::propagate(
         throw std::overflow_error("Fraunhofer axial phase computation overflowed");
     }
 
-    const double maxX = std::max(std::abs(output.xCoordinateMetres(0)), std::abs(output.xCoordinateMetres(width - 1)));
-    const double maxY = std::max(std::abs(output.yCoordinateMetres(0)), std::abs(output.yCoordinateMetres(height - 1)));
+    const std::size_t mMaxX = std::max(width / 2, (width > 0) ? (width - 1 - width / 2) : 0);
+    const std::size_t mMaxY = std::max(height / 2, (height > 0) ? (height - 1 - height / 2) : 0);
+    const double maxX = static_cast<double>(mMaxX) * pitchXOut;
+    const double maxY = static_cast<double>(mMaxY) * pitchYOut;
     const double maxR2 = maxX * maxX + maxY * maxY;
     if (!std::isfinite(maxR2) || !std::isfinite(quadraticPhaseFactor * maxR2)) {
         throw std::overflow_error("Fraunhofer quadratic phase computation overflowed");
@@ -213,6 +244,21 @@ FraunhoferResult FraunhoferPropagator::propagate(
 
     validateFiniteSamples(output, "Fraunhofer propagation produced non-finite output samples");
 
+    const double maxR = std::hypot(maxX, maxY);
+    const double maxParaxial = maxR / distanceMetres;
+    if (!std::isfinite(maxParaxial)) {
+        throw std::overflow_error("Fraunhofer maximum paraxial parameter exceeds the finite double range");
+    }
+
+    const double factorX = (mMaxX > 0) ? static_cast<double>(2 * mMaxX - 1) : 0.0;
+    const double factorY = (mMaxY > 0) ? static_cast<double>(2 * mMaxY - 1) : 0.0;
+    const double maxPhaseStepX = (std::numbers::pi * factorX * pitchXOut) / denomX;
+    const double maxPhaseStepY = (std::numbers::pi * factorY * pitchYOut) / denomY;
+    const double maxAdjacentPhaseStep = std::max(maxPhaseStepX, maxPhaseStepY);
+    if (!std::isfinite(maxAdjacentPhaseStep)) {
+        throw std::overflow_error("Fraunhofer maximum adjacent phase step exceeds the finite double range");
+    }
+
     FraunhoferDiagnostics diagnostics;
     diagnostics.mediumWavelengthMetres = lambda;
     diagnostics.outputPitchXMetres = pitchXOut;
@@ -220,6 +266,11 @@ FraunhoferResult FraunhoferPropagator::propagate(
     diagnostics.periodicBoundary = true;
     diagnostics.automaticPadding = false;
     diagnostics.isExact = false;
+
+    diagnostics.maximumParaxialParameter = maxParaxial;
+    diagnostics.paraxialParameterBelowThreshold = (maxParaxial < 0.1);
+    diagnostics.maxAdjacentPhaseStepRadians = maxAdjacentPhaseStep;
+    diagnostics.quadraticPhaseUndersampled = (maxAdjacentPhaseStep > std::numbers::pi);
 
     if (options.illuminatedDiameterMetres.has_value()) {
         diagnostics.effectiveSupportDiameterMetres = *options.illuminatedDiameterMetres;
@@ -230,21 +281,38 @@ FraunhoferResult FraunhoferPropagator::propagate(
         diagnostics.effectiveSupportDiameterMetres = std::hypot(extX, extY);
         diagnostics.supportSource = FraunhoferSupportSource::CallerProvidedExtents;
     } else {
-        const double gridLx = static_cast<double>(width) * pitchXIn;
-        const double gridLy = static_cast<double>(height) * pitchYIn;
-        diagnostics.effectiveSupportDiameterMetres = std::hypot(gridLx, gridLy);
+        diagnostics.effectiveSupportDiameterMetres = std::hypot(denomX, denomY);
         diagnostics.supportSource = FraunhoferSupportSource::FullGridExtentConservative;
     }
 
-    diagnostics.fresnelNumber = (diagnostics.effectiveSupportDiameterMetres / (lambda * distanceMetres))
+    diagnostics.fresnelNumber = (diagnostics.effectiveSupportDiameterMetres / lambdaZ)
         * diagnostics.effectiveSupportDiameterMetres;
     diagnostics.fresnelNumberBelowThreshold = (diagnostics.fresnelNumber < 0.1);
 
-    if (diagnostics.fresnelNumberBelowThreshold) {
+    std::vector<std::string> warningParts;
+    if (!diagnostics.fresnelNumberBelowThreshold) {
+        warningParts.push_back(
+            "Fresnel number D^2/(lambda*z) is " + std::to_string(diagnostics.fresnelNumber)
+            + " (>= 0.1); far-field condition N_F << 1 is not satisfied, leading to significant near-field phase and amplitude discrepancies.");
+    }
+    if (!diagnostics.paraxialParameterBelowThreshold) {
+        warningParts.push_back(
+            "Maximum paraxial parameter lambda*hypot(fx_max, fy_max) is " + std::to_string(diagnostics.maximumParaxialParameter)
+            + " (>= 0.1); small-angle paraxial approximation is violated at grid boundaries.");
+    }
+    if (diagnostics.quadraticPhaseUndersampled) {
+        warningParts.push_back(
+            "Maximum adjacent quadratic phase step is " + std::to_string(diagnostics.maxAdjacentPhaseStepRadians)
+            + " rad (> pi); output spherical quadratic phase factor is undersampled/aliased on the discrete grid.");
+    }
+
+    if (warningParts.empty()) {
         diagnostics.warning.clear();
     } else {
-        diagnostics.warning = "Fresnel number D^2/(lambda*z) is " + std::to_string(diagnostics.fresnelNumber)
-            + " (>= 0.1); far-field condition N_F << 1 is not satisfied, leading to significant near-field phase and amplitude discrepancies.";
+        diagnostics.warning = warningParts[0];
+        for (std::size_t i = 1; i < warningParts.size(); ++i) {
+            diagnostics.warning += "\n" + warningParts[i];
+        }
     }
 
     return FraunhoferResult{std::move(output), std::move(diagnostics)};

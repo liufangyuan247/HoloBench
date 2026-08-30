@@ -206,7 +206,7 @@ TEST_CASE("Fraunhofer propagator diagnostics report Fresnel number and support s
         const double expectedNf = (100e-6 * 100e-6) / (vacuumWavelengthMetres * distance);
         CHECK(std::abs(res.diagnostics.fresnelNumber - expectedNf) / expectedNf < 1e-12);
         CHECK(res.diagnostics.fresnelNumberBelowThreshold == true);
-        CHECK(res.diagnostics.warning.empty());
+        CHECK(res.diagnostics.warning.find("Fresnel number") == std::string::npos);
     }
 
     // 2. Caller provides explicit large extents (e.g. 5 mm x 5 mm) -> near-field / Fresnel warning
@@ -705,4 +705,216 @@ TEST_CASE("Fraunhofer propagator rejects unsupported dimensions and phase overfl
         (void)propagator.propagate(tinyPitchField, 1.0),
         std::overflow_error);
     checkSamplesExactly(tinyPitchField, tinyBefore);
+}
+
+TEST_CASE("Fraunhofer propagator exact discrete adjacent quadratic phase step on even and odd grids") {
+    // 1. Even grid (16 x 8): mMaxX = 8, mMaxY = 4 -> 2mMax-1 = 15 (N-1) and 7 (N-1)
+    {
+        constexpr std::size_t width = 16;
+        constexpr std::size_t height = 8;
+        constexpr double pitchX = 10e-6;
+        constexpr double pitchY = 20e-6;
+        constexpr double distance = 0.05;
+
+        auto input = field::ComplexField2D(width, height, pitchX, pitchY, vacuumWavelengthMetres, 1.0);
+        fillDeterministic(input);
+
+        fft::CpuFftBackend backend;
+        propagation::FraunhoferPropagator propagator(backend);
+        const auto res = propagator.propagate(input, distance);
+
+        const double lambdaZ = vacuumWavelengthMetres * distance;
+        const double pitchXOut = lambdaZ / (static_cast<double>(width) * pitchX);
+        const double pitchYOut = lambdaZ / (static_cast<double>(height) * pitchY);
+
+        const double expectedStepX = (std::numbers::pi * 15.0 * pitchXOut) / (static_cast<double>(width) * pitchX);
+        const double expectedStepY = (std::numbers::pi * 7.0 * pitchYOut) / (static_cast<double>(height) * pitchY);
+        const double expectedMaxStep = std::max(expectedStepX, expectedStepY);
+
+        CHECK(std::abs(res.diagnostics.maxAdjacentPhaseStepRadians - expectedMaxStep) / expectedMaxStep < 1e-12);
+        CHECK(res.diagnostics.maxAdjacentPhaseStepRadians > 0.0);
+    }
+
+    // 2. Odd grid (7 x 5) with DirectDftBackend:
+    // mMaxX = 3 -> 2mMax-1 = 5 = N-2 (NOT N-1 = 6!)
+    // mMaxY = 2 -> 2mMax-1 = 3 = N-2 (NOT N-1 = 4!)
+    {
+        constexpr std::size_t width = 7;
+        constexpr std::size_t height = 5;
+        constexpr double pitchX = 10e-6;
+        constexpr double pitchY = 15e-6;
+        constexpr double distance = 0.1;
+
+        auto input = field::ComplexField2D(width, height, pitchX, pitchY, vacuumWavelengthMetres, 1.0);
+        fillDeterministic(input);
+
+        DirectDftBackend backend;
+        propagation::FraunhoferPropagator propagator(backend);
+        const auto res = propagator.propagate(input, distance);
+
+        const double lambdaZ = vacuumWavelengthMetres * distance;
+        const double pitchXOut = lambdaZ / (static_cast<double>(width) * pitchX);
+        const double pitchYOut = lambdaZ / (static_cast<double>(height) * pitchY);
+
+        // Discrete coordinate bounds:
+        // X index 0: x(0) = (0 - 3) * pitchXOut = -3 * pitchXOut -> x(0)^2 = 9 * pitchXOut^2
+        // X index 1: x(1) = (1 - 3) * pitchXOut = -2 * pitchXOut -> x(1)^2 = 4 * pitchXOut^2
+        // Difference = 5 * pitchXOut^2 (corresponding to 2*mMax - 1 = 5, NOT N-1 = 6)
+        const double expectedStepX = (std::numbers::pi * 5.0 * pitchXOut) / (static_cast<double>(width) * pitchX);
+        const double expectedStepY = (std::numbers::pi * 3.0 * pitchYOut) / (static_cast<double>(height) * pitchY);
+        const double expectedMaxStep = std::max(expectedStepX, expectedStepY);
+
+        CHECK(std::abs(res.diagnostics.maxAdjacentPhaseStepRadians - expectedMaxStep) / expectedMaxStep < 1e-12);
+
+        // Verify that using (N-1) would have produced an incorrect overestimate
+        const double wrongOverestimatedStepX = (std::numbers::pi * 6.0 * pitchXOut) / (static_cast<double>(width) * pitchX);
+        CHECK(std::abs(res.diagnostics.maxAdjacentPhaseStepRadians - wrongOverestimatedStepX) > 1e-6);
+    }
+
+    // 3. Odd grid boundary: 1 x 1 grid (mMax = 0 -> step factor = 0)
+    {
+        DirectDftBackend backend;
+        propagation::FraunhoferPropagator propagator(backend);
+        auto input1x1 = field::ComplexField2D(1, 1, 10e-6, 10e-6, vacuumWavelengthMetres, 1.0);
+        input1x1.at(0, 0) = {1.0, 0.0};
+        const auto res = propagator.propagate(input1x1, 0.1);
+        CHECK(res.diagnostics.maxAdjacentPhaseStepRadians == 0.0);
+        CHECK(res.diagnostics.quadraticPhaseUndersampled == false);
+    }
+
+    // 4. Odd grid boundary: 3 x 3 grid (mMax = 1 -> 2mMax-1 = 1 = N-2)
+    {
+        DirectDftBackend backend;
+        propagation::FraunhoferPropagator propagator(backend);
+        auto input3x3 = field::ComplexField2D(3, 3, 10e-6, 10e-6, vacuumWavelengthMetres, 1.0);
+        fillDeterministic(input3x3);
+        const auto res = propagator.propagate(input3x3, 0.1);
+
+        const double pitchXOut = (vacuumWavelengthMetres * 0.1) / (3.0 * 10e-6);
+        const double expectedStep = (std::numbers::pi * 1.0 * pitchXOut) / (3.0 * 10e-6);
+        CHECK(std::abs(res.diagnostics.maxAdjacentPhaseStepRadians - expectedStep) / expectedStep < 1e-12);
+    }
+}
+
+TEST_CASE("Fraunhofer propagator three independent diagnostic dimensions and combined warning matrix") {
+    fft::CpuFftBackend backend;
+    propagation::FraunhoferPropagator propagator(backend);
+
+    // Case 1: All three conditions valid (NF < 0.1, paraxial < 0.1, quadratic phase step <= pi)
+    {
+        constexpr std::size_t size = 16;
+        constexpr double pitch = 100e-6; // 100 um pitch -> small max frequency 5000 1/m
+        constexpr double distance = 0.05; // 5 cm
+
+        auto input = makeField(size, size, pitch, 1.0);
+        fillDeterministic(input);
+
+        propagation::FraunhoferOptions options;
+        options.illuminatedDiameterMetres = 40e-6; // NF = (40um)^2 / (532nm * 0.05m) = 0.06015 < 0.1
+
+        const auto res = propagator.propagate(input, distance, options);
+        CHECK(res.diagnostics.fresnelNumber < 0.1);
+        CHECK(res.diagnostics.fresnelNumberBelowThreshold == true);
+        CHECK(res.diagnostics.maximumParaxialParameter < 0.1);
+        CHECK(res.diagnostics.paraxialParameterBelowThreshold == true);
+        CHECK(res.diagnostics.maxAdjacentPhaseStepRadians <= std::numbers::pi);
+        CHECK(res.diagnostics.quadraticPhaseUndersampled == false);
+        CHECK(res.diagnostics.warning.empty());
+    }
+
+    // Case 2: Only Fresnel number violated (NF >= 0.1, paraxial < 0.1, quadratic phase step <= pi)
+    {
+        constexpr std::size_t size = 16;
+        constexpr double pitch = 100e-6;
+        constexpr double distance = 0.05;
+
+        auto input = makeField(size, size, pitch, 1.0);
+        fillDeterministic(input);
+
+        propagation::FraunhoferOptions options;
+        options.illuminatedDiameterMetres = 100e-6; // NF = (100um)^2 / (532nm * 0.05m) = 0.3759 >= 0.1
+
+        const auto res = propagator.propagate(input, distance, options);
+        CHECK(res.diagnostics.fresnelNumber >= 0.1);
+        CHECK(res.diagnostics.fresnelNumberBelowThreshold == false);
+        CHECK(res.diagnostics.paraxialParameterBelowThreshold == true);
+        CHECK(res.diagnostics.quadraticPhaseUndersampled == false);
+
+        CHECK_FALSE(res.diagnostics.warning.empty());
+        CHECK(res.diagnostics.warning.find("Fresnel number") != std::string::npos);
+        CHECK(res.diagnostics.warning.find("paraxial parameter") == std::string::npos);
+        CHECK(res.diagnostics.warning.find("quadratic phase step") == std::string::npos);
+    }
+
+    // Case 3: Only paraxial parameter violated (NF < 0.1, paraxial >= 0.1, quadratic phase step <= pi)
+    {
+        constexpr std::size_t size = 4;
+        constexpr double pitch = 2e-6; // 2 um pitch -> max corner frequency paraxial parameter = 0.188 >= 0.1
+        constexpr double distance = 30e-6; // 30 um -> quadratic phase step ~ 0.748 pi <= pi
+
+        auto input = makeField(size, size, pitch, 1.0);
+        fillDeterministic(input);
+
+        propagation::FraunhoferOptions options;
+        options.illuminatedDiameterMetres = 1e-6; // NF = (1um)^2 / (532nm * 30um) = 0.0627 < 0.1
+
+        const auto res = propagator.propagate(input, distance, options);
+        CHECK(res.diagnostics.fresnelNumberBelowThreshold == true);
+        CHECK(res.diagnostics.maximumParaxialParameter >= 0.1);
+        CHECK(res.diagnostics.paraxialParameterBelowThreshold == false);
+        CHECK(res.diagnostics.maxAdjacentPhaseStepRadians <= std::numbers::pi);
+        CHECK(res.diagnostics.quadraticPhaseUndersampled == false);
+
+        CHECK_FALSE(res.diagnostics.warning.empty());
+        CHECK(res.diagnostics.warning.find("Fresnel number") == std::string::npos);
+        CHECK(res.diagnostics.warning.find("paraxial parameter") != std::string::npos);
+        CHECK(res.diagnostics.warning.find("quadratic phase step") == std::string::npos);
+    }
+
+    // Case 4: Only quadratic phase step violated (NF < 0.1, paraxial < 0.1, quadratic phase step > pi)
+    {
+        constexpr std::size_t size = 32;
+        constexpr double pitch = 50e-6;
+        constexpr double distance = 0.5; // 0.5 m -> max adjacent phase step ~ 3.22 pi > pi
+
+        auto input = makeField(size, size, pitch, 1.0);
+        fillDeterministic(input);
+
+        propagation::FraunhoferOptions options;
+        options.illuminatedDiameterMetres = 100e-6; // NF = (100um)^2 / (532nm * 0.5m) = 0.0376 < 0.1
+
+        const auto res = propagator.propagate(input, distance, options);
+        CHECK(res.diagnostics.fresnelNumberBelowThreshold == true);
+        CHECK(res.diagnostics.paraxialParameterBelowThreshold == true);
+        CHECK(res.diagnostics.maxAdjacentPhaseStepRadians > std::numbers::pi);
+        CHECK(res.diagnostics.quadraticPhaseUndersampled == true);
+
+        CHECK_FALSE(res.diagnostics.warning.empty());
+        CHECK(res.diagnostics.warning.find("Fresnel number") == std::string::npos);
+        CHECK(res.diagnostics.warning.find("paraxial parameter") == std::string::npos);
+        CHECK(res.diagnostics.warning.find("quadratic phase step") != std::string::npos);
+    }
+
+    // Case 5: All three conditions violated simultaneously
+    {
+        constexpr std::size_t size = 64;
+        constexpr double pitch = 2e-6;
+        constexpr double distance = 0.5;
+
+        auto input = makeField(size, size, pitch, 1.0);
+        fillDeterministic(input);
+
+        propagation::FraunhoferOptions options;
+        options.illuminatedDiameterMetres = 500e-6; // NF = (500um)^2 / (532nm * 0.5m) = 0.94 >= 0.1
+
+        const auto res = propagator.propagate(input, distance, options);
+        CHECK(res.diagnostics.fresnelNumberBelowThreshold == false);
+        CHECK(res.diagnostics.paraxialParameterBelowThreshold == false);
+        CHECK(res.diagnostics.quadraticPhaseUndersampled == true);
+
+        CHECK_FALSE(res.diagnostics.warning.empty());
+        CHECK(res.diagnostics.warning.find("Fresnel number") != std::string::npos);
+        CHECK(res.diagnostics.warning.find("paraxial parameter") != std::string::npos);
+        CHECK(res.diagnostics.warning.find("quadratic phase step") != std::string::npos);
+    }
 }
