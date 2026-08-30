@@ -41,6 +41,15 @@ void validateFiniteSamples(const field::ComplexField2D& value, const char* messa
     }
 }
 
+/// Stably evaluates a multi-factor product and quotient of doubles:
+///   result = (prod_{i} numerators[i]) / (prod_{j} denominators[j])
+/// using frexp/ldexp mantissa-exponent decomposition.
+///
+/// Exception semantics:
+/// - Returns exact 0.0 if and only if at least one numerator is exact 0.0.
+/// - Throws std::overflow_error if any factor is non-finite, denominator is 0.0, or product exceeds double range.
+/// - Throws std::underflow_error if all factors are non-zero but the true result underflows the minimum
+///   representable double range (below denorm_min or ldexp rounds to zero).
 [[nodiscard]] double stableProduct(
     std::initializer_list<double> numerators,
     std::initializer_list<double> denominators = {}) {
@@ -75,7 +84,7 @@ void validateFiniteSamples(const field::ComplexField2D& value, const char* messa
     }
 
     if (mTotal == 0.0) {
-        return 0.0;
+        throw std::underflow_error("Fresnel phase product underflows double range");
     }
 
     if (expTotal > std::numeric_limits<double>::max_exponent) {
@@ -83,12 +92,15 @@ void validateFiniteSamples(const field::ComplexField2D& value, const char* messa
     }
 
     if (expTotal < std::numeric_limits<double>::min_exponent - std::numeric_limits<double>::digits - 2) {
-        return 0.0;
+        throw std::underflow_error("Fresnel phase product underflows double range");
     }
 
     const double result = std::ldexp(mTotal, expTotal);
     if (!std::isfinite(result)) {
         throw std::overflow_error("Fresnel phase product exceeds finite double range");
+    }
+    if (result == 0.0) {
+        throw std::underflow_error("Fresnel phase product underflows double range");
     }
     return result;
 }

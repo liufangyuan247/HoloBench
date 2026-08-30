@@ -52,6 +52,15 @@ struct FresnelDiagnostics final {
 ///
 /// Output spatial sampling matches input spatial sampling (Delta x2 = Delta x1, Delta y2 = Delta y1).
 /// All bins retain unit modulus |H| = 1 without evanescent cutoff.
+///
+/// Representable-domain exception and safety semantics:
+/// - Exact zero inputs (e.g. z = 0 or fx = 0) evaluate deterministically to exact 0.0 phase.
+/// - If all factors are non-zero but a phase product (carrier phase, quadratic phase, adjacent phase step)
+///   underflows below the minimum representable double range (below denorm_min or ldexp rounds to 0.0),
+///   std::underflow_error is thrown instead of silently flushing the phase to 0.0.
+/// - If intermediate phase or paraxial products exceed finite double capacity, std::overflow_error is thrown.
+/// - If input parameters or field dimensions are invalid, std::invalid_argument is thrown.
+/// - Strong exception safety: in all failure modes, the input field is left bitwise unmodified.
 class FresnelTransferFunctionPropagator final {
 public:
     explicit FresnelTransferFunctionPropagator(fft::IFftBackend& fftBackend) noexcept;

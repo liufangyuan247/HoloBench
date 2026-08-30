@@ -75,6 +75,7 @@ This file records active physical assumptions, sign conventions, and validity do
   - `maximumParaxialParameter`: $\max \lambda \sqrt{f_x^2 + f_y^2}$ across all grid frequency bins (dimensionless).
   - `maxAdjacentPhaseStepRadians`: maximum unwrapped quadratic phase step $\Delta\psi$ between adjacent discrete frequency bins along $X$ or $Y$ ($\text{rad}$).
   - `transferFunctionUndersampled`: boolean flag indicating whether $\Delta\psi > \pi\text{ rad}$ (transfer-function frequency-domain phase aliasing).
+  - Representable-domain exceptions: Multi-factor phase computations (carrier phase, quadratic spectral phase, and adjacent phase steps) use mantissa-exponent decomposition. Exact zero factors ($z = 0$ or $f_x = 0$) evaluate deterministically to 0.0. When all factors are non-zero but the exact product underflows below the double-precision representable range (below subnormal `denorm_min`), `std::underflow_error` is thrown rather than silently zeroing the phase; arithmetic overflows or non-finite factors throw `std::overflow_error`. Strong exception safety guarantees that the input field remains bitwise unmodified if an exception is thrown.
 - The Fraunhofer propagator (`FraunhoferPropagator`) is an approximate paraxial far-field diffraction solver, not an exact wave solver (`isExact = false`):
   \[
   U_{\text{out}}(x_2, y_2, z) = \frac{e^{ikz} e^{i\frac{k}{2z}(x_2^2 + y_2^2)}}{i \lambda z} \iint U_{\text{in}}(x_1, y_1) e^{-i \frac{2\pi}{\lambda z}(x_2 x_1 + y_2 y_1)} \, dx_1 dy_1

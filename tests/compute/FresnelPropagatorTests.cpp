@@ -543,6 +543,42 @@ TEST_CASE("Fresnel enforces strong exception safety when intermediate diagnostic
     checkSamplesExactly(field, original);
 }
 
+TEST_CASE("Fresnel throws underflow_error when non-zero quadratic phase product underflows double domain") {
+    // Non-zero distance and wavelength where pi * lambda * distance * fx^2 is non-zero but below double denorm_min.
+    constexpr double tinyLambda = 1e-200;
+    constexpr double tinyDistance = 1e-200;
+    constexpr double pitch = 10e-6; // fx ~ 1.25e4 -> fx^2 ~ 1.56e8 -> product ~ 4.9e-392 < denorm_min (~4.94e-324)
+    field::ComplexField2D field(8, 8, pitch, pitch, tinyLambda, 1.0);
+    fillDeterministic(field);
+    const auto original = copySamples(field);
+
+    fft::CpuFftBackend backend;
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
+
+    CHECK_THROWS_AS(
+        propagator.propagateInPlace(field, tinyDistance),
+        std::underflow_error);
+    checkSamplesExactly(field, original);
+}
+
+TEST_CASE("Fresnel throws underflow_error when non-zero carrier phase underflows double domain") {
+    // Distance and wavelength where carrierPhase = 2 * pi * distance / lambda is non-zero but underflows double range.
+    constexpr double subnormalDistance = 1.0e-320;
+    constexpr double hugeLambda = 1.0e100;
+    constexpr double pitch = 10e-6;
+    field::ComplexField2D field(8, 8, pitch, pitch, hugeLambda, 1.0);
+    fillDeterministic(field);
+    const auto original = copySamples(field);
+
+    fft::CpuFftBackend backend;
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
+
+    CHECK_THROWS_AS(
+        propagator.propagateInPlace(field, subnormalDistance),
+        std::underflow_error);
+    checkSamplesExactly(field, original);
+}
+
 TEST_CASE("Fresnel balanced-extreme spectral bin evaluates exact phase despite intermediate underflow/overflow") {
     // Parameters where:
     // lambda = 2.0e-200, distance = 3.0e-200 -> lambda * distance = 6.0e-400 (underflows to 0.0 in double)
