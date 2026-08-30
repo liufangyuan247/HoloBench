@@ -39,6 +39,7 @@ FetchContent_MakeAvailable(nlohmann_json)
 add_library(holobench_core STATIC
     core/field/ComplexField2D.cpp
     core/field/FieldObservables.cpp
+    core/field/FieldVisualization.cpp
     core/field/ScalarField2D.cpp
     core/project/ProjectDocument.cpp
 )
@@ -72,10 +73,11 @@ add_library(holobench_optics STATIC
     optics/scene/SceneProjectAdapter.cpp
     optics/wave/FieldElements.cpp
     optics/wave/FieldSources.cpp
+    optics/wave/WaveDetectorPipeline.cpp
 )
 add_library(HoloBench::Optics ALIAS holobench_optics)
 target_include_directories(holobench_optics PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(holobench_optics PUBLIC HoloBench::Core)
+target_link_libraries(holobench_optics PUBLIC HoloBench::Core HoloBench::Compute)
 target_compile_features(holobench_optics PUBLIC cxx_std_20)
 holobench_set_warnings(holobench_optics)
 
@@ -145,6 +147,7 @@ if(HOLOBENCH_BUILD_APP)
         render/Camera.cpp
         render/gl/Shader.cpp
         render/gl/Framebuffer.cpp
+        render/gl/Texture2D.cpp
         render/OpticalBenchRenderer.cpp
         render/gl/GlDebug.cpp
     )
@@ -176,6 +179,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/core/UnitsTests.cpp
         tests/core/ComplexFieldTests.cpp
         tests/core/FieldObservablesTests.cpp
+        tests/core/FieldVisualizationTests.cpp
         tests/compute/AngularSpectrumPropagatorTests.cpp
         tests/compute/CpuFftBackendTests.cpp
         tests/compute/FraunhoferPropagatorTests.cpp
@@ -187,6 +191,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/NumericalApertureTests.cpp
         tests/analytic/SnellTests.cpp
         tests/analytic/ThinLensTests.cpp
+        tests/analytic/WaveDetectorPipelineTests.cpp
         tests/analytic/WaveSourceTests.cpp
         tests/project/ProjectDocumentTests.cpp
         tests/project/SceneProjectAdapterTests.cpp
