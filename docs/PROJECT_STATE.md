@@ -45,6 +45,7 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
   - **Field Sources & Elements**: Plane wave and fundamental paraxial Gaussian beam sources; binary circular, rectangular, and double-slit aperture masks; ideal thin-lens quadratic phase screen.
   - **External Golden Cross-Validation**: Three complete complex fields independently generated with `waveprop 0.0.12` validate ASM, Fresnel TF, and Fraunhofer propagation. Tests check coordinate conventions, normalized complex-field error, peak-normalized maximum error, and independent intensity errors; the Python validation environment is never linked into runtime binaries.
   - **Test Suite Status**: 185/185 deterministic unit tests passing across `dev` and headless `core-ci`, including three external `waveprop` cross-validation cases; the strict `app-ci` build and 120-frame OpenGL smoke test also pass on the reference AMD Radeon Pro 5300M.
+  - **Cross-platform CI**: GitHub Actions run [33342229206](https://github.com/liufangyuan247/HoloBench/actions/runs/33342229206) passes all four M2 integration gates: Windows and Ubuntu core build/tests plus Windows and Ubuntu application compilation with warnings as errors.
 
 ## In progress / Remaining for M2
 

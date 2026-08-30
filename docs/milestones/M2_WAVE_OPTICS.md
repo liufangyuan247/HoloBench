@@ -26,7 +26,7 @@ Deliver a validated scalar-wave vertical slice spanning a sampled complex field,
 - [x] Three complete-field cases cross-validate ASM, Fresnel TF, and Fraunhofer propagation against `waveprop 0.0.12` without linking validation tools into runtime binaries.
 - [ ] GPU and CPU backends agree within a documented error bound.
 - [ ] The named 1024x1024 interactive propagation benchmark is below 50 ms on the reference GPU.
-- [ ] Windows and Ubuntu warnings-as-errors CI, local smoke tests, documentation, and project compatibility checks pass.
+- [x] Windows and Ubuntu warnings-as-errors CI, local smoke tests, documentation, and project compatibility checks pass for the current M2 integration baseline.
 
 ## Deferred beyond M2
 
