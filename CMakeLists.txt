@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(HoloBench VERSION 0.1.0 LANGUAGES CXX)
+project(HoloBench VERSION 0.1.0 LANGUAGES C CXX)
 
 include(CTest)
 include(FetchContent)
@@ -45,6 +45,33 @@ target_link_libraries(holobench_core PUBLIC nlohmann_json::nlohmann_json)
 target_compile_features(holobench_core PUBLIC cxx_std_20)
 holobench_set_warnings(holobench_core)
 
+add_library(holobench_optics STATIC
+    optics/ray/BenchTracer.cpp
+    optics/ray/GeometricElements.cpp
+    optics/ray/Interface.cpp
+    optics/ray/Ray.cpp
+    optics/ray/ThinLens.cpp
+    optics/scene/GeometricComponents.cpp
+    optics/scene/NumericalAperture.cpp
+    optics/scene/OpticalBenchScene.cpp
+    optics/scene/SceneProjectAdapter.cpp
+)
+add_library(HoloBench::Optics ALIAS holobench_optics)
+target_include_directories(holobench_optics PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(holobench_optics PUBLIC HoloBench::Core)
+target_compile_features(holobench_optics PUBLIC cxx_std_20)
+holobench_set_warnings(holobench_optics)
+
+set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    glm
+    URL https://codeload.github.com/g-truc/glm/tar.gz/a532f5b1cf27d6a3c099437e6959cf7e398a0a67
+    URL_HASH SHA256=3a83ca4c2dba0497af5f8c09a9cc90b03a80c7012bd56920afaab4acfa09f634
+    DOWNLOAD_EXTRACT_TIMESTAMP FALSE
+)
+FetchContent_MakeAvailable(glm)
+
 if(HOLOBENCH_BUILD_APP)
     set(SDL_SHARED OFF CACHE BOOL "" FORCE)
     set(SDL_STATIC ON CACHE BOOL "" FORCE)
@@ -67,6 +94,16 @@ if(HOLOBENCH_BUILD_APP)
     )
     FetchContent_MakeAvailable(imgui)
 
+    FetchContent_Declare(
+        glad
+        URL https://codeload.github.com/Dav1dde/glad/tar.gz/73db193f853e2ee079bf3ca8a64aa2eaf6459043
+        URL_HASH SHA256=33dbeae44d8315ece57e14eba4b1b4a02ac5406d1c4f49cd20048c91522a6b9a
+        DOWNLOAD_EXTRACT_TIMESTAMP FALSE
+        SOURCE_SUBDIR cmake
+    )
+    FetchContent_MakeAvailable(glad)
+    glad_add_library(holobench_glad STATIC REPRODUCIBLE API gl:core=4.6)
+
     find_package(OpenGL REQUIRED)
 
     add_library(holobench_imgui STATIC
@@ -88,13 +125,20 @@ if(HOLOBENCH_BUILD_APP)
     add_executable(holobench_app
         app/main.cpp
         app/Application.cpp
+        render/Camera.cpp
+        render/gl/Shader.cpp
+        render/gl/Framebuffer.cpp
+        render/OpticalBenchRenderer.cpp
         render/gl/GlDebug.cpp
     )
     set_target_properties(holobench_app PROPERTIES OUTPUT_NAME HoloBench)
     target_include_directories(holobench_app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(holobench_app PRIVATE
         HoloBench::Core
+        HoloBench::Optics
         holobench_imgui
+        holobench_glad
+        glm::glm
         SDL3::SDL3-static
         OpenGL::GL
     )
@@ -113,9 +157,18 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
     add_executable(holobench_tests
         tests/test_main.cpp
         tests/core/UnitsTests.cpp
+        tests/analytic/BenchTracerTests.cpp
+        tests/analytic/GeometricElementsTests.cpp
+        tests/analytic/NumericalApertureTests.cpp
+        tests/analytic/SnellTests.cpp
+        tests/analytic/ThinLensTests.cpp
         tests/project/ProjectDocumentTests.cpp
+        tests/project/SceneProjectAdapterTests.cpp
+        render/Camera.cpp
+        tests/render/CameraTests.cpp
+        tests/render/GizmoTests.cpp
     )
-    target_link_libraries(holobench_tests PRIVATE HoloBench::Core doctest::doctest)
+    target_link_libraries(holobench_tests PRIVATE HoloBench::Core HoloBench::Optics doctest::doctest glm::glm)
     holobench_set_warnings(holobench_tests)
 
     include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)

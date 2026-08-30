@@ -28,6 +28,18 @@
         "HOLOBENCH_BUILD_TESTS": "ON",
         "HOLOBENCH_WARNINGS_AS_ERRORS": "ON"
       }
+    },
+    {
+      "name": "app-ci",
+      "displayName": "Application CI (Ninja, Release)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "HOLOBENCH_BUILD_APP": "ON",
+        "HOLOBENCH_BUILD_TESTS": "OFF",
+        "HOLOBENCH_WARNINGS_AS_ERRORS": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -38,6 +50,10 @@
     {
       "name": "core-ci",
       "configurePreset": "core-ci"
+    },
+    {
+      "name": "app-ci",
+      "configurePreset": "app-ci"
     }
   ],
   "testPresets": [

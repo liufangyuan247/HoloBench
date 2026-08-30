@@ -1,26 +1,275 @@
 #include "app/Application.hpp"
 
+#include <glad/gl.h>
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_opengl.h>
 #include <backends/imgui_impl_opengl3.h>
 #include <backends/imgui_impl_sdl3.h>
 #include <imgui.h>
+#include <imgui_internal.h>
+#include <glm/trigonometric.hpp>
 
+#include <algorithm>
 #include <array>
+#include <chrono>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <numeric>
+#include <string>
+#include <type_traits>
+#include <vector>
 
+#include "optics/ray/BenchTracer.hpp"
+#include "optics/scene/NumericalAperture.hpp"
+#include "optics/scene/OpticalBenchScene.hpp"
+#include "optics/scene/SceneProjectAdapter.hpp"
+#include "render/OpticalBenchRenderer.hpp"
 #include "render/gl/GlDebug.hpp"
 
 namespace holobench::app {
+namespace {
+
+GLADapiproc loadOpenGlProcedure(const char* name) {
+    return reinterpret_cast<GLADapiproc>(SDL_GL_GetProcAddress(name));
+}
+
+template <typename T = ImTextureID>
+constexpr T toImTextureID(GLuint textureId) noexcept {
+    if constexpr (std::is_pointer_v<T>) {
+        return reinterpret_cast<T>(static_cast<std::uintptr_t>(textureId));
+    } else {
+        return static_cast<T>(textureId);
+    }
+}
+
+void drawGizmoHandle(
+    ImDrawList* drawList,
+    const gizmo::ProjectedPoint& projCenter,
+    const gizmo::AxisProjection& axisProj,
+    bool isHovered,
+    bool isSelected,
+    bool isDragged,
+    const char* label,
+    double zMetres,
+    ImU32 primaryColor,
+    ImU32 hoverColor) {
+    if (!projCenter.visible || drawList == nullptr) {
+        return;
+    }
+
+    const ImVec2 center(projCenter.screenPos.x, projCenter.screenPos.y);
+    const bool isHighlighted = isHovered || isSelected || isDragged;
+    const ImU32 activeColor = isHighlighted ? hoverColor : primaryColor;
+
+    // +Z Axis Arrow & Drag Hint
+    if (!axisProj.isDegenerate) {
+        constexpr float kArrowShaftLength = 40.0F;
+        const ImVec2 shaftEnd(
+            center.x + axisProj.screenDir.x * kArrowShaftLength,
+            center.y + axisProj.screenDir.y * kArrowShaftLength);
+        const float shaftThickness = isDragged ? 3.0F : (isHighlighted ? 2.2F : 1.4F);
+        drawList->AddLine(center, shaftEnd, activeColor, shaftThickness);
+
+        // Arrowhead
+        const ImVec2 perp(-axisProj.screenDir.y, axisProj.screenDir.x);
+        constexpr float kHeadLen = 8.0F;
+        constexpr float kHeadWidth = 5.0F;
+        const ImVec2 tip = shaftEnd;
+        const ImVec2 left(
+            tip.x - axisProj.screenDir.x * kHeadLen + perp.x * kHeadWidth,
+            tip.y - axisProj.screenDir.y * kHeadLen + perp.y * kHeadWidth);
+        const ImVec2 right(
+            tip.x - axisProj.screenDir.x * kHeadLen - perp.x * kHeadWidth,
+            tip.y - axisProj.screenDir.y * kHeadLen - perp.y * kHeadWidth);
+        drawList->AddTriangleFilled(tip, left, right, activeColor);
+
+        // "+Z" Label
+        const ImVec2 textPos(
+            tip.x + axisProj.screenDir.x * 5.0F + perp.x * 3.0F,
+            tip.y + axisProj.screenDir.y * 5.0F + perp.y * 3.0F - 6.0F);
+        drawList->AddText(textPos, activeColor, "+Z");
+    }
+
+    // Outer Ring
+    const float ringRadius = isDragged ? 13.0F : (isHovered ? 12.0F : (isSelected ? 11.0F : 9.5F));
+    const float ringThickness = isHighlighted ? 2.5F : 1.8F;
+    drawList->AddCircle(center, ringRadius, activeColor, 24, ringThickness);
+
+    if (isSelected || isDragged) {
+        // Halo ring
+        const ImU32 haloColor = (activeColor & 0x00FFFFFF) | 0x55000000;
+        drawList->AddCircle(center, ringRadius + 4.0F, haloColor, 24, 1.5F);
+    }
+
+    // Inner Dot
+    const ImU32 innerDotColor = isDragged ? IM_COL32(255, 255, 255, 255) : (isHighlighted ? activeColor : primaryColor);
+    drawList->AddCircleFilled(center, isDragged ? 5.0F : 4.0F, innerDotColor, 16);
+
+    // Component Label Pill
+    char labelBuf[96];
+    std::snprintf(labelBuf, sizeof(labelBuf), "%s (Z: %.1f mm)", label, zMetres * 1000.0);
+    const ImVec2 txtSize = ImGui::CalcTextSize(labelBuf);
+    const ImVec2 pillPos(center.x + 15.0F, center.y - txtSize.y * 0.5F);
+    const ImVec2 pillMin(pillPos.x - 4.0F, pillPos.y - 2.0F);
+    const ImVec2 pillMax(pillPos.x + txtSize.x + 4.0F, pillPos.y + txtSize.y + 2.0F);
+
+    drawList->AddRectFilled(pillMin, pillMax, IM_COL32(15, 23, 42, 220), 4.0F);
+    const ImU32 borderColor = isHighlighted ? activeColor : IM_COL32(100, 116, 139, 160);
+    drawList->AddRect(pillMin, pillMax, borderColor, 4.0F, 0, 1.0F);
+    drawList->AddText(pillPos, IM_COL32(241, 245, 249, 255), labelBuf);
+}
+
+void drawViewportHud(
+    ImDrawList* drawList,
+    const ImVec2& imagePosMin,
+    GizmoTarget selectedTarget,
+    GizmoTarget draggedTarget,
+    bool isGizmoDragging) {
+    if (drawList == nullptr) {
+        return;
+    }
+
+    const char* selStr = (selectedTarget == GizmoTarget::Lens) ? "Lens"
+        : (selectedTarget == GizmoTarget::Screen) ? "Screen" : "None";
+
+    char statusBuf[160];
+    if (isGizmoDragging) {
+        const char* dName = (draggedTarget == GizmoTarget::Lens) ? "Lens" : "Screen";
+        std::snprintf(statusBuf, sizeof(statusBuf), "Dragging %s (+Z optical axis) | ESC to cancel", dName);
+    } else {
+        std::snprintf(statusBuf, sizeof(statusBuf), "Gizmo: %s selected | LMB on handle to drag +Z | RMB: Orbit | MMB: Pan", selStr);
+    }
+
+    const ImVec2 hudPos(imagePosMin.x + 12.0F, imagePosMin.y + 12.0F);
+    const ImVec2 txtSize = ImGui::CalcTextSize(statusBuf);
+    const ImVec2 hudMin(hudPos.x - 6.0F, hudPos.y - 4.0F);
+    const ImVec2 hudMax(hudPos.x + txtSize.x + 6.0F, hudPos.y + txtSize.y + 4.0F);
+
+    drawList->AddRectFilled(hudMin, hudMax, IM_COL32(15, 23, 42, 200), 5.0F);
+    drawList->AddRect(hudMin, hudMax, isGizmoDragging ? IM_COL32(56, 189, 248, 200) : IM_COL32(71, 85, 105, 160), 5.0F, 0, 1.0F);
+    drawList->AddText(hudPos, isGizmoDragging ? IM_COL32(125, 211, 252, 255) : IM_COL32(226, 232, 240, 240), statusBuf);
+}
+
+} // namespace
+
+Application::Application()
+    : renderer_(std::make_unique<render::OpticalBenchRenderer>())
+    , scene_(optics::scene::createDefaultRealImageScene())
+    , naResult_(optics::scene::computeObjectSideNumericalAperture(scene_)) {
+    tracerOptions_.rayCount = 64;
+    tracerOptions_.pattern = optics::ray::RaySamplingPattern::FibonacciDisk;
+    tracerOptions_.maxPropagationDistanceMetres = 2.0;
+    tracerOptions_.includeVirtualExtensions = true;
+    tracerOptions_.virtualExtensionDistanceMetres = 1.0;
+    std::strncpy(projectPathBuffer_, "holobench_scene.json", sizeof(projectPathBuffer_) - 1);
+    projectPathBuffer_[sizeof(projectPathBuffer_) - 1] = '\0';
+}
 
 Application::~Application() {
     shutdown();
 }
 
-bool Application::initialize() {
+bool Application::applyScene(
+    const optics::scene::OpticalBenchScene& candidateScene,
+    const optics::ray::BenchTracerOptions& candidateOptions) {
+    static_assert(std::is_nothrow_move_assignable_v<optics::scene::OpticalBenchScene>);
+    static_assert(std::is_nothrow_move_assignable_v<optics::scene::ThinLensImagePrediction>);
+    static_assert(std::is_nothrow_move_assignable_v<optics::ray::BenchTracerOptions>);
+    static_assert(std::is_nothrow_swappable_v<std::vector<optics::ray::RaySegment>>);
+    static_assert(std::is_nothrow_move_assignable_v<std::string>);
+
+    try {
+        optics::scene::OpticalBenchScene sceneCopy = candidateScene;
+        optics::scene::validateScene(sceneCopy);
+        const auto pred = optics::scene::predictThinLensImage(sceneCopy);
+        const auto na = optics::scene::computeObjectSideNumericalAperture(sceneCopy);
+        optics::ray::traceBench(sceneCopy, candidateOptions, stagingRaySegments_);
+        std::string newStatus = "Scene updated (" + std::to_string(stagingRaySegments_.size()) + " displayed segments)";
+
+        if (!renderer_ || !renderer_->updateScene(sceneCopy, pred, stagingRaySegments_)) {
+            throw std::runtime_error("Renderer rejected scene geometry update");
+        }
+
+        scene_ = std::move(sceneCopy);
+        prediction_ = pred;
+        naResult_ = na;
+        tracerOptions_ = candidateOptions;
+        raySegments_.swap(stagingRaySegments_);
+        errorMessage_.clear();
+        statusMessage_ = std::move(newStatus);
+        return true;
+    } catch (const std::exception& ex) {
+        errorMessage_ = ex.what();
+        statusMessage_.clear();
+        return false;
+    }
+}
+
+void Application::saveSceneToPath(const char* pathStr) {
+    if (pathStr == nullptr || pathStr[0] == '\0') {
+        errorMessage_ = "Save failed: file path cannot be empty";
+        statusMessage_.clear();
+        return;
+    }
+    std::string pathString(pathStr);
+    const auto first = pathString.find_first_not_of(" \t\n\r");
+    if (first == std::string::npos) {
+        errorMessage_ = "Save failed: file path cannot be empty";
+        statusMessage_.clear();
+        return;
+    }
+    const auto last = pathString.find_last_not_of(" \t\n\r");
+    const std::filesystem::path path(pathString.substr(first, last - first + 1));
+
+    try {
+        optics::scene::saveScene(scene_, path);
+        statusMessage_ = "Saved scene to " + path.string();
+        errorMessage_.clear();
+    } catch (const std::exception& ex) {
+        errorMessage_ = "Save failed: " + std::string(ex.what());
+        statusMessage_.clear();
+    }
+}
+
+void Application::loadSceneFromPath(const char* pathStr) {
+    if (pathStr == nullptr || pathStr[0] == '\0') {
+        errorMessage_ = "Load failed: file path cannot be empty";
+        statusMessage_.clear();
+        return;
+    }
+    std::string pathString(pathStr);
+    const auto first = pathString.find_first_not_of(" \t\n\r");
+    if (first == std::string::npos) {
+        errorMessage_ = "Load failed: file path cannot be empty";
+        statusMessage_.clear();
+        return;
+    }
+    const auto last = pathString.find_last_not_of(" \t\n\r");
+    const std::filesystem::path path(pathString.substr(first, last - first + 1));
+
+    try {
+        const auto loaded = optics::scene::loadScene(path);
+        if (applyScene(loaded, tracerOptions_)) {
+            statusMessage_ = "Loaded scene from " + path.string() + " (" + std::to_string(raySegments_.size()) + " segments)";
+        }
+    } catch (const std::exception& ex) {
+        errorMessage_ = "Load failed: " + std::string(ex.what());
+        statusMessage_.clear();
+    }
+}
+
+bool Application::initialize(const RunOptions& options) {
+    if (initialized_) {
+        return true;
+    }
+
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return false;
     }
+    sdlInitialized_ = true;
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6);
@@ -30,7 +279,10 @@ bool Application::initialize() {
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
     constexpr auto windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-    window_ = SDL_CreateWindow("HoloBench — M0 Foundation", 1440, 900, windowFlags);
+    isBenchmark_ = options.benchmarkFrames > 0;
+    const int requestedWidth = isBenchmark_ ? 1920 : 1440;
+    const int requestedHeight = isBenchmark_ ? 1080 : 900;
+    window_ = SDL_CreateWindow("HoloBench — M1 3D Optical Bench", requestedWidth, requestedHeight, windowFlags);
     if (window_ == nullptr) {
         SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
         shutdown();
@@ -43,7 +295,29 @@ bool Application::initialize() {
         shutdown();
         return false;
     }
-    SDL_GL_SetSwapInterval(1);
+
+    if (isBenchmark_) {
+        SDL_GL_SetSwapInterval(0);
+    } else {
+        if (!SDL_GL_SetSwapInterval(1)) {
+            SDL_GL_SetSwapInterval(-1);
+        }
+    }
+    int interval = isBenchmark_ ? 0 : 1;
+    if (SDL_GL_GetSwapInterval(&interval)) {
+        vsyncInterval_ = interval;
+    } else {
+        vsyncInterval_ = isBenchmark_ ? 0 : 1;
+    }
+
+    const int loadedVersion = gladLoadGL(loadOpenGlProcedure);
+    if (loadedVersion == 0
+        || GLAD_VERSION_MAJOR(loadedVersion) < 4
+        || (GLAD_VERSION_MAJOR(loadedVersion) == 4 && GLAD_VERSION_MINOR(loadedVersion) < 6)) {
+        SDL_Log("Failed to load the required OpenGL 4.6 Core API");
+        shutdown();
+        return false;
+    }
 
     render::gl::installDebugCallback();
     constexpr std::array<GLenum, 4> glProperties {GL_VENDOR, GL_RENDERER, GL_VERSION, GL_SHADING_LANGUAGE_VERSION};
@@ -51,6 +325,12 @@ bool Application::initialize() {
     for (std::size_t index = 0; index < glProperties.size(); ++index) {
         const auto* value = reinterpret_cast<const char*>(glGetString(glProperties[index]));
         SDL_Log("OpenGL %s: %s", glPropertyNames[index], value != nullptr ? value : "unavailable");
+    }
+
+    if (!renderer_ || !renderer_->initialize()) {
+        SDL_Log("OpticalBenchRenderer initialization failed");
+        shutdown();
+        return false;
     }
 
     IMGUI_CHECKVERSION();
@@ -67,11 +347,25 @@ bool Application::initialize() {
         return false;
     }
 
+    auto initialOptions = tracerOptions_;
+    initialOptions.rayCount = static_cast<std::size_t>(options.initialRayCount > 0 ? options.initialRayCount : 64);
+    if (!applyScene(scene_, initialOptions)) {
+        SDL_Log("Initial scene setup failed: %s", errorMessage_.c_str());
+        shutdown();
+        return false;
+    }
+
     initialized_ = true;
     return true;
 }
 
 void Application::shutdown() noexcept {
+    if (glContext_ != nullptr && window_ != nullptr) {
+        SDL_GL_MakeCurrent(window_, glContext_);
+    }
+    if (renderer_) {
+        renderer_->destroy();
+    }
     if (imguiGlInitialized_) {
         ImGui_ImplOpenGL3_Shutdown();
         imguiGlInitialized_ = false;
@@ -85,6 +379,12 @@ void Application::shutdown() noexcept {
         imguiContextCreated_ = false;
     }
     initialized_ = false;
+    dockLayoutInitialized_ = false;
+    isOrbiting_ = false;
+    isPanning_ = false;
+    isGizmoDragging_ = false;
+    draggedTarget_ = GizmoTarget::None;
+    selectedTarget_ = GizmoTarget::None;
     if (glContext_ != nullptr) {
         SDL_GL_DestroyContext(glContext_);
         glContext_ = nullptr;
@@ -93,41 +393,713 @@ void Application::shutdown() noexcept {
         SDL_DestroyWindow(window_);
         window_ = nullptr;
     }
-    SDL_Quit();
+    if (sdlInitialized_) {
+        SDL_Quit();
+        sdlInitialized_ = false;
+    }
 }
 
 void Application::drawWorkspace() {
-    ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const ImGuiID dockspaceId = ImGui::DockSpaceOverViewport(
+        ImGui::GetID(docking::DockLayoutConfig::kDockSpaceIdStr),
+        viewport);
 
-    ImGui::Begin("Optical Bench");
-    ImGui::TextUnformatted("M0 engineering foundation is running.");
+    // Dear ImGui docking initialization: only configure default layout when the dockspace
+    // has not been restored from an existing user imgui.ini configuration.
+    // The Dear ImGui internal DockBuilder API (from imgui_internal.h) is used to create
+    // the node splits and dock windows into their respective panes.
+    if (!dockLayoutInitialized_) {
+        ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockspaceId);
+        const bool nodeExists = (node != nullptr);
+        const bool isSplit = nodeExists && (node->IsSplitNode() || node->ChildNodes[0] != nullptr || node->ChildNodes[1] != nullptr);
+        const bool hasWindows = nodeExists && (node->Windows.Size > 0 || node->TabBar != nullptr);
+        const bool isEmpty = !nodeExists || (node->IsEmpty() && !hasWindows && !isSplit);
+
+        if (docking::shouldInitializeDefaultDockLayout(nodeExists, isSplit, isEmpty)) {
+            ImGui::DockBuilderRemoveNode(dockspaceId);
+            ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->WorkSize);
+            ImGui::DockBuilderSetNodePos(dockspaceId, viewport->WorkPos);
+
+            ImGuiID dockMainId = dockspaceId;
+            ImGuiID dockRightId = 0;
+            ImGuiID dockBottomId = 0;
+
+            // Split right side (~25%) for Inspector
+            ImGui::DockBuilderSplitNode(
+                dockMainId,
+                ImGuiDir_Right,
+                docking::DockLayoutConfig::kRightInspectorRatio,
+                &dockRightId,
+                &dockMainId);
+
+            // Split bottom area (~20%) beneath optical bench for Validation
+            ImGui::DockBuilderSplitNode(
+                dockMainId,
+                ImGuiDir_Down,
+                docking::DockLayoutConfig::kBottomValidationRatio,
+                &dockBottomId,
+                &dockMainId);
+
+            // Dock windows into their designated regions:
+            // - Center main: Optical Bench (largest region)
+            // - Right: Inspector (~25% width)
+            // - Bottom: Validation (~20% height under central area)
+            ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kOpticalBenchWindowName, dockMainId);
+            ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kInspectorWindowName, dockRightId);
+            ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kValidationWindowName, dockBottomId);
+
+            ImGui::DockBuilderFinish(dockspaceId);
+        }
+        dockLayoutInitialized_ = true;
+    }
+
+    const ImGuiIO& io = ImGui::GetIO();
+
+    ImGui::Begin(docking::DockLayoutConfig::kOpticalBenchWindowName);
+    const ImVec2 contentSize = ImGui::GetContentRegionAvail();
+
+    int fboWidth = 0;
+    int fboHeight = 0;
+    if (isBenchmark_) {
+        fboWidth = 1920;
+        fboHeight = 1080;
+    } else if (contentSize.x >= 1.0F && contentSize.y >= 1.0F) {
+        const float scaleX = io.DisplayFramebufferScale.x > 0.0F ? io.DisplayFramebufferScale.x : 1.0F;
+        const float scaleY = io.DisplayFramebufferScale.y > 0.0F ? io.DisplayFramebufferScale.y : 1.0F;
+        fboWidth = std::max(1, static_cast<int>(std::round(contentSize.x * scaleX)));
+        fboHeight = std::max(1, static_cast<int>(std::round(contentSize.y * scaleY)));
+    }
+
+    if (fboWidth > 0 && fboHeight > 0) {
+        lastViewportWidth_ = fboWidth;
+        lastViewportHeight_ = fboHeight;
+        camera_.setViewportSize(fboWidth, fboHeight);
+        if (renderer_) {
+            renderer_->render(fboWidth, fboHeight, camera_);
+        }
+    }
+
+    if (contentSize.x >= 1.0F && contentSize.y >= 1.0F) {
+        const GLuint texId = renderer_ ? renderer_->colorTextureId() : 0;
+        if (texId != 0) {
+            ImGui::Image(
+                toImTextureID(texId),
+                contentSize,
+                ImVec2(0.0F, 1.0F),
+                ImVec2(1.0F, 0.0F));
+        }
+
+        const ImVec2 imagePosMin = ImGui::GetItemRectMin();
+        const ImVec2 imageSize = ImGui::GetItemRectSize();
+        const bool isHovered = ImGui::IsItemHovered();
+        const bool noActiveWidget = !ImGui::IsAnyItemActive();
+        const glm::vec2 rectMin(imagePosMin.x, imagePosMin.y);
+        const glm::vec2 rectSize(imageSize.x, imageSize.y);
+
+        // Aspect ratio corresponds to actual offscreen FBO size
+        const float aspect = (fboHeight > 0)
+            ? (static_cast<float>(fboWidth) / static_cast<float>(fboHeight))
+            : (16.0F / 9.0F);
+        const glm::mat4 viewProj = camera_.projectionMatrix(aspect) * camera_.viewMatrix();
+
+        // Project lens center and +Z axis direction
+        const glm::vec3 lensCenterWorld(
+            static_cast<float>(scene_.lens.centreXMetres),
+            static_cast<float>(scene_.lens.centreYMetres),
+            static_cast<float>(scene_.lens.planeZMetres));
+        const auto projLensCenter = gizmo::projectWorldToViewport(lensCenterWorld, viewProj, rectMin, rectSize);
+        const auto lensAxisProj = gizmo::computeAxisProjection(
+            lensCenterWorld,
+            glm::vec3(0.0F, 0.0F, 1.0F),
+            0.05F,
+            viewProj,
+            rectMin,
+            rectSize);
+
+        // Project screen center and +Z axis direction
+        const glm::vec3 screenCenterWorld(
+            static_cast<float>(scene_.screen.centreXMetres),
+            static_cast<float>(scene_.screen.centreYMetres),
+            static_cast<float>(scene_.screen.planeZMetres));
+        const auto projScreenCenter = gizmo::projectWorldToViewport(screenCenterWorld, viewProj, rectMin, rectSize);
+        const auto screenAxisProj = gizmo::computeAxisProjection(
+            screenCenterWorld,
+            glm::vec3(0.0F, 0.0F, 1.0F),
+            0.05F,
+            viewProj,
+            rectMin,
+            rectSize);
+
+        // Hit testing - only when hovered over viewport, no active ImGui widget, not dragging gizmo, not orbiting, not panning
+        constexpr float kHitRadius = 14.0F;
+        bool lensHovered = false;
+        bool screenHovered = false;
+
+        const glm::vec2 mousePos(io.MousePos.x, io.MousePos.y);
+        const glm::vec2 mouseDelta(io.MouseDelta.x, io.MouseDelta.y);
+
+        if (!isGizmoDragging_ && !isOrbiting_ && !isPanning_ && isHovered && noActiveWidget) {
+            lensHovered = gizmo::hitTestHandle(mousePos, projLensCenter, kHitRadius);
+            screenHovered = gizmo::hitTestHandle(mousePos, projScreenCenter, kHitRadius);
+            if (lensHovered && screenHovered) {
+                // If both overlap, pick closer one in depth
+                if (projLensCenter.depth <= projScreenCenter.depth) {
+                    screenHovered = false;
+                } else {
+                    lensHovered = false;
+                }
+            }
+        }
+
+        // Gizmo Dragging Logic
+        if (isGizmoDragging_) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                // ESC full restoration of start position
+                if (draggedTarget_ == GizmoTarget::Lens) {
+                    auto candidate = scene_;
+                    candidate.lens.planeZMetres = dragInitialLensZ_;
+                    if (dragApertureWasCoplanar_) {
+                        candidate.aperture.planeZMetres = dragInitialApertureZ_;
+                    }
+                    applyScene(candidate, tracerOptions_);
+                } else if (draggedTarget_ == GizmoTarget::Screen) {
+                    auto candidate = scene_;
+                    candidate.screen.planeZMetres = dragInitialScreenZ_;
+                    applyScene(candidate, tracerOptions_);
+                }
+                isGizmoDragging_ = false;
+                draggedTarget_ = GizmoTarget::None;
+            } else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                // Release drag on left mouse up
+                isGizmoDragging_ = false;
+                draggedTarget_ = GizmoTarget::None;
+            } else {
+                // Active dragging along +Z axis
+                const auto& activeAxisProj = (draggedTarget_ == GizmoTarget::Lens) ? lensAxisProj : screenAxisProj;
+                const double deltaZ = gizmo::computeGizmoDeltaZ(mouseDelta, activeAxisProj);
+
+                if (std::abs(deltaZ) >= 1e-5 && std::isfinite(deltaZ)) {
+                    if (draggedTarget_ == GizmoTarget::Lens) {
+                        auto candidate = scene_;
+                        candidate.lens.planeZMetres += deltaZ;
+                        if (dragApertureWasCoplanar_) {
+                            candidate.aperture.planeZMetres = candidate.lens.planeZMetres;
+                        }
+                        applyScene(candidate, tracerOptions_);
+                    } else if (draggedTarget_ == GizmoTarget::Screen) {
+                        auto candidate = scene_;
+                        candidate.screen.planeZMetres += deltaZ;
+                        applyScene(candidate, tracerOptions_);
+                    }
+                }
+            }
+        }
+
+        // Interaction triggering (when not currently dragging)
+        if (isHovered && noActiveWidget && !isGizmoDragging_) {
+            if (std::abs(io.MouseWheel) > 0.0F) {
+                camera_.zoom(io.MouseWheel);
+            }
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+                isOrbiting_ = true;
+            }
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) {
+                isPanning_ = true;
+            }
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                if (lensHovered) {
+                    isGizmoDragging_ = true;
+                    draggedTarget_ = GizmoTarget::Lens;
+                    selectedTarget_ = GizmoTarget::Lens;
+                    dragInitialLensZ_ = scene_.lens.planeZMetres;
+                    dragInitialApertureZ_ = scene_.aperture.planeZMetres;
+                    dragInitialScreenZ_ = scene_.screen.planeZMetres;
+                    dragApertureWasCoplanar_ = (std::abs(scene_.aperture.planeZMetres - scene_.lens.planeZMetres) < 1e-4);
+                } else if (screenHovered) {
+                    isGizmoDragging_ = true;
+                    draggedTarget_ = GizmoTarget::Screen;
+                    selectedTarget_ = GizmoTarget::Screen;
+                    dragInitialLensZ_ = scene_.lens.planeZMetres;
+                    dragInitialApertureZ_ = scene_.aperture.planeZMetres;
+                    dragInitialScreenZ_ = scene_.screen.planeZMetres;
+                    dragApertureWasCoplanar_ = (std::abs(scene_.aperture.planeZMetres - scene_.lens.planeZMetres) < 1e-4);
+                } else {
+                    selectedTarget_ = GizmoTarget::None;
+                }
+            }
+        }
+
+        if (!noActiveWidget && !isGizmoDragging_) {
+            isOrbiting_ = false;
+            isPanning_ = false;
+        }
+
+        if (isOrbiting_) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+                constexpr float kOrbitSensitivity = 0.005F;
+                camera_.orbit(io.MouseDelta.x * kOrbitSensitivity, -io.MouseDelta.y * kOrbitSensitivity);
+            } else {
+                isOrbiting_ = false;
+            }
+        }
+
+        if (isPanning_) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Middle)) {
+                const float panFactor = 0.0015F * camera_.distance();
+                camera_.pan(-io.MouseDelta.x * panFactor, io.MouseDelta.y * panFactor);
+            } else {
+                isPanning_ = false;
+            }
+        }
+
+        // Draw Gizmos and HUD
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        if (drawList != nullptr) {
+            drawList->PushClipRect(imagePosMin, ImVec2(imagePosMin.x + imageSize.x, imagePosMin.y + imageSize.y), true);
+
+            // Lens gizmo
+            constexpr ImU32 kLensPrimaryColor = IM_COL32(56, 189, 248, 255);
+            constexpr ImU32 kLensHoverColor = IM_COL32(125, 211, 252, 255);
+            drawGizmoHandle(
+                drawList,
+                projLensCenter,
+                lensAxisProj,
+                lensHovered,
+                selectedTarget_ == GizmoTarget::Lens,
+                isGizmoDragging_ && draggedTarget_ == GizmoTarget::Lens,
+                "Lens",
+                scene_.lens.planeZMetres,
+                kLensPrimaryColor,
+                kLensHoverColor);
+
+            // Screen gizmo
+            constexpr ImU32 kScreenPrimaryColor = IM_COL32(251, 146, 60, 255);
+            constexpr ImU32 kScreenHoverColor = IM_COL32(253, 186, 116, 255);
+            drawGizmoHandle(
+                drawList,
+                projScreenCenter,
+                screenAxisProj,
+                screenHovered,
+                selectedTarget_ == GizmoTarget::Screen,
+                isGizmoDragging_ && draggedTarget_ == GizmoTarget::Screen,
+                "Screen",
+                scene_.screen.planeZMetres,
+                kScreenPrimaryColor,
+                kScreenHoverColor);
+
+            // HUD
+            drawViewportHud(
+                drawList,
+                imagePosMin,
+                selectedTarget_,
+                draggedTarget_,
+                isGizmoDragging_);
+
+            drawList->PopClipRect();
+        }
+    } else {
+        isOrbiting_ = false;
+        isPanning_ = false;
+        isGizmoDragging_ = false;
+        draggedTarget_ = GizmoTarget::None;
+    }
+    ImGui::End();
+
+    ImGui::Begin(docking::DockLayoutConfig::kInspectorWindowName);
+
+    if (ImGui::CollapsingHeader("Active Gizmo Selection", ImGuiTreeNodeFlags_DefaultOpen)) {
+        const char* selName = (selectedTarget_ == GizmoTarget::Lens) ? "Thin Lens"
+            : (selectedTarget_ == GizmoTarget::Screen) ? "Screen" : "None (Click 3D handle)";
+        ImGui::Text("Selected Component: %s", selName);
+        if (isGizmoDragging_) {
+            const char* dName = (draggedTarget_ == GizmoTarget::Lens) ? "Thin Lens" : "Screen";
+            ImGui::TextColored(ImVec4(0.4F, 0.9F, 1.0F, 1.0F), "Status: Dragging %s (+Z optical axis)", dName);
+        } else {
+            ImGui::TextDisabled("Status: Ready (LMB drag 3D handle, ESC to cancel)");
+        }
+
+        if (ImGui::Button("Select Lens")) {
+            selectedTarget_ = GizmoTarget::Lens;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Select Screen")) {
+            selectedTarget_ = GizmoTarget::Screen;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Deselect")) {
+            selectedTarget_ = GizmoTarget::None;
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Presets", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::Button("Real Image")) {
+            applyScene(optics::scene::createDefaultRealImageScene(), tracerOptions_);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Virtual Image")) {
+            applyScene(optics::scene::createDefaultVirtualImageScene(), tracerOptions_);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Collimated")) {
+            applyScene(optics::scene::createDefaultInfinityScene(), tracerOptions_);
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Analytic Thin-Lens Prediction", ImGuiTreeNodeFlags_DefaultOpen)) {
+        const char* natureStr = "Unknown";
+        switch (prediction_.nature) {
+        case optics::scene::ImageNature::Real:
+            natureStr = "Real (Convergent)";
+            break;
+        case optics::scene::ImageNature::Virtual:
+            natureStr = "Virtual (Divergent)";
+            break;
+        case optics::scene::ImageNature::AtInfinity:
+            natureStr = "At Infinity (Collimated)";
+            break;
+        }
+        ImGui::Text("Image Nature: %s", natureStr);
+        ImGui::Text("Object Distance u: %.2f mm", prediction_.objectDistanceMetres * 1000.0);
+
+        if (prediction_.nature == optics::scene::ImageNature::AtInfinity) {
+            ImGui::Text("Image Distance v: inf");
+            ImGui::Text("Image Plane Z: inf");
+            ImGui::Text("Transverse Magnification m: inf");
+            ImGui::Text("Image Position: inf");
+        } else {
+            ImGui::Text("Image Distance v: %.2f mm", prediction_.imageDistanceMetres * 1000.0);
+            ImGui::Text("Image Plane Z: %.2f mm", prediction_.imagePlaneZMetres * 1000.0);
+            ImGui::Text("Transverse Magnification m: %.3f", prediction_.transverseMagnification);
+            ImGui::Text("Image Position: (%.2f, %.2f, %.2f) mm",
+                prediction_.imagePositionMetres.x * 1000.0,
+                prediction_.imagePositionMetres.y * 1000.0,
+                prediction_.imagePositionMetres.z * 1000.0);
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Numerical Aperture (Object-Side NA)", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Text("Object-Side NA: %.4f", naResult_.numericalAperture);
+        ImGui::Text("Acceptance Half-Angle: %.2f deg (%.4f rad)",
+            glm::degrees(static_cast<float>(naResult_.halfAngleRadians)),
+            naResult_.halfAngleRadians);
+
+        const char* stopKindStr = (naResult_.limitingStop == optics::scene::LimitingStopKind::Lens)
+            ? "Thin Lens Clear Aperture"
+            : "Independent Aperture";
+        ImGui::Text("Limiting Stop: %s (ID: %s)", stopKindStr, naResult_.limitingStopId.c_str());
+        ImGui::Text("Stop Axial Distance d: %.2f mm", naResult_.axialDistanceMetres * 1000.0);
+        ImGui::Text("Stop Rim Radius R: %.2f mm", naResult_.rimRadiusMetres * 1000.0);
+        ImGui::Text("Stop Rim Center: (%.2f, %.2f, %.2f) mm",
+            naResult_.rimCenterMetres.x * 1000.0,
+            naResult_.rimCenterMetres.y * 1000.0,
+            naResult_.rimCenterMetres.z * 1000.0);
+
+        if (naResult_.approximate || naResult_.downstreamStopNotModeled) {
+            ImGui::Spacing();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.98F, 0.73F, 0.20F, 1.0F));
+            ImGui::TextWrapped("Warning: %s",
+                naResult_.warningMessage.empty()
+                    ? "Aperture is downstream of lens; entrance pupil is approximate."
+                    : naResult_.warningMessage.c_str());
+            ImGui::PopStyleColor();
+        } else {
+            ImGui::TextDisabled("Approximation: None (exact entrance pupil in object space)");
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Point Source", ImGuiTreeNodeFlags_DefaultOpen)) {
+        const double currentU = (scene_.lens.planeZMetres - scene_.source.positionMetres.z) * 1000.0;
+        float uMm = static_cast<float>(currentU);
+        if (ImGui::DragFloat("Object Distance u (mm)", &uMm, 0.5F, 1.0F, 2000.0F, "%.2f mm")) {
+            if (uMm > 0.0F && std::isfinite(uMm)) {
+                auto candidate = scene_;
+                candidate.source.positionMetres.z = candidate.lens.planeZMetres - static_cast<double>(uMm) * 1e-3;
+                applyScene(candidate, tracerOptions_);
+            } else {
+                errorMessage_ = "Object distance u must be finite and positive";
+                statusMessage_.clear();
+            }
+        }
+
+        float srcX = static_cast<float>(scene_.source.positionMetres.x * 1000.0);
+        if (ImGui::DragFloat("Source X (mm)", &srcX, 0.1F, -200.0F, 200.0F, "%.2f mm")) {
+            if (std::isfinite(srcX)) {
+                auto candidate = scene_;
+                candidate.source.positionMetres.x = static_cast<double>(srcX) * 1e-3;
+                applyScene(candidate, tracerOptions_);
+            } else {
+                errorMessage_ = "Source X must be finite";
+                statusMessage_.clear();
+            }
+        }
+
+        float srcY = static_cast<float>(scene_.source.positionMetres.y * 1000.0);
+        if (ImGui::DragFloat("Source Y (mm)", &srcY, 0.1F, -200.0F, 200.0F, "%.2f mm")) {
+            if (std::isfinite(srcY)) {
+                auto candidate = scene_;
+                candidate.source.positionMetres.y = static_cast<double>(srcY) * 1e-3;
+                applyScene(candidate, tracerOptions_);
+            } else {
+                errorMessage_ = "Source Y must be finite";
+                statusMessage_.clear();
+            }
+        }
+
+        float wlNm = static_cast<float>(scene_.source.wavelengthMetres * 1e9);
+        if (ImGui::DragFloat("Wavelength (nm)", &wlNm, 1.0F, 200.0F, 2000.0F, "%.1f nm")) {
+            if (wlNm > 0.0F && std::isfinite(wlNm)) {
+                auto candidate = scene_;
+                candidate.source.wavelengthMetres = static_cast<double>(wlNm) * 1e-9;
+                applyScene(candidate, tracerOptions_);
+            } else {
+                errorMessage_ = "Wavelength must be positive and finite";
+                statusMessage_.clear();
+            }
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Thin Lens", ImGuiTreeNodeFlags_DefaultOpen)) {
+        float lensZMm = static_cast<float>(scene_.lens.planeZMetres * 1000.0);
+        if (ImGui::DragFloat("Lens Z (mm)", &lensZMm, 0.5F, -500.0F, 2000.0F, "%.2f mm")) {
+            if (std::isfinite(lensZMm)) {
+                auto candidate = scene_;
+                const bool coplanar = (std::abs(candidate.aperture.planeZMetres - candidate.lens.planeZMetres) < 1e-4);
+                candidate.lens.planeZMetres = static_cast<double>(lensZMm) * 1e-3;
+                if (coplanar) {
+                    candidate.aperture.planeZMetres = candidate.lens.planeZMetres;
+                }
+                applyScene(candidate, tracerOptions_);
+            } else {
+                errorMessage_ = "Lens Z must be finite";
+                statusMessage_.clear();
+            }
+        }
+
+        float fMm = static_cast<float>(scene_.lens.focalLengthMetres * 1000.0);
+        if (ImGui::DragFloat("Focal Length f (mm)", &fMm, 0.5F, -1000.0F, 1000.0F, "%.2f mm")) {
+            if (std::isfinite(fMm) && std::abs(fMm) >= 0.1F) {
+                auto candidate = scene_;
+                candidate.lens.focalLengthMetres = static_cast<double>(fMm) * 1e-3;
+                applyScene(candidate, tracerOptions_);
+            } else if (std::abs(fMm) < 0.1F) {
+                errorMessage_ = "Focal length f cannot be zero or near-zero (|f| >= 0.1 mm)";
+                statusMessage_.clear();
+            } else {
+                errorMessage_ = "Focal length f must be finite";
+                statusMessage_.clear();
+            }
+        }
+
+        float lensRMm = static_cast<float>(scene_.lens.clearApertureRadiusMetres * 1000.0);
+        if (ImGui::DragFloat("Lens Radius (mm)", &lensRMm, 0.2F, 0.5F, 200.0F, "%.2f mm")) {
+            if (lensRMm > 0.0F && std::isfinite(lensRMm)) {
+                auto candidate = scene_;
+                candidate.lens.clearApertureRadiusMetres = static_cast<double>(lensRMm) * 1e-3;
+                applyScene(candidate, tracerOptions_);
+            } else {
+                errorMessage_ = "Lens clear aperture radius must be positive";
+                statusMessage_.clear();
+            }
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Independent Aperture", ImGuiTreeNodeFlags_DefaultOpen)) {
+        float apZMm = static_cast<float>(scene_.aperture.planeZMetres * 1000.0);
+        if (ImGui::DragFloat("Aperture Z (mm)", &apZMm, 0.5F, -500.0F, 1000.0F, "%.2f mm")) {
+            if (std::isfinite(apZMm)) {
+                auto candidate = scene_;
+                candidate.aperture.planeZMetres = static_cast<double>(apZMm) * 1e-3;
+                applyScene(candidate, tracerOptions_);
+            } else {
+                errorMessage_ = "Aperture Z must be finite";
+                statusMessage_.clear();
+            }
+        }
+
+        float apRMm = static_cast<float>(scene_.aperture.radiusMetres * 1000.0);
+        if (ImGui::DragFloat("Aperture Radius (mm)", &apRMm, 0.2F, 0.5F, 200.0F, "%.2f mm")) {
+            if (apRMm > 0.0F && std::isfinite(apRMm)) {
+                auto candidate = scene_;
+                candidate.aperture.radiusMetres = static_cast<double>(apRMm) * 1e-3;
+                applyScene(candidate, tracerOptions_);
+            } else {
+                errorMessage_ = "Aperture radius must be positive";
+                statusMessage_.clear();
+            }
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Screen", ImGuiTreeNodeFlags_DefaultOpen)) {
+        float scrZMm = static_cast<float>(scene_.screen.planeZMetres * 1000.0);
+        if (ImGui::DragFloat("Screen Z (mm)", &scrZMm, 0.5F, -500.0F, 2000.0F, "%.2f mm")) {
+            if (std::isfinite(scrZMm)) {
+                auto candidate = scene_;
+                candidate.screen.planeZMetres = static_cast<double>(scrZMm) * 1e-3;
+                applyScene(candidate, tracerOptions_);
+            } else {
+                errorMessage_ = "Screen Z must be finite";
+                statusMessage_.clear();
+            }
+        }
+
+        float scrWMm = static_cast<float>(scene_.screen.widthMetres * 1000.0);
+        if (ImGui::DragFloat("Screen Width (mm)", &scrWMm, 0.5F, 1.0F, 500.0F, "%.2f mm")) {
+            if (scrWMm > 0.0F && std::isfinite(scrWMm)) {
+                auto candidate = scene_;
+                candidate.screen.widthMetres = static_cast<double>(scrWMm) * 1e-3;
+                applyScene(candidate, tracerOptions_);
+            } else {
+                errorMessage_ = "Screen width must be positive";
+                statusMessage_.clear();
+            }
+        }
+
+        float scrHMm = static_cast<float>(scene_.screen.heightMetres * 1000.0);
+        if (ImGui::DragFloat("Screen Height (mm)", &scrHMm, 0.5F, 1.0F, 500.0F, "%.2f mm")) {
+            if (scrHMm > 0.0F && std::isfinite(scrHMm)) {
+                auto candidate = scene_;
+                candidate.screen.heightMetres = static_cast<double>(scrHMm) * 1e-3;
+                applyScene(candidate, tracerOptions_);
+            } else {
+                errorMessage_ = "Screen height must be positive";
+                statusMessage_.clear();
+            }
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Ray Tracer", ImGuiTreeNodeFlags_DefaultOpen)) {
+        int rayCount = static_cast<int>(tracerOptions_.rayCount);
+        if (ImGui::SliderInt("Ray Count", &rayCount, 1, 10000)) {
+            if (rayCount >= 1 && rayCount <= 10000) {
+                auto candidateOptions = tracerOptions_;
+                candidateOptions.rayCount = static_cast<std::size_t>(rayCount);
+                applyScene(scene_, candidateOptions);
+            }
+        }
+
+        constexpr std::array<const char*, 6> patternNames {
+            "Fibonacci Disk",
+            "Concentric Rings",
+            "Meridional Fan (Y)",
+            "Sagittal Fan (X)",
+            "Cross Fans (XY)",
+            "Aperture Boundary"
+        };
+        int currentPattern = static_cast<int>(tracerOptions_.pattern);
+        if (ImGui::Combo("Sampling Pattern", &currentPattern, patternNames.data(), static_cast<int>(patternNames.size()))) {
+            auto candidateOptions = tracerOptions_;
+            candidateOptions.pattern = static_cast<optics::ray::RaySamplingPattern>(currentPattern);
+            applyScene(scene_, candidateOptions);
+        }
+
+        bool includeVirt = tracerOptions_.includeVirtualExtensions;
+        if (ImGui::Checkbox("Include Virtual Extensions", &includeVirt)) {
+            auto candidateOptions = tracerOptions_;
+            candidateOptions.includeVirtualExtensions = includeVirt;
+            applyScene(scene_, candidateOptions);
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Project File", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::InputText("Path", projectPathBuffer_, sizeof(projectPathBuffer_));
+        if (ImGui::Button("Save Scene")) {
+            saveSceneToPath(projectPathBuffer_);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Load Scene")) {
+            loadSceneFromPath(projectPathBuffer_);
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Camera Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::Button("Reset Camera")) {
+            camera_.reset();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Perspective")) {
+            camera_.setPresetView(render::CameraPresetView::Perspective);
+        }
+        if (ImGui::Button("Top (XZ)")) {
+            camera_.setPresetView(render::CameraPresetView::TopXZ);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Side (YZ)")) {
+            camera_.setPresetView(render::CameraPresetView::SideYZ);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Front (XY)")) {
+            camera_.setPresetView(render::CameraPresetView::FrontXY);
+        }
+
+        ImGui::Separator();
+        ImGui::Text("Target: (%.2f, %.2f, %.2f) m",
+            static_cast<double>(camera_.target().x),
+            static_cast<double>(camera_.target().y),
+            static_cast<double>(camera_.target().z));
+        ImGui::Text("Distance: %.2f m", static_cast<double>(camera_.distance()));
+        ImGui::Text("Yaw: %.1f deg, Pitch: %.1f deg",
+            static_cast<double>(glm::degrees(camera_.yaw())),
+            static_cast<double>(glm::degrees(camera_.pitch())));
+        ImGui::Text("FOV: %.1f deg", static_cast<double>(camera_.fovDegrees()));
+    }
+
+    if (!errorMessage_.empty()) {
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(1.0F, 0.3F, 0.3F, 1.0F), "Error: %s", errorMessage_.c_str());
+    } else if (!statusMessage_.empty()) {
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.4F, 0.9F, 0.5F, 1.0F), "%s", statusMessage_.c_str());
+    }
+
+    ImGui::End();
+
+    ImGui::Begin(docking::DockLayoutConfig::kValidationWindowName);
+    ImGui::TextDisabled("Milestone: M1 3D Optical Bench + Geometric Optics");
     ImGui::Separator();
-    ImGui::TextDisabled("The 3D scene and optical components arrive in M1.");
-    ImGui::End();
-
-    ImGui::Begin("Inspector");
-    ImGui::TextUnformatted("No component selected");
-    ImGui::End();
-
-    ImGui::Begin("Validation");
-    ImGui::BulletText("Project format: v1");
-    ImGui::BulletText("Physics solver: not implemented");
-    ImGui::BulletText("Results: no unvalidated optical claims");
+    ImGui::BulletText("Project format: v1 (JSON)");
+    ImGui::BulletText("3D Grid & Axes: M1 OpenGL 4.6 bench active");
+    ImGui::BulletText("CPU Thin Lens: Paraxial analytic model validated");
+    ImGui::BulletText("CPU Camera: Orthonormal basis & projections validated");
+    ImGui::BulletText("Traced Rays: %zu (Displayed segments: %zu)", tracerOptions_.rayCount, raySegments_.size());
+    if (!errorMessage_.empty()) {
+        ImGui::BulletText("Status: Error (%s)", errorMessage_.c_str());
+    } else {
+        ImGui::BulletText("Status: Nominal");
+    }
     ImGui::End();
 }
 
-int Application::run(int smokeFrameLimit) {
-    if (!initialize()) {
+int Application::run(const RunOptions& options) {
+    if (!initialize(options)) {
         return 1;
     }
 
+    const bool isBenchmark = options.benchmarkFrames > 0;
+    constexpr int kWarmupFrames = 60;
+    const int measuredTarget = options.benchmarkFrames;
+
+    std::vector<double> frameDurationsMs;
+    if (isBenchmark) {
+        frameDurationsMs.reserve(static_cast<std::size_t>(measuredTarget));
+    }
+
     bool running = true;
-    int renderedFrames = 0;
+    int totalFrames = 0;
+    int lastWindowPixelWidth = 0;
+    int lastWindowPixelHeight = 0;
+
     while (running) {
+        const auto frameStart = std::chrono::steady_clock::now();
+
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             ImGui_ImplSDL3_ProcessEvent(&event);
             if (event.type == SDL_EVENT_QUIT) {
+                running = false;
+            }
+            if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window_)) {
                 running = false;
             }
         }
@@ -135,25 +1107,97 @@ int Application::run(int smokeFrameLimit) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
+
         drawWorkspace();
+
         ImGui::Render();
 
         int width = 0;
         int height = 0;
         SDL_GetWindowSizeInPixels(window_, &width, &height);
-        glViewport(0, 0, width, height);
-        glClearColor(0.035F, 0.045F, 0.060F, 1.0F);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        SDL_GL_SwapWindow(window_);
+        if (width > 0 && height > 0) {
+            lastWindowPixelWidth = width;
+            lastWindowPixelHeight = height;
+            glViewport(0, 0, width, height);
+            glClearColor(0.035F, 0.045F, 0.060F, 1.0F);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+            SDL_GL_SwapWindow(window_);
+        }
 
-        ++renderedFrames;
-        if (smokeFrameLimit > 0 && renderedFrames >= smokeFrameLimit) {
-            running = false;
+        if (isBenchmark) {
+            glFinish();
+        }
+
+        const auto frameEnd = std::chrono::steady_clock::now();
+        const std::chrono::duration<double, std::milli> frameDuration = frameEnd - frameStart;
+
+        ++totalFrames;
+
+        if (isBenchmark) {
+            if (totalFrames > kWarmupFrames) {
+                frameDurationsMs.push_back(frameDuration.count());
+                if (static_cast<int>(frameDurationsMs.size()) >= measuredTarget) {
+                    running = false;
+                }
+            }
+        } else if (options.smokeFrameLimit > 0) {
+            if (totalFrames >= options.smokeFrameLimit) {
+                running = false;
+            }
         }
     }
 
+    if (isBenchmark && !frameDurationsMs.empty()) {
+        const std::size_t measuredCount = frameDurationsMs.size();
+        const double totalTimeMs = std::accumulate(frameDurationsMs.begin(), frameDurationsMs.end(), 0.0);
+        const double avgFps = totalTimeMs > 0.0 ? (static_cast<double>(measuredCount) * 1000.0 / totalTimeMs) : 0.0;
+
+        std::vector<double> sortedDurations = frameDurationsMs;
+        std::sort(sortedDurations.begin(), sortedDurations.end());
+
+        const std::size_t p50Index = static_cast<std::size_t>(std::round(0.50 * static_cast<double>(measuredCount - 1)));
+        const std::size_t p95Index = static_cast<std::size_t>(std::round(0.95 * static_cast<double>(measuredCount - 1)));
+
+        const double p50_ms = sortedDurations[p50Index];
+        const double p95_ms = sortedDurations[p95Index];
+        const double max_ms = sortedDurations.back();
+
+        if (window_ != nullptr && (lastWindowPixelWidth <= 0 || lastWindowPixelHeight <= 0)) {
+            SDL_GetWindowSizeInPixels(window_, &lastWindowPixelWidth, &lastWindowPixelHeight);
+        }
+
+        const int viewportWidth = (lastViewportWidth_ > 0) ? lastViewportWidth_ : (isBenchmark ? 1920 : lastWindowPixelWidth);
+        const int viewportHeight = (lastViewportHeight_ > 0) ? lastViewportHeight_ : (isBenchmark ? 1080 : lastWindowPixelHeight);
+
+        SDL_Log(
+            "[Benchmark] avg_fps=%.2f p50_ms=%.3f p95_ms=%.3f max_ms=%.3f viewport_width=%d viewport_height=%d window_width=%d window_height=%d ray_count=%zu displayed_segments=%zu warmup_frames=%d measured_frames=%zu vsync=%d gpu_sync=%s",
+            avgFps,
+            p50_ms,
+            p95_ms,
+            max_ms,
+            viewportWidth,
+            viewportHeight,
+            lastWindowPixelWidth,
+            lastWindowPixelHeight,
+            tracerOptions_.rayCount,
+            raySegments_.size(),
+            kWarmupFrames,
+            measuredCount,
+            vsyncInterval_,
+            isBenchmark ? "true" : "false");
+    }
+
+    shutdown();
+
     return render::gl::errorCount() == 0 ? 0 : 2;
+}
+
+int Application::run(int smokeFrameLimit, int initialRayCount) {
+    RunOptions options;
+    options.smokeFrameLimit = smokeFrameLimit;
+    options.initialRayCount = initialRayCount;
+    return run(options);
 }
 
 } // namespace holobench::app

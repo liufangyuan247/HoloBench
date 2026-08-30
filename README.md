@@ -2,9 +2,23 @@
 
 HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator, and a long-term R&D tool for CHIMERA-like holographic printing.
 
-**M0 — Engineering Foundation** is complete; M1 geometric-optics work is next. The product vision and long-term physics roadmap live in [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md); the repository's actual current state is tracked in [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md).
+**Milestone status**: **M0 (Engineering Foundation)** and **M1 (3D Optical Bench & Geometric Optics)** are complete. The next milestone is **M2 (Scalar Wave Optics & Angular Spectrum Method)**. For the current repository state and roadmap, see [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
 
-## Supported development environment
+## M1 Features
+
+- **Optical Sources & Elements**: Point Source, Collimated Source, Ideal Thin Lens, Circular Aperture, Screen / Detector Plane, Planar Mirror, and Planar Dielectric Interface.
+- **Geometric Ray Tracing**: Deterministic CPU ray-plane intersections, paraxial thin-lens refraction ($1/f = 1/u + 1/v$), specular reflection, Snell's law refraction, and Total Internal Reflection (TIR).
+- **Physical Analysis & Diagnostics**: Real, virtual, and collimated/infinity image plane prediction, Numerical Aperture (NA) cone visualization, and automated warnings for off-axis paraxial approximations and rear-aperture clipping.
+- **Interactive 3D Bench UI**: Orbit/pan/zoom 3D camera, metric world grid, ray segment renderer, `+Z` forward-orientation gizmos for optical components, and Dear ImGui property inspector.
+- **Project Serialization**: Versioned JSON document model with semantic and byte-stable round-trip persistence.
+
+## Physical Assumptions & Limitations (M1)
+
+- **Paraxial Approximation**: Thin lenses and ray propagation assume small angles relative to the optical axis ($+Z$).
+- **Unmodeled Effects in M1**: Monochromatic ray tracing only; no Fresnel transmission/reflection loss, no polarization ($s/p$ states), no wave diffraction, and no recursive multi-bounce ray splitting.
+- **Planar Interface Indices**: `nIncident` and `nTransmitted` are specified by the caller based on the propagation direction and are not automatically swapped for reverse-incident rays.
+
+## Supported Development Environment
 
 - Windows x64 or Linux x64
 - CMake 3.28+
@@ -12,9 +26,11 @@ HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator
 - A C++20 compiler
 - OpenGL 4.6-capable GPU for the interactive application
 
-Dependencies are fetched by CMake at pinned versions. Python libraries used for numerical validation will remain development-only dependencies.
+Dependencies are pinned and fetched automatically via CMake FetchContent.
 
-## Build and test
+## Build and Test
+
+Standard dev build and deterministic test suite (92/92 tests passing):
 
 ```powershell
 cmake --preset dev
@@ -22,19 +38,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Run on Windows:
-
-```powershell
-./out/build/dev/HoloBench.exe
-```
-
-Automated local OpenGL smoke run (opens briefly, renders 120 frames, then exits):
-
-```powershell
-./out/build/dev/HoloBench.exe --smoke-frames 120
-```
-
-For a headless core-only build:
+Headless core/physics build and test (no display/OpenGL required, 92/92 tests passing):
 
 ```powershell
 cmake --preset core-ci
@@ -42,12 +46,52 @@ cmake --build --preset core-ci
 ctest --preset core-ci
 ```
 
-## Project rules
+Strict compiler diagnostics (`warnings-as-errors`):
+
+```powershell
+cmake --preset app-ci
+cmake --build --preset app-ci
+```
+
+## Running the Application
+
+Interactive 3D bench mode (targets display refresh with `vsync=1`):
+
+```powershell
+./out/build/dev/HoloBench.exe
+```
+
+Automated local OpenGL smoke test (renders 120 frames, verifies 0 GL errors, and exits with code 0):
+
+```powershell
+./out/build/dev/HoloBench.exe --smoke-frames 120
+```
+
+Automated GPU throughput benchmark (disables VSync, forces per-frame `glFinish`, renders 5,000 rays / 10,000 line segments at 1920x1080):
+
+```powershell
+./out/build/dev/HoloBench.exe --benchmark
+```
+
+### Reference Benchmark Results
+
+Tested on AMD Radeon Pro 5300M (OpenGL 4.6.0 Core, GLSL 4.60):
+- **Resolution**: 1920 x 1080 window and viewport
+- **Workload**: 5,000 rays, 10,000 displayed line segments, 3D grid, component meshes, gizmos, and ImGui overlays
+- **Configuration**: 60 warmup frames, 300 measured frames, `vsync=0`, `gpu_sync=true` (`glFinish` per frame)
+- **Throughput**: **1119.76 FPS** average
+- **Frame Times**: p50 = **0.855 ms**, p95 = **1.275 ms**, max = **2.206 ms**
+
+*Note*: The benchmark measures raw GPU rendering throughput with VSync disabled and synchronous CPU-GPU sync. In normal interactive mode (`vsync=1`), the application syncs to display refresh (e.g. 60 Hz). Earlier ~32 FPS observations on certain displays were due to window compositor swap pacing rather than GPU rendering bottlenecks.
+
+## CI & Automated Workflows
+
+- Windows and Linux CI workflows are defined in `.github/workflows/` with `warnings-as-errors` compilation and test execution. Remote GitHub Actions runs execute upon git push.
+
+## Project Rules
 
 - Visualization, optical models, and numerical backends are separate layers.
-- Ray and wave solvers are distinct and declare their assumptions.
-- Every physics feature needs an analytic or trusted-oracle validation before it becomes teaching content.
-- GPU implementations follow a CPU reference implementation and are compared against it.
+- Ray and wave solvers are distinct and explicitly declare their physical assumptions.
+- Every physics feature requires an analytic or trusted-oracle validation test.
+- GPU implementations follow a deterministic CPU reference implementation.
 - A visually plausible result is not evidence of physical correctness.
-
-The software license has not yet been selected. Until a license file is added, no redistribution license is granted.

@@ -1,7 +1,7 @@
 #include "render/gl/GlDebug.hpp"
 
+#include <glad/gl.h>
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_opengl.h>
 
 #include <atomic>
 
@@ -10,7 +10,7 @@ namespace {
 
 std::atomic<std::uint32_t> debugErrorCount = 0;
 
-void APIENTRY debugCallback(
+void GLAD_API_PTR debugCallback(
     GLenum,
     GLenum type,
     GLuint,
@@ -31,15 +31,14 @@ void APIENTRY debugCallback(
 } // namespace
 
 void installDebugCallback() {
-    const auto callback = reinterpret_cast<PFNGLDEBUGMESSAGECALLBACKPROC>(SDL_GL_GetProcAddress("glDebugMessageCallback"));
-    if (callback == nullptr) {
+    if (glDebugMessageCallback == nullptr) {
         SDL_LogWarn(SDL_LOG_CATEGORY_RENDER, "OpenGL debug callback is unavailable");
         return;
     }
 
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    callback(debugCallback, nullptr);
+    glDebugMessageCallback(debugCallback, nullptr);
 }
 
 std::uint32_t errorCount() noexcept {

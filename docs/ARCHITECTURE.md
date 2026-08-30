@@ -21,16 +21,23 @@ app -> render -> optics -> compute interfaces
 
 ## OpenGL ownership
 
-The main/render thread owns the OpenGL context. CPU work may execute on worker threads; future GPU simulation jobs must be submitted back to the context-owning thread and synchronized with fences or buffered resources. M0 does not create shared worker contexts.
+The main/render thread exclusively owns the OpenGL context (ADR 0004). CPU work may execute on worker threads; future GPU simulation jobs must be submitted back to the context-owning thread and synchronized with fences or buffered resources. HoloBench does not create shared worker contexts.
+
+## Coordinate & optical sign conventions
+
+Following ADR 0003:
+- Right-handed world and optical coordinate system (`+X` right, `+Y` up, `+Z` forward propagation).
+- Element local optical axis is local `+Z`.
+- Ideal thin-lens imaging follows paraxial conjugate relation $1/f = 1/u + 1/v$.
+- Angles are stored in radians and canonical length values use SI metres.
 
 ## Project format
 
 Project JSON carries an explicit integer `format_version`. Loading an unknown version fails rather than silently misinterpreting physical data. Canonical persisted length values use keys suffixed with `_m` and SI metres.
 
-## Decisions still required before M1
+## Architectural decisions & next milestone (M2)
 
-- Coordinate-system handedness and optical-axis convention.
-- Stable component IDs and transform representation.
-- Scene graph versus flat entity registry.
-- Renderer GL function loading beyond the ImGui backend's internal loader.
-- Error/result reporting policy for project I/O and numerical solvers.
+M1 conventions (coordinates, GL loader, entity registry, ray tracer architecture) are established. Decisions planned for M2:
+- Wave optics Fourier sign, FFT normalization, and complex phasor time convention (ADR 0005).
+- 2D complex optical field data structure and GPU/CPU backend dispatch.
+- Boundary condition absorption and grid sampling limits for Angular Spectrum Method (ASM).
