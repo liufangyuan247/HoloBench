@@ -425,6 +425,8 @@ TEST_CASE("computeIntegratedIntensity scales accurately with transverse grid pit
 }
 
 TEST_CASE("computeIntegratedIntensity evaluates balanced extreme scale fields without intermediate underflow/overflow") {
+    constexpr double denormMin = std::numeric_limits<double>::denorm_min();
+
     // Balanced ComplexField2D: huge amplitude 1e160 x tiny pitch 1e-160 x 1e-160
     // Mathematical integral = (1e160)^2 * (1e-160 * 1e-160) = 1.0
     field::ComplexField2D hugeAmpTinyPitch(1, 1, 1e-160, 1e-160, 532e-9, 1.0);
@@ -437,6 +439,17 @@ TEST_CASE("computeIntegratedIntensity evaluates balanced extreme scale fields wi
     tinyAmpHugePitch.at(0, 0) = {1e-160, 0.0};
     CHECK(field::computeIntegratedIntensity(tinyAmpHugePitch) == doctest::Approx(1.0));
 
+    // Balanced ComplexField2D with denorm_min amplitude:
+    // amplitude = denorm_min (2^-1074), pitchX = pitchY = 2^1023
+    // Mathematical integral = (2^-1074)^2 * 2^1023 * 2^1023 = 2^-2148 * 2^2046 = 2^-102
+    const double pitch1023 = std::ldexp(1.0, 1023);
+    field::ComplexField2D denormComplex(1, 1, pitch1023, pitch1023, 532e-9, 1.0);
+    denormComplex.at(0, 0) = {denormMin, 0.0};
+    const double expectedComplexResult = std::ldexp(1.0, -102);
+    const double actualComplexResult = field::computeIntegratedIntensity(denormComplex);
+    CHECK(actualComplexResult == expectedComplexResult);
+    CHECK(actualComplexResult == doctest::Approx(expectedComplexResult));
+
     // Balanced ScalarField2D: huge intensity 1e300 x tiny pitch 1e-150 x 1e-150
     // Mathematical integral = 1e300 * 1e-300 = 1.0
     field::ScalarField2D hugeScalarTinyPitch(1, 1, 1e-150, 1e-150, 532e-9, 1.0);
@@ -448,6 +461,23 @@ TEST_CASE("computeIntegratedIntensity evaluates balanced extreme scale fields wi
     field::ScalarField2D tinyScalarHugePitch(1, 1, 1e150, 1e150, 532e-9, 1.0);
     tinyScalarHugePitch.at(0, 0) = 1e-300;
     CHECK(field::computeIntegratedIntensity(tinyScalarHugePitch) == doctest::Approx(1.0));
+
+    // Balanced ScalarField2D with denorm_min intensity:
+    // intensity = denorm_min (2^-1074), pitchX = pitchY = 2^537
+    // Mathematical integral = 2^-1074 * 2^537 * 2^537 = 2^0 = 1.0
+    const double pitch537 = std::ldexp(1.0, 537);
+    field::ScalarField2D denormScalar(1, 1, pitch537, pitch537, 532e-9, 1.0);
+    denormScalar.at(0, 0) = denormMin;
+    const double actualScalarResult = field::computeIntegratedIntensity(denormScalar);
+    CHECK(actualScalarResult == 1.0);
+    CHECK(actualScalarResult == doctest::Approx(1.0));
+
+    // Representable subnormal result return without underflow_error:
+    // scalar intensity = 2^-1000, pitchX = 2^-50, pitchY = 2^-24 -> total = 2^-1074 = denorm_min
+    field::ScalarField2D subnormalScalar(1, 1, std::ldexp(1.0, -50), std::ldexp(1.0, -24), 532e-9, 1.0);
+    subnormalScalar.at(0, 0) = std::ldexp(1.0, -1000);
+    const double subnormalResult = field::computeIntegratedIntensity(subnormalScalar);
+    CHECK(subnormalResult == denormMin);
 
     // True underflow on non-zero field throws std::underflow_error
     field::ComplexField2D underflowComplex(1, 1, 1.0, 1.0, 532e-9, 1.0);

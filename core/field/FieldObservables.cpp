@@ -173,12 +173,11 @@ double computeIntegratedIntensity(const ComplexField2D& field) {
 
     int expM = 0;
     std::frexp(maxAmp, &expM);
-    const double scale = std::ldexp(1.0, -expM);
 
     double sum = 0.0;
     for (std::size_t i = 0; i < count; ++i) {
-        const double u = sourceSamples[i].real() * scale;
-        const double v = sourceSamples[i].imag() * scale;
+        const double u = std::ldexp(sourceSamples[i].real(), -expM);
+        const double v = std::ldexp(sourceSamples[i].imag(), -expM);
         sum += (u * u + v * v);
     }
 
@@ -222,11 +221,10 @@ double computeIntegratedIntensity(const ScalarField2D& intensityField) {
 
     int expM = 0;
     std::frexp(maxVal, &expM);
-    const double scale = std::ldexp(1.0, -expM);
 
     double sum = 0.0;
     for (std::size_t i = 0; i < count; ++i) {
-        sum += (sourceSamples[i] * scale);
+        sum += std::ldexp(sourceSamples[i], -expM);
     }
 
     int expS = 0;
