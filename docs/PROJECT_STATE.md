@@ -4,7 +4,7 @@ Last updated: 2026-08-31
 
 ## Current milestone
 
-**M2 — Scalar Wave Optics & Angular Spectrum Method (ASM): in progress**
+**M2 — Scalar Wave Optics & Propagation Solvers: in progress**
 
 Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 
@@ -29,30 +29,37 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
   - **GPU Throughput Benchmark**: Measured at 1920x1080 with 5,000 rays (10,000 displayed line segments), 60 warmup frames, 300 measured frames, `vsync=0`, and `gpu_sync=true` (`glFinish` per frame):
     - Average frame rate: **1119.76 FPS**
     - Frame times: p50 = **0.855 ms**, p95 = **1.275 ms**, max = **2.206 ms**
-    - *Note*: Benchmark measures raw GPU throughput under disabled VSync and forced synchronization. Interactive execution operates at `vsync=1` (60 Hz target). Historical ~32 FPS observations were display swap pacing rather than GPU compute limits.
 
-## In progress / Next up (M2)
+- **M2 Scalar Wave Optics (Implemented Components)**:
+  - **Conventions & Foundation**: Fourier sign, normalization, complex phasor time convention, grid sampling, periodic boundary, and evanescent-wave policy locked in [ADR 0005](adr/0005-wave-optics-conventions.md).
+  - **Complex & Scalar Fields**: `ComplexField2D`, `ScalarField2D`, backend-neutral FFT interface, and deterministic radix-2 CPU FFT reference.
+  - **Field Observables**: Pointwise linear intensity ($I=|U|^2$), decibel log intensity ($I_{\text{dB}}$ with explicit floor and zero handling), wrapped phase in unique $[-\pi, +\pi)$ rad interval with `validityMask` tracking sub-threshold samples, and transverse Riemann plane integrated relative intensity.
+  - **Angular Spectrum Method (ASM)**: CPU reference propagator with positive propagation phase, native FFT frequency indexing, evanescent cutoff, and Gaussian beam verification ($\sqrt{2}w_0$ at one Rayleigh range).
+  - **Fresnel Transfer-Function Propagator**: Quadratic phase transfer function $H(f_x, f_y) = \exp(+ikz)\exp[-i\pi\lambda z(f_x^2+f_y^2)]$, non-propagating energy tracking, sampling phase aliasing diagnostics ($\Delta\psi > \pi$), and low-NA ASM agreement.
+  - **Fraunhofer Propagator & Independent Oracles**: Scaled Fourier diffraction integral $\Delta x_{\text{out}} = \frac{\lambda z}{N_x \Delta x_{\text{in}}}$, Parseval energy conservation, range-reduced phase evaluation, Fresnel number $N_F$ far-field warnings, and independent analytical oracles for single-slit sinc$^2$, double-slit Young interference, and circular aperture Airy disc patterns.
+  - **Field Sources & Elements**: Plane wave and fundamental paraxial Gaussian beam sources; binary circular, rectangular, and double-slit aperture masks; ideal thin-lens quadratic phase screen.
+  - **Test Suite Status**: 170/170 deterministic unit tests passing across `dev` and `core-ci` presets (124 baseline + 11 observables + 19 Fresnel TF + 16 Fraunhofer).
 
-- Fourier sign, normalization, complex phasor time convention, grid sampling, periodic boundary, and evanescent-wave policy are locked in [ADR 0005](adr/0005-wave-optics-conventions.md).
-- `ComplexField2D`, a backend-neutral FFT interface, and the deterministic radix-2 CPU FFT reference are implemented.
-- The backend-neutral CPU Angular Spectrum Method reference implements the locked positive propagation phase, native FFT-order frequency mapping, default evanescent filtering, and strong exception safety.
-- Forward plane-wave and full fundamental Gaussian-beam sources implement refractive-index-aware carrier phase, Rayleigh-range beam-radius evolution, wavefront curvature, and Gouy phase. A 256x256 CPU ASM cross-check recovers the analytic $\sqrt{2}w_0$ radius after one Rayleigh range.
-- Sample-center binary circular, rectangular, and double-slit masks use an explicit boundary-transmission rule; the ideal thin-lens field element applies the locked negative quadratic phase and preserves pointwise intensity.
-- The complete 124-test suite passes under Clang and MSVC warnings-as-errors builds.
-- Add detector intensity and phase visualization.
-- Implement analytical validation cases (single slit, rectangular aperture, circular Airy disc, paraxial vs non-paraxial ASM propagation).
+## In progress / Remaining for M2
 
-## Known limitations (M1)
+- M2 remains **in progress**; the following components are still pending before M2 milestone completion:
+  - Portable GPU FFT and wave propagation backend (with CPU-reference parity).
+  - External independent golden cross-validation against `waveprop` or `TorchOptics` (without linking GPL/external tools into runtime binaries).
+  - Interactive 1024x1024 wave propagation benchmark (< 50 ms target on reference GPU).
+  - Detector field visualization and UI inspector for complex field amplitude, phase, and log-intensity maps.
 
-- **Paraxial approximation**: Thin-lens solver assumes small incident angles and paraxial proximity.
-- **Unmodeled physics**: Monochromatic rays only; no Fresnel transmission/reflection coefficients, no polarization, no wave diffraction, and no recursive multi-bounce ray tracing.
-- **Planar interface conventions**: `nIncident` and `nTransmitted` are supplied by the caller according to the propagation side and are not automatically swapped for reverse-incident rays.
-- **Platform scope**: Automated build coverage is Windows and Ubuntu; macOS remains unsupported because the application requires an OpenGL 4.6 Core context.
+## Known limitations (M1/M2)
+
+- **Paraxial approximation**: Thin-lens solver, Fresnel TF, and Fraunhofer propagators assume small angles and paraxial conditions.
+- **Wave optics far-field & TF limits**: Fraunhofer requires $N_F \ll 1$; Fresnel TF is subject to kernel phase aliasing when $z > N(\Delta x)^2/\lambda$.
+- **Unmodeled physics**: Monochromatic fields/rays only; no polarization/Stokes vector tracking, no Fresnel reflection/transmission splitting, and no inhomogeneous 3D media.
+- **Planar interface conventions**: `nIncident` and `nTransmitted` are supplied by the caller according to the propagation side.
+- **Platform scope**: Windows and Ubuntu automated build/test coverage; macOS remains unsupported (requires OpenGL 4.6 Core).
 
 ## Next five tasks
 
-1. Implement Fraunhofer and Fresnel propagators with slit and Airy-profile validation.
-2. Add independent single-slit, double-slit, and circular-aperture diffraction oracles.
-3. Implement detector intensity, log-intensity, and wrapped-phase observables.
-4. Implement and cross-validate the portable GPU FFT/propagation backend.
-5. Add detector field visualization and complex field phase/amplitude inspection in the UI.
+1. Implement portable GPU FFT and wave propagation backend.
+2. Implement cross-validation against waveprop / TorchOptics reference data.
+3. Integrate detector intensity, log-intensity, and phase rendering views into ImGui / OpticalBenchRenderer.
+4. Execute and record the 1024x1024 GPU propagation performance benchmark.
+5. Prepare M2 release tag and cross-platform remote CI verification.
