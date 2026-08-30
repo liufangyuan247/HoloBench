@@ -51,6 +51,7 @@ holobench_set_warnings(holobench_core)
 add_library(holobench_compute STATIC
     compute/fft/CpuFftBackend.cpp
     compute/propagation/AngularSpectrumPropagator.cpp
+    compute/propagation/FraunhoferPropagator.cpp
     compute/propagation/FresnelPropagator.cpp
 )
 add_library(HoloBench::Compute ALIAS holobench_compute)
@@ -177,10 +178,12 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/core/FieldObservablesTests.cpp
         tests/compute/AngularSpectrumPropagatorTests.cpp
         tests/compute/CpuFftBackendTests.cpp
+        tests/compute/FraunhoferPropagatorTests.cpp
         tests/compute/FresnelPropagatorTests.cpp
         tests/analytic/BenchTracerTests.cpp
         tests/analytic/GeometricElementsTests.cpp
         tests/analytic/FieldElementTests.cpp
+        tests/analytic/FraunhoferDiffractionTests.cpp
         tests/analytic/NumericalApertureTests.cpp
         tests/analytic/SnellTests.cpp
         tests/analytic/ThinLensTests.cpp

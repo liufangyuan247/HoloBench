@@ -75,3 +75,13 @@ This file records active physical assumptions, sign conventions, and validity do
   - `maximumParaxialParameter`: $\max \lambda \sqrt{f_x^2 + f_y^2}$ across all grid frequency bins (dimensionless).
   - `maxAdjacentPhaseStepRadians`: maximum unwrapped quadratic phase step $\Delta\psi$ between adjacent discrete frequency bins along $X$ or $Y$ ($\text{rad}$).
   - `transferFunctionUndersampled`: boolean flag indicating whether $\Delta\psi > \pi\text{ rad}$ (transfer-function frequency-domain phase aliasing).
+- The Fraunhofer propagator (`FraunhoferPropagator`) is an approximate paraxial far-field diffraction solver, not an exact wave solver (`isExact = false`):
+  \[
+  U_{\text{out}}(x_2, y_2, z) = \frac{e^{ikz} e^{i\frac{k}{2z}(x_2^2 + y_2^2)}}{i \lambda z} \iint U_{\text{in}}(x_1, y_1) e^{-i \frac{2\pi}{\lambda z}(x_2 x_1 + y_2 y_1)} \, dx_1 dy_1
+  \]
+  where $\lambda = \lambda_0 / n$ and $k = 2\pi n / \lambda_0$.
+- The output grid pitch scales proportionally to distance: $\Delta x_{\text{out}} = \frac{\lambda z}{N_x \Delta x_{\text{in}}}$, $\Delta y_{\text{out}} = \frac{\lambda z}{N_y \Delta y_{\text{in}}}$.
+- The discrete Fraunhofer implementation enforces exact spatial centering at $(x=0, y=0)$ and strictly conserves integrated intensity $\sum |U_2|^2 \Delta x_{\text{out}} \Delta y_{\text{out}} = \sum |U_1|^2 \Delta x_{\text{in}} \Delta y_{\text{in}}$ via Parseval's theorem.
+- Fraunhofer propagation requires strictly positive finite propagation distance $z > 0$ and far-field conditions $z \gg D^2/\lambda$ (Fresnel number $N_F = D^2 / (\lambda z) \ll 1$). Diagnostics report $N_F$, support source (caller diameter/extents or conservative full grid default), and flag near-field / paraxial invalidity warnings when $N_F \ge 0.1$.
+- Boundary conditions are periodic on the discrete sampling grid without automatic padding (`periodicBoundary = true`, `automaticPadding = false`).
+- Phasor angles are range-reduced via `std::remainder(phase, 2*pi)` to keep arguments to `std::polar` in $[-\pi, \pi]$. Extreme distances or coordinates exceeding double-precision capacity ($kz \gtrsim 2^{52} \approx 4.5\times 10^{15}\text{ rad}$) will undergo numerical precision loss, and intermediate quadratic phase overflows throw explicit `std::overflow_error`.
