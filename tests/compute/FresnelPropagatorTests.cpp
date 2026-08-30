@@ -457,3 +457,75 @@ TEST_CASE("Fresnel rejects unsupported dimensions, invalid pitches, and phase ov
         std::overflow_error);
     checkSamplesExactly(hugeDistance, hugeDistanceBefore);
 }
+
+TEST_CASE("Fresnel calculates correct non-propagating energy fraction for finite large amplitude fields") {
+    // Amplitude of 1e200 has squared magnitude 1e400 which overflows standard double std::norm to Inf.
+    // The robust scaled sum-of-squares algorithm correctly evaluates the fraction instead of silently reporting 0.0.
+    constexpr double pitch = 100e-9; // Sub-wavelength grid where high-frequency bins are non-propagating
+    auto value = makeField(8, 8, pitch);
+    
+    // Fill with two spectral modes of equal magnitude 1e200:
+    // Mode A: DC (x=0, y=0), transverse freq = 0 <= 1/lambda (propagating)
+    // Mode B: xBin=3, yBin=0, transverse freq = 3 / (8 * 100nm) = 3.75e6 > 1/532nm = 1.88e6 (non-propagating)
+    constexpr double largeMagnitude = 1e200;
+    for (std::size_t y = 0; y < value.height(); ++y) {
+        for (std::size_t x = 0; x < value.width(); ++x) {
+            const double phaseNonProp = 2.0 * std::numbers::pi * (3.0 * static_cast<double>(x) / 8.0);
+            value.at(x, y) = largeMagnitude * (1.0 + std::polar(1.0, phaseNonProp));
+        }
+    }
+
+    const auto original = copySamples(value);
+    fft::CpuFftBackend backend;
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
+
+    const auto diagnostics = propagator.propagateInPlace(value, 1e-6);
+
+    CHECK(diagnostics.nonPropagatingBinCount > 0);
+    // Equal energy in propagating and non-propagating modes -> fraction must be exactly 0.5
+    CHECK(diagnostics.nonPropagatingSpectralEnergyFraction == doctest::Approx(0.5).epsilon(1e-12));
+    CHECK(diagnostics.nonPropagatingSpectralEnergyFraction != 0.0);
+
+    // Verify all output samples remain finite and non-zero
+    for (const auto& sample : value.samples()) {
+        CHECK(std::isfinite(sample.real()));
+        CHECK(std::isfinite(sample.imag()));
+        CHECK(std::abs(sample) > 0.0);
+    }
+}
+
+TEST_CASE("Fresnel stably evaluates Helmholtz cutoff when lambda squared underflows") {
+    // vacuumWavelengthMetres = 2.0e-154:
+    // In naive 1.0 / (lambda * lambda), intermediate lambda * lambda is near subnormal underflow (4e-308).
+    // In the stable order: cutoff = 1.0 / lambda = 5.0e153, cutoffSq = 2.5e307 (finite and exact).
+    constexpr double tinyWavelength = 2.0e-154;
+    // Set pitch such that maxFx = 0.5 / pitch = 8.0e153, maxFxSq = 6.4e307, maxFreqSq = 1.28e308 (finite).
+    // For xBin = 2 (Nyquist in width=4): fx = 2 / (4 * pitch) = 8.0e153 > cutoff (5.0e153), so non-propagating.
+    constexpr double pitch = 6.25e-155;
+    field::ComplexField2D field(4, 4, pitch, pitch, tinyWavelength, 1.0);
+    fillSpectralBin(field, 2, 0);
+
+    fft::CpuFftBackend backend;
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
+
+    const auto diagnostics = propagator.propagateInPlace(field, 0.0);
+
+    CHECK(diagnostics.nonPropagatingBinCount > 0);
+    CHECK(diagnostics.nonPropagatingSpectralEnergyFraction == doctest::Approx(1.0).epsilon(1e-12));
+}
+
+TEST_CASE("Fresnel enforces strong exception safety when intermediate diagnostics overflow") {
+    // Create a field where spatial frequency or paraxial parameter is near range limit
+    constexpr double tinyPitch = 1e-300;
+    field::ComplexField2D field(8, 8, tinyPitch, tinyPitch, vacuumWavelengthMetres, 1.0);
+    fillDeterministic(field);
+    const auto original = copySamples(field);
+
+    fft::CpuFftBackend backend;
+    propagation::FresnelTransferFunctionPropagator propagator(backend);
+
+    // Maximum paraxial parameter (lambda / pitch) overflows double range -> must throw overflow_error
+    CHECK_THROWS_AS(propagator.propagateInPlace(field, 0.0), std::overflow_error);
+    checkSamplesExactly(field, original);
+}
+
