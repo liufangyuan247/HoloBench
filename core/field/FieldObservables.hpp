@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+#include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include "core/field/ComplexField2D.hpp"
@@ -16,23 +19,46 @@ namespace holobench::field {
  * validityMask contains 0 (invalid). Callers consuming wrappedPhaseRadians must check validityMask
  * or isValid() before interpreting values as physical optical phase.
  */
-struct PhaseResult final {
-    ScalarField2D wrappedPhaseRadians;
-    std::vector<uint8_t> validityMask; ///< 1 for valid defined phase, 0 for undefined/sub-threshold.
+class PhaseResult final {
+public:
+    PhaseResult(ScalarField2D wrappedPhaseRadians, std::vector<std::uint8_t> validityMask)
+        : wrappedPhaseRadians_(std::move(wrappedPhaseRadians)),
+          validityMask_(std::move(validityMask)) {
+        if (validityMask_.size() != wrappedPhaseRadians_.sampleCount()) {
+            throw std::invalid_argument(
+                "validity mask size must match wrapped phase sample count");
+        }
+    }
+
+    [[nodiscard]] const ScalarField2D& wrappedPhaseRadians() const noexcept {
+        return wrappedPhaseRadians_;
+    }
+
+    [[nodiscard]] const std::vector<std::uint8_t>& validityMask() const noexcept {
+        return validityMask_;
+    }
 
     [[nodiscard]] bool isValid(std::size_t xIndex, std::size_t yIndex) const {
-        if (xIndex >= wrappedPhaseRadians.width() || yIndex >= wrappedPhaseRadians.height()) {
+        if (xIndex >= wrappedPhaseRadians_.width() || yIndex >= wrappedPhaseRadians_.height()) {
+            throw std::out_of_range("phase result sample coordinate out of range");
+        }
+        const std::size_t index = yIndex * wrappedPhaseRadians_.width() + xIndex;
+        if (index >= validityMask_.size()) {
             throw std::out_of_range("phase result sample index out of range");
         }
-        return validityMask[yIndex * wrappedPhaseRadians.width() + xIndex] != 0;
+        return validityMask_[index] != 0;
     }
 
     [[nodiscard]] bool isValid(std::size_t flatIndex) const {
-        if (flatIndex >= validityMask.size()) {
+        if (flatIndex >= wrappedPhaseRadians_.sampleCount() || flatIndex >= validityMask_.size()) {
             throw std::out_of_range("phase result sample index out of range");
         }
-        return validityMask[flatIndex] != 0;
+        return validityMask_[flatIndex] != 0;
     }
+
+private:
+    ScalarField2D wrappedPhaseRadians_;
+    std::vector<std::uint8_t> validityMask_;
 };
 
 /**
@@ -44,21 +70,6 @@ struct PhaseResult final {
  * @throws std::overflow_error If intensity calculation overflows double precision.
  */
 [[nodiscard]] ScalarField2D computeIntensity(const ComplexField2D& field);
-
-/**
- * @brief Computes natural log intensity I_ln(x, y) = ln(max(|U(x, y)|^2, minimumIntensity)).
- *
- * Pointwise natural logarithm of linear intensity clamped from below by minimumIntensity.
- *
- * @param field The input complex field.
- * @param minimumIntensity Strictly positive finite lower bound threshold for intensity.
- * @return ScalarField2D Pointwise natural log intensity with matching dimensions and physical metadata.
- * @throws std::invalid_argument If minimumIntensity is non-positive or non-finite, or if any field sample is non-finite.
- * @throws std::overflow_error If intensity calculation overflows double precision.
- */
-[[nodiscard]] ScalarField2D computeNaturalLogIntensity(
-    const ComplexField2D& field,
-    double minimumIntensity);
 
 /**
  * @brief Computes decibel (dB) log intensity I_dB(x, y) = max(10 * log10(|U(x, y)|^2 / referenceIntensity), floorDecibels).
@@ -103,27 +114,27 @@ struct PhaseResult final {
     double minimumIntensity = 0.0);
 
 /**
- * @brief Computes discrete integrated intensity across the transverse plane: P = sum(|U(x, y)|^2) * dx * dy.
+ * @brief Computes discrete integrated relative intensity across the transverse plane: sum(|U(x, y)|^2) * dx * dy.
  *
  * Represents the discrete transverse plane integral of field intensity.
  * Units are [field-amplitude-squared * m^2].
  * Conversion to absolute radiometric power (Watts) requires calibrated optical impedance and source normalization.
  *
  * @param field The input complex field.
- * @return double Total integrated intensity across the grid.
+ * @return double Total integrated relative intensity across the grid.
  * @throws std::invalid_argument If any complex sample in the field contains NaN or Inf.
  * @throws std::overflow_error If intermediate summation or area scaling overflows double precision.
  */
 [[nodiscard]] double computeIntegratedIntensity(const ComplexField2D& field);
 
 /**
- * @brief Computes discrete integrated intensity from an existing linear intensity field: P = sum(I(x, y)) * dx * dy.
+ * @brief Computes discrete integrated relative intensity from an existing linear intensity field: sum(I(x, y)) * dx * dy.
  *
  * Units are [field-amplitude-squared * m^2].
  * Conversion to absolute radiometric power (Watts) requires calibrated optical impedance and source normalization.
  *
  * @param intensityField The input linear intensity field.
- * @return double Total integrated intensity across the grid.
+ * @return double Total integrated relative intensity across the grid.
  * @throws std::invalid_argument If any intensity sample is negative, NaN, or Inf.
  * @throws std::overflow_error If intermediate summation or area scaling overflows double precision.
  */

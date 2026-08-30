@@ -59,27 +59,6 @@ ScalarField2D computeIntensity(const ComplexField2D& field) {
     return result;
 }
 
-ScalarField2D computeNaturalLogIntensity(const ComplexField2D& field, double minimumIntensity) {
-    requirePositiveFinite(minimumIntensity, "minimum intensity");
-
-    auto result = ScalarField2D::createMatching(field);
-    const auto sourceSamples = field.samples();
-    auto destSamples = result.samples();
-    const std::size_t count = sourceSamples.size();
-
-    for (std::size_t i = 0; i < count; ++i) {
-        const double intensity = calculateIntensityChecked(sourceSamples[i], i);
-        const double clamped = std::max(intensity, minimumIntensity);
-        const double logValue = std::log(clamped);
-        if (!std::isfinite(logValue)) {
-            throw std::overflow_error(
-                "natural log intensity calculation overflowed double precision at index " + std::to_string(i));
-        }
-        destSamples[i] = logValue;
-    }
-    return result;
-}
-
 ScalarField2D computeDecibelIntensity(
     const ComplexField2D& field,
     double floorDecibels,
@@ -118,7 +97,7 @@ PhaseResult computeWrappedPhase(const ComplexField2D& field, double minimumInten
     auto phaseSamples = phaseField.samples();
     const std::size_t count = sourceSamples.size();
 
-    std::vector<uint8_t> validity(count, 0);
+    std::vector<std::uint8_t> validity(count, 0);
 
     constexpr double pi = std::numbers::pi;
 
@@ -149,10 +128,7 @@ PhaseResult computeWrappedPhase(const ComplexField2D& field, double minimumInten
         validity[i] = 1;
     }
 
-    return PhaseResult{
-        .wrappedPhaseRadians = std::move(phaseField),
-        .validityMask = std::move(validity),
-    };
+    return PhaseResult(std::move(phaseField), std::move(validity));
 }
 
 double computeIntegratedIntensity(const ComplexField2D& field) {

@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <limits>
 #include <numbers>
 #include <stdexcept>
@@ -68,6 +69,44 @@ TEST_CASE("ScalarField2D constructor rejects illegal dimensions and parameters")
     CHECK_THROWS_AS(static_cast<void>(field::ScalarField2D(1, 1, 1.0, 1.0, 1.0, 0.0)), std::invalid_argument);
 }
 
+TEST_CASE("PhaseResult enforces invariant between wrappedPhase and validityMask") {
+    field::ScalarField2D phaseField(3, 2, 1e-4, 1e-4, 532e-9, 1.0);
+    REQUIRE(phaseField.sampleCount() == 6);
+
+    // Matching size succeeds
+    std::vector<std::uint8_t> validMask(6, 1);
+    validMask[2] = 0;
+    REQUIRE_NOTHROW({
+        field::PhaseResult result(phaseField, validMask);
+        CHECK(result.wrappedPhaseRadians().sampleCount() == 6);
+        CHECK(result.validityMask().size() == 6);
+        CHECK(result.isValid(0, 0) == true);
+        CHECK(result.isValid(2, 0) == false);
+        CHECK(result.isValid(2) == false);
+        CHECK(result.isValid(5) == true);
+    });
+
+    // Mismatched size (smaller) throws invalid_argument
+    std::vector<std::uint8_t> tooSmallMask(5, 1);
+    CHECK_THROWS_AS(static_cast<void>(field::PhaseResult(phaseField, tooSmallMask)), std::invalid_argument);
+
+    // Mismatched size (larger) throws invalid_argument
+    std::vector<std::uint8_t> tooLargeMask(7, 1);
+    CHECK_THROWS_AS(static_cast<void>(field::PhaseResult(phaseField, tooLargeMask)), std::invalid_argument);
+
+    // Empty mask throws invalid_argument when field is non-empty
+    std::vector<std::uint8_t> emptyMask;
+    CHECK_THROWS_AS(static_cast<void>(field::PhaseResult(phaseField, emptyMask)), std::invalid_argument);
+
+    // Bounds checking on isValid
+    field::PhaseResult result(phaseField, validMask);
+    CHECK_THROWS_AS(static_cast<void>(result.isValid(3, 0)), std::out_of_range);
+    CHECK_THROWS_AS(static_cast<void>(result.isValid(0, 2)), std::out_of_range);
+    CHECK_THROWS_AS(static_cast<void>(result.isValid(4, 5)), std::out_of_range);
+    CHECK_THROWS_AS(static_cast<void>(result.isValid(6)), std::out_of_range);
+    CHECK_THROWS_AS(static_cast<void>(result.isValid(100)), std::out_of_range);
+}
+
 TEST_CASE("computeIntensity computes accurate pointwise intensity and preserves metadata") {
     field::ComplexField2D field(3, 2, 1e-4, 2e-4, 532e-9, 1.0);
     field.at(0, 0) = {1.0, 0.0};
@@ -102,26 +141,6 @@ TEST_CASE("computeIntensity computes accurate pointwise intensity and preserves 
     for (std::size_t i = 0; i < intensity.sampleCount(); ++i) {
         CHECK(intensity.samples()[i] == intensity2.samples()[i]);
     }
-}
-
-TEST_CASE("computeNaturalLogIntensity applies explicit minimum intensity and computes natural logarithm") {
-    field::ComplexField2D field(3, 1, 1e-4, 1e-4, 532e-9, 1.0);
-    field.at(0, 0) = {std::numbers::e, 0.0}; // |U|^2 = e^2, ln(I) = 2.0
-    field.at(1, 0) = {1.0, 0.0};            // |U|^2 = 1.0, ln(I) = 0.0
-    field.at(2, 0) = {0.0, 0.0};            // |U|^2 = 0.0 -> clamped to minimumIntensity 1e-4
-
-    constexpr double minimumIntensity = 1e-4;
-    const auto logI = field::computeNaturalLogIntensity(field, minimumIntensity);
-
-    CHECK(logI.at(0, 0) == doctest::Approx(2.0));
-    CHECK(logI.at(1, 0) == doctest::Approx(0.0));
-    CHECK(logI.at(2, 0) == doctest::Approx(std::log(minimumIntensity)));
-
-    // Test value smaller than minimumIntensity is clamped
-    field::ComplexField2D weakField(1, 1, 1e-4, 1e-4, 532e-9, 1.0);
-    weakField.at(0, 0) = {1e-5, 0.0}; // |U|^2 = 1e-10 < minimumIntensity
-    const auto weakLogI = field::computeNaturalLogIntensity(weakField, minimumIntensity);
-    CHECK(weakLogI.at(0, 0) == doctest::Approx(std::log(minimumIntensity)));
 }
 
 TEST_CASE("computeDecibelIntensity evaluates relative dB with stable log differences and floor clamping") {
@@ -197,8 +216,8 @@ TEST_CASE("computeWrappedPhase normalizes to minus pi to plus pi interval and pr
     field.at(3, 2) = {-0.0, -0.0};            // exact zero -> invalid (mask 0, phase 0.0)
 
     const auto phaseResult = field::computeWrappedPhase(field);
-    const auto& phase = phaseResult.wrappedPhaseRadians;
-    const auto& mask = phaseResult.validityMask;
+    const auto& phase = phaseResult.wrappedPhaseRadians();
+    const auto& mask = phaseResult.validityMask();
 
     REQUIRE(mask.size() == 12);
     REQUIRE(phase.sampleCount() == 12);
@@ -267,9 +286,9 @@ TEST_CASE("computeWrappedPhase handles all-zero field sub-threshold intensity an
     zeroField.fill({0.0, 0.0});
 
     const auto zeroPhase = field::computeWrappedPhase(zeroField);
-    for (std::size_t i = 0; i < zeroPhase.wrappedPhaseRadians.sampleCount(); ++i) {
-        CHECK(zeroPhase.wrappedPhaseRadians.samples()[i] == 0.0);
-        CHECK(zeroPhase.validityMask[i] == 0);
+    for (std::size_t i = 0; i < zeroPhase.wrappedPhaseRadians().sampleCount(); ++i) {
+        CHECK(zeroPhase.wrappedPhaseRadians().samples()[i] == 0.0);
+        CHECK(zeroPhase.validityMask()[i] == 0);
         CHECK(zeroPhase.isValid(i) == false);
     }
 
@@ -283,26 +302,26 @@ TEST_CASE("computeWrappedPhase handles all-zero field sub-threshold intensity an
     const auto threshPhase = field::computeWrappedPhase(field, minimumIntensity);
 
     CHECK(threshPhase.isValid(0, 0) == true);
-    CHECK(threshPhase.wrappedPhaseRadians.at(0, 0) == doctest::Approx(0.0));
+    CHECK(threshPhase.wrappedPhaseRadians().at(0, 0) == doctest::Approx(0.0));
 
     CHECK(threshPhase.isValid(1, 0) == false);
-    CHECK(threshPhase.wrappedPhaseRadians.at(1, 0) == 0.0);
+    CHECK(threshPhase.wrappedPhaseRadians().at(1, 0) == 0.0);
 
     CHECK(threshPhase.isValid(2, 0) == false);
-    CHECK(threshPhase.wrappedPhaseRadians.at(2, 0) == 0.0);
+    CHECK(threshPhase.wrappedPhaseRadians().at(2, 0) == 0.0);
 
     // Determinism test: repeated calls produce bit-identical phase and mask
     const auto threshPhase2 = field::computeWrappedPhase(field, minimumIntensity);
-    for (std::size_t i = 0; i < threshPhase.wrappedPhaseRadians.sampleCount(); ++i) {
-        CHECK(threshPhase.wrappedPhaseRadians.samples()[i] == threshPhase2.wrappedPhaseRadians.samples()[i]);
-        CHECK(threshPhase.validityMask[i] == threshPhase2.validityMask[i]);
+    for (std::size_t i = 0; i < threshPhase.wrappedPhaseRadians().sampleCount(); ++i) {
+        CHECK(threshPhase.wrappedPhaseRadians().samples()[i] == threshPhase2.wrappedPhaseRadians().samples()[i]);
+        CHECK(threshPhase.validityMask()[i] == threshPhase2.validityMask()[i]);
     }
 }
 
 TEST_CASE("computeIntegratedIntensity scales accurately with transverse grid pitch") {
     // 4x5 grid with constant amplitude 3 + 4i (|U|^2 = 25)
     // dx = 0.5 m, dy = 0.25 m
-    // Total integrated intensity = 25 * (4 * 5) * (0.5 * 0.25) = 25 * 20 * 0.125 = 62.5
+    // Total integrated relative intensity = 25 * (4 * 5) * (0.5 * 0.25) = 25 * 20 * 0.125 = 62.5
     field::ComplexField2D field(4, 5, 0.5, 0.25, 532e-9, 1.0);
     field.fill({3.0, 4.0});
 
@@ -319,9 +338,9 @@ TEST_CASE("computeIntegratedIntensity scales accurately with transverse grid pit
 
     // Determinism test
     field.fill({1.5, -2.5});
-    const double p1 = field::computeIntegratedIntensity(field);
-    const double p2 = field::computeIntegratedIntensity(field);
-    CHECK(p1 == p2);
+    const double integrated1 = field::computeIntegratedIntensity(field);
+    const double integrated2 = field::computeIntegratedIntensity(field);
+    CHECK(integrated1 == integrated2);
 }
 
 TEST_CASE("observables strictly reject non-finite inputs and invalid parameters") {
@@ -333,16 +352,9 @@ TEST_CASE("observables strictly reject non-finite inputs and invalid parameters"
 
     // Valid parameters baseline
     CHECK_NOTHROW(static_cast<void>(field::computeIntensity(field)));
-    CHECK_NOTHROW(static_cast<void>(field::computeNaturalLogIntensity(field, 1e-6)));
     CHECK_NOTHROW(static_cast<void>(field::computeDecibelIntensity(field, -120.0, 1.0)));
     CHECK_NOTHROW(static_cast<void>(field::computeWrappedPhase(field, 0.0)));
     CHECK_NOTHROW(static_cast<void>(field::computeIntegratedIntensity(field)));
-
-    // Rejection of invalid minimumIntensity in computeNaturalLogIntensity
-    CHECK_THROWS_AS(static_cast<void>(field::computeNaturalLogIntensity(field, 0.0)), std::invalid_argument);
-    CHECK_THROWS_AS(static_cast<void>(field::computeNaturalLogIntensity(field, -1.0)), std::invalid_argument);
-    CHECK_THROWS_AS(static_cast<void>(field::computeNaturalLogIntensity(field, nan)), std::invalid_argument);
-    CHECK_THROWS_AS(static_cast<void>(field::computeNaturalLogIntensity(field, inf)), std::invalid_argument);
 
     // Rejection of invalid floorDecibels (> 0.0 or non-finite) in computeDecibelIntensity
     CHECK_THROWS_AS(static_cast<void>(field::computeDecibelIntensity(field, 1.0, 1.0)), std::invalid_argument);
@@ -364,14 +376,12 @@ TEST_CASE("observables strictly reject non-finite inputs and invalid parameters"
     // Rejection of NaN / Inf in ComplexField2D samples
     field.at(1, 1) = {nan, 0.0};
     CHECK_THROWS_AS(static_cast<void>(field::computeIntensity(field)), std::invalid_argument);
-    CHECK_THROWS_AS(static_cast<void>(field::computeNaturalLogIntensity(field, 1e-6)), std::invalid_argument);
     CHECK_THROWS_AS(static_cast<void>(field::computeDecibelIntensity(field, -120.0, 1.0)), std::invalid_argument);
     CHECK_THROWS_AS(static_cast<void>(field::computeWrappedPhase(field)), std::invalid_argument);
     CHECK_THROWS_AS(static_cast<void>(field::computeIntegratedIntensity(field)), std::invalid_argument);
 
     field.at(1, 1) = {0.0, inf};
     CHECK_THROWS_AS(static_cast<void>(field::computeIntensity(field)), std::invalid_argument);
-    CHECK_THROWS_AS(static_cast<void>(field::computeNaturalLogIntensity(field, 1e-6)), std::invalid_argument);
     CHECK_THROWS_AS(static_cast<void>(field::computeDecibelIntensity(field, -120.0, 1.0)), std::invalid_argument);
     CHECK_THROWS_AS(static_cast<void>(field::computeWrappedPhase(field)), std::invalid_argument);
     CHECK_THROWS_AS(static_cast<void>(field::computeIntegratedIntensity(field)), std::invalid_argument);
@@ -397,9 +407,7 @@ TEST_CASE("observables detect and reject floating point overflow") {
     hugeField.at(0, 0) = {1e200, 0.0};
 
     CHECK_THROWS_AS(static_cast<void>(field::computeIntensity(hugeField)), std::overflow_error);
-    CHECK_THROWS_AS(static_cast<void>(field::computeNaturalLogIntensity(hugeField, 1e-6)), std::overflow_error);
     CHECK_THROWS_AS(static_cast<void>(field::computeDecibelIntensity(hugeField, -120.0, 1.0)), std::overflow_error);
     CHECK_THROWS_AS(static_cast<void>(field::computeWrappedPhase(hugeField)), std::overflow_error);
     CHECK_THROWS_AS(static_cast<void>(field::computeIntegratedIntensity(hugeField)), std::overflow_error);
 }
-
