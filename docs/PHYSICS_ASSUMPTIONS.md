@@ -59,3 +59,10 @@ This file records active physical assumptions, sign conventions, and validity do
 - The fundamental Gaussian-beam source is the scalar paraxial solution: `waistRadiusMetres` is the $1/e$ complex-amplitude radius, $z_R=\pi n w_0^2/\lambda_0$, and the phase includes positive carrier/curvature terms and negative Gouy phase. It is not claimed accurate when the waist approaches the wavelength or in a vector/high-NA regime.
 - Binary circular, rectangular, and double-slit apertures classify sample centers; samples exactly on an aperture boundary are transmitted. M2 does not infer fractional pixel coverage or anti-aliased edge transmission.
 - The ideal thin-lens field element is the lossless paraxial phase screen $\exp[-ik((x-x_c)^2+(y-y_c)^2)/(2f)]$. It preserves pointwise intensity and does not model thickness, material dispersion, Fresnel loss, aberrations, or finite clear aperture unless a separate aperture mask is applied.
+- Sampled field observables in `core/field/`:
+  - Pointwise linear intensity is $I(x,y) = |U(x,y)|^2 = \operatorname{Re}(U)^2 + \operatorname{Im}(U)^2$.
+  - Pointwise natural log intensity is $I_{\ln}(x,y) = \ln(\max(I(x,y), \text{floor}))$, requiring $\text{floor} > 0$.
+  - Pointwise decibel log intensity is $I_{\text{dB}}(x,y) = 10\log_{10}(\max(I(x,y), \text{floor}) / I_0)$, requiring $\text{floor} > 0$ and $I_0 > 0$.
+  - Pointwise wrapped phase is $\phi(x,y) = \operatorname{atan2}(\operatorname{Im}(U), \operatorname{Re}(U)) \in [-\pi, +\pi]$ rad with standard IEEE 754 branch cut along the negative real axis; exact zero field produces $0.0$ rad.
+  - Discrete plane power integral is $P = \sum I(x,y)\Delta x\Delta y$ (in $\text{intensity}\cdot\text{m}^2$).
+  - Observables reject non-finite inputs (NaN, Inf) and non-positive floors/references via `std::invalid_argument`, and arithmetic overflows throw `std::overflow_error` to prevent downstream UI/validation poisoning.

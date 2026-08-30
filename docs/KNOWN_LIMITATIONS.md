@@ -7,6 +7,12 @@
 - **Unmodeled physical effects**: Monochromatic rays only; no Fresnel coefficients (amplitude/power splitting across reflection/transmission), no polarization/Stokes parameters, and no recursive multi-bounce ray tracing.
 - **Interface media specification**: For planar dielectric interfaces, `nIncident` and `nTransmitted` are supplied by the caller according to the propagation side and are not automatically swapped for reverse-incident rays.
 
+## Wave optics & observables (M2)
+
+- **Phase wrapping**: Phase extraction returns principal wrapped values in $[-\pi, +\pi]$ radians; 2D phase unwrapping across branch cuts is deferred.
+- **Transverse power integration**: Integrated power uses discrete rectangular Riemann summation ($\sum I\,\Delta x\,\Delta y$); sub-pixel edge integration and high-order quadrature are not applied.
+- **Radiometric calibration**: Scalar field intensity $|U|^2$ is proportional to physical irradiance; conversion to absolute SI Watts requires external optical impedance and source calibration.
+
 ## Platform & runtime
 
 - Requires an OpenGL 4.6 Core context; macOS is unsupported.
