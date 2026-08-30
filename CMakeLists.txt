@@ -66,6 +66,7 @@ add_library(holobench_optics STATIC
     optics/scene/NumericalAperture.cpp
     optics/scene/OpticalBenchScene.cpp
     optics/scene/SceneProjectAdapter.cpp
+    optics/wave/FieldSources.cpp
 )
 add_library(HoloBench::Optics ALIAS holobench_optics)
 target_include_directories(holobench_optics PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -176,6 +177,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/NumericalApertureTests.cpp
         tests/analytic/SnellTests.cpp
         tests/analytic/ThinLensTests.cpp
+        tests/analytic/WaveSourceTests.cpp
         tests/project/ProjectDocumentTests.cpp
         tests/project/SceneProjectAdapterTests.cpp
         render/Camera.cpp

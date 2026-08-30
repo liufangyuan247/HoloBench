@@ -35,7 +35,9 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 
 - Fourier sign, normalization, complex phasor time convention, grid sampling, periodic boundary, and evanescent-wave policy are locked in [ADR 0005](adr/0005-wave-optics-conventions.md).
 - `ComplexField2D`, a backend-neutral FFT interface, and the deterministic radix-2 CPU FFT reference are implemented.
-- The backend-neutral CPU Angular Spectrum Method reference implements the locked positive propagation phase, native FFT-order frequency mapping, default evanescent filtering, and strong exception safety. The complete 108-test suite passes under Clang and MSVC warnings-as-errors builds.
+- The backend-neutral CPU Angular Spectrum Method reference implements the locked positive propagation phase, native FFT-order frequency mapping, default evanescent filtering, and strong exception safety.
+- Forward plane-wave and full fundamental Gaussian-beam sources implement refractive-index-aware carrier phase, Rayleigh-range beam-radius evolution, wavefront curvature, and Gouy phase. A 256x256 CPU ASM cross-check recovers the analytic $\sqrt{2}w_0$ radius after one Rayleigh range.
+- The complete 116-test suite passes under Clang and MSVC warnings-as-errors builds.
 - Add detector intensity and phase visualization.
 - Implement analytical validation cases (single slit, rectangular aperture, circular Airy disc, paraxial vs non-paraxial ASM propagation).
 
@@ -48,8 +50,8 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 
 ## Next five tasks
 
-1. Add plane-wave and Gaussian-beam sources with analytic propagation oracles.
-2. Add aperture masks and ideal thin-lens phase with diffraction validation cases.
-3. Implement Fraunhofer and Fresnel propagators with slit and Airy-profile validation.
+1. Add aperture masks and ideal thin-lens phase with diffraction validation cases.
+2. Implement Fraunhofer and Fresnel propagators with slit and Airy-profile validation.
+3. Implement detector intensity, log-intensity, and wrapped-phase observables.
 4. Implement and cross-validate the portable GPU FFT/propagation backend.
-5. Add detector intensity rendering and complex field phase/amplitude inspection in the UI.
+5. Add detector field visualization and complex field phase/amplitude inspection in the UI.

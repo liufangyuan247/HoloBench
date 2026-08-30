@@ -56,3 +56,4 @@ This file records active physical assumptions, sign conventions, and validity do
 - Default ASM propagation removes evanescent bins instead of allowing unstable negative-distance exponential growth.
 - Scalar intensity is proportional to $|U|^2$ and its discrete plane integral is $\sum |U|^2\Delta x\Delta y$; absolute radiometric calibration is separate.
 - The deterministic CPU reference uses double-precision complex samples. GPU implementations must document precision and validate against it.
+- The fundamental Gaussian-beam source is the scalar paraxial solution: `waistRadiusMetres` is the $1/e$ complex-amplitude radius, $z_R=\pi n w_0^2/\lambda_0$, and the phase includes positive carrier/curvature terms and negative Gouy phase. It is not claimed accurate when the waist approaches the wavelength or in a vector/high-NA regime.
