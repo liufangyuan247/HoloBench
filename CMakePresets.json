@@ -1,0 +1,56 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "dev",
+      "displayName": "Development (Ninja, Debug)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "HOLOBENCH_BUILD_APP": "ON",
+        "HOLOBENCH_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "core-ci",
+      "displayName": "Core CI (Ninja, Release)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "HOLOBENCH_BUILD_APP": "OFF",
+        "HOLOBENCH_BUILD_TESTS": "ON",
+        "HOLOBENCH_WARNINGS_AS_ERRORS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "core-ci",
+      "configurePreset": "core-ci"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "core-ci",
+      "configurePreset": "core-ci",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}
+

@@ -1,0 +1,13 @@
+/out/
+/build/
+/.cache/
+/.idea/
+/.vs/
+/.vscode/
+CMakeUserPresets.json
+*.user
+*.suo
+*.log
+*.tmp
+compile_commands.json
+imgui.ini
