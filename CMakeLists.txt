@@ -37,6 +37,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(nlohmann_json)
 
 add_library(holobench_core STATIC
+    core/field/ComplexField2D.cpp
     core/project/ProjectDocument.cpp
 )
 add_library(HoloBench::Core ALIAS holobench_core)
@@ -44,6 +45,15 @@ target_include_directories(holobench_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(holobench_core PUBLIC nlohmann_json::nlohmann_json)
 target_compile_features(holobench_core PUBLIC cxx_std_20)
 holobench_set_warnings(holobench_core)
+
+add_library(holobench_compute STATIC
+    compute/fft/CpuFftBackend.cpp
+)
+add_library(HoloBench::Compute ALIAS holobench_compute)
+target_include_directories(holobench_compute PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(holobench_compute PUBLIC HoloBench::Core)
+target_compile_features(holobench_compute PUBLIC cxx_std_20)
+holobench_set_warnings(holobench_compute)
 
 add_library(holobench_optics STATIC
     optics/ray/BenchTracer.cpp
@@ -157,6 +167,8 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
     add_executable(holobench_tests
         tests/test_main.cpp
         tests/core/UnitsTests.cpp
+        tests/core/ComplexFieldTests.cpp
+        tests/compute/CpuFftBackendTests.cpp
         tests/analytic/BenchTracerTests.cpp
         tests/analytic/GeometricElementsTests.cpp
         tests/analytic/NumericalApertureTests.cpp
@@ -168,7 +180,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/render/CameraTests.cpp
         tests/render/GizmoTests.cpp
     )
-    target_link_libraries(holobench_tests PRIVATE HoloBench::Core HoloBench::Optics doctest::doctest glm::glm)
+    target_link_libraries(holobench_tests PRIVATE HoloBench::Core HoloBench::Compute HoloBench::Optics doctest::doctest glm::glm)
     holobench_set_warnings(holobench_tests)
 
     include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
