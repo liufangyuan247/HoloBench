@@ -19,14 +19,18 @@
 #include <numeric>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
+#include "compute/fft/CpuFftBackend.hpp"
+#include "core/field/FieldVisualization.hpp"
 #include "optics/ray/BenchTracer.hpp"
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
 #include "optics/scene/SceneProjectAdapter.hpp"
 #include "render/OpticalBenchRenderer.hpp"
 #include "render/gl/GlDebug.hpp"
+#include "render/gl/Texture2D.hpp"
 
 namespace holobench::app {
 namespace {
@@ -156,6 +160,8 @@ void drawViewportHud(
 
 Application::Application()
     : renderer_(std::make_unique<render::OpticalBenchRenderer>())
+    , detectorFftBackend_(std::make_unique<compute::fft::CpuFftBackend>())
+    , detectorTexture_(std::make_unique<render::gl::Texture2D>())
     , scene_(optics::scene::createDefaultRealImageScene())
     , naResult_(optics::scene::computeObjectSideNumericalAperture(scene_)) {
     tracerOptions_.rayCount = 64;
@@ -279,7 +285,11 @@ bool Application::initialize(const RunOptions& options) {
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-    constexpr auto windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+    glSmokeMode_ = options.glSmoke;
+    auto windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+    if (glSmokeMode_) {
+        windowFlags |= SDL_WINDOW_HIDDEN;
+    }
     isBenchmark_ = options.benchmarkFrames > 0;
     const int requestedWidth = isBenchmark_ ? 1920 : 1440;
     const int requestedHeight = isBenchmark_ ? 1080 : 900;
@@ -367,6 +377,10 @@ void Application::shutdown() noexcept {
     if (renderer_) {
         renderer_->destroy();
     }
+    if (detectorTexture_) {
+        detectorTexture_->destroy();
+    }
+    detectorResult_.reset();
     if (imguiGlInitialized_) {
         ImGui_ImplOpenGL3_Shutdown();
         imguiGlInitialized_ = false;
@@ -386,6 +400,8 @@ void Application::shutdown() noexcept {
     isGizmoDragging_ = false;
     draggedTarget_ = GizmoTarget::None;
     selectedTarget_ = GizmoTarget::None;
+    hasDetectorProbe_ = false;
+    detectorProbeLocked_ = false;
     if (glContext_ != nullptr) {
         SDL_GL_DestroyContext(glContext_);
         glContext_ = nullptr;
@@ -400,7 +416,272 @@ void Application::shutdown() noexcept {
     }
 }
 
+void Application::updateWaveDetector() {
+    if (detectorUiState_.consumePropagationRequest()) {
+        try {
+            if (!detectorFftBackend_) {
+                throw std::runtime_error("CPU FFT backend is unavailable");
+            }
+            auto result = optics::wave::simulateDetectorField(
+                detectorUiState_.appliedConfig(),
+                *detectorFftBackend_);
+            detectorResult_ = std::make_unique<optics::wave::WaveDetectorResult>(std::move(result));
+            detectorUiState_.propagationSucceeded();
+            detectorErrorMessage_.clear();
+            detectorStatusMessage_ = "Detector field recomputed on the deterministic CPU reference backend";
+            hasDetectorProbe_ = false;
+            detectorProbeLocked_ = false;
+        } catch (const std::exception& ex) {
+            detectorErrorMessage_ = "Propagation failed: " + std::string(ex.what());
+            detectorStatusMessage_.clear();
+            detectorResult_.reset();
+            if (detectorTexture_) {
+                detectorTexture_->destroy();
+            }
+            hasDetectorProbe_ = false;
+            detectorProbeLocked_ = false;
+        }
+    }
+
+    if (detectorResult_ && detectorUiState_.consumeVisualizationRequest()) {
+        try {
+            field::FieldVisualizationOptions options;
+            if (detectorResult_->peakIntensity > 0.0) {
+                options.phaseMinimumIntensity = detectorResult_->peakIntensity * 1.0e-12;
+            }
+            auto image = field::renderFieldView(
+                detectorResult_->field,
+                detectorUiState_.viewMode(),
+                options);
+            if (!detectorTexture_ || !detectorTexture_->uploadImage(image)) {
+                throw std::runtime_error("OpenGL rejected the detector texture upload");
+            }
+            detectorErrorMessage_.clear();
+        } catch (const std::exception& ex) {
+            detectorErrorMessage_ = "Visualization failed: " + std::string(ex.what());
+            detectorStatusMessage_.clear();
+        }
+    }
+}
+
+void Application::drawWaveDetectorPanel() {
+    ImGui::Begin(docking::DockLayoutConfig::kWaveDetectorWindowName);
+
+    auto draft = detectorUiState_.draftConfig();
+    bool physicsEdited = false;
+    const auto inputNanometres = [&physicsEdited](const char* label, double& metres) {
+        double nanometres = metres * 1.0e9;
+        if (ImGui::InputDouble(label, &nanometres, 1.0, 10.0, "%.3f nm", ImGuiInputTextFlags_CharsScientific)) {
+            metres = nanometres * 1.0e-9;
+            physicsEdited = true;
+        }
+    };
+    const auto inputMillimetres = [&physicsEdited](const char* label, double& metres, double step = 0.01) {
+        double millimetres = metres * 1.0e3;
+        if (ImGui::InputDouble(label, &millimetres, step, step * 10.0, "%.6g mm", ImGuiInputTextFlags_CharsScientific)) {
+            metres = millimetres * 1.0e-3;
+            physicsEdited = true;
+        }
+    };
+
+    if (ImGui::CollapsingHeader("Wave Source", ImGuiTreeNodeFlags_DefaultOpen)) {
+        int sourceKind = (draft.sourceKind == optics::wave::WaveSourceKind::PlaneWave) ? 0 : 1;
+        constexpr std::array<const char*, 2> sourceNames {"Plane wave", "Gaussian beam"};
+        if (ImGui::Combo("Source model", &sourceKind, sourceNames.data(), static_cast<int>(sourceNames.size()))) {
+            draft.sourceKind = sourceKind == 0
+                ? optics::wave::WaveSourceKind::PlaneWave
+                : optics::wave::WaveSourceKind::GaussianBeam;
+            physicsEdited = true;
+        }
+        inputNanometres("Vacuum wavelength", draft.wavelengthMetres);
+        if (draft.sourceKind == optics::wave::WaveSourceKind::GaussianBeam) {
+            inputMillimetres("Waist radius w0", draft.gaussianWaistRadiusMetres);
+            ImGui::TextDisabled("Scalar, coherent fundamental Gaussian at its waist plane.");
+        } else {
+            if (ImGui::InputDouble("Direction cosine X", &draft.planeWaveDirectionCosineX, 0.001, 0.01, "%.6f")) {
+                physicsEdited = true;
+            }
+            if (ImGui::InputDouble("Direction cosine Y", &draft.planeWaveDirectionCosineY, 0.001, 0.01, "%.6f")) {
+                physicsEdited = true;
+            }
+            ImGui::TextDisabled("Direction cosines must satisfy lx^2 + ly^2 <= 1.");
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Aperture", ImGuiTreeNodeFlags_DefaultOpen)) {
+        int apertureKind = static_cast<int>(draft.apertureKind);
+        constexpr std::array<const char*, 4> apertureNames {"None", "Circular", "Rectangular", "Double slit"};
+        if (ImGui::Combo("Aperture model", &apertureKind, apertureNames.data(), static_cast<int>(apertureNames.size()))) {
+            draft.apertureKind = static_cast<optics::wave::WaveApertureKind>(apertureKind);
+            physicsEdited = true;
+        }
+        switch (draft.apertureKind) {
+        case optics::wave::WaveApertureKind::None:
+            break;
+        case optics::wave::WaveApertureKind::Circular:
+            inputMillimetres("Radius", draft.circularApertureRadiusMetres);
+            break;
+        case optics::wave::WaveApertureKind::Rectangular:
+            inputMillimetres("Half width", draft.rectangularHalfWidthMetres);
+            inputMillimetres("Half height", draft.rectangularHalfHeightMetres);
+            break;
+        case optics::wave::WaveApertureKind::DoubleSlit:
+            inputMillimetres("Slit width", draft.doubleSlitWidthMetres);
+            inputMillimetres("Slit height", draft.doubleSlitHeightMetres);
+            inputMillimetres("Centre separation", draft.doubleSlitSeparationMetres);
+            break;
+        }
+        if (draft.apertureKind != optics::wave::WaveApertureKind::None) {
+            inputMillimetres("Centre X", draft.apertureCenterXMetres);
+            inputMillimetres("Centre Y", draft.apertureCenterYMetres);
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Thin Lens")) {
+        if (ImGui::Checkbox("Enable scalar thin-lens phase", &draft.enableThinLens)) {
+            physicsEdited = true;
+        }
+        if (draft.enableThinLens) {
+            inputMillimetres("Focal length", draft.thinLensFocalLengthMetres);
+            inputMillimetres("Lens centre X", draft.thinLensCenterXMetres);
+            inputMillimetres("Lens centre Y", draft.thinLensCenterYMetres);
+            ImGui::TextDisabled("Ideal, monochromatic, zero-thickness lens approximation.");
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Propagation & Detector Grid", ImGuiTreeNodeFlags_DefaultOpen)) {
+        int propagator = draft.propagator == optics::wave::WavePropagatorKind::AngularSpectrum ? 0 : 1;
+        constexpr std::array<const char*, 2> propagatorNames {"Angular spectrum (ASM)", "Fresnel transfer function"};
+        if (ImGui::Combo("Propagation method", &propagator, propagatorNames.data(), static_cast<int>(propagatorNames.size()))) {
+            draft.propagator = propagator == 0
+                ? optics::wave::WavePropagatorKind::AngularSpectrum
+                : optics::wave::WavePropagatorKind::FresnelTransferFunction;
+            physicsEdited = true;
+        }
+        inputMillimetres("Distance z", draft.propagationDistanceMetres, 0.1);
+        inputMillimetres("Square grid span", draft.gridPhysicalSpanMetres, 0.1);
+        constexpr std::array<int, 4> resolutions {64, 128, 256, 512};
+        int resolutionIndex = 1;
+        for (std::size_t index = 0; index < resolutions.size(); ++index) {
+            if (draft.gridResolution == static_cast<std::size_t>(resolutions[index])) {
+                resolutionIndex = static_cast<int>(index);
+            }
+        }
+        constexpr std::array<const char*, 4> resolutionNames {"64 x 64", "128 x 128", "256 x 256", "512 x 512"};
+        if (ImGui::Combo("Grid resolution", &resolutionIndex, resolutionNames.data(), static_cast<int>(resolutionNames.size()))) {
+            draft.gridResolution = static_cast<std::size_t>(resolutions[static_cast<std::size_t>(resolutionIndex)]);
+            physicsEdited = true;
+        }
+        if (ImGui::InputDouble("Refractive index n", &draft.refractiveIndex, 0.001, 0.01, "%.6f")) {
+            physicsEdited = true;
+        }
+        const double pitchMicrometres = draft.gridPhysicalSpanMetres * 1.0e6 / static_cast<double>(draft.gridResolution);
+        ImGui::Text("Sampling pitch: %.4g um", pitchMicrometres);
+        ImGui::TextDisabled("Periodic FFT boundary; scalar, monochromatic, coherent propagation.");
+    }
+
+    if (physicsEdited) {
+        detectorUiState_.setDraftConfig(draft);
+    }
+    if (detectorUiState_.isDirty()) {
+        ImGui::TextColored(ImVec4(1.0F, 0.75F, 0.2F, 1.0F), "Parameters edited - press Apply to recompute");
+    }
+    if (ImGui::Button("Apply & Recompute")) {
+        detectorUiState_.apply();
+        detectorStatusMessage_ = "Detector recompute queued";
+        detectorErrorMessage_.clear();
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("Propagation never runs continuously per frame.");
+
+    ImGui::SeparatorText("Screen Display");
+    int viewMode = static_cast<int>(detectorUiState_.viewMode());
+    constexpr std::array<const char*, 3> viewNames {"Linear intensity", "Log intensity (dB)", "Wrapped phase"};
+    if (ImGui::Combo("Displayed observable", &viewMode, viewNames.data(), static_cast<int>(viewNames.size()))) {
+        detectorUiState_.setViewMode(static_cast<field::FieldViewMode>(viewMode));
+    }
+
+    if (!detectorErrorMessage_.empty()) {
+        ImGui::TextColored(ImVec4(1.0F, 0.35F, 0.35F, 1.0F), "%s", detectorErrorMessage_.c_str());
+    } else if (!detectorStatusMessage_.empty()) {
+        ImGui::TextColored(ImVec4(0.4F, 0.9F, 0.5F, 1.0F), "%s", detectorStatusMessage_.c_str());
+    }
+
+    if (detectorResult_ && detectorTexture_ && detectorTexture_->isValid()) {
+        ImGui::Text("Peak I: %.6g | Integrated I: %.6g", detectorResult_->peakIntensity, detectorResult_->integratedIntensity);
+        ImGui::TextWrapped("%s", detectorResult_->diagnosticSummary.c_str());
+
+        const ImVec2 available = ImGui::GetContentRegionAvail();
+        const float imageHeightBudget = std::max(180.0F, available.y - 110.0F);
+        const auto layout = waveui::fitDetectorImage(
+            available.x,
+            imageHeightBudget,
+            detectorResult_->field.width(),
+            detectorResult_->field.height());
+        if (layout.width > 0.0F && layout.height > 0.0F) {
+            const float horizontalOffset = std::max(0.0F, (available.x - layout.width) * 0.5F);
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + horizontalOffset);
+            ImGui::Image(
+                toImTextureID(detectorTexture_->handle()),
+                ImVec2(layout.width, layout.height),
+                ImVec2(0.0F, 1.0F),
+                ImVec2(1.0F, 0.0F));
+            const ImVec2 imageMin = ImGui::GetItemRectMin();
+            if (ImGui::IsItemHovered()) {
+                const ImVec2 mouse = ImGui::GetMousePos();
+                waveui::DetectorPixel hovered;
+                if (waveui::mapDisplayPointToDetectorPixel(
+                        mouse.x - imageMin.x,
+                        mouse.y - imageMin.y,
+                        layout.width,
+                        layout.height,
+                        detectorResult_->field.width(),
+                        detectorResult_->field.height(),
+                        hovered)) {
+                    if (!detectorProbeLocked_) {
+                        detectorProbe_ = hovered;
+                        hasDetectorProbe_ = true;
+                    }
+                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                        detectorProbe_ = hovered;
+                        hasDetectorProbe_ = true;
+                        detectorProbeLocked_ = true;
+                    }
+                }
+            }
+        }
+
+        ImGui::SeparatorText("Probe");
+        if (hasDetectorProbe_
+            && detectorProbe_.x < detectorResult_->field.width()
+            && detectorProbe_.y < detectorResult_->field.height()) {
+            const auto sample = detectorResult_->field.at(detectorProbe_.x, detectorProbe_.y);
+            const double intensity = std::norm(sample);
+            const double phase = std::arg(sample);
+            ImGui::Text("%s pixel (%zu, %zu)", detectorProbeLocked_ ? "Locked" : "Hover", detectorProbe_.x, detectorProbe_.y);
+            ImGui::Text("x = %.6g mm, y = %.6g mm",
+                detectorResult_->field.xCoordinateMetres(detectorProbe_.x) * 1.0e3,
+                detectorResult_->field.yCoordinateMetres(detectorProbe_.y) * 1.0e3);
+            ImGui::Text("E = %.9g %+.9gi", sample.real(), sample.imag());
+            ImGui::Text("Intensity = %.9g | Wrapped phase = %.9g rad", intensity, phase);
+            if (detectorProbeLocked_) {
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Clear lock")) {
+                    detectorProbeLocked_ = false;
+                }
+            }
+        } else {
+            ImGui::TextDisabled("Hover the detector to probe; click to lock a sample.");
+        }
+    } else {
+        ImGui::TextDisabled("Detector output is not available yet.");
+    }
+
+    ImGui::End();
+}
+
 void Application::drawWorkspace() {
+    updateWaveDetector();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     const ImGuiID dockspaceId = ImGui::DockSpaceOverViewport(
         ImGui::GetID(docking::DockLayoutConfig::kDockSpaceIdStr),
@@ -450,6 +731,7 @@ void Application::drawWorkspace() {
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kOpticalBenchWindowName, dockMainId);
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kInspectorWindowName, dockRightId);
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kValidationWindowName, dockBottomId);
+            ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kWaveDetectorWindowName, dockBottomId);
 
             ImGui::DockBuilderFinish(dockspaceId);
         }
@@ -1070,6 +1352,8 @@ void Application::drawWorkspace() {
         ImGui::BulletText("Status: Nominal");
     }
     ImGui::End();
+
+    drawWaveDetectorPanel();
 }
 
 int Application::run(const RunOptions& options) {
@@ -1189,9 +1473,21 @@ int Application::run(const RunOptions& options) {
             isBenchmark ? "true" : "false");
     }
 
+    glFinish();
+    bool rawGlError = false;
+    for (GLenum error = glGetError(); error != GL_NO_ERROR; error = glGetError()) {
+        rawGlError = true;
+        SDL_Log("OpenGL smoke check observed error 0x%04X", static_cast<unsigned int>(error));
+    }
+    const bool debugCallbackClean = render::gl::errorCount() == 0;
+    if (glSmokeMode_ && !detectorTexture_->isValid()) {
+        SDL_Log("OpenGL smoke check failed: detector texture was never uploaded");
+        rawGlError = true;
+    }
+
     shutdown();
 
-    return render::gl::errorCount() == 0 ? 0 : 2;
+    return (!rawGlError && debugCallbackClean) ? 0 : 2;
 }
 
 int Application::run(int smokeFrameLimit, int initialRayCount) {

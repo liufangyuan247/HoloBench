@@ -144,6 +144,7 @@ if(HOLOBENCH_BUILD_APP)
     add_executable(holobench_app
         app/main.cpp
         app/Application.cpp
+        app/WaveDetectorUiState.cpp
         render/Camera.cpp
         render/gl/Shader.cpp
         render/gl/Framebuffer.cpp
@@ -196,6 +197,8 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/project/ProjectDocumentTests.cpp
         tests/project/SceneProjectAdapterTests.cpp
         tests/validation/WavepropCrossValidationTests.cpp
+        app/WaveDetectorUiState.cpp
+        tests/app/WaveDetectorUiStateTests.cpp
         render/Camera.cpp
         tests/render/CameraTests.cpp
         tests/render/GizmoTests.cpp

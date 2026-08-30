@@ -27,6 +27,7 @@ bool parsePositiveInt(std::string_view value, int maxVal, int& out) {
 int main(int argc, char** argv) {
     holobench::app::RunOptions options;
     bool seenSmoke = false;
+    bool seenGlSmoke = false;
     bool seenBenchmark = false;
     bool seenRayCount = false;
 
@@ -41,6 +42,13 @@ int main(int argc, char** argv) {
             if (!parsePositiveInt(argv[index], 1'000'000, options.smokeFrameLimit)) {
                 return 64;
             }
+        } else if (arg == "--gl-smoke") {
+            if (seenGlSmoke) {
+                return 64;
+            }
+            seenGlSmoke = true;
+            options.glSmoke = true;
+            options.smokeFrameLimit = 3;
         } else if (arg == "--benchmark-frames") {
             if (seenBenchmark || (index + 1 >= argc)) {
                 return 64;
@@ -64,7 +72,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (seenSmoke && seenBenchmark) {
+    if ((seenSmoke && seenBenchmark) || (seenGlSmoke && (seenSmoke || seenBenchmark))) {
         return 64;
     }
 

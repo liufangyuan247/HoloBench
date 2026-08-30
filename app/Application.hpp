@@ -9,6 +9,7 @@
 
 #include <glm/glm.hpp>
 
+#include "app/WaveDetectorUiState.hpp"
 #include "optics/ray/BenchTracer.hpp"
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
@@ -19,6 +20,17 @@ struct SDL_Window;
 
 namespace holobench::render {
 class OpticalBenchRenderer;
+namespace gl {
+class Texture2D;
+}
+}
+
+namespace holobench::compute::fft {
+class CpuFftBackend;
+}
+
+namespace holobench::optics::wave {
+struct WaveDetectorResult;
 }
 
 namespace holobench::app {
@@ -164,6 +176,7 @@ struct DockLayoutConfig {
     static constexpr const char* kOpticalBenchWindowName = "Optical Bench";
     static constexpr const char* kInspectorWindowName = "Inspector";
     static constexpr const char* kValidationWindowName = "Validation";
+    static constexpr const char* kWaveDetectorWindowName = "Wave Detector / Screen";
     static constexpr const char* kDockSpaceIdStr = "HoloBenchDockSpace";
 };
 
@@ -232,6 +245,7 @@ struct RunOptions {
     int smokeFrameLimit = 0;
     int benchmarkFrames = 0;
     int initialRayCount = 64;
+    bool glSmoke = false;
 };
 
 class Application final {
@@ -249,6 +263,8 @@ private:
     bool initialize(const RunOptions& options);
     void shutdown() noexcept;
     void drawWorkspace();
+    void drawWaveDetectorPanel();
+    void updateWaveDetector();
     bool applyScene(
         const optics::scene::OpticalBenchScene& candidateScene,
         const optics::ray::BenchTracerOptions& candidateOptions);
@@ -276,6 +292,15 @@ private:
 
     render::OrbitCamera camera_;
     std::unique_ptr<render::OpticalBenchRenderer> renderer_;
+    std::unique_ptr<compute::fft::CpuFftBackend> detectorFftBackend_;
+    std::unique_ptr<render::gl::Texture2D> detectorTexture_;
+    std::unique_ptr<optics::wave::WaveDetectorResult> detectorResult_;
+    waveui::WaveDetectorUiState detectorUiState_;
+    waveui::DetectorPixel detectorProbe_;
+    bool hasDetectorProbe_ = false;
+    bool detectorProbeLocked_ = false;
+    std::string detectorErrorMessage_;
+    std::string detectorStatusMessage_;
 
     optics::scene::OpticalBenchScene scene_;
     optics::scene::ThinLensImagePrediction prediction_;
@@ -292,6 +317,7 @@ private:
     int vsyncInterval_ = 1;
     int lastViewportWidth_ = 0;
     int lastViewportHeight_ = 0;
+    bool glSmokeMode_ = false;
 };
 
 } // namespace holobench::app

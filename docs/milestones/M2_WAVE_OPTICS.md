@@ -33,3 +33,15 @@ Deliver a validated scalar-wave vertical slice spanning a sampled complex field,
 Sampling-debugger UX, automatic anti-alias padding, arbitrary-plane probes, 4-f spatial filtering, PSF/MTF workflows, polarization, vector diffraction, and non-uniform media are not M2 completion claims unless separately validated.
 
 Completion tag: `m2-wave-core`.
+
+## Detector UI acceptance command
+
+The Wave Detector / Screen panel keeps all physical lengths in SI metres internally while showing nm, um, or mm labels. It exposes the scalar coherent source, aperture, ideal thin-lens, propagation, and square sampled-grid assumptions; display-only observable changes do not rerun propagation. Detector pixels are uploaded as RGBA8 and displayed with vertically flipped ImGui UVs so the field's positive-Y rows appear at the top. Hover probes follow that transform and clicks lock the selected complex sample.
+
+On a workstation with an OpenGL 4.6 Core driver, run the hidden-context texture/UI smoke check with:
+
+```text
+HoloBench.exe --gl-smoke
+```
+
+The command performs the initial CPU-reference propagation, uploads the detector texture, renders three hidden frames, calls `glFinish`, checks `glGetError`, and fails if the GL debug callback reported an error or no detector texture was produced.
