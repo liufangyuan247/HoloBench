@@ -38,10 +38,14 @@ lessons during M7.
   M1-M6 physics and diagnostics.
 - [ ] Versioned project templates that open in Lab mode and remain compatible
   with normal project save/load.
-- [ ] Contextual explanations that declare units, approximations, solver
+- [x] Contextual explanations that declare units, approximations, solver
   fidelity, and limitations without making formulas the primary interaction.
   All first-eight workflows include these explanations.
-- [ ] Undo/redo for lesson-relevant editing actions with deterministic tests.
+- [x] Undo/redo for lesson-relevant editing actions with deterministic tests.
+  The 64-state bounded history covers the shared optical-bench, Wave Detector,
+  Sampling Debugger, and SLM inputs plus calibration provenance. Restored
+  drafts remain Apply/Refresh gated; result data and lesson progress are never
+  stored in the history.
 - [x] Basic English/`zh-Hans` localization architecture based on stable message
   keys, English fallback, and no localized strings used as serialized identity.
   Packaged CJK font coverage is still required before localization is a

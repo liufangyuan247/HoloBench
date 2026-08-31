@@ -427,11 +427,83 @@ bool Application::applyScene(
         raySegments_.swap(stagingRaySegments_);
         errorMessage_.clear();
         statusMessage_ = std::move(newStatus);
+        if (lessonEditHistoryReady_ && !restoringLessonEdit_
+            && !isGizmoDragging_) {
+            recordLessonEdit();
+        }
         return true;
     } catch (const std::exception& ex) {
         errorMessage_ = ex.what();
         statusMessage_.clear();
         return false;
+    }
+}
+
+LessonEditState Application::captureLessonEditState() const {
+    return {
+        .scene = scene_,
+        .tracerOptions = tracerOptions_,
+        .waveDetectorDraft = detectorUiState_.draftConfig(),
+        .samplingDebugger = samplingDebuggerConfig_,
+        .slmInterferenceDraft = slmInterferenceUiState_.draftConfig(),
+        .slmCalibrationSource = slmInterferenceUiState_.draftCalibrationSource(),
+    };
+}
+
+void Application::recordLessonEdit() {
+    if (lessonEditHistoryReady_ && !restoringLessonEdit_) {
+        static_cast<void>(lessonEditHistory_.record(captureLessonEditState()));
+    }
+}
+
+bool Application::restoreLessonEditState(const LessonEditState& state) {
+    restoringLessonEdit_ = true;
+    try {
+        slmexperiment::validateSlmInterferenceExperimentConfig(
+            state.slmInterferenceDraft);
+        if (!applyScene(state.scene, state.tracerOptions)) {
+            throw std::runtime_error(
+                errorMessage_.empty() ? "scene restoration failed" : errorMessage_);
+        }
+        detectorUiState_.setDraftConfig(state.waveDetectorDraft);
+        samplingDebuggerConfig_ = state.samplingDebugger;
+        slmInterferenceUiState_.replaceDraftProject(
+            state.slmInterferenceDraft, state.slmCalibrationSource);
+        restoringLessonEdit_ = false;
+
+        detectorStatusMessage_
+            = "Edit history restored the detector draft; Apply if it differs from the result";
+        samplingDebuggerStatusMessage_
+            = "Edit history restored debugger inputs; Refresh if they differ from the result";
+        slmInterferenceStatusMessage_
+            = "Edit history restored the SLM draft; Apply if it differs from the result";
+        statusMessage_ = "Restored lesson-relevant editable inputs";
+        return true;
+    } catch (const std::exception& ex) {
+        restoringLessonEdit_ = false;
+        errorMessage_ = "Edit history restore failed: " + std::string(ex.what());
+        statusMessage_.clear();
+        return false;
+    }
+}
+
+void Application::undoLessonEdit() {
+    if (!lessonEditHistory_.canUndo()) {
+        return;
+    }
+    const LessonEditState state = lessonEditHistory_.undo();
+    if (!restoreLessonEditState(state)) {
+        static_cast<void>(lessonEditHistory_.redo());
+    }
+}
+
+void Application::redoLessonEdit() {
+    if (!lessonEditHistory_.canRedo()) {
+        return;
+    }
+    const LessonEditState state = lessonEditHistory_.redo();
+    if (!restoreLessonEditState(state)) {
+        static_cast<void>(lessonEditHistory_.undo());
     }
 }
 
@@ -620,6 +692,8 @@ bool Application::initialize(const RunOptions& options) {
         return false;
     }
     refreshRealLensWorkbench();
+    lessonEditHistory_.reset(captureLessonEditState());
+    lessonEditHistoryReady_ = true;
 
     initialized_ = true;
     return true;
@@ -900,6 +974,7 @@ void Application::loadSlmCalibration() {
         auto response = optics::slm::loadSlmResponseJson(path);
         const std::size_t curveCount = response.wavelengths().size();
         slmInterferenceUiState_.setCalibration(std::move(response), path.string());
+        recordLessonEdit();
         slmInterferenceErrorMessage_.clear();
         slmInterferenceStatusMessage_ = "Loaded measured LUT with "
             + std::to_string(curveCount)
@@ -939,6 +1014,7 @@ void Application::loadSlmExperimentProject() {
         slmInterferenceUiState_.replaceDraftProject(
             std::move(document.config),
             std::move(document.calibrationProvenance));
+        recordLessonEdit();
         slmInterferenceErrorMessage_.clear();
         slmInterferenceStatusMessage_ = "Loaded SLM experiment project from "
             + path.string() + "; press Apply to recompute";
@@ -1252,6 +1328,7 @@ void Application::drawWaveDetectorPanel() {
 
     if (physicsEdited) {
         detectorUiState_.setDraftConfig(draft);
+        recordLessonEdit();
     }
     if (detectorUiState_.isDirty()) {
         ImGui::TextColored(ImVec4(1.0F, 0.75F, 0.2F, 1.0F), "Parameters edited - press Apply to recompute");
@@ -1354,6 +1431,7 @@ void Application::drawWaveDetectorPanel() {
 
 void Application::drawSamplingDebuggerPanel() {
     ImGui::Begin(docking::DockLayoutConfig::kSamplingDebuggerWindowName);
+    const auto configBeforeEditing = samplingDebuggerConfig_;
     ImGui::TextDisabled("Selected plane: current Wave Detector output (relative probe z)");
     if (ImGui::CollapsingHeader("How to read this debugger", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::BulletText(
@@ -1443,6 +1521,9 @@ void Application::drawSamplingDebuggerPanel() {
         fourFFilterInnerRadiusMillimetres * 1e-3;
     samplingDebuggerConfig_.fourFFilterOuterRadiusMetres =
         fourFFilterOuterRadiusMillimetres * 1e-3;
+    if (samplingDebuggerConfig_ != configBeforeEditing) {
+        recordLessonEdit();
+    }
     if (ImGui::Button("Refresh Sampling Debugger")) {
         refreshSamplingDebugger();
     }
@@ -2081,6 +2162,7 @@ void Application::drawSlmInterferencePanel() {
         ImGui::SameLine();
         if (ImGui::Button("Clear LUT")) {
             slmInterferenceUiState_.clearCalibration();
+            recordLessonEdit();
             slmInterferenceStatusMessage_ = "Measured LUT cleared from the draft configuration";
             slmInterferenceErrorMessage_.clear();
         }
@@ -2314,6 +2396,7 @@ void Application::drawSlmInterferencePanel() {
 
     if (physicsEdited) {
         slmInterferenceUiState_.setDraftConfig(draft);
+        recordLessonEdit();
     }
     if (slmInterferenceUiState_.isDirty()) {
         ImGui::TextColored(
@@ -2331,6 +2414,7 @@ void Application::drawSlmInterferencePanel() {
         slmInterferenceUiState_.setDraftConfig(
             slmexperiment::makeDefaultSlmInterferenceExperimentConfig());
         slmInterferenceUiState_.clearCalibration();
+        recordLessonEdit();
         slmInterferenceStatusMessage_ = "Teaching defaults restored in draft; press Apply";
         slmInterferenceErrorMessage_.clear();
     }
@@ -2952,6 +3036,7 @@ void Application::loadLessonTemplate(std::string_view lessonId) {
         samplingDebuggerResult_.reset();
         detectorErrorMessage_.clear();
         detectorStatusMessage_ = "Diffraction lesson recompute queued";
+        recordLessonEdit();
         ImGui::SetWindowFocus(docking::DockLayoutConfig::kWaveDetectorWindowName);
         return;
     }
@@ -2968,6 +3053,7 @@ void Application::loadLessonTemplate(std::string_view lessonId) {
         detectorErrorMessage_.clear();
         samplingDebuggerErrorMessage_.clear();
         detectorStatusMessage_ = "Fourier lesson source recompute queued";
+        recordLessonEdit();
         if (lessonId == "fourier_plane") {
             lessonFourierPlaneIdentification_
                 = lessons::FourierPlaneIdentification::ObjectPlane;
@@ -2989,6 +3075,7 @@ void Application::loadLessonTemplate(std::string_view lessonId) {
         slmInterferenceResult_.reset();
         slmInterferenceErrorMessage_.clear();
         slmInterferenceStatusMessage_ = "Coherence lesson recompute queued";
+        recordLessonEdit();
         lessonFringeVisibilityChange_
             = lessons::FringeVisibilityChange::Higher;
         ImGui::SetWindowFocus(
@@ -3632,6 +3719,17 @@ void Application::drawWorkspace() {
     }
 
     const ImGuiIO& io = ImGui::GetIO();
+    if (!io.WantTextInput && io.KeyCtrl) {
+        if (ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+            if (io.KeyShift) {
+                redoLessonEdit();
+            } else {
+                undoLessonEdit();
+            }
+        } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
+            redoLessonEdit();
+        }
+    }
 
     ImGui::Begin(docking::DockLayoutConfig::kOpticalBenchWindowName);
     const ImVec2 contentSize = ImGui::GetContentRegionAvail();
@@ -3747,10 +3845,15 @@ void Application::drawWorkspace() {
                 }
                 isGizmoDragging_ = false;
                 draggedTarget_ = GizmoTarget::None;
+                gizmoDragChanged_ = false;
             } else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
                 // Release drag on left mouse up
                 isGizmoDragging_ = false;
                 draggedTarget_ = GizmoTarget::None;
+                if (gizmoDragChanged_) {
+                    recordLessonEdit();
+                    gizmoDragChanged_ = false;
+                }
             } else {
                 // Active dragging along +Z axis
                 const auto& activeAxisProj = (draggedTarget_ == GizmoTarget::Lens) ? lensAxisProj : screenAxisProj;
@@ -3763,11 +3866,13 @@ void Application::drawWorkspace() {
                         if (dragApertureWasCoplanar_) {
                             candidate.aperture.planeZMetres = candidate.lens.planeZMetres;
                         }
-                        applyScene(candidate, tracerOptions_);
+                        gizmoDragChanged_ = applyScene(candidate, tracerOptions_)
+                            || gizmoDragChanged_;
                     } else if (draggedTarget_ == GizmoTarget::Screen) {
                         auto candidate = scene_;
                         candidate.screen.planeZMetres += deltaZ;
-                        applyScene(candidate, tracerOptions_);
+                        gizmoDragChanged_ = applyScene(candidate, tracerOptions_)
+                            || gizmoDragChanged_;
                     }
                 }
             }
@@ -3793,6 +3898,7 @@ void Application::drawWorkspace() {
                     dragInitialApertureZ_ = scene_.aperture.planeZMetres;
                     dragInitialScreenZ_ = scene_.screen.planeZMetres;
                     dragApertureWasCoplanar_ = (std::abs(scene_.aperture.planeZMetres - scene_.lens.planeZMetres) < 1e-4);
+                    gizmoDragChanged_ = false;
                 } else if (screenHovered) {
                     isGizmoDragging_ = true;
                     draggedTarget_ = GizmoTarget::Screen;
@@ -3801,6 +3907,7 @@ void Application::drawWorkspace() {
                     dragInitialApertureZ_ = scene_.aperture.planeZMetres;
                     dragInitialScreenZ_ = scene_.screen.planeZMetres;
                     dragApertureWasCoplanar_ = (std::abs(scene_.aperture.planeZMetres - scene_.lens.planeZMetres) < 1e-4);
+                    gizmoDragChanged_ = false;
                 } else {
                     selectedTarget_ = GizmoTarget::None;
                 }
@@ -3876,14 +3983,36 @@ void Application::drawWorkspace() {
             drawList->PopClipRect();
         }
     } else {
+        const bool shouldCommitGizmoDrag
+            = isGizmoDragging_ && gizmoDragChanged_;
         isOrbiting_ = false;
         isPanning_ = false;
         isGizmoDragging_ = false;
         draggedTarget_ = GizmoTarget::None;
+        if (shouldCommitGizmoDrag) {
+            recordLessonEdit();
+        }
+        gizmoDragChanged_ = false;
     }
     ImGui::End();
 
     ImGui::Begin(docking::DockLayoutConfig::kInspectorWindowName);
+
+    ImGui::SeparatorText("Edit History");
+    ImGui::BeginDisabled(!lessonEditHistory_.canUndo());
+    if (ImGui::Button("Undo (Ctrl+Z)")) {
+        undoLessonEdit();
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!lessonEditHistory_.canRedo());
+    if (ImGui::Button("Redo (Ctrl+Y)")) {
+        redoLessonEdit();
+    }
+    ImGui::EndDisabled();
+    ImGui::TextDisabled(
+        "%zu undo / %zu redo; lesson progress is separate",
+        lessonEditHistory_.undoDepth(), lessonEditHistory_.redoDepth());
 
     if (ImGui::CollapsingHeader("Active Gizmo Selection", ImGuiTreeNodeFlags_DefaultOpen)) {
         const char* selName = (selectedTarget_ == GizmoTarget::Lens) ? "Thin Lens"

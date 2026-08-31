@@ -132,6 +132,11 @@ Product Alpha)** is active development. For the current repository state and roa
 - **Localization architecture**: English and `zh-Hans` resources resolve from
   stable message keys with English fallback. The first eight workflows have full
   step text; packaged CJK font coverage remains work in progress.
+- **Deterministic edit history**: A capacity-bounded 64-state history covers the
+  optical bench, Wave Detector draft, Sampling Debugger inputs, and SLM draft
+  plus calibration provenance. Undo/redo restores editable inputs through the
+  normal validation paths, leaves numerical Apply/Refresh explicit, and never
+  stores or mutates lesson progress.
 - **Current scope**: The two advanced Holography lessons remain visible but
   cannot be started until their guided workflows and ordinary project
   templates are implemented and validated.

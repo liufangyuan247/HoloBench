@@ -11,6 +11,7 @@
 #include <glm/glm.hpp>
 
 #include "app/WaveDetectorUiState.hpp"
+#include "app/LessonEditHistory.hpp"
 #include "app/HolographyLabPipeline.hpp"
 #include "app/HolographyUiState.hpp"
 #include "app/RealLensWorkbenchPipeline.hpp"
@@ -298,6 +299,11 @@ private:
     void saveHolographyProject();
     void loadLessonProgress();
     void saveLessonProgress();
+    [[nodiscard]] LessonEditState captureLessonEditState() const;
+    void recordLessonEdit();
+    void undoLessonEdit();
+    void redoLessonEdit();
+    [[nodiscard]] bool restoreLessonEditState(const LessonEditState& state);
     bool applyScene(
         const optics::scene::OpticalBenchScene& candidateScene,
         const optics::ray::BenchTracerOptions& candidateOptions);
@@ -322,6 +328,7 @@ private:
     double dragInitialApertureZ_ = 0.0;
     double dragInitialScreenZ_ = 0.0;
     bool dragApertureWasCoplanar_ = false;
+    bool gizmoDragChanged_ = false;
 
     render::OrbitCamera camera_;
     std::unique_ptr<render::OpticalBenchRenderer> renderer_;
@@ -347,6 +354,9 @@ private:
     lessons::LearnSession learnSession_;
     lessons::LocalizationCatalog lessonLocalization_;
     lessons::LessonLocale lessonLocale_ = lessons::LessonLocale::English;
+    LessonEditHistory lessonEditHistory_;
+    bool lessonEditHistoryReady_ = false;
+    bool restoringLessonEdit_ = false;
     waveui::DetectorPixel detectorProbe_;
     bool hasDetectorProbe_ = false;
     bool detectorProbeLocked_ = false;

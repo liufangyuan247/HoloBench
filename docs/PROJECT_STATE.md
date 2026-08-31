@@ -141,9 +141,11 @@ Previous: **M5 - SLM, Coherence & Interference: complete**
 - **Coherence / Interference workflow**: The eighth lesson uses the existing apply-gated SLM mutual-coherence experiment at one wavelength with a 1 mm Gaussian 1/e coherence length. Moving OPD to at least that length must reduce the shared field's measured fringe visibility by at least 20%; completion requires the correct lower-visibility classification. The scalar time-averaged model and its polarization boundary remain explicit.
 - **Result provenance**: Sampling Debugger results retain the exact applied configuration and an exact complex source-plane snapshot; SLM experiment results retain their full applied physics configuration. Detector or SLM Apply clears dependent stale results, and lesson observers reject configuration, source-field, or result mismatches before progress can advance.
 - **Localization foundation**: Stable English and `zh-Hans` resources cover all ten titles/objectives and every step in the first eight workflows, with deterministic English fallback. Packaged CJK glyph coverage is not yet present, so this is the localization architecture rather than a claim of release-complete Chinese rendering.
+- **Lesson-relevant edit history**: A deterministic capacity-bounded 64-state history covers the optical-bench scene and tracer options, Wave Detector draft, Sampling Debugger inputs, and SLM draft plus calibration provenance. Undo/redo is available from the Inspector and `Ctrl+Z`, `Ctrl+Shift+Z`, or `Ctrl+Y`; restoring inputs uses existing validation and leaves expensive Apply/Refresh gates explicit. Redo branches clear after a new edit, oldest states evict without underflow, gizmo cancel creates no history entry, and lesson progress is deliberately absent from every snapshot.
 - **Compatibility boundary**: This increment adds no GPU dispatch, vendor/model branch, or compatibility workaround. It does not change any existing physics-project schema; reflection uses lesson configuration and Thin Lens uses the normal format-v1 scene path. Formal versioned templates for all guided experiments remain open M7 work.
 - **First Learn UI integration CI**: GitHub Actions run [33383387506](https://github.com/liufangyuan247/HoloBench/actions/runs/33383387506) passes all Windows/Ubuntu core and application-compile jobs at `43d864b`.
-- **Current validation**: The eight-workflow development state passes 381/381 deterministic core/application cases with Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings as errors. The complete Clang development state passes 382/382 including the OpenGL GPU executable (8/8 hardware cases and 1,121 assertions), and all three compilers build the complete application. Hidden OpenGL smoke passes with Clang and MSVC Release builds, and the Clang application passes 120 hidden frames on the available AMD Radeon Pro 5300M. No GPU dispatch or compatibility behavior changed.
+- **Eight-workflow integration CI**: GitHub Actions run [33388683639](https://github.com/liufangyuan247/HoloBench/actions/runs/33388683639) passes all Windows/Ubuntu core and application-compile jobs at `d37999a`.
+- **Current validation**: The edit-history increment passes 386/386 deterministic core/application cases with Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings as errors. The complete Clang application builds and its hidden OpenGL smoke passes on the available AMD Radeon Pro 5300M. No GPU dispatch or compatibility behavior changed.
 
 ## Known limitations (M1/M2)
 
@@ -155,8 +157,8 @@ Previous: **M5 - SLM, Coherence & Interference: complete**
 
 ## Next five tasks
 
-1. Promote lesson setups to ordinary versioned project templates with provenance and add packaged CJK font coverage.
-2. Add deterministic undo/redo for lesson-relevant editing actions.
-3. Add named M7 benchmark scenes and complete application smoke coverage for all eight workflows.
+1. Promote lesson setups to ordinary versioned project templates with provenance.
+2. Add named M7 benchmark scenes and complete application smoke coverage for all eight workflows.
+3. Add packaged CJK font coverage and verify English/Chinese rendering.
 4. Run the external learner product gate for lessons 1-7 and record the human acceptance evidence.
-5. Decide whether the two advanced holography courses enter M7 or remain post-Alpha content.
+5. Implement and validate the two advanced holography courses before deciding the M7 tag boundary.
