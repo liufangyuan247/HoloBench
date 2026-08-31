@@ -9,7 +9,7 @@
 | Wave optics (M2 CPU/GPU & detector) | Validated | 203 deterministic CPU/application cases; OpenGL executable 7/7 cases and 720/720 assertions; analytic oracles and three external full-field `waveprop 0.0.12` cross-validation cases | CPU reference, interactive GPU propagation, detector UI |
 | Fourier optics and Sampling Debugger (M3) | Validated | 229/229 deterministic cases; 4-f direct-DFT/inversion/filter/Airy oracles; 8/8 GPU cases and 1121/1121 assertions; seven-texture OpenGL smoke; named CPU debugger and GPU 4-f budgets pass; four-job release CI passes | Interactive 4-f filtering and sampling diagnostics |
 | Real-lens engineering (M4) | Validated | Real surfaces, SI dispersion, rigid poses, sequential assemblies, wavelength/field/combined spot statistics, longitudinal chromatic focus, versioned JSON/CSV exchange, interactive editor/plots, and five pinned Optiland 0.6.2 benchmark prescriptions; 270/270 on Clang, MSVC, and GCC; named 729-ray budget, local smoke, and four-job release CI pass | Interactive real-lens engineering |
-| SLM, coherence, and interference (M5) | CPU reference validated; product integration active | Ideal/pixelated modulation, pitch/fill/dead-space/bit-depth boundaries, scalar mutual coherence, analytic two-plane-wave fringe period and visibility, multi-wavelength `Laser -> SLM -> Lens -> Angular Probe` mapping, and a pinned waveprop 0.0.12 SLM/Fraunhofer golden; 286/286 on Windows Clang/MSVC and Ubuntu GCC | Headless M5 reference; interactive use pending |
+| SLM, coherence, and interference (M5) | CPU reference validated; product integration active | Ideal/pixelated, calibrated LUT, and LCD teaching responses; scalar mutual coherence; analytic fringe gates; multi-wavelength `Laser -> SLM -> Lens -> Angular Probe` mapping; and a pinned waveprop 0.0.12 SLM/Fraunhofer golden; 293/293 on Windows Clang/MSVC and Ubuntu GCC | Headless M5 reference; interactive use pending |
 | Holography (M6) | Not implemented | None | Prohibited |
 
 ## M1 Validation Breakdown
@@ -82,7 +82,7 @@
 ## Build and CI Execution Status
 
 - **M5 CPU Reference (active)**:
-  - Windows Clang 21.1.8, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors core builds pass all 286 deterministic cases; the complete Windows Clang application build also passes.
+  - Windows Clang 21.1.8, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors core builds pass all 293 deterministic cases; the complete Windows Clang application build also passes.
   - Ideal amplitude identity/extinction, phase intensity invariance, pixel boundary/fill-factor classification, bit-depth quantization, finite-input rejection, and strong exception safety pass.
   - Equal-beam visibility equals `|gamma|`; symmetric plane waves reproduce `lambda / (2 sin(theta/2))`; relative phase translates the fringe; Gaussian and exponential envelopes reach 1/e at their declared coherence length.
   - The headless angular experiment reproduces `(-x_pixel/f, -y_pixel/f)` from the independently measured angular-spectrum centroid, exposes wavelength-scaled angular axes and selected-pixel angular PSF, and remains deterministic.
@@ -116,7 +116,7 @@
 - **OpenGL Smoke Test**:
   - Hidden detector `--gl-smoke` and 120-frame application run on AMD Radeon Pro 5300M with OpenGL 4.6 Core / GLSL 4.60: both complete with exit code 0 and 0 reported OpenGL debug errors.
 - **GitHub Actions Remote CI**:
-  - M5 CPU-reference baseline run [33358955749](https://github.com/liufangyuan247/HoloBench/actions/runs/33358955749): all four jobs pass at commit `5417019`.
+  - M5 sampled-SLM validation run [33359985911](https://github.com/liufangyuan247/HoloBench/actions/runs/33359985911): all four jobs pass at commit `b6895c6`.
   - M4 documentation/tag readiness run [33357878982](https://github.com/liufangyuan247/HoloBench/actions/runs/33357878982): all four jobs pass at commit `235085f`; annotated tag `m4-real-lens` points to that commit.
   - Final M4 integration run [33357679559](https://github.com/liufangyuan247/HoloBench/actions/runs/33357679559): all four jobs pass at commit `a943123`.
   - Final M3 integration run [33351374693](https://github.com/liufangyuan247/HoloBench/actions/runs/33351374693): all four jobs pass at commit `2f2a0c5`.

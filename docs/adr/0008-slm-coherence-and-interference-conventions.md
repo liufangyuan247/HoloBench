@@ -45,9 +45,34 @@ convert other conventions explicitly but may not silently change these rules.
   `phaseOffset` through `phaseOffset + phaseRange`; amplitude mode uses the
   quantized command as field-amplitude transmission.
 - The ideal and first pixelated models are scalar and polarization-independent.
-  Wavelength response, calibrated phase/amplitude LUTs, fringing fields,
-  pixel crosstalk, surface flatness, and LCD polarizers require explicit later
+  Fringing fields, pixel crosstalk, and surface flatness require explicit later
   models and must not be implied by the ideal result.
+
+### Calibrated response and LCD teaching model
+
+- A calibrated response is a versioned set of strictly increasing vacuum-
+  wavelength curves. Each curve spans normalized commands 0 through 1 and
+  stores field-amplitude transmission plus explicitly unwrapped phase delay.
+  Interpolation is linear first in command and then wavelength. Extrapolation
+  is prohibited; the requested field wavelength must lie in the measured
+  domain.
+- Calibration amplitude is field amplitude in `[0, 1]`, not intensity. Phase
+  must be unwrapped by the calibration producer before import; HoloBench does
+  not guess branch cuts from sparse wrapped data. Bit-depth quantization occurs
+  before LUT evaluation.
+- JSON format version 1 names the model `scalar_complex_response_lut`, uses SI
+  vacuum wavelength and radians, rejects missing/unknown fields, and has
+  deterministic byte-stable serialization. A measured LUT is user evidence,
+  not a vendor or GPU-model workaround.
+- The LCD teaching path starts with a linearly polarized scalar input, applies
+  an ideal linear retarder with command-interpolated retardance, projects onto
+  an ideal analyzer, and multiplies the resulting complex scalar by an RGB
+  filter field-amplitude transmission. Vertical RGB stripes, horizontal RGB
+  stripes, and RGGB Bayer layouts are explicit.
+- LCD output represents only the analyzer-projected scalar component so it can
+  enter existing scalar propagation. It is not a general Jones-field solver,
+  does not propagate orthogonal components, and excludes director tilt,
+  viewing-angle response, depolarization, absorption anisotropy, and crosstalk.
 
 ### Coherent combination and interference
 

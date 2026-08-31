@@ -40,6 +40,9 @@ HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator
 - **SLM CPU reference**: Ideal amplitude/phase modulation plus a finite pixel
   grid with physical pitch, independent X/Y fill factor, opaque dead space,
   phase range, and bit-depth quantization.
+- **Measured and LCD response paths**: Versioned wavelength/command complex-
+  response LUTs with deterministic JSON persistence, plus an explicitly limited
+  Jones-retarder/input-polarizer/analyzer teaching model with RGB filter layouts.
 - **Coherence and interference**: Fully coherent complex-field addition and a
   scalar mutual-coherence intensity model with explicit Gaussian/exponential
   1/e coherence-length conventions.
@@ -66,7 +69,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (286 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (293 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -74,7 +77,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 286/286 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 293/293 tests passing):
 
 ```powershell
 cmake --preset core-ci

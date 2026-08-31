@@ -15,8 +15,8 @@ model.
 - [x] Fully coherent field addition and scalar two-beam mutual-coherence
   intensity reference.
 - [x] Gaussian and exponential 1/e coherence-length teaching envelopes.
-- [ ] LCD teaching model with explicit RGB filters and polarizer assumptions.
-- [ ] SLM wavelength-response and measured-response LUT data model.
+- [x] LCD teaching model with explicit RGB filters and polarizer assumptions.
+- [x] SLM wavelength-response and measured-response LUT data model.
 - [x] `Laser -> SLM -> Lens -> Angular Probe` headless pipeline.
 - [x] SLM coordinate-to-angle, angular PSF, and multi-wavelength mapping results.
 - [ ] Dockable apply-gated teaching workflow and fringe visualization.

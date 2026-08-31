@@ -7,8 +7,10 @@
 #include <numbers>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 #include "core/field/ComplexField2D.hpp"
+#include "optics/slm/SlmResponse.hpp"
 
 namespace holobench::optics::slm {
 namespace {
@@ -184,6 +186,57 @@ struct PixelLocation final {
     };
 }
 
+[[nodiscard]] SlmApplicationDiagnostics applyPixelTransfers(
+    field::ComplexField2D& field,
+    const PixelatedSlmParameters& parameters,
+    std::span<const std::complex<double>> transfers,
+    std::span<const unsigned char> quantizedCommands) {
+    const auto pixelCount = checkedPixelCount(parameters);
+    validateParameters(parameters);
+    if (transfers.size() != pixelCount) {
+        throw std::invalid_argument("SLM transfer count does not match its pixel grid");
+    }
+    if (!quantizedCommands.empty() && quantizedCommands.size() != pixelCount) {
+        throw std::invalid_argument("SLM quantization flags do not match its pixel grid");
+    }
+    for (const auto transfer : transfers) {
+        if (!std::isfinite(transfer.real()) || !std::isfinite(transfer.imag())) {
+            throw std::invalid_argument("SLM pixel transfers must be finite");
+        }
+    }
+    requireFiniteField(field);
+
+    auto modulated = field;
+    SlmApplicationDiagnostics diagnostics;
+    for (std::size_t y = 0; y < modulated.height(); ++y) {
+        const double yMetres = modulated.yCoordinateMetres(y);
+        for (std::size_t x = 0; x < modulated.width(); ++x) {
+            auto& sample = modulated.at(x, y);
+            const auto location = locatePixel(
+                modulated.xCoordinateMetres(x), yMetres, parameters);
+            if (!location.insideGrid) {
+                sample = {0.0, 0.0};
+                ++diagnostics.outsideActiveAreaSampleCount;
+                continue;
+            }
+            if (!location.insideActivePixel) {
+                sample = {0.0, 0.0};
+                ++diagnostics.deadSpaceSampleCount;
+                continue;
+            }
+            const std::size_t commandIndex = location.row * parameters.pixelColumns
+                + location.column;
+            multiplyFinite(sample, transfers[commandIndex]);
+            if (!quantizedCommands.empty() && quantizedCommands[commandIndex] != 0U) {
+                ++diagnostics.quantizedSampleCount;
+            }
+            ++diagnostics.modulatedSampleCount;
+        }
+    }
+    field = std::move(modulated);
+    return diagnostics;
+}
+
 } // namespace
 
 SlmApplicationDiagnostics applyIdealAmplitudeSlm(
@@ -221,52 +274,73 @@ SlmApplicationDiagnostics applyPixelatedSlm(
     const auto pixelCount = checkedPixelCount(parameters);
     validateParameters(parameters);
     requireCommands(normalizedPixelCommands, pixelCount, true);
-    requireFiniteField(field);
 
-    auto modulated = field;
-    SlmApplicationDiagnostics diagnostics;
-    for (std::size_t y = 0; y < modulated.height(); ++y) {
-        const double yMetres = modulated.yCoordinateMetres(y);
-        for (std::size_t x = 0; x < modulated.width(); ++x) {
-            auto& sample = modulated.at(x, y);
-            const auto location = locatePixel(
-                modulated.xCoordinateMetres(x), yMetres, parameters);
-            if (!location.insideGrid) {
-                sample = {0.0, 0.0};
-                ++diagnostics.outsideActiveAreaSampleCount;
-                continue;
+    std::vector<std::complex<double>> transfers(pixelCount);
+    std::vector<unsigned char> quantized(pixelCount, 0U);
+    for (std::size_t index = 0; index < pixelCount; ++index) {
+        const double command = normalizedPixelCommands[index];
+        const double effectiveCommand = quantizeCommand(command, parameters.bitDepth);
+        quantized[index] = effectiveCommand != command ? 1U : 0U;
+        if (parameters.mode == ModulationMode::Amplitude) {
+            transfers[index] = {effectiveCommand, 0.0};
+        } else {
+            const double phase = std::fma(
+                effectiveCommand,
+                parameters.phaseRangeRadians,
+                parameters.phaseOffsetRadians);
+            if (!std::isfinite(phase)) {
+                throw std::overflow_error("SLM command phase is not representable");
             }
-            if (!location.insideActivePixel) {
-                sample = {0.0, 0.0};
-                ++diagnostics.deadSpaceSampleCount;
-                continue;
-            }
-
-            const std::size_t commandIndex = location.row * parameters.pixelColumns
-                + location.column;
-            const double command = normalizedPixelCommands[commandIndex];
-            const double effectiveCommand = quantizeCommand(command, parameters.bitDepth);
-            if (effectiveCommand != command) {
-                ++diagnostics.quantizedSampleCount;
-            }
-            if (parameters.mode == ModulationMode::Amplitude) {
-                multiplyFinite(sample, {effectiveCommand, 0.0});
-            } else {
-                const double phase = std::fma(
-                    effectiveCommand,
-                    parameters.phaseRangeRadians,
-                    parameters.phaseOffsetRadians);
-                if (!std::isfinite(phase)) {
-                    throw std::overflow_error("SLM command phase is not representable");
-                }
-                multiplyFinite(sample, finitePhasor(phase));
-            }
-            ++diagnostics.modulatedSampleCount;
+            transfers[index] = finitePhasor(phase);
         }
     }
+    return applyPixelTransfers(field, parameters, transfers, quantized);
+}
 
-    field = std::move(modulated);
-    return diagnostics;
+SlmApplicationDiagnostics applyCalibratedPixelatedSlm(
+    field::ComplexField2D& field,
+    const PixelatedSlmParameters& parameters,
+    std::span<const double> normalizedPixelCommands,
+    const CalibratedSlmResponse& response) {
+    const auto pixelCount = checkedPixelCount(parameters);
+    validateParameters(parameters);
+    requireCommands(normalizedPixelCommands, pixelCount, true);
+    std::vector<std::complex<double>> transfers(pixelCount);
+    std::vector<unsigned char> quantized(pixelCount, 0U);
+    for (std::size_t index = 0; index < pixelCount; ++index) {
+        const double command = normalizedPixelCommands[index];
+        const double effectiveCommand = quantizeCommand(command, parameters.bitDepth);
+        quantized[index] = effectiveCommand != command ? 1U : 0U;
+        transfers[index] = response.evaluate(
+            field.vacuumWavelengthMetres(), effectiveCommand).complexTransfer();
+    }
+    return applyPixelTransfers(field, parameters, transfers, quantized);
+}
+
+SlmApplicationDiagnostics applyLcdTeachingSlm(
+    field::ComplexField2D& field,
+    const PixelatedSlmParameters& parameters,
+    std::span<const double> normalizedPixelCommands,
+    const LcdTeachingParameters& lcdParameters) {
+    const auto pixelCount = checkedPixelCount(parameters);
+    validateParameters(parameters);
+    requireCommands(normalizedPixelCommands, pixelCount, true);
+    std::vector<std::complex<double>> transfers(pixelCount);
+    std::vector<unsigned char> quantized(pixelCount, 0U);
+    for (std::size_t row = 0; row < parameters.pixelRows; ++row) {
+        for (std::size_t column = 0; column < parameters.pixelColumns; ++column) {
+            const std::size_t index = row * parameters.pixelColumns + column;
+            const double command = normalizedPixelCommands[index];
+            const double effectiveCommand = quantizeCommand(command, parameters.bitDepth);
+            quantized[index] = effectiveCommand != command ? 1U : 0U;
+            transfers[index] = evaluateLcdTeachingTransfer(
+                lcdParameters,
+                lcdColorChannelAt(row, column, lcdParameters.colorFilterPattern),
+                field.vacuumWavelengthMetres(),
+                effectiveCommand);
+        }
+    }
+    return applyPixelTransfers(field, parameters, transfers, quantized);
 }
 
 } // namespace holobench::optics::slm

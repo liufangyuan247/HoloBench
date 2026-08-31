@@ -2,9 +2,15 @@
 
 ## M5 SLM and interference scope
 
-- The current SLM reference is scalar and polarization-independent. It does not
-  yet model liquid-crystal director physics, Jones/Mueller response, fringing
-  fields, pixel crosstalk, surface flatness, or measured wavelength LUTs.
+- The ideal and calibrated SLM propagation result is scalar. Measured complex-
+  response LUTs are supported but only as user-supplied evidence inside their
+  wavelength domain; HoloBench does not ship a vendor calibration. Fringing
+  fields, pixel crosstalk, surface flatness, and full device Jones/Mueller
+  response remain unmodeled.
+- The LCD teaching model evaluates one ideal linear retarder between ideal
+  input/analyzer polarizers and then keeps only the analyzer-projected scalar
+  component. It does not propagate both Jones components or model director
+  tilt, viewing angle, depolarization, or anisotropic absorption.
 - Fill factor is a centred rectangular active area sampled at field points.
   Coarse field grids can bias the sampled active centroid; the angular pipeline
   reports both geometric and sampled centroids instead of hiding this error.

@@ -74,6 +74,8 @@ add_library(holobench_optics STATIC
     optics/io/LensPrescriptionIO.cpp
     optics/material/OpticalMaterial.cpp
     optics/slm/SpatialLightModulator.cpp
+    optics/slm/SlmResponse.cpp
+    optics/slm/SlmResponseIO.cpp
     optics/ray/BenchTracer.cpp
     optics/ray/GeometricElements.cpp
     optics/ray/Interface.cpp
@@ -281,6 +283,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/LensPrescriptionIOTests.cpp
         tests/analytic/RealLensWorkbenchPipelineTests.cpp
         tests/analytic/SpatialLightModulatorTests.cpp
+        tests/analytic/SlmResponseTests.cpp
         tests/analytic/CoherentInterferenceTests.cpp
         tests/analytic/FieldElementTests.cpp
         tests/analytic/FraunhoferDiffractionTests.cpp

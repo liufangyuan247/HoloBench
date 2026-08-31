@@ -60,6 +60,27 @@ void validateConfig(
         || config.selectedPixelRow >= config.slm.pixelRows) {
         throw std::out_of_range("selected SLM pixel is outside the pixel grid");
     }
+    if (config.deviceResponseModel == SlmDeviceResponseModel::CalibratedLut
+        && !config.calibratedResponse.has_value()) {
+        throw std::invalid_argument("calibrated SLM experiment needs a response LUT");
+    }
+}
+
+[[nodiscard]] optics::slm::SlmApplicationDiagnostics applyConfiguredSlm(
+    field::ComplexField2D& field,
+    const SlmInterferenceExperimentConfig& config,
+    std::span<const double> commands) {
+    switch (config.deviceResponseModel) {
+    case SlmDeviceResponseModel::Ideal:
+        return optics::slm::applyPixelatedSlm(field, config.slm, commands);
+    case SlmDeviceResponseModel::CalibratedLut:
+        return optics::slm::applyCalibratedPixelatedSlm(
+            field, config.slm, commands, config.calibratedResponse.value());
+    case SlmDeviceResponseModel::LcdTeaching:
+        return optics::slm::applyLcdTeachingSlm(
+            field, config.slm, commands, config.lcdTeaching);
+    }
+    throw std::invalid_argument("unsupported SLM device response model");
 }
 
 [[nodiscard]] field::ScalarField2D peakNormalizedIntensity(
@@ -220,8 +241,8 @@ SlmInterferenceExperimentResult runSlmInterferenceExperiment(
         optics::wave::fillPlaneWave(source, laser);
 
         auto modulated = source;
-        const auto modulationDiagnostics = optics::slm::applyPixelatedSlm(
-            modulated, config.slm, commands);
+        const auto modulationDiagnostics = applyConfiguredSlm(
+            modulated, config, commands);
         auto angularDistribution = lensTransform.transformFrontToBackFocalPlane(
             modulated, config.lensFocalLengthMetres);
         auto normalizedAngularIntensity = peakNormalizedIntensity(angularDistribution.field);

@@ -2,11 +2,13 @@
 
 #include <complex>
 #include <cstddef>
+#include <optional>
 #include <vector>
 
 #include "compute/fourier/FourierOptics.hpp"
 #include "core/field/ScalarField2D.hpp"
 #include "optics/slm/SpatialLightModulator.hpp"
+#include "optics/slm/SlmResponse.hpp"
 #include "optics/wave/CoherentInterference.hpp"
 #include "optics/wave/FieldSources.hpp"
 
@@ -15,6 +17,12 @@ class IFftBackend;
 }
 
 namespace holobench::app::slmexperiment {
+
+enum class SlmDeviceResponseModel {
+    Ideal,
+    CalibratedLut,
+    LcdTeaching,
+};
 
 struct SlmInterferenceExperimentConfig final {
     std::size_t fieldWidth = 256;
@@ -27,6 +35,9 @@ struct SlmInterferenceExperimentConfig final {
     double lensFocalLengthMetres = 0.050;
 
     optics::slm::PixelatedSlmParameters slm;
+    SlmDeviceResponseModel deviceResponseModel = SlmDeviceResponseModel::Ideal;
+    std::optional<optics::slm::CalibratedSlmResponse> calibratedResponse;
+    optics::slm::LcdTeachingParameters lcdTeaching;
     // Empty means all-one commands. Otherwise the size must match the SLM.
     std::vector<double> normalizedPixelCommands;
     std::size_t selectedPixelColumn = 0;

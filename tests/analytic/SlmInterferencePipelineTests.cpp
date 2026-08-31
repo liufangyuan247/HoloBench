@@ -111,6 +111,41 @@ TEST_CASE("pipeline produces coherent SLM/reference fringes and finite-coherence
     CHECK(interference.intensity.at(0, 0) == doctest::Approx(1.0).epsilon(2e-15));
 }
 
+TEST_CASE("pipeline dispatches calibrated and LCD response models explicitly") {
+    auto calibrated = makeConfig();
+    calibrated.deviceResponseModel = experiment::SlmDeviceResponseModel::CalibratedLut;
+    calibrated.calibratedResponse.emplace(std::vector<holobench::optics::slm::SlmWavelengthResponse>{
+        {
+            .vacuumWavelengthMetres = 500e-9,
+            .commandResponse = {
+                {0.0, 0.0, 0.0},
+                {1.0, 0.5, 0.5 * std::numbers::pi},
+            },
+        },
+    });
+    fft::CpuFftBackend backend;
+    const auto calibratedResult = experiment::runSlmInterferenceExperiment(
+        calibrated, backend);
+    CHECK(std::abs(calibratedResult.wavelengths.front().modulatedSlmPlane.at(38, 34))
+        == doctest::Approx(0.5).epsilon(2e-15));
+
+    auto lcd = makeConfig();
+    lcd.deviceResponseModel = experiment::SlmDeviceResponseModel::LcdTeaching;
+    lcd.lcdTeaching.colorFilterPattern = holobench::optics::slm::LcdColorFilterPattern::Monochrome;
+    lcd.lcdTeaching.inputPolarizerAngleRadians = 0.0;
+    lcd.lcdTeaching.analyzerAngleRadians = 0.5 * std::numbers::pi;
+    lcd.lcdTeaching.liquidCrystalFastAxisAngleRadians = 0.25 * std::numbers::pi;
+    lcd.lcdTeaching.zeroCommandRetardanceRadians = std::numbers::pi;
+    lcd.lcdTeaching.fullCommandRetardanceRadians = 0.0;
+    const auto lcdResult = experiment::runSlmInterferenceExperiment(lcd, backend);
+    CHECK(std::abs(lcdResult.wavelengths.front().modulatedSlmPlane.at(38, 34)) < 1e-15);
+
+    calibrated.calibratedResponse.reset();
+    CHECK_THROWS_AS(
+        static_cast<void>(experiment::runSlmInterferenceExperiment(calibrated, backend)),
+        std::invalid_argument);
+}
+
 TEST_CASE("pipeline is deterministic and rejects invalid sampling or pixel selection") {
     auto config = makeConfig();
     fft::CpuFftBackend backend;
