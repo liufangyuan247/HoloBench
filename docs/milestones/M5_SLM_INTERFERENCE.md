@@ -35,6 +35,8 @@ model.
   translation, and 1/e coherence-envelope tests.
 - [x] Independent SLM diffraction and angular mapping oracle on committed data.
 - [x] Complete warnings-as-errors builds on Windows Clang/MSVC and Ubuntu GCC.
+- [x] Four-job Windows/Ubuntu core and application release CI passes in run
+  [33362709724](https://github.com/liufangyuan247/HoloBench/actions/runs/33362709724).
 
 ## Product gate
 

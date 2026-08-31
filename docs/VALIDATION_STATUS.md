@@ -9,7 +9,7 @@
 | Wave optics (M2 CPU/GPU & detector) | Validated | 203 deterministic CPU/application cases; OpenGL executable 7/7 cases and 720/720 assertions; analytic oracles and three external full-field `waveprop 0.0.12` cross-validation cases | CPU reference, interactive GPU propagation, detector UI |
 | Fourier optics and Sampling Debugger (M3) | Validated | 229/229 deterministic cases; 4-f direct-DFT/inversion/filter/Airy oracles; 8/8 GPU cases and 1121/1121 assertions; seven-texture OpenGL smoke; named CPU debugger and GPU 4-f budgets pass; four-job release CI passes | Interactive 4-f filtering and sampling diagnostics |
 | Real-lens engineering (M4) | Validated | Real surfaces, SI dispersion, rigid poses, sequential assemblies, wavelength/field/combined spot statistics, longitudinal chromatic focus, versioned JSON/CSV exchange, interactive editor/plots, and five pinned Optiland 0.6.2 benchmark prescriptions; 270/270 on Clang, MSVC, and GCC; named 729-ray budget, local smoke, and four-job release CI pass | Interactive real-lens engineering |
-| SLM, coherence, and interference (M5) | CPU reference and product workflow validated; release integration active | Ideal/pixelated, calibrated LUT, and LCD responses; scalar mutual coherence; analytic fringe gates; multi-wavelength mapping; pinned waveprop golden; docked interference/angular/PSF views; strict experiment/LUT persistence and provenance; 301 deterministic cases; named 3-response CPU budget | Final release CI pending |
+| SLM, coherence, and interference (M5) | Validated | Ideal/pixelated, calibrated LUT, and LCD responses; scalar mutual coherence; analytic fringe gates; multi-wavelength mapping; pinned waveprop golden; docked interference/angular/PSF views; strict experiment/LUT persistence and provenance; 301 deterministic cases; named 3-response CPU budget; four-job release CI pass | Interactive SLM and interference engineering |
 | Holography (M6) | Not implemented | None | Prohibited |
 
 ## M1 Validation Breakdown
@@ -81,7 +81,7 @@
 
 ## Build and CI Execution Status
 
-- **M5 CPU Reference (active)**:
+- **M5 Local Release Gate (complete)**:
   - Windows Clang 21.1.8, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass all 301 deterministic cases. Complete Clang/MSVC applications build, and hidden-window OpenGL smoke includes both a drawable SLM result and a semantic experiment-project round trip.
   - Ideal amplitude identity/extinction, phase intensity invariance, pixel boundary/fill-factor classification, bit-depth quantization, finite-input rejection, and strong exception safety pass.
   - Equal-beam visibility equals `|gamma|`; symmetric plane waves reproduce `lambda / (2 sin(theta/2))`; relative phase translates the fringe; Gaussian and exponential envelopes reach 1/e at their declared coherence length.
@@ -90,6 +90,7 @@
   - The apply-gated UI state proves draft edits do not run physics, Apply schedules exactly one experiment, and wavelength/display-plane changes refresh visualization only. The dock exposes strict measured-LUT import/export and separately reports draft/applied provenance.
   - The separate M5 experiment document rejects missing/unknown keys, unsupported versions/models/enums, invalid physics, and malformed embedded calibrations; ideal and calibrated documents round-trip byte-stably. Loading replaces only draft state until Apply. Existing optical-bench scene format v1 remains unchanged and its legacy tests continue to pass.
   - `wave/slm_interference_128_square_3w_3response_cpu_refresh` runs ideal, measured-LUT, and LCD responses across three wavelengths. On Intel Core i7-9750H, Clang p50/p95 are **155.898/188.482 ms**, MSVC p50/p95 are **231.500/278.183 ms**, and GCC p50/p95 are **123.826/175.544 ms**; all meet the platform-neutral p95 < 350 ms budget with checksum `809.806743551`.
+  - GitHub Actions run [33362709724](https://github.com/liufangyuan247/HoloBench/actions/runs/33362709724) passes Windows and Ubuntu core build/tests plus Windows and Ubuntu application compilation with warnings as errors at `3f29775`.
 
 - **M4 Local Release Gate**:
   - Windows Clang 21.1.8: warnings-as-errors core/application and M4 benchmark builds pass; all 270 deterministic headless cases pass.

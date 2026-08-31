@@ -4,11 +4,11 @@ Last updated: 2026-08-31
 
 ## Current milestone
 
-**M4 — Real Lens Engineering Model: complete**
+**M5 — SLM, Coherence & Interference: complete**
 
-Active development: **M5 — SLM, Coherence & Interference**
+Active development: **M6 — Holography Core**
 
-Previous: **M3 — Fourier Optics & Sampling Debugger: complete**
+Previous: **M4 — Real Lens Engineering Model: complete**
 
 ## Completed
 
@@ -95,7 +95,7 @@ Previous: **M3 — Fourier Optics & Sampling Debugger: complete**
 - **Local toolchain gate**: Windows Clang 21 warnings-as-errors core and application builds pass with 270/270 headless tests. MSVC 19.44 `/W4 /WX` passes 270/270 and builds the complete SDL/OpenGL/ImGui application and all benchmark targets. Ubuntu/WSL GCC 15.2 warnings-as-errors passes 270/270 and builds the complete application. Hidden OpenGL smoke passes for both Clang and MSVC builds on the available AMD device and requires drawable Real Lens Workbench output.
 - **M4 release CI**: GitHub Actions run [33357679559](https://github.com/liufangyuan247/HoloBench/actions/runs/33357679559) passes all four Windows/Ubuntu core-test and application-compile jobs at integration commit `a943123`.
 
-## M5 progress
+## M5 completed
 
 - **Locked conventions**: [ADR 0008](adr/0008-slm-coherence-and-interference-conventions.md) fixes pixel/grid edges, pitch and linear fill factors, opaque dead space, normalized commands, phase and bit-depth semantics, scalar mutual coherence, 1/e coherence-length envelopes, and lens/angular-probe signs.
 - **SLM CPU reference**: Ideal amplitude and phase modulators plus a finite pixelated SLM preserve strong exception safety, reject non-finite/non-representable state, and expose active, dead-space, outside-grid, and quantized-sample evidence.
@@ -106,7 +106,8 @@ Previous: **M3 — Fourier Optics & Sampling Debugger: complete**
 - **Experiment persistence**: A separate format-v1 `slm_interference_experiment` document stores the complete M5 draft, embedded calibrated response, and provenance with strict keys and byte-stable serialization. Loading remains apply-gated. The existing optical-bench scene document stays at format v1, so legacy scene files and adapters are not reinterpreted.
 - **Named M5 performance gate**: `wave/slm_interference_128_square_3w_3response_cpu_refresh` fixes a 128x128 field, three wavelengths, 16x16 SLM, and ideal/calibrated/LCD full refresh. On Intel Core i7-9750H, Clang/MSVC/GCC p95 values are **188.482/278.183/175.544 ms**, all below the platform-neutral 350 ms budget with identical checksum `809.806743551`. This CPU benchmark has no GPU vendor/model dispatch.
 - **Independent waveprop validation**: A pinned waveprop 0.0.12 case rasterizes an 8x16 selected-pixel SLM with physical pitch, active cell, and dead space, then evaluates Fraunhofer diffraction. The complete mask agrees sample-for-sample and the full normalized angular intensity agrees below `1e-12`; metadata makes waveprop's command-axis and raster-origin conversion explicit. Regeneration is byte-for-byte stable.
-- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 301/301 deterministic cases. Complete Clang/MSVC applications build, and hidden-window OpenGL smoke produces the SLM texture plus a semantic project round trip. Gates cover ideal/calibrated/LCD responses; interpolation and strict JSON; fill-factor/bit-depth boundaries; fringe/coherence conventions; angular mapping; apply gating; provenance; project compatibility; exception safety; and determinism. GitHub Actions run [33361552234](https://github.com/liufangyuan247/HoloBench/actions/runs/33361552234) is the last pushed four-job UI baseline at `8391b3b`.
+- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 301/301 deterministic cases. Complete Clang/MSVC applications build, and hidden-window OpenGL smoke produces the SLM texture plus a semantic project round trip. Gates cover ideal/calibrated/LCD responses; interpolation and strict JSON; fill-factor/bit-depth boundaries; fringe/coherence conventions; angular mapping; apply gating; provenance; project compatibility; exception safety; and determinism.
+- **Release CI**: GitHub Actions run [33362709724](https://github.com/liufangyuan247/HoloBench/actions/runs/33362709724) passes all four final M5 integration jobs at `3f29775`: Windows and Ubuntu core build/tests plus Windows and Ubuntu application compilation with warnings as errors.
 
 ## Known limitations (M1/M2)
 
@@ -118,8 +119,8 @@ Previous: **M3 — Fourier Optics & Sampling Debugger: complete**
 
 ## Next five tasks
 
-1. Run the final M5 CI matrix and close documentation/release evidence.
-2. Tag the accepted M5 release and advance project state to M6 holography.
-3. Begin M6 hologram synthesis/reconstruction conventions and independent oracles.
-4. Add CPU-reference hologram synthesis and reconstruction kernels.
+1. Fix M6 hologram synthesis/reconstruction conventions and independent oracles.
+2. Add CPU-reference hologram synthesis and reconstruction kernels.
+3. Add phase-only encoding and reconstruction-quality diagnostics.
+4. Build the apply-gated Holography teaching workflow and persistence.
 5. Consider GPU acceleration only after the CPU/product model is stable; retain runtime capability dispatch and the default path on untested devices.
