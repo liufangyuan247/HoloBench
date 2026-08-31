@@ -1114,6 +1114,8 @@ void Application::shutdown() noexcept {
     holographyResult_.reset();
     sandboxPlateRecording_.reset();
     sandboxPlateReplay_.reset();
+    sandboxVolumeRecording_.reset();
+    sandboxVolumeReplay_.reset();
     if (imguiGlInitialized_) {
         ImGui_ImplOpenGL3_Shutdown();
         imguiGlInitialized_ = false;
@@ -4936,6 +4938,29 @@ void Application::drawSandboxInspector() {
                             "%.4g");
                         ImGui::TextDisabled(
                             "The analysis window is a labelled local patch inside the physical plate.");
+                        if (ImGui::TreeNode("Volume recording material")) {
+                            ImGui::InputFloat(
+                                "Average refractive index",
+                                &sandboxVolumeAverageRefractiveIndex_,
+                                0.01F,
+                                0.1F,
+                                "%.5g");
+                            ImGui::InputFloat(
+                                "Index modulation (dn)",
+                                &sandboxVolumeIndexModulation_,
+                                0.001F,
+                                0.01F,
+                                "%.5g");
+                            ImGui::InputFloat(
+                                "Isotropic shrinkage (%)",
+                                &sandboxVolumeShrinkagePercent_,
+                                0.1F,
+                                1.0F,
+                                "%.4g");
+                            ImGui::TextDisabled(
+                                "Uniform, lossless scalar-TE sinusoidal grating; plate thickness comes from the placed component.");
+                            ImGui::TreePop();
+                        }
                         const auto fields
                             = optics::holography::collectPlateIncidentFields(
                                 benchProject_.scene,
@@ -5056,8 +5081,53 @@ void Application::drawSandboxInspector() {
                                 }
                                 if (pair.geometry
                                     == optics::holography::PlateRecordingGeometry::Reflection) {
-                                    ImGui::TextDisabled(
-                                        "Opposite-side pair: use the volume reflection recorder (next M8 slice).");
+                                    if (ImGui::Button("Record volume reflection")) {
+                                        try {
+                                            const optics::holography::VolumePlateMaterial
+                                                material {
+                                                    .averageRefractiveIndex
+                                                        = static_cast<double>(
+                                                            sandboxVolumeAverageRefractiveIndex_),
+                                                    .refractiveIndexModulation
+                                                        = static_cast<double>(
+                                                            sandboxVolumeIndexModulation_),
+                                                    .isotropicLinearShrinkageFraction
+                                                        = static_cast<double>(
+                                                            sandboxVolumeShrinkagePercent_)
+                                                        * 0.01,
+                                                };
+                                            auto recording
+                                                = optics::holography::recordVolumePlate(
+                                                    benchProject_.scene,
+                                                    fields,
+                                                    pair.objectBranchId,
+                                                    pair.referenceBranchId,
+                                                    material);
+                                            sandboxVolumeReplayWavelengthNanometres_
+                                                = static_cast<float>(
+                                                    recording.pair.wavelengthMetres
+                                                    * 1e9);
+                                            sandboxVolumeReplayAngleDegrees_
+                                                = static_cast<float>(
+                                                    recording
+                                                        .equivalentSymmetricBraggAngleInMediumRadians
+                                                    * 180.0
+                                                    / std::numbers::pi_v<double>);
+                                            sandboxVolumeRecording_ = std::make_unique<
+                                                optics::holography::VolumePlateRecordingResult>(
+                                                    std::move(recording));
+                                            sandboxVolumeReplay_.reset();
+                                            errorMessage_.clear();
+                                            statusMessage_
+                                                = "Recorded volume reflection grating on plate "
+                                                + selected->id;
+                                        } catch (const std::exception& error) {
+                                            errorMessage_
+                                                = "Volume recording failed: "
+                                                + std::string(error.what());
+                                            statusMessage_.clear();
+                                        }
+                                    }
                                 }
                                 ImGui::PopID();
                                 ++compatiblePairCount;
@@ -5069,6 +5139,118 @@ void Application::drawSandboxInspector() {
                         }
                         ImGui::TextDisabled(
                             "Each wavelength is paired independently; RGB channels never cross-interfere.");
+                        if (sandboxVolumeRecording_
+                            && sandboxVolumeRecording_->plateComponentId
+                                == selected->id) {
+                            ImGui::SeparatorText("Recorded Volume Grating");
+                            const bool stale = sandboxVolumeRecording_->isStaleFor(
+                                benchProject_.scene);
+                            if (stale) {
+                                ImGui::TextColored(
+                                    ImVec4(1.0F, 0.45F, 0.25F, 1.0F),
+                                    "STALE: bench revision changed; record again.");
+                            } else {
+                                ImGui::TextColored(
+                                    ImVec4(0.35F, 0.9F, 0.45F, 1.0F),
+                                    "Current at revision %llu",
+                                    static_cast<unsigned long long>(
+                                        sandboxVolumeRecording_->sourceRevision));
+                            }
+                            const auto& recording = *sandboxVolumeRecording_;
+                            const auto& grating
+                                = recording.recordedGratingVectorLocalRadiansPerMetre;
+                            ImGui::TextWrapped(
+                                "%s | %.3f nm | period %.6g nm | slant %.4f deg",
+                                recording.pair.geometry
+                                        == optics::holography::PlateRecordingGeometry::Reflection
+                                    ? "Reflection / Denisyuk"
+                                    : "Transmission",
+                                recording.pair.wavelengthMetres * 1e9,
+                                recording.recordedGratingPeriodMetres * 1e9,
+                                recording.gratingSlantFromPlateNormalRadians
+                                    * 180.0 / std::numbers::pi_v<double>);
+                            ImGui::TextWrapped(
+                                "K local = (%.6g, %.6g, %.6g) rad/m | equivalent symmetric Bragg angle %.4f deg",
+                                grating.x,
+                                grating.y,
+                                grating.z,
+                                recording
+                                    .equivalentSymmetricBraggAngleInMediumRadians
+                                    * 180.0 / std::numbers::pi_v<double>);
+                            ImGui::TextWrapped(
+                                "Nominal replay: coupling %.6g | detuning %.6g | efficiency %.3f%%",
+                                recording.nominalReplay.kogelnik.couplingStrength,
+                                recording.nominalReplay.kogelnik.detuningParameter,
+                                recording.nominalReplay.kogelnik.diffractionEfficiency
+                                    * 100.0);
+
+                            ImGui::SeparatorText("Volume Replay");
+                            ImGui::InputFloat(
+                                "Replay wavelength (nm)",
+                                &sandboxVolumeReplayWavelengthNanometres_,
+                                1.0F,
+                                10.0F,
+                                "%.5g");
+                            ImGui::InputFloat(
+                                "Replay internal angle (deg)",
+                                &sandboxVolumeReplayAngleDegrees_,
+                                0.1F,
+                                1.0F,
+                                "%.5g");
+                            ImGui::BeginDisabled(stale);
+                            if (ImGui::Button("Evaluate volume replay")) {
+                                try {
+                                    auto replay
+                                        = optics::holography::replayVolumePlate(
+                                            benchProject_.scene,
+                                            recording,
+                                            static_cast<double>(
+                                                sandboxVolumeReplayWavelengthNanometres_)
+                                                * 1e-9,
+                                            static_cast<double>(
+                                                sandboxVolumeReplayAngleDegrees_)
+                                                * std::numbers::pi_v<double>
+                                                / 180.0);
+                                    sandboxVolumeReplay_ = std::make_unique<
+                                        optics::holography::VolumePlateReplayResult>(
+                                            std::move(replay));
+                                    errorMessage_.clear();
+                                    statusMessage_
+                                        = "Evaluated volume hologram replay";
+                                } catch (const std::exception& error) {
+                                    errorMessage_
+                                        = "Volume replay failed: "
+                                        + std::string(error.what());
+                                    statusMessage_.clear();
+                                }
+                            }
+                            ImGui::EndDisabled();
+                            if (sandboxVolumeReplay_
+                                && sandboxVolumeReplay_->plateComponentId
+                                    == selected->id) {
+                                const auto& volume = sandboxVolumeReplay_->volume;
+                                ImGui::TextWrapped(
+                                    "Replay period %.6g nm | thickness %.6g um | mismatch %.6g rad/m",
+                                    volume.replayGratingPeriodMetres * 1e9,
+                                    volume.replayThicknessMetres * 1e6,
+                                    volume.phaseMismatchRadiansPerMetre);
+                                if (volume.kogelnikEfficiencyEvaluated) {
+                                    ImGui::TextWrapped(
+                                        "Coupling %.6g | detuning %.6g | diffraction efficiency %.3f%% (exact-Bragg %.3f%%)",
+                                        volume.kogelnik.couplingStrength,
+                                        volume.kogelnik.detuningParameter,
+                                        volume.kogelnik.diffractionEfficiency * 100.0,
+                                        volume.exactBraggEfficiencyAtReplayCoupling
+                                            * 100.0);
+                                } else {
+                                    ImGui::TextColored(
+                                        ImVec4(1.0F, 0.65F, 0.25F, 1.0F),
+                                        "Diffracted order is non-propagating; efficiency was not evaluated.");
+                                }
+                            }
+                            ImGui::TextDisabled(
+                                "Efficiency uses an equivalent symmetric Kogelnik model; the full placed slanted K vector above remains authoritative geometry.");
+                        }
                         if (sandboxPlateRecording_
                             && sandboxPlateRecording_->plateComponentId
                                 == selected->id) {

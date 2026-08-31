@@ -305,6 +305,46 @@ completion because it is primarily driven through fixed parameter panels:
 - **Ten-workflow and capability-driven GPU CI**: GitHub Actions run [33411773549](https://github.com/liufangyuan247/HoloBench/actions/runs/33411773549) passes all four Windows/Ubuntu core and application-compile jobs at `0a48a56`.
 - **Current validation**: The advanced-course increment passes 412/412 deterministic core/application cases and complete warnings-as-errors applications with Windows Clang 21, MSVC 19.44, and Ubuntu/WSL GCC 15.2. The 589-glyph packaged-output atlas gate passes on all three toolchains. Clang and MSVC hidden OpenGL smoke pass on AMD Radeon Pro 5300M, render Chinese draw geometry, validate all ten packaged templates at startup, and retain all prior semantic round-trip checks. The capability-driven GPU revision additionally passes 9/9 cases and 3175/3175 assertions on both Windows compilers, while GCC compiles the same backend; no GPU identity branch remains.
 
+## Active free-form bench and holography sandbox state
+
+- **Product scope**: The primary product is the editable optical bench. Steam
+  and other store/distribution work are not active milestones. The delivery
+  sequence is M7 free-form bench, M8 placed transmission/reflection/RGB
+  holography, then M9 CHIMERA-like automated construction and reconstruction.
+- **Editable bench foundation**: Twelve typed optical component kinds share one
+  `BenchScene`; the 3D viewport and Inspector support placement, selection,
+  translation, local rotation, duplication, deletion, undo/redo, physical
+  parameter editing, and strict unified-project save/load. Deterministic
+  next-hit tracing derives split/reflected/transmitted paths, power, wavelength,
+  coherence identity, optical path, and termination from placed geometry.
+- **Ordinary holography layouts**: Transmission, reflection/Denisyuk, and RGB
+  full-colour presets are normal editable `BenchProject` instances rather than
+  fixed teaching forms. The plate Inspector lists the branches that actually
+  reach the plate, assigns object/reference roles, classifies same-side versus
+  opposite-side recording, and forbids cross-wavelength interference.
+- **Placed thin transmission workflow**: A selected compatible branch pair is
+  sampled on a labelled plate-local 2D patch. Recording exposes power, fringe,
+  carrier/Nyquist, and exposure diagnostics. Ordinary or conjugate replay
+  propagates the physical complete field and separately labelled zero,
+  object-bearing, and conjugate orders to a physically placed coaxial
+  Screen/Detector or Field Probe.
+- **Placed volume workflow**: Counter-propagating reflection recording refracts
+  both actual local branch directions into the configured material and records
+  the full vector `K = k_object - k_reference`, its period and slant. The UI
+  exposes thickness, average index, index modulation, shrinkage, replay
+  wavelength/internal angle, coupling, detuning, and Kogelnik efficiency. The
+  current efficiency mapping uses the recorded vector magnitude as an
+  equivalent symmetric Bragg angle and does not falsely claim arbitrary
+  slanted-grating coupled-wave fidelity. Spatial reflection reconstruction to
+  a placed observation plane is the next active slice.
+- **Revision provenance**: Plate incident evidence, thin recordings, thin
+  replays, volume recordings, and volume replays carry the exact scene
+  revision and visibly become stale after a bench edit.
+- **Current local validation**: Windows Clang development build passes 468/468
+  deterministic CPU, application, font, and OpenGL GPU cases after the placed
+  volume-recording increment. Cross-compiler CI and hidden-window application
+  smoke remain required before the M8 slice is closed.
+
 ## Known limitations (M1/M2)
 
 - **Paraxial approximation**: Thin-lens solver, Fresnel TF, and Fraunhofer propagators assume small angles and paraxial conditions.
@@ -315,16 +355,17 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Implement deterministic spatial next-hit tracing for laser, mirror,
-   splitter/combiner, lens, aperture, and screen with branch budgets and
-   termination evidence.
-2. Connect the twelve typed kinds to the 3D component library, generic
-   rendering, selection, translation/rotation, duplicate, delete, and exact
-   Inspector editing over the same `BenchScene` commands.
-3. Connect object/SLM/probe/plate local 2D field planes and the existing wave
-   solvers, then commit editable transmission/reflection/RGB layout fixtures.
-4. Deliver M8 transmission, reflection/Denisyuk, and RGB full-colour
-   recording/reconstruction from actual plate-arriving branches with
-   independent numerical oracles.
+1. Propagate a recorded reflection-volume order to a physically placed
+   observation plane, with explicit plate side/direction, sampling domain, and
+   field/intensity validation.
+2. Record the RGB preset as three strictly independent same-wavelength pairs,
+   replay each channel independently, and combine only display intensities
+   through a labelled uncalibrated colour transform.
+3. Apply placed lens, aperture/filter, and SLM transformations to local complex
+   fields so spatial object structure follows the actual upstream bench rather
+   than only its centre ray.
+4. Persist a versioned recording recipe and material/channel configuration in
+   the unified bench document without treating recomputable field caches as
+   project truth.
 5. Compile a versioned M9 CHIMERA recipe into an editable bench, then simulate
    hogel/angular data, RGB exposure events, and bounded reconstruction.

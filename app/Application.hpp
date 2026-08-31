@@ -29,6 +29,7 @@
 #include "optics/ray/DynamicBenchTracer.hpp"
 #include "optics/holography/BenchHologramRecording.hpp"
 #include "optics/holography/BenchHologramReplay.hpp"
+#include "optics/holography/BenchVolumeHologram.hpp"
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
 #include "render/Camera.hpp"
@@ -422,6 +423,11 @@ private:
     float sandboxPlateRelativeReferenceKilowattsPerSquareMetre_ = 100.0F;
     int sandboxPlateReplayKindIndex_ = 1;
     int sandboxPlateReplayViewIndex_ = 0;
+    float sandboxVolumeAverageRefractiveIndex_ = 1.5F;
+    float sandboxVolumeIndexModulation_ = 0.01F;
+    float sandboxVolumeShrinkagePercent_ = 0.0F;
+    float sandboxVolumeReplayWavelengthNanometres_ = 532.0F;
+    float sandboxVolumeReplayAngleDegrees_ = 0.0F;
 
     GizmoTarget selectedTarget_ = GizmoTarget::None;
     GizmoTarget draggedTarget_ = GizmoTarget::None;
@@ -455,6 +461,10 @@ private:
         sandboxPlateRecording_;
     std::unique_ptr<optics::holography::ThinPlateReplayResult>
         sandboxPlateReplay_;
+    std::unique_ptr<optics::holography::VolumePlateRecordingResult>
+        sandboxVolumeRecording_;
+    std::unique_ptr<optics::holography::VolumePlateReplayResult>
+        sandboxVolumeReplay_;
     reflection::ReflectionRefractionConfig reflectionRefractionConfig_;
     reflection::ReflectionRefractionResult reflectionRefractionResult_;
     project::ProjectProvenance reflectionProjectProvenance_;

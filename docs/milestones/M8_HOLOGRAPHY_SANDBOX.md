@@ -97,6 +97,13 @@ stale until recomputation.
 
 ## Delivery slices
 
+Current implementation status (2026-09-01): M8.1 is implemented; M8.2 has an
+end-to-end placed thin-transmission record/replay path; M8.3 records the full
+placed reflection grating vector and evaluates wavelength/angle/material Bragg
+selectivity, while spatial reflection replay to a placed observation remains
+in progress; M8.4 has an editable RGB layout and strict per-wavelength pairing,
+but batch recording/replay and display-only colour composition remain pending.
+
 ### M8.1 — Plate-local branch and coordinate contract
 
 - Object/reference role assignment from selected incident branches.
