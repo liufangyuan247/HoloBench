@@ -19,7 +19,8 @@ model.
 - [x] SLM wavelength-response and measured-response LUT data model.
 - [x] `Laser -> SLM -> Lens -> Angular Probe` headless pipeline.
 - [x] SLM coordinate-to-angle, angular PSF, and multi-wavelength mapping results.
-- [ ] Dockable apply-gated teaching workflow and fringe visualization.
+- [x] Dockable apply-gated teaching workflow, fringe/angular/PSF visualization,
+  and measured-LUT import/export with visible provenance.
 - [ ] Named CPU/GPU performance profiles and cross-platform release gates.
 
 ## Numerical gate

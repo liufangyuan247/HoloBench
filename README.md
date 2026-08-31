@@ -50,6 +50,9 @@ HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator
   Probe` orchestration reports multi-wavelength angular coordinates, a selected
   pixel angular PSF, analytic-versus-measured pixel-to-angle mapping, and
   reference-beam interference.
+- **Apply-gated SLM lab**: A dockable teaching workflow visualizes interference,
+  angular intensity, and selected-pixel PSF without recomputing per frame;
+  measured LUT import/export keeps calibration provenance visible.
 
 ## Physical Assumptions & Limitations (M1)
 
@@ -69,7 +72,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (293 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (297 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -77,7 +80,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 293/293 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 297/297 tests passing):
 
 ```powershell
 cmake --preset core-ci

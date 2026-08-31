@@ -9,7 +9,7 @@
 | Wave optics (M2 CPU/GPU & detector) | Validated | 203 deterministic CPU/application cases; OpenGL executable 7/7 cases and 720/720 assertions; analytic oracles and three external full-field `waveprop 0.0.12` cross-validation cases | CPU reference, interactive GPU propagation, detector UI |
 | Fourier optics and Sampling Debugger (M3) | Validated | 229/229 deterministic cases; 4-f direct-DFT/inversion/filter/Airy oracles; 8/8 GPU cases and 1121/1121 assertions; seven-texture OpenGL smoke; named CPU debugger and GPU 4-f budgets pass; four-job release CI passes | Interactive 4-f filtering and sampling diagnostics |
 | Real-lens engineering (M4) | Validated | Real surfaces, SI dispersion, rigid poses, sequential assemblies, wavelength/field/combined spot statistics, longitudinal chromatic focus, versioned JSON/CSV exchange, interactive editor/plots, and five pinned Optiland 0.6.2 benchmark prescriptions; 270/270 on Clang, MSVC, and GCC; named 729-ray budget, local smoke, and four-job release CI pass | Interactive real-lens engineering |
-| SLM, coherence, and interference (M5) | CPU reference validated; product integration active | Ideal/pixelated, calibrated LUT, and LCD teaching responses; scalar mutual coherence; analytic fringe gates; multi-wavelength `Laser -> SLM -> Lens -> Angular Probe` mapping; and a pinned waveprop 0.0.12 SLM/Fraunhofer golden; 293/293 on Windows Clang/MSVC and Ubuntu GCC | Headless M5 reference; interactive use pending |
+| SLM, coherence, and interference (M5) | CPU reference and apply-gated lab validated; release integration active | Ideal/pixelated, calibrated LUT, and LCD teaching responses; scalar mutual coherence; analytic fringe gates; multi-wavelength angular mapping; pinned waveprop 0.0.12 SLM/Fraunhofer golden; docked interference/angular/PSF views; measured-LUT provenance; 297 deterministic cases | Named performance and persistence gates pending |
 | Holography (M6) | Not implemented | None | Prohibited |
 
 ## M1 Validation Breakdown
@@ -82,11 +82,12 @@
 ## Build and CI Execution Status
 
 - **M5 CPU Reference (active)**:
-  - Windows Clang 21.1.8, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors core builds pass all 293 deterministic cases; the complete Windows Clang application build also passes.
+  - Windows Clang 21.1.8, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors builds pass all 297 deterministic cases. Complete Clang/MSVC applications build, and hidden-window OpenGL smoke includes a drawable SLM result.
   - Ideal amplitude identity/extinction, phase intensity invariance, pixel boundary/fill-factor classification, bit-depth quantization, finite-input rejection, and strong exception safety pass.
   - Equal-beam visibility equals `|gamma|`; symmetric plane waves reproduce `lambda / (2 sin(theta/2))`; relative phase translates the fringe; Gaussian and exponential envelopes reach 1/e at their declared coherence length.
   - The headless angular experiment reproduces `(-x_pixel/f, -y_pixel/f)` from the independently measured angular-spectrum centroid, exposes wavelength-scaled angular axes and selected-pixel angular PSF, and remains deterministic.
   - A byte-reproducible waveprop 0.0.12 golden independently rasterizes an 8x16 selected-pixel SLM with 8 um pitch, 6 um active cell, and dead space, then evaluates Fraunhofer diffraction. The complete sampled mask agrees exactly; normalized angular-intensity L2 and maximum/peak errors are each below `1e-12`. Metadata records waveprop's axis reversal and one-sample X raster-origin conversion.
+  - The apply-gated UI state proves draft edits do not run physics, Apply schedules exactly one experiment, and wavelength/display-plane changes refresh visualization only. The dock exposes strict measured-LUT import/export and separately reports draft/applied provenance.
 
 - **M4 Local Release Gate**:
   - Windows Clang 21.1.8: warnings-as-errors core/application and M4 benchmark builds pass; all 270 deterministic headless cases pass.

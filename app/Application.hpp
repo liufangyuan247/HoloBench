@@ -12,6 +12,7 @@
 #include "app/WaveDetectorUiState.hpp"
 #include "app/RealLensWorkbenchPipeline.hpp"
 #include "app/SamplingDebuggerPipeline.hpp"
+#include "app/SlmInterferenceUiState.hpp"
 #include "optics/ray/BenchTracer.hpp"
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
@@ -181,6 +182,7 @@ struct DockLayoutConfig {
     static constexpr const char* kWaveDetectorWindowName = "Wave Detector / Screen";
     static constexpr const char* kSamplingDebuggerWindowName = "Sampling Debugger";
     static constexpr const char* kRealLensWindowName = "Real Lens Workbench";
+    static constexpr const char* kSlmInterferenceWindowName = "SLM & Interference Lab";
     static constexpr const char* kDockSpaceIdStr = "HoloBenchDockSpace";
 };
 
@@ -270,11 +272,15 @@ private:
     void drawWaveDetectorPanel();
     void drawSamplingDebuggerPanel();
     void drawRealLensPanel();
+    void drawSlmInterferencePanel();
     void updateWaveDetector();
+    void updateSlmInterference();
     void refreshSamplingDebugger();
     void refreshRealLensWorkbench();
     void loadRealLensPrescription(bool csv);
     void saveRealLensPrescription(bool csv);
+    void loadSlmCalibration();
+    void saveSlmCalibration();
     bool applyScene(
         const optics::scene::OpticalBenchScene& candidateScene,
         const optics::ray::BenchTracerOptions& candidateOptions);
@@ -309,12 +315,15 @@ private:
     std::unique_ptr<render::gl::Texture2D> fourFBeforeFilterTexture_;
     std::unique_ptr<render::gl::Texture2D> fourFAfterFilterTexture_;
     std::unique_ptr<render::gl::Texture2D> fourFImageTexture_;
+    std::unique_ptr<render::gl::Texture2D> slmInterferenceTexture_;
     std::unique_ptr<wave::WaveDetectorResult> detectorResult_;
     std::unique_ptr<samplingdebug::SamplingDebuggerResult> samplingDebuggerResult_;
     std::unique_ptr<reallens::RealLensWorkbenchResult> realLensResult_;
+    std::unique_ptr<slmexperiment::SlmInterferenceExperimentResult> slmInterferenceResult_;
     waveui::WaveDetectorUiState detectorUiState_;
     samplingdebug::SamplingDebuggerConfig samplingDebuggerConfig_;
     reallens::RealLensWorkbenchConfig realLensConfig_;
+    slmui::SlmInterferenceUiState slmInterferenceUiState_;
     waveui::DetectorPixel detectorProbe_;
     bool hasDetectorProbe_ = false;
     bool detectorProbeLocked_ = false;
@@ -324,6 +333,8 @@ private:
     std::string samplingDebuggerStatusMessage_;
     std::string realLensErrorMessage_;
     std::string realLensStatusMessage_;
+    std::string slmInterferenceErrorMessage_;
+    std::string slmInterferenceStatusMessage_;
     bool realLensDirty_ = true;
     std::size_t selectedRealLensSurface_ = 0;
 
@@ -338,6 +349,7 @@ private:
     std::string statusMessage_;
     char projectPathBuffer_[512] = "holobench_scene.json";
     char realLensPathBuffer_[512] = "holobench_lens.json";
+    char slmCalibrationPathBuffer_[512] = "slm_response.json";
 
     bool isBenchmark_ = false;
     int vsyncInterval_ = 1;

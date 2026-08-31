@@ -26,6 +26,7 @@
 #include "compute/fft/CpuFftBackend.hpp"
 #include "core/field/FieldVisualization.hpp"
 #include "optics/io/LensPrescriptionIO.hpp"
+#include "optics/slm/SlmResponseIO.hpp"
 #include "optics/ray/BenchTracer.hpp"
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
@@ -348,6 +349,7 @@ Application::Application()
     , fourFBeforeFilterTexture_(std::make_unique<render::gl::Texture2D>())
     , fourFAfterFilterTexture_(std::make_unique<render::gl::Texture2D>())
     , fourFImageTexture_(std::make_unique<render::gl::Texture2D>())
+    , slmInterferenceTexture_(std::make_unique<render::gl::Texture2D>())
     , realLensConfig_(reallens::makeDefaultRealLensWorkbenchConfig())
     , scene_(optics::scene::createDefaultRealImageScene())
     , naResult_(optics::scene::computeObjectSideNumericalAperture(scene_)) {
@@ -583,9 +585,13 @@ void Application::shutdown() noexcept {
     if (fourFImageTexture_) {
         fourFImageTexture_->destroy();
     }
+    if (slmInterferenceTexture_) {
+        slmInterferenceTexture_->destroy();
+    }
     detectorResult_.reset();
     samplingDebuggerResult_.reset();
     realLensResult_.reset();
+    slmInterferenceResult_.reset();
     if (imguiGlInitialized_) {
         ImGui_ImplOpenGL3_Shutdown();
         imguiGlInitialized_ = false;
@@ -685,6 +691,104 @@ void Application::updateWaveDetector() {
             detectorErrorMessage_ = "Visualization failed: " + std::string(ex.what());
             detectorStatusMessage_.clear();
         }
+    }
+}
+
+void Application::updateSlmInterference() {
+    if (slmInterferenceUiState_.consumeSimulationRequest()) {
+        try {
+            if (!detectorFftBackend_) {
+                throw std::runtime_error("CPU FFT backend is unavailable");
+            }
+            auto result = slmexperiment::runSlmInterferenceExperiment(
+                slmInterferenceUiState_.appliedConfig(),
+                *detectorFftBackend_);
+            slmInterferenceResult_
+                = std::make_unique<slmexperiment::SlmInterferenceExperimentResult>(
+                    std::move(result));
+            slmInterferenceUiState_.simulationSucceeded();
+            slmInterferenceErrorMessage_.clear();
+            slmInterferenceStatusMessage_
+                = "SLM experiment recomputed on the deterministic CPU reference backend";
+        } catch (const std::exception& ex) {
+            slmInterferenceErrorMessage_ = "SLM experiment failed: " + std::string(ex.what());
+            slmInterferenceStatusMessage_.clear();
+            slmInterferenceResult_.reset();
+            if (slmInterferenceTexture_) {
+                slmInterferenceTexture_->destroy();
+            }
+        }
+    }
+
+    if (slmInterferenceResult_
+        && slmInterferenceUiState_.consumeVisualizationRequest()) {
+        try {
+            if (slmInterferenceResult_->wavelengths.empty()) {
+                throw std::runtime_error("SLM experiment returned no wavelengths");
+            }
+            const std::size_t wavelengthIndex = std::min(
+                slmInterferenceUiState_.displayedWavelengthIndex(),
+                slmInterferenceResult_->wavelengths.size() - 1U);
+            const auto& result = slmInterferenceResult_->wavelengths[wavelengthIndex];
+            field::FieldVisualizationOptions options;
+            options.colormap = field::ColormapKind::Inferno;
+            field::RgbaImage image = [&]() {
+                switch (slmInterferenceUiState_.displayPlane()) {
+                case slmui::DisplayPlane::Interference:
+                    return field::renderLinearIntensity(result.interference.intensity, options);
+                case slmui::DisplayPlane::AngularIntensity:
+                    return field::renderLinearIntensity(result.normalizedAngularIntensity, options);
+                case slmui::DisplayPlane::SelectedPixelPsf:
+                    return field::renderLinearIntensity(result.normalizedAngularPsf, options);
+                }
+                throw std::invalid_argument("unsupported SLM display plane");
+            }();
+            if (!slmInterferenceTexture_ || !slmInterferenceTexture_->uploadImage(image)) {
+                throw std::runtime_error("OpenGL rejected the SLM experiment texture upload");
+            }
+            slmInterferenceErrorMessage_.clear();
+        } catch (const std::exception& ex) {
+            slmInterferenceErrorMessage_ = "SLM visualization failed: " + std::string(ex.what());
+            slmInterferenceStatusMessage_.clear();
+        }
+    }
+}
+
+void Application::loadSlmCalibration() {
+    try {
+        const std::filesystem::path path(slmCalibrationPathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument("SLM calibration path cannot be empty");
+        }
+        auto response = optics::slm::loadSlmResponseJson(path);
+        const std::size_t curveCount = response.wavelengths().size();
+        slmInterferenceUiState_.setCalibration(std::move(response), path.string());
+        slmInterferenceErrorMessage_.clear();
+        slmInterferenceStatusMessage_ = "Loaded measured LUT with "
+            + std::to_string(curveCount)
+            + " wavelength curve(s); press Apply to use it";
+    } catch (const std::exception& ex) {
+        slmInterferenceErrorMessage_ = "SLM calibration load failed: " + std::string(ex.what());
+        slmInterferenceStatusMessage_.clear();
+    }
+}
+
+void Application::saveSlmCalibration() {
+    try {
+        const std::filesystem::path path(slmCalibrationPathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument("SLM calibration path cannot be empty");
+        }
+        const auto& response = slmInterferenceUiState_.draftConfig().calibratedResponse;
+        if (!response.has_value()) {
+            throw std::invalid_argument("there is no measured SLM LUT to export");
+        }
+        optics::slm::saveSlmResponseJson(path, response.value());
+        slmInterferenceErrorMessage_.clear();
+        slmInterferenceStatusMessage_ = "Exported measured LUT to " + path.string();
+    } catch (const std::exception& ex) {
+        slmInterferenceErrorMessage_ = "SLM calibration export failed: " + std::string(ex.what());
+        slmInterferenceStatusMessage_.clear();
     }
 }
 
@@ -1722,8 +1826,395 @@ void Application::drawRealLensPanel() {
     ImGui::End();
 }
 
+void Application::drawSlmInterferencePanel() {
+    ImGui::Begin(docking::DockLayoutConfig::kSlmInterferenceWindowName);
+    ImGui::TextDisabled(
+        "Laser -> pixelated SLM -> ideal Fourier lens -> angular probe + reference beam");
+
+    if (ImGui::CollapsingHeader("Measured response LUT", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::InputText(
+            "LUT JSON path",
+            slmCalibrationPathBuffer_,
+            sizeof(slmCalibrationPathBuffer_));
+        if (ImGui::Button("Load measured LUT")) {
+            loadSlmCalibration();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Export loaded LUT")) {
+            saveSlmCalibration();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Clear LUT")) {
+            slmInterferenceUiState_.clearCalibration();
+            slmInterferenceStatusMessage_ = "Measured LUT cleared from the draft configuration";
+            slmInterferenceErrorMessage_.clear();
+        }
+        ImGui::TextWrapped(
+            "Draft provenance: %s",
+            slmInterferenceUiState_.draftCalibrationSource().c_str());
+        const auto& calibration = slmInterferenceUiState_.draftConfig().calibratedResponse;
+        if (calibration.has_value()) {
+            const auto& curves = calibration->wavelengths();
+            ImGui::Text(
+                "%zu curve(s), %.3f-%.3f nm; phase is imported explicitly unwrapped",
+                curves.size(),
+                curves.front().vacuumWavelengthMetres * 1e9,
+                curves.back().vacuumWavelengthMetres * 1e9);
+        }
+    }
+
+    auto draft = slmInterferenceUiState_.draftConfig();
+    bool physicsEdited = false;
+    const auto inputMicrometres = [&physicsEdited](const char* label, double& metres) {
+        double micrometres = metres * 1e6;
+        if (ImGui::InputDouble(
+                label, &micrometres, 0.1, 1.0, "%.6g um", ImGuiInputTextFlags_CharsScientific)) {
+            metres = micrometres * 1e-6;
+            physicsEdited = true;
+        }
+    };
+    const auto inputMillimetres = [&physicsEdited](const char* label, double& metres) {
+        double millimetres = metres * 1e3;
+        if (ImGui::InputDouble(
+                label, &millimetres, 0.1, 1.0, "%.6g mm", ImGuiInputTextFlags_CharsScientific)) {
+            metres = millimetres * 1e-3;
+            physicsEdited = true;
+        }
+    };
+
+    if (ImGui::CollapsingHeader("SLM and sampling", ImGuiTreeNodeFlags_DefaultOpen)) {
+        int responseModel = static_cast<int>(draft.deviceResponseModel);
+        constexpr std::array<const char*, 3> responseNames {
+            "Ideal scalar", "Measured complex LUT", "LCD polarizer teaching model"};
+        if (ImGui::Combo(
+                "Device response",
+                &responseModel,
+                responseNames.data(),
+                static_cast<int>(responseNames.size()))) {
+            const auto selected = static_cast<slmexperiment::SlmDeviceResponseModel>(responseModel);
+            if (selected == slmexperiment::SlmDeviceResponseModel::CalibratedLut
+                && !draft.calibratedResponse.has_value()) {
+                slmInterferenceErrorMessage_ =
+                    "Load a measured response LUT before selecting calibrated mode";
+                slmInterferenceStatusMessage_.clear();
+            } else {
+                draft.deviceResponseModel = selected;
+                physicsEdited = true;
+            }
+        }
+
+        constexpr std::array<int, 3> resolutions {64, 128, 256};
+        constexpr std::array<const char*, 3> resolutionNames {"64 x 64", "128 x 128", "256 x 256"};
+        int resolutionIndex = 1;
+        for (std::size_t index = 0; index < resolutions.size(); ++index) {
+            if (draft.fieldWidth == static_cast<std::size_t>(resolutions[index])
+                && draft.fieldHeight == static_cast<std::size_t>(resolutions[index])) {
+                resolutionIndex = static_cast<int>(index);
+            }
+        }
+        if (ImGui::Combo(
+                "Field grid",
+                &resolutionIndex,
+                resolutionNames.data(),
+                static_cast<int>(resolutionNames.size()))) {
+            draft.fieldWidth = static_cast<std::size_t>(resolutions[static_cast<std::size_t>(resolutionIndex)]);
+            draft.fieldHeight = draft.fieldWidth;
+            physicsEdited = true;
+        }
+        inputMicrometres("Field pitch X", draft.fieldPitchXMetres);
+        inputMicrometres("Field pitch Y", draft.fieldPitchYMetres);
+        inputMillimetres("Fourier lens focal length", draft.lensFocalLengthMetres);
+        inputMicrometres("SLM pixel pitch X", draft.slm.pixelPitchXMetres);
+        inputMicrometres("SLM pixel pitch Y", draft.slm.pixelPitchYMetres);
+        if (ImGui::InputDouble("Fill factor X", &draft.slm.fillFactorX, 0.01, 0.05, "%.4f")) {
+            physicsEdited = true;
+        }
+        if (ImGui::InputDouble("Fill factor Y", &draft.slm.fillFactorY, 0.01, 0.05, "%.4f")) {
+            physicsEdited = true;
+        }
+        int bitDepth = static_cast<int>(draft.slm.bitDepth);
+        if (ImGui::InputInt("Command bit depth (0 = continuous)", &bitDepth)) {
+            draft.slm.bitDepth = static_cast<unsigned int>(std::max(bitDepth, 0));
+            physicsEdited = true;
+        }
+        if (draft.deviceResponseModel == slmexperiment::SlmDeviceResponseModel::Ideal) {
+            int modulationMode = static_cast<int>(draft.slm.mode);
+            constexpr std::array<const char*, 2> modulationNames {"Amplitude", "Phase"};
+            if (ImGui::Combo(
+                    "Ideal modulation",
+                    &modulationMode,
+                    modulationNames.data(),
+                    static_cast<int>(modulationNames.size()))) {
+                draft.slm.mode = static_cast<optics::slm::ModulationMode>(modulationMode);
+                physicsEdited = true;
+            }
+            if (draft.slm.mode == optics::slm::ModulationMode::Phase
+                && ImGui::InputDouble(
+                    "Phase range (rad)", &draft.slm.phaseRangeRadians, 0.1, 1.0, "%.8g")) {
+                physicsEdited = true;
+            }
+        }
+
+        int selectedColumn = static_cast<int>(draft.selectedPixelColumn);
+        int selectedRow = static_cast<int>(draft.selectedPixelRow);
+        if (ImGui::InputInt("Selected pixel column", &selectedColumn)) {
+            draft.selectedPixelColumn = static_cast<std::size_t>(std::max(selectedColumn, 0));
+            physicsEdited = true;
+        }
+        if (ImGui::InputInt("Selected pixel row", &selectedRow)) {
+            draft.selectedPixelRow = static_cast<std::size_t>(std::max(selectedRow, 0));
+            physicsEdited = true;
+        }
+        ImGui::Text(
+            "SLM grid: %zu x %zu | command: repeatable X blaze",
+            draft.slm.pixelColumns,
+            draft.slm.pixelRows);
+    }
+
+    if (draft.deviceResponseModel == slmexperiment::SlmDeviceResponseModel::LcdTeaching
+        && ImGui::CollapsingHeader("LCD teaching assumptions", ImGuiTreeNodeFlags_DefaultOpen)) {
+        const auto inputDegrees = [&physicsEdited](const char* label, double& radians) {
+            double degrees = radians * 180.0 / std::numbers::pi;
+            if (ImGui::InputDouble(label, &degrees, 1.0, 5.0, "%.4f deg")) {
+                radians = degrees * std::numbers::pi / 180.0;
+                physicsEdited = true;
+            }
+        };
+        inputDegrees("Input polarizer", draft.lcdTeaching.inputPolarizerAngleRadians);
+        inputDegrees("Analyzer", draft.lcdTeaching.analyzerAngleRadians);
+        inputDegrees("LC fast axis", draft.lcdTeaching.liquidCrystalFastAxisAngleRadians);
+        if (ImGui::InputDouble(
+                "Retardance at command 0",
+                &draft.lcdTeaching.zeroCommandRetardanceRadians,
+                0.1,
+                1.0,
+                "%.8g rad")) {
+            physicsEdited = true;
+        }
+        if (ImGui::InputDouble(
+                "Retardance at command 1",
+                &draft.lcdTeaching.fullCommandRetardanceRadians,
+                0.1,
+                1.0,
+                "%.8g rad")) {
+            physicsEdited = true;
+        }
+        int pattern = static_cast<int>(draft.lcdTeaching.colorFilterPattern);
+        constexpr std::array<const char*, 4> patternNames {
+            "Monochrome", "Vertical RGB stripes", "Horizontal RGB stripes", "RGGB Bayer"};
+        if (ImGui::Combo(
+                "Color-filter layout",
+                &pattern,
+                patternNames.data(),
+                static_cast<int>(patternNames.size()))) {
+            draft.lcdTeaching.colorFilterPattern
+                = static_cast<optics::slm::LcdColorFilterPattern>(pattern);
+            physicsEdited = true;
+        }
+        ImGui::TextDisabled(
+            "Ideal retarder between ideal polarizers; output keeps only the analyzer-projected scalar field.");
+    }
+
+    if (ImGui::CollapsingHeader("Reference beam and coherence", ImGuiTreeNodeFlags_DefaultOpen)) {
+        double referenceAmplitude = std::abs(draft.referenceBeam.amplitude);
+        if (ImGui::InputDouble("Reference field amplitude", &referenceAmplitude, 0.05, 0.2, "%.6g")) {
+            draft.referenceBeam.amplitude = std::polar(
+                referenceAmplitude,
+                std::arg(draft.referenceBeam.amplitude));
+            physicsEdited = true;
+        }
+        if (ImGui::InputDouble(
+                "Reference direction cosine X",
+                &draft.referenceBeam.directionCosineX,
+                0.001,
+                0.01,
+                "%.8g")) {
+            physicsEdited = true;
+        }
+        if (ImGui::InputDouble(
+                "Reference direction cosine Y",
+                &draft.referenceBeam.directionCosineY,
+                0.001,
+                0.01,
+                "%.8g")) {
+            physicsEdited = true;
+        }
+        double coherenceMagnitude = std::abs(draft.mutualCoherence.zeroDelayDegree);
+        double coherencePhase = std::arg(draft.mutualCoherence.zeroDelayDegree);
+        if (ImGui::InputDouble("|gamma(0)|", &coherenceMagnitude, 0.01, 0.1, "%.6g")) {
+            draft.mutualCoherence.zeroDelayDegree
+                = std::polar(coherenceMagnitude, coherencePhase);
+            physicsEdited = true;
+        }
+        if (ImGui::InputDouble("arg gamma(0)", &coherencePhase, 0.05, 0.2, "%.6g rad")) {
+            draft.mutualCoherence.zeroDelayDegree
+                = std::polar(coherenceMagnitude, coherencePhase);
+            physicsEdited = true;
+        }
+        inputMicrometres(
+            "Optical path difference", draft.mutualCoherence.opticalPathDifferenceMetres);
+        bool finiteCoherence = std::isfinite(draft.mutualCoherence.coherenceLengthMetres);
+        if (ImGui::Checkbox("Finite coherence length", &finiteCoherence)) {
+            draft.mutualCoherence.coherenceLengthMetres = finiteCoherence
+                ? 1e-3
+                : std::numeric_limits<double>::infinity();
+            physicsEdited = true;
+        }
+        if (finiteCoherence) {
+            inputMillimetres(
+                "1/e coherence length", draft.mutualCoherence.coherenceLengthMetres);
+        }
+        int envelope = static_cast<int>(draft.mutualCoherence.envelope);
+        constexpr std::array<const char*, 2> envelopeNames {"Gaussian", "Exponential"};
+        if (ImGui::Combo(
+                "Coherence envelope",
+                &envelope,
+                envelopeNames.data(),
+                static_cast<int>(envelopeNames.size()))) {
+            draft.mutualCoherence.envelope
+                = static_cast<optics::wave::CoherenceEnvelope>(envelope);
+            physicsEdited = true;
+        }
+    }
+
+    if (physicsEdited) {
+        slmInterferenceUiState_.setDraftConfig(draft);
+    }
+    if (slmInterferenceUiState_.isDirty()) {
+        ImGui::TextColored(
+            ImVec4(1.0F, 0.75F, 0.2F, 1.0F),
+            "Draft differs from the displayed result - press Apply to recompute");
+    }
+    if (ImGui::Button("Apply SLM Experiment")) {
+        slmInterferenceUiState_.apply();
+        slmInterferenceStatusMessage_ = "SLM experiment recompute queued";
+        slmInterferenceErrorMessage_.clear();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset teaching defaults")) {
+        slmInterferenceUiState_.setDraftConfig(
+            slmexperiment::makeDefaultSlmInterferenceExperimentConfig());
+        slmInterferenceUiState_.clearCalibration();
+        slmInterferenceStatusMessage_ = "Teaching defaults restored in draft; press Apply";
+        slmInterferenceErrorMessage_.clear();
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("FFT work runs only on Apply.");
+
+    if (!slmInterferenceErrorMessage_.empty()) {
+        ImGui::TextColored(
+            ImVec4(1.0F, 0.35F, 0.35F, 1.0F),
+            "%s",
+            slmInterferenceErrorMessage_.c_str());
+    } else if (!slmInterferenceStatusMessage_.empty()) {
+        ImGui::TextColored(
+            ImVec4(0.4F, 0.9F, 0.5F, 1.0F),
+            "%s",
+            slmInterferenceStatusMessage_.c_str());
+    }
+
+    ImGui::SeparatorText("Result");
+    if (slmInterferenceResult_ && !slmInterferenceResult_->wavelengths.empty()) {
+        const std::size_t selectedIndex = std::min(
+            slmInterferenceUiState_.displayedWavelengthIndex(),
+            slmInterferenceResult_->wavelengths.size() - 1U);
+        const auto& selectedResult = slmInterferenceResult_->wavelengths[selectedIndex];
+        char wavelengthLabel[64];
+        std::snprintf(
+            wavelengthLabel,
+            sizeof(wavelengthLabel),
+            "%.3f nm",
+            selectedResult.vacuumWavelengthMetres * 1e9);
+        if (ImGui::BeginCombo("Displayed wavelength", wavelengthLabel)) {
+            for (std::size_t index = 0;
+                 index < slmInterferenceResult_->wavelengths.size();
+                 ++index) {
+                char itemLabel[64];
+                std::snprintf(
+                    itemLabel,
+                    sizeof(itemLabel),
+                    "%.3f nm",
+                    slmInterferenceResult_->wavelengths[index].vacuumWavelengthMetres * 1e9);
+                const bool selected = index == selectedIndex;
+                if (ImGui::Selectable(itemLabel, selected)) {
+                    slmInterferenceUiState_.setDisplayedWavelengthIndex(index);
+                }
+                if (selected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        int displayPlane = static_cast<int>(slmInterferenceUiState_.displayPlane());
+        constexpr std::array<const char*, 3> displayNames {
+            "SLM/reference interference", "Angular intensity", "Selected-pixel angular PSF"};
+        if (ImGui::Combo(
+                "Displayed plane",
+                &displayPlane,
+                displayNames.data(),
+                static_cast<int>(displayNames.size()))) {
+            slmInterferenceUiState_.setDisplayPlane(
+                static_cast<slmui::DisplayPlane>(displayPlane));
+        }
+
+        const double intensitySum = selectedResult.interference.maximumIntensity
+            + selectedResult.interference.minimumIntensity;
+        const double visibility = intensitySum > 0.0
+            ? (selectedResult.interference.maximumIntensity
+                - selectedResult.interference.minimumIntensity) / intensitySum
+            : 0.0;
+        ImGui::Text(
+            "Interference min/max %.6g / %.6g | visibility %.6g | |gamma| %.6g",
+            selectedResult.interference.minimumIntensity,
+            selectedResult.interference.maximumIntensity,
+            visibility,
+            std::abs(selectedResult.interference.degreeOfCoherence));
+        const auto& mapping = selectedResult.selectedPixelMapping;
+        ImGui::Text(
+            "Selected pixel direction cosine predicted (%.6g, %.6g), measured (%.6g, %.6g)",
+            mapping.sampledPredictedDirectionCosineX,
+            mapping.sampledPredictedDirectionCosineY,
+            mapping.measuredDirectionCosineX,
+            mapping.measuredDirectionCosineY);
+        ImGui::Text(
+            "Active/dead/outside/quantized samples: %zu / %zu / %zu / %zu",
+            selectedResult.modulationDiagnostics.modulatedSampleCount,
+            selectedResult.modulationDiagnostics.deadSpaceSampleCount,
+            selectedResult.modulationDiagnostics.outsideActiveAreaSampleCount,
+            selectedResult.modulationDiagnostics.quantizedSampleCount);
+        ImGui::TextWrapped(
+            "Applied calibration provenance: %s",
+            slmInterferenceUiState_.appliedCalibrationSource().c_str());
+
+        if (slmInterferenceTexture_ && slmInterferenceTexture_->isValid()) {
+            const ImVec2 available = ImGui::GetContentRegionAvail();
+            const auto layout = waveui::fitDetectorImage(
+                available.x,
+                std::max(220.0F, available.y - 80.0F),
+                static_cast<std::size_t>(slmInterferenceTexture_->width()),
+                static_cast<std::size_t>(slmInterferenceTexture_->height()));
+            if (layout.width > 0.0F && layout.height > 0.0F) {
+                ImGui::Image(
+                    toImTextureID(slmInterferenceTexture_->handle()),
+                    ImVec2(layout.width, layout.height),
+                    ImVec2(0.0F, 1.0F),
+                    ImVec2(1.0F, 0.0F));
+            }
+        }
+    } else {
+        ImGui::TextDisabled("No SLM experiment result is available.");
+    }
+
+    ImGui::SeparatorText("Model boundary");
+    ImGui::TextWrapped(
+        "CPU double-precision scalar reference. The measured LUT is evidence, not a GPU/device workaround. "
+        "The LCD path is an analyzer-projected teaching approximation, not a full Jones-field solver.");
+    ImGui::End();
+}
+
 void Application::drawWorkspace() {
     updateWaveDetector();
+    updateSlmInterference();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     const ImGuiID dockspaceId = ImGui::DockSpaceOverViewport(
         ImGui::GetID(docking::DockLayoutConfig::kDockSpaceIdStr),
@@ -1776,6 +2267,7 @@ void Application::drawWorkspace() {
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kWaveDetectorWindowName, dockBottomId);
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kSamplingDebuggerWindowName, dockBottomId);
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kRealLensWindowName, dockBottomId);
+            ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kSlmInterferenceWindowName, dockBottomId);
 
             ImGui::DockBuilderFinish(dockspaceId);
         }
@@ -2400,6 +2892,7 @@ void Application::drawWorkspace() {
     drawWaveDetectorPanel();
     drawSamplingDebuggerPanel();
     drawRealLensPanel();
+    drawSlmInterferencePanel();
 }
 
 int Application::run(const RunOptions& options) {
@@ -2547,6 +3040,15 @@ int Application::run(const RunOptions& options) {
             || realLensResult_->tracePolylines.empty()
             || !realLensErrorMessage_.empty())) {
         SDL_Log("OpenGL smoke check failed: Real Lens Workbench did not produce drawable analysis");
+        rawGlError = true;
+    }
+    if (glSmokeMode_
+        && (!slmInterferenceResult_
+            || slmInterferenceResult_->wavelengths.empty()
+            || !slmInterferenceTexture_
+            || !slmInterferenceTexture_->isValid()
+            || !slmInterferenceErrorMessage_.empty())) {
+        SDL_Log("OpenGL smoke check failed: SLM Interference Lab did not produce drawable analysis");
         rawGlError = true;
     }
 

@@ -87,6 +87,8 @@ struct SlmInterferenceExperimentResult final {
     std::vector<SlmWavelengthExperimentResult> wavelengths;
 };
 
+[[nodiscard]] SlmInterferenceExperimentConfig makeDefaultSlmInterferenceExperimentConfig();
+
 [[nodiscard]] SlmInterferenceExperimentResult runSlmInterferenceExperiment(
     const SlmInterferenceExperimentConfig& config,
     compute::fft::IFftBackend& fftBackend);

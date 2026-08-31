@@ -212,6 +212,43 @@ struct ActiveCentroid final {
 
 } // namespace
 
+SlmInterferenceExperimentConfig makeDefaultSlmInterferenceExperimentConfig() {
+    SlmInterferenceExperimentConfig config;
+    config.fieldWidth = 128;
+    config.fieldHeight = 128;
+    config.fieldPitchXMetres = 2e-6;
+    config.fieldPitchYMetres = 2e-6;
+    config.vacuumWavelengthsMetres = {450e-9, 532e-9, 638e-9};
+    config.lensFocalLengthMetres = 0.050;
+    config.slm.pixelColumns = 16;
+    config.slm.pixelRows = 16;
+    config.slm.pixelPitchXMetres = 8e-6;
+    config.slm.pixelPitchYMetres = 8e-6;
+    config.slm.fillFactorX = 0.80;
+    config.slm.fillFactorY = 0.80;
+    config.slm.mode = optics::slm::ModulationMode::Phase;
+    config.slm.bitDepth = 8;
+    config.normalizedPixelCommands.resize(
+        config.slm.pixelColumns * config.slm.pixelRows);
+    for (std::size_t row = 0; row < config.slm.pixelRows; ++row) {
+        for (std::size_t column = 0; column < config.slm.pixelColumns; ++column) {
+            config.normalizedPixelCommands[row * config.slm.pixelColumns + column]
+                = static_cast<double>(column)
+                / static_cast<double>(config.slm.pixelColumns - 1U);
+        }
+    }
+    config.selectedPixelColumn = config.slm.pixelColumns / 2U;
+    config.selectedPixelRow = config.slm.pixelRows / 2U;
+    config.referenceBeam.amplitude = {0.65, 0.0};
+    config.referenceBeam.directionCosineX = 0.020;
+    config.lcdTeaching.spectralTransmission = {
+        {450e-9, 0.04, 0.12, 1.00},
+        {532e-9, 0.10, 1.00, 0.10},
+        {638e-9, 1.00, 0.05, 0.02},
+    };
+    return config;
+}
+
 SlmInterferenceExperimentResult runSlmInterferenceExperiment(
     const SlmInterferenceExperimentConfig& config,
     compute::fft::IFftBackend& fftBackend) {

@@ -104,6 +104,7 @@ add_library(holobench_app_logic STATIC
     app/RealLensWorkbenchPipeline.cpp
     app/SamplingDebuggerPipeline.cpp
     app/SlmInterferencePipeline.cpp
+    app/SlmInterferenceUiState.cpp
     app/WaveDetectorPipeline.cpp
     app/WaveDetectorUiState.cpp
 )
@@ -303,6 +304,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/validation/OptilandCrossValidationTests.cpp
         tests/validation/WavepropCrossValidationTests.cpp
         tests/app/WaveDetectorUiStateTests.cpp
+        tests/app/SlmInterferenceUiStateTests.cpp
         render/Camera.cpp
         tests/render/CameraTests.cpp
         tests/render/GizmoTests.cpp
