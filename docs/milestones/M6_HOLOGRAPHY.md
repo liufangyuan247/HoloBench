@@ -20,7 +20,8 @@ clearly separate first volume-hologram model.
 - [x] RGB recording/replay basics with wavelength identity preserved.
 - [x] H1 record -> conjugate replay -> real image -> H2 record/replay pipeline.
 - [x] Signed H2 placement and negative-side/transplane/positive-side image
-  traversal diagnostics.
+  traversal diagnostics, plus zero/twin carrier placement, sampling, and
+  periodic-window diagnostics without hidden order filtering.
 - [ ] Dockable apply-gated Holography Lab and strict project persistence.
 - [ ] Separate volume-hologram data model and first Kogelnik coupled-wave path.
 - [ ] Named CPU performance profile and cross-platform compiler/CI gates.
@@ -34,6 +35,8 @@ clearly separate first volume-hologram model.
   normalized and peak-relative complex-field error, plus a direct Helmholtz
   spectral-bin phase oracle.
 - [x] H1/H2 placement and RGB wavelength-scaling oracles.
+- [x] Ordinary/conjugate carrier-sign, geometric displacement, Nyquist alias,
+  non-propagating twin-order, and periodic-window boundary oracles.
 - [ ] Thin/volume boundary and Kogelnik limiting-case oracles.
 
 ## Product gate

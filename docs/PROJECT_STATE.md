@@ -118,7 +118,8 @@ Previous: **M4 — Real Lens Engineering Model: complete**
 - **Phase-only propagated quality**: A headless workflow back-propagates a requested image to the command plane, encodes phase only, replays with a uniform field, and propagates forward. Explicit least-squares global scale fitting separates arbitrary relative gain/phase from spatial error; diagnostics report matched complex-mode power plus replay-normalized and peak-normalized complex and intensity residuals. The metrics expose discarded target amplitude and phase quantization rather than hiding either behind image normalization.
 - **H1-to-H2 and transplane**: Conjugated-reference H1 replay exposes its image-bearing field at H1, propagates it to an independently positioned H2, records H2 with a second reference, and replays the isolated H2 object-bearing order back to the H1 real-image plane. The signed `z_image - z_H2` distance classifies positive-side, transplane, and negative-side placement, while physical full replay remains separate from the isolated teaching order. H2 in this workflow is explicitly another thin transmission recording, never a substitute label for a Denisyuk/reflection volume hologram.
 - **RGB basics**: Red, green, and blue are three independent coherent H1/H2 recordings with strictly preserved vacuum wavelength and per-channel refractive index. They share only transverse dimensions/pitch and geometry; every ASM transfer is recomputed from channel metadata, with no artificial RGB position shift or achromatic phase assumption.
-- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 325/325 deterministic cases; complete Clang/MSVC applications build. Twenty-four M6 cases additionally cover H2 placement on both signed sides and exactly transplane, H2 reconstruction below `3e-11` after the longer FFT chain, independent RGB Helmholtz wavelength scaling, channel identity/grid rejection, and clipped/invalid H2 rejection, on top of the prior thin and phase-only gates.
+- **Order placement and sampling**: A backend-neutral diagnostic predicts zero- and twin-order carrier centres relative to the desired image order for ordinary or conjugate replay. It reports physical propagation, signed transverse displacement, desired-order separation, per-axis Nyquist sampling, and whether each centre remains inside the native periodic field window. The physical replay fields are unchanged and retain all orders.
+- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 327/327 deterministic cases; complete Clang/MSVC applications build. Twenty-six M6 cases additionally cover H2 placement on both signed sides and exactly transplane, H2 reconstruction below `3e-11` after the longer FFT chain, independent RGB Helmholtz wavelength scaling, channel identity/grid rejection, clipped/invalid H2 rejection, ordinary/conjugate carrier sign and geometric displacement, Nyquist aliasing, a non-propagating twin order, and periodic-window escape.
 
 ## Known limitations (M1/M2)
 
@@ -130,10 +131,10 @@ Previous: **M4 — Real Lens Engineering Model: complete**
 
 ## Next five tasks
 
-1. Add diffraction-order spatial placement and sampling diagnostics.
-2. Build the apply-gated Holography teaching workflow and persistence.
-3. Implement the separate volume-hologram/Kogelnik CPU reference and oracles.
-4. Add a named M6 CPU benchmark and cross-platform release gate.
+1. Build the apply-gated Holography teaching workflow and persistence.
+2. Implement the separate volume-hologram/Kogelnik CPU reference and oracles.
+3. Add a named M6 CPU benchmark and cross-platform release gate.
+4. Run the complete M6 OpenGL smoke/product acceptance workflow.
 5. Consider GPU
    acceleration only after the CPU/product model is stable, retaining runtime
    capability dispatch and the default path on untested devices.

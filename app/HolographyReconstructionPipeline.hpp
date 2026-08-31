@@ -16,6 +16,40 @@ class IFftBackend;
 
 namespace holobench::app::holography {
 
+enum class ReferenceReplayKind {
+    Ordinary,
+    Conjugate,
+};
+
+struct DiffractionOrderPlacementDiagnostics final {
+    double referenceSpatialFrequencyXCyclesPerMetre = 0.0;
+    double referenceSpatialFrequencyYCyclesPerMetre = 0.0;
+    double nyquistXCyclesPerMetre = 0.0;
+    double nyquistYCyclesPerMetre = 0.0;
+    double zeroOrderOffsetXMetres = 0.0;
+    double zeroOrderOffsetYMetres = 0.0;
+    double twinOrderOffsetXMetres = 0.0;
+    double twinOrderOffsetYMetres = 0.0;
+    double desiredToZeroOrderSeparationMetres = 0.0;
+    double desiredToTwinOrderSeparationMetres = 0.0;
+    bool zeroOrderCarrierSampled = false;
+    bool twinOrderCarrierSampled = false;
+    bool zeroOrderCarrierPropagating = false;
+    bool twinOrderCarrierPropagating = false;
+    bool zeroOrderCentreInsidePeriodicWindow = false;
+    bool twinOrderCentreInsidePeriodicWindow = false;
+};
+
+// Predicts carrier-centre placement for the zero and twin orders relative to
+// the desired image order. This is a sampling/placement diagnostic, not hidden
+// spatial filtering: physical replay still retains all orders.
+[[nodiscard]] DiffractionOrderPlacementDiagnostics
+evaluateDiffractionOrderPlacement(
+    const field::ComplexField2D& plateField,
+    const optics::wave::PlaneWaveParameters& recordingReference,
+    ReferenceReplayKind replayKind,
+    double signedObservationDistanceMetres);
+
 struct ThinHologramReconstructionConfig final {
     // Object plane is at z=-distance and the recording plate is at z=0.
     double objectToPlateDistanceMetres = 0.01;
@@ -55,6 +89,7 @@ struct ThinHologramReconstructionResult final {
     compute::propagation::AngularSpectrumDiagnostics recordingPropagation;
     compute::propagation::AngularSpectrumDiagnostics virtualImagePropagation;
     compute::propagation::AngularSpectrumDiagnostics realImagePropagation;
+    DiffractionOrderPlacementDiagnostics conjugateRealImageOrderPlacement;
     double expectedImageAmplitudeScale = 0.0;
 };
 
@@ -144,6 +179,7 @@ struct H1H2TransferResult final {
     ReconstructionQuality h2ImageQuality;
     compute::propagation::AngularSpectrumDiagnostics h1ToH2Propagation;
     compute::propagation::AngularSpectrumDiagnostics h2ToImagePropagation;
+    DiffractionOrderPlacementDiagnostics h2ReplayOrderPlacement;
     double h1ImageAxialPositionMetres = 0.0;
     double imageDistanceFromH2Metres = 0.0;
     H2ImagePlacement imagePlacement = H2ImagePlacement::PositiveSide;

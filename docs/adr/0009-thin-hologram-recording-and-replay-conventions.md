@@ -108,6 +108,13 @@ photopolymer, or a complete radiometric exposure model.
   refractive index and independently evaluates recording, replay, and
   propagation. No manual RGB spatial offset or cross-wavelength phase reuse is
   permitted.
+- Diffraction-order placement is diagnostic only. Under ordinary reference
+  replay the zero carrier follows the recording reference and the twin carrier
+  uses twice its transverse direction cosine; conjugate replay reverses both.
+  The desired image carrier is the reference-cancelled origin. Diagnostics
+  distinguish a non-propagating carrier, a carrier beyond sampled Nyquist, and
+  a geometrically propagating centre outside the native periodic window. They
+  do not silently select, discard, or spatially clamp any order.
 
 ## Validation
 
@@ -139,6 +146,11 @@ photopolymer, or a complete radiometric exposure model.
   error after the longer FFT chain. Three independent spectral-bin oracles use
   the Helmholtz longitudinal frequency at 638, 532, and 450 nm and prove that
   wavelength identity, rather than an artificial colour offset, drives phase.
+- Independent carrier geometry verifies ordinary/conjugate sign reversal and
+  exact `z * directionTransverse / directionZ` displacement. Separate cases
+  distinguish a sampled zero order from an aliased twice-carrier twin, reject a
+  grazing recording reference, and mark a non-propagating twin with no finite
+  predicted centre.
 
 ## Explicit limitations
 
@@ -148,6 +160,5 @@ photopolymer, or a complete radiometric exposure model.
 - A Denisyuk, reflection H2, or other volume hologram must use the later volume
   model/Kogelnik path. It must never be represented as this thin mask while
   being labelled physically complete.
-- Diffraction-order spatial separation, calibrated exposure, the interactive
-  teaching workflow, and strict experiment persistence are subsequent M6
-  increments.
+- Calibrated exposure, the interactive teaching workflow, and strict experiment
+  persistence are subsequent M6 increments.

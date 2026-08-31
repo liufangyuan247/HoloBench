@@ -347,6 +347,99 @@ TEST_CASE("phase-only reconstruction rejects invalid geometry signal and backend
         std::invalid_argument);
 }
 
+TEST_CASE("diffraction-order carrier placement follows replay sign and geometry") {
+    field::ComplexField2D plate(64, 32, 4e-6, 6e-6, 532e-9, 1.3);
+    holobench::optics::wave::PlaneWaveParameters reference;
+    reference.directionCosineX = 0.01;
+    reference.directionCosineY = -0.01;
+    constexpr double distance = 0.005;
+
+    const auto ordinary = appholography::evaluateDiffractionOrderPlacement(
+        plate,
+        reference,
+        appholography::ReferenceReplayKind::Ordinary,
+        distance);
+    const auto conjugate = appholography::evaluateDiffractionOrderPlacement(
+        plate,
+        reference,
+        appholography::ReferenceReplayKind::Conjugate,
+        distance);
+
+    const double zeroZ = std::sqrt(1.0
+        - reference.directionCosineX * reference.directionCosineX
+        - reference.directionCosineY * reference.directionCosineY);
+    const double twinZ = std::sqrt(1.0
+        - 4.0 * reference.directionCosineX * reference.directionCosineX
+        - 4.0 * reference.directionCosineY * reference.directionCosineY);
+    CHECK(ordinary.zeroOrderOffsetXMetres
+        == doctest::Approx(distance * reference.directionCosineX / zeroZ)
+            .epsilon(1e-15));
+    CHECK(ordinary.zeroOrderOffsetYMetres
+        == doctest::Approx(distance * reference.directionCosineY / zeroZ)
+            .epsilon(1e-15));
+    CHECK(ordinary.twinOrderOffsetXMetres
+        == doctest::Approx(
+            distance * 2.0 * reference.directionCosineX / twinZ).epsilon(1e-15));
+    CHECK(ordinary.twinOrderOffsetYMetres
+        == doctest::Approx(
+            distance * 2.0 * reference.directionCosineY / twinZ).epsilon(1e-15));
+    CHECK(conjugate.zeroOrderOffsetXMetres
+        == doctest::Approx(-ordinary.zeroOrderOffsetXMetres).epsilon(1e-15));
+    CHECK(conjugate.zeroOrderOffsetYMetres
+        == doctest::Approx(-ordinary.zeroOrderOffsetYMetres).epsilon(1e-15));
+    CHECK(conjugate.twinOrderOffsetXMetres
+        == doctest::Approx(-ordinary.twinOrderOffsetXMetres).epsilon(1e-15));
+    CHECK(conjugate.twinOrderOffsetYMetres
+        == doctest::Approx(-ordinary.twinOrderOffsetYMetres).epsilon(1e-15));
+    CHECK(ordinary.referenceSpatialFrequencyXCyclesPerMetre
+        == doctest::Approx(
+            plate.refractiveIndex() / plate.vacuumWavelengthMetres()
+                * reference.directionCosineX).epsilon(1e-15));
+    CHECK(ordinary.zeroOrderCarrierSampled);
+    CHECK(ordinary.twinOrderCarrierSampled);
+    CHECK(ordinary.zeroOrderCarrierPropagating);
+    CHECK(ordinary.twinOrderCarrierPropagating);
+    CHECK(ordinary.zeroOrderCentreInsidePeriodicWindow);
+    CHECK_FALSE(ordinary.twinOrderCentreInsidePeriodicWindow);
+}
+
+TEST_CASE("diffraction-order diagnostics distinguish aliasing and nonpropagation") {
+    field::ComplexField2D plate(32, 32, 8e-6, 8e-6, 532e-9);
+    holobench::optics::wave::PlaneWaveParameters sampledReference;
+    sampledReference.directionCosineX = 0.02;
+    const auto aliasedTwin = appholography::evaluateDiffractionOrderPlacement(
+        plate,
+        sampledReference,
+        appholography::ReferenceReplayKind::Conjugate,
+        0.01);
+
+    CHECK(aliasedTwin.zeroOrderCarrierSampled);
+    CHECK_FALSE(aliasedTwin.twinOrderCarrierSampled);
+    CHECK(aliasedTwin.twinOrderCarrierPropagating);
+
+    auto steepReference = sampledReference;
+    steepReference.directionCosineX = 0.6;
+    const auto nonpropagatingTwin = appholography::evaluateDiffractionOrderPlacement(
+        plate,
+        steepReference,
+        appholography::ReferenceReplayKind::Ordinary,
+        0.01);
+    CHECK(nonpropagatingTwin.zeroOrderCarrierPropagating);
+    CHECK_FALSE(nonpropagatingTwin.twinOrderCarrierPropagating);
+    CHECK(std::isnan(nonpropagatingTwin.twinOrderOffsetXMetres));
+    CHECK(std::isnan(nonpropagatingTwin.desiredToTwinOrderSeparationMetres));
+    CHECK_FALSE(nonpropagatingTwin.twinOrderCentreInsidePeriodicWindow);
+
+    steepReference.directionCosineX = 1.0;
+    CHECK_THROWS_AS(
+        static_cast<void>(appholography::evaluateDiffractionOrderPlacement(
+            plate,
+            steepReference,
+            appholography::ReferenceReplayKind::Ordinary,
+            0.01)),
+        std::invalid_argument);
+}
+
 TEST_CASE("H2 placement crosses the H1 real-image plane with signed geometry") {
     const auto object = makeObjectField();
     appholography::H1H2TransferConfig config;

@@ -201,6 +201,107 @@ namespace {
 
 } // namespace
 
+DiffractionOrderPlacementDiagnostics evaluateDiffractionOrderPlacement(
+    const field::ComplexField2D& plateField,
+    const optics::wave::PlaneWaveParameters& recordingReference,
+    ReferenceReplayKind replayKind,
+    double signedObservationDistanceMetres) {
+    if (!std::isfinite(signedObservationDistanceMetres)
+        || !std::isfinite(recordingReference.directionCosineX)
+        || !std::isfinite(recordingReference.directionCosineY)) {
+        throw std::invalid_argument(
+            "diffraction-order placement inputs must be finite");
+    }
+    const double referenceTransverseDirection = std::hypot(
+        recordingReference.directionCosineX,
+        recordingReference.directionCosineY);
+    if (!std::isfinite(referenceTransverseDirection)
+        || referenceTransverseDirection >= 1.0) {
+        throw std::invalid_argument(
+            "diffraction-order recording reference must define a forward wave");
+    }
+
+    const double carrierScale = plateField.refractiveIndex()
+        / plateField.vacuumWavelengthMetres();
+    const double referenceFx = carrierScale
+        * recordingReference.directionCosineX;
+    const double referenceFy = carrierScale
+        * recordingReference.directionCosineY;
+    const double nyquistX = 0.5 / plateField.pitchXMetres();
+    const double nyquistY = 0.5 / plateField.pitchYMetres();
+    const double replaySign = replayKind == ReferenceReplayKind::Ordinary
+        ? 1.0 : -1.0;
+    const double zeroDirectionX = replaySign
+        * recordingReference.directionCosineX;
+    const double zeroDirectionY = replaySign
+        * recordingReference.directionCosineY;
+    const double twinDirectionX = 2.0 * zeroDirectionX;
+    const double twinDirectionY = 2.0 * zeroDirectionY;
+    const double zeroTransverseSquared = zeroDirectionX * zeroDirectionX
+        + zeroDirectionY * zeroDirectionY;
+    const double twinTransverseSquared = twinDirectionX * twinDirectionX
+        + twinDirectionY * twinDirectionY;
+    const bool zeroPropagating = zeroTransverseSquared < 1.0;
+    const bool twinPropagating = twinTransverseSquared < 1.0;
+    const double invalidOffset = std::numeric_limits<double>::quiet_NaN();
+    double zeroOffsetX = invalidOffset;
+    double zeroOffsetY = invalidOffset;
+    double twinOffsetX = invalidOffset;
+    double twinOffsetY = invalidOffset;
+    if (zeroPropagating) {
+        const double directionZ = std::sqrt(1.0 - zeroTransverseSquared);
+        zeroOffsetX = signedObservationDistanceMetres
+            * zeroDirectionX / directionZ;
+        zeroOffsetY = signedObservationDistanceMetres
+            * zeroDirectionY / directionZ;
+    }
+    if (twinPropagating) {
+        const double directionZ = std::sqrt(1.0 - twinTransverseSquared);
+        twinOffsetX = signedObservationDistanceMetres
+            * twinDirectionX / directionZ;
+        twinOffsetY = signedObservationDistanceMetres
+            * twinDirectionY / directionZ;
+    }
+    if ((zeroPropagating
+            && (!std::isfinite(zeroOffsetX) || !std::isfinite(zeroOffsetY)))
+        || (twinPropagating
+            && (!std::isfinite(twinOffsetX) || !std::isfinite(twinOffsetY)))) {
+        throw std::overflow_error(
+            "diffraction-order carrier displacement is not representable");
+    }
+    const double halfExtentX = 0.5 * static_cast<double>(plateField.width())
+        * plateField.pitchXMetres();
+    const double halfExtentY = 0.5 * static_cast<double>(plateField.height())
+        * plateField.pitchYMetres();
+
+    return {
+        .referenceSpatialFrequencyXCyclesPerMetre = referenceFx,
+        .referenceSpatialFrequencyYCyclesPerMetre = referenceFy,
+        .nyquistXCyclesPerMetre = nyquistX,
+        .nyquistYCyclesPerMetre = nyquistY,
+        .zeroOrderOffsetXMetres = zeroOffsetX,
+        .zeroOrderOffsetYMetres = zeroOffsetY,
+        .twinOrderOffsetXMetres = twinOffsetX,
+        .twinOrderOffsetYMetres = twinOffsetY,
+        .desiredToZeroOrderSeparationMetres = zeroPropagating
+            ? std::hypot(zeroOffsetX, zeroOffsetY) : invalidOffset,
+        .desiredToTwinOrderSeparationMetres = twinPropagating
+            ? std::hypot(twinOffsetX, twinOffsetY) : invalidOffset,
+        .zeroOrderCarrierSampled = std::abs(referenceFx) <= nyquistX
+            && std::abs(referenceFy) <= nyquistY,
+        .twinOrderCarrierSampled = std::abs(2.0 * referenceFx) <= nyquistX
+            && std::abs(2.0 * referenceFy) <= nyquistY,
+        .zeroOrderCarrierPropagating = zeroPropagating,
+        .twinOrderCarrierPropagating = twinPropagating,
+        .zeroOrderCentreInsidePeriodicWindow = zeroPropagating
+            && std::abs(zeroOffsetX) < halfExtentX
+            && std::abs(zeroOffsetY) < halfExtentY,
+        .twinOrderCentreInsidePeriodicWindow = twinPropagating
+            && std::abs(twinOffsetX) < halfExtentX
+            && std::abs(twinOffsetY) < halfExtentY,
+    };
+}
+
 ThinHologramReconstructionResult runThinHologramReconstruction(
     const field::ComplexField2D& objectPlaneField,
     const ThinHologramReconstructionConfig& config,
@@ -267,6 +368,11 @@ ThinHologramReconstructionResult runThinHologramReconstruction(
     const auto expectedReal = scaledExpected(objectPlaneField, expectedScale, true);
     const auto virtualQuality = compareFields(virtualImage, expectedVirtual);
     const auto realQuality = compareFields(realImage, expectedReal);
+    const auto orderPlacement = evaluateDiffractionOrderPlacement(
+        objectAtPlate,
+        config.recordingReference,
+        ReferenceReplayKind::Conjugate,
+        config.objectToPlateDistanceMetres);
 
     return {
         .objectAtRecordingPlate = std::move(objectAtPlate),
@@ -284,6 +390,7 @@ ThinHologramReconstructionResult runThinHologramReconstruction(
         .recordingPropagation = recordingDiagnostics,
         .virtualImagePropagation = virtualDiagnostics,
         .realImagePropagation = realDiagnostics,
+        .conjugateRealImageOrderPlacement = orderPlacement,
         .expectedImageAmplitudeScale = expectedScale,
     };
 }
@@ -395,6 +502,11 @@ H1H2TransferResult runH1H2Transfer(
     const auto expectedImage = scaledExpected(
         h1.isolatedRealImageOrder, expectedScale, false);
     const auto quality = compareFields(h2IsolatedAtImage, expectedImage);
+    const auto h2OrderPlacement = evaluateDiffractionOrderPlacement(
+        objectAtH2,
+        h2ReferenceParameters,
+        ReferenceReplayKind::Ordinary,
+        imageDistanceFromH2);
 
     return {
         .h1 = std::move(h1),
@@ -408,6 +520,7 @@ H1H2TransferResult runH1H2Transfer(
         .h2ImageQuality = quality,
         .h1ToH2Propagation = h1ToH2Diagnostics,
         .h2ToImagePropagation = h2ToImageDiagnostics,
+        .h2ReplayOrderPlacement = h2OrderPlacement,
         .h1ImageAxialPositionMetres = imagePosition,
         .imageDistanceFromH2Metres = imageDistanceFromH2,
         .imagePlacement = placement,

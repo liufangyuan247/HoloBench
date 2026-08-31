@@ -85,6 +85,11 @@ development. For the current repository state and roadmap, see
   or positive side of H2. Red, green, and blue run as independent coherent
   wavelength channels on a shared transverse grid, with no artificial colour
   offset and no claim that thin H2 represents a reflection volume hologram.
+- **Diffraction-order placement diagnostics**: Ordinary and conjugate replay
+  predict the zero/twin carrier centres relative to the desired image order and
+  report propagation, Nyquist sampling, physical separation, and periodic-
+  window escape independently. These diagnostics never filter an order out of
+  the physical full replay.
 
 ## Physical Assumptions & Limitations (M1)
 
@@ -104,7 +109,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (325 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (327 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -112,7 +117,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 325/325 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 327/327 tests passing):
 
 ```powershell
 cmake --preset core-ci
