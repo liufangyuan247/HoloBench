@@ -62,7 +62,20 @@ rebuilt on the shared bench.
   cross-coherence pairing fails explicitly, and a common rigid transform of the
   complete setup preserves the plate-local result. The selected-plate Inspector
   now exposes every compatible per-wavelength candidate and its OPD/crossing
-  angle; actual material recording and replay remain M8 work.
+  angle; persisted material recipes and reconstruction remain M8 work.
+- **Sampled plate fields and first placed-bench exposure**: a current incident
+  branch now becomes a finite `ComplexField2D` in the selected plate's local
+  frame. Collimated, Gaussian, and rectangular object-source envelopes retain
+  physical branch power in `sqrt(W/m^2)` units; a finite plate or explicit local
+  analysis window integrates only the power it intercepts. Optical path and
+  transverse direction produce sampled phase, while carrier Nyquist, boundary
+  truncation, Gaussian-envelope approximation, and upstream elements awaiting
+  wave refinement remain explicit. Same-side coherent branches can be recorded
+  through the existing thin-amplitude response from the plate Inspector, which
+  displays exposure, captured powers, fringe frequency/period, sampling, and
+  stale revision. Opposite-side pairs and unresolved fringe carriers fail
+  explicitly. A labelled physical irradiance defines relative `I=1`; shrinking
+  the ROI never concentrates the complete beam power into that window.
 
 - **Dynamic scene foundation (headless)**: `BenchScene` is now the first shared
   scene truth source for the new product path. It owns a dynamic component
@@ -106,10 +119,10 @@ rebuilt on the shared bench.
   order; hop, branch, minimum-power, escape, clipping, absorption, and invalid
   interaction endings are explicit.
 - **Current verification**: Windows Clang 21 `core-ci` warnings-as-errors build
-  passes with 448/448 deterministic cases; the complete development build and
-  application link pass with 450/450 cases including the packaged-font and
+  passes with 457/457 deterministic cases; the complete development build and
+  application link pass with 459/459 cases including the packaged-font and
   hardware OpenGL tests. The development and warnings-as-errors application
-  smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Thirty-six M7
+  smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Forty-five M7
   cases cover all twelve
   schemas, invalid IDs/transforms/physics, scene mutation/revision/staleness,
   RGB and arbitrary-transform canonical persistence, strict parser rejection,
@@ -117,10 +130,11 @@ rebuilt on the shared bench.
   budget validation, plus arbitrary-pose mirror/lens paths, split-screen power,
   aperture clipping, insertion-order determinism, RGB detector identity,
   bounded mirror loops, rigid local-rotation stability, complete bench history,
-  branch clearing, bounded eviction, and revision-safe restore. Multi-ray beam
-  envelopes, sampled detector fields, the resolved real-lens adapter, and local
-  wave-plane propagation/modulation adapters and M8 recording/replay remain
-  open,
+  branch clearing, bounded eviction, revision-safe restore, local source-field
+  power/phase/Nyquist, ROI flux, and thin placed-plate exposure. Full
+  path-dependent beam-envelope transforms, sampled screen/probe fields, the
+  resolved real-lens adapter, lens/filter/SLM wave transforms, thin replay,
+  volume reflection, and RGB recording/replay remain open,
   so M7 is not yet accepted even though the interactive M7.1 path is present.
 
 ## Completed

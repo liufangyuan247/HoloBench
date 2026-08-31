@@ -475,6 +475,7 @@ Application::Application()
     , fourFImageTexture_(std::make_unique<render::gl::Texture2D>())
     , slmInterferenceTexture_(std::make_unique<render::gl::Texture2D>())
     , holographyTexture_(std::make_unique<render::gl::Texture2D>())
+    , sandboxPlateTexture_(std::make_unique<render::gl::Texture2D>())
     , reflectionRefractionResult_(
           reflection::evaluateReflectionRefraction(
               reflectionRefractionConfig_))
@@ -1098,11 +1099,15 @@ void Application::shutdown() noexcept {
     if (holographyTexture_) {
         holographyTexture_->destroy();
     }
+    if (sandboxPlateTexture_) {
+        sandboxPlateTexture_->destroy();
+    }
     detectorResult_.reset();
     samplingDebuggerResult_.reset();
     realLensResult_.reset();
     slmInterferenceResult_.reset();
     holographyResult_.reset();
+    sandboxPlateRecording_.reset();
     if (imguiGlInitialized_) {
         ImGui_ImplOpenGL3_Shutdown();
         imguiGlInitialized_ = false;
@@ -4887,9 +4892,25 @@ void Application::drawSandboxInspector() {
                         }
                     }
                     ImGui::TextDisabled(
-                        "Centreline evidence only; intensity/phase fields require local wave refinement.");
+                        "Centreline routing is immediate; committed plate sampling refines it into a local complex field.");
                     if (selected->kind == bench::BenchComponentKind::HolographicPlate) {
                         ImGui::SeparatorText("Recording Geometry Candidates");
+                        ImGui::InputInt(
+                            "Samples / axis", &sandboxPlateSampleSize_, 16, 64);
+                        ImGui::InputFloat(
+                            "Square analysis window (mm)",
+                            &sandboxPlateWindowMillimetres_,
+                            0.1F,
+                            1.0F,
+                            "%.4g");
+                        ImGui::InputFloat(
+                            "Relative I=1 (kW/m^2)",
+                            &sandboxPlateRelativeReferenceKilowattsPerSquareMetre_,
+                            1.0F,
+                            10.0F,
+                            "%.4g");
+                        ImGui::TextDisabled(
+                            "The analysis window is a labelled local patch inside the physical plate.");
                         const auto fields
                             = optics::holography::collectPlateIncidentFields(
                                 benchProject_.scene,
@@ -4926,6 +4947,90 @@ void Application::drawSandboxInspector() {
                                     pair.signedOpticalPathDifferenceMetres,
                                     pair.crossingAngleRadians * 180.0
                                         / std::numbers::pi_v<double>);
+                                const std::string pairWidgetId
+                                    = "pair-"
+                                    + std::to_string(pair.objectBranchId)
+                                    + "-" + std::to_string(pair.referenceBranchId);
+                                ImGui::PushID(pairWidgetId.c_str());
+                                if (pair.geometry
+                                        == optics::holography::PlateRecordingGeometry::Transmission
+                                    && ImGui::Button("Record thin transmission")) {
+                                    try {
+                                        if (sandboxPlateSampleSize_ < 2
+                                            || sandboxPlateSampleSize_ > 4096) {
+                                            throw std::invalid_argument(
+                                                "plate sample size must be in [2, 4096]");
+                                        }
+                                        if (!std::isfinite(
+                                                sandboxPlateWindowMillimetres_)
+                                            || sandboxPlateWindowMillimetres_ <= 0.0F) {
+                                            throw std::invalid_argument(
+                                                "plate analysis window must be positive");
+                                        }
+                                        if (!std::isfinite(
+                                                sandboxPlateRelativeReferenceKilowattsPerSquareMetre_)
+                                            || sandboxPlateRelativeReferenceKilowattsPerSquareMetre_
+                                                <= 0.0F) {
+                                            throw std::invalid_argument(
+                                                "relative intensity reference must be positive");
+                                        }
+                                        optics::holography::ThinPlateRecordingOptions
+                                            recordingOptions;
+                                        const double extentMetres
+                                            = static_cast<double>(
+                                                sandboxPlateWindowMillimetres_)
+                                            * 1e-3;
+                                        recordingOptions.sampling = {
+                                            .sampleWidth = static_cast<std::size_t>(
+                                                sandboxPlateSampleSize_),
+                                            .sampleHeight = static_cast<std::size_t>(
+                                                sandboxPlateSampleSize_),
+                                            .refractiveIndex = 1.0,
+                                            .extentWidthMetres = extentMetres,
+                                            .extentHeightMetres = extentMetres,
+                                        };
+                                        recordingOptions
+                                            .relativeIntensityReferenceWattsPerSquareMetre
+                                            = static_cast<double>(
+                                                sandboxPlateRelativeReferenceKilowattsPerSquareMetre_)
+                                            * 1e3;
+                                        auto recording
+                                            = optics::holography::recordThinTransmissionPlate(
+                                                benchProject_.scene,
+                                                fields,
+                                                pair.objectBranchId,
+                                                pair.referenceBranchId,
+                                                recordingOptions);
+                                        field::FieldVisualizationOptions viewOptions;
+                                        viewOptions.colormap = field::ColormapKind::Inferno;
+                                        const auto image = field::renderLinearIntensity(
+                                            recording.hologram.recordedRelativeIntensity,
+                                            viewOptions);
+                                        if (!sandboxPlateTexture_
+                                            || !sandboxPlateTexture_->uploadImage(image)) {
+                                            throw std::runtime_error(
+                                                "OpenGL rejected the sampled plate exposure texture");
+                                        }
+                                        sandboxPlateRecording_ = std::make_unique<
+                                            optics::holography::ThinPlateRecordingResult>(
+                                                std::move(recording));
+                                        errorMessage_.clear();
+                                        statusMessage_
+                                            = "Recorded thin transmission exposure on plate "
+                                            + selected->id;
+                                    } catch (const std::exception& error) {
+                                        errorMessage_
+                                            = "Plate recording failed: "
+                                            + std::string(error.what());
+                                        statusMessage_.clear();
+                                    }
+                                }
+                                if (pair.geometry
+                                    == optics::holography::PlateRecordingGeometry::Reflection) {
+                                    ImGui::TextDisabled(
+                                        "Opposite-side pair: use the volume reflection recorder (next M8 slice).");
+                                }
+                                ImGui::PopID();
                                 ++compatiblePairCount;
                             }
                         }
@@ -4935,6 +5040,56 @@ void Application::drawSandboxInspector() {
                         }
                         ImGui::TextDisabled(
                             "Each wavelength is paired independently; RGB channels never cross-interfere.");
+                        if (sandboxPlateRecording_
+                            && sandboxPlateRecording_->plateComponentId
+                                == selected->id) {
+                            ImGui::SeparatorText("Recorded Thin Exposure");
+                            const bool stale = sandboxPlateRecording_->isStaleFor(
+                                benchProject_.scene);
+                            if (stale) {
+                                ImGui::TextColored(
+                                    ImVec4(1.0F, 0.45F, 0.25F, 1.0F),
+                                    "STALE: bench revision changed; record again.");
+                            } else {
+                                ImGui::TextColored(
+                                    ImVec4(0.35F, 0.9F, 0.45F, 1.0F),
+                                    "Current at revision %llu",
+                                    static_cast<unsigned long long>(
+                                        sandboxPlateRecording_->sourceRevision));
+                            }
+                            const auto& diagnostics
+                                = sandboxPlateRecording_->diagnostics;
+                            ImGui::TextWrapped(
+                                "Fringe %.6g cycles/m (X %.6g, Y %.6g) | period %.6g um | sampled: %s",
+                                std::hypot(
+                                    diagnostics.fringeFrequencyXCyclesPerMetre,
+                                    diagnostics.fringeFrequencyYCyclesPerMetre),
+                                diagnostics.fringeFrequencyXCyclesPerMetre,
+                                diagnostics.fringeFrequencyYCyclesPerMetre,
+                                diagnostics.fringePeriodMetres * 1e6,
+                                diagnostics.fringeCarrierSampled ? "yes" : "no");
+                            ImGui::TextWrapped(
+                                "Patch power: object %.6g W, reference %.6g W | exposure %.6g .. %.6g relative intensity",
+                                diagnostics.objectPowerOnSampledWindowWatts,
+                                diagnostics.referencePowerOnSampledWindowWatts,
+                                sandboxPlateRecording_->hologram.diagnostics
+                                    .minimumRecordedRelativeIntensity,
+                                sandboxPlateRecording_->hologram.diagnostics
+                                    .maximumRecordedRelativeIntensity);
+                            if (sandboxPlateTexture_
+                                && sandboxPlateTexture_->isValid()) {
+                                const float availableWidth
+                                    = ImGui::GetContentRegionAvail().x;
+                                const float imageSize = std::clamp(
+                                    availableWidth, 160.0F, 360.0F);
+                                ImGui::Image(
+                                    toImTextureID(
+                                        sandboxPlateTexture_->handle()),
+                                    ImVec2(imageSize, imageSize),
+                                    ImVec2(0.0F, 1.0F),
+                                    ImVec2(1.0F, 0.0F));
+                            }
+                        }
                     }
                 }
             }

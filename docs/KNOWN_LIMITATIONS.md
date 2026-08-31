@@ -113,15 +113,24 @@
   sampled mask, probes observe it non-destructively, and plates collect it as
   recording input. Real-lens components stop explicitly until their persisted
   prescription IDs can be resolved into sequential assemblies. Complete
-  coherent field merging, detector intensity/phase views, and local wave-plane
-  adapters remain open, so this is a functional layout sandbox rather than a
-  completed holography experiment.
+  coherent field merging and detector intensity/phase views remain open. A
+  plate can now sample source envelopes into local complex fields and record a
+  same-side thin transmission exposure over an explicit ROI. Mirrors and
+  splitters are reflected in direction, path, phase, and power, but lens phase,
+  spatial-filter diffraction, SLM modulation, and real-lens wave transforms are
+  not yet applied; affected paths carry explicit refinement warnings.
 - Plate candidates currently infer object branches from an Object/Wavefront
   Source and reference branches from a Laser Source. They classify same-side
   transmission versus opposite-side reflection geometry and reject
-  cross-wavelength/coherence pairs, but branch-role overrides, recording recipe
-  persistence, material exposure, grating formation, Bragg replay, and sampled
-  reconstructed fields are not implemented yet.
+  cross-wavelength/coherence pairs. Thin same-side exposure is now available as
+  a revision-bound recomputable result, but branch-role overrides, persisted
+  recording recipes, replay/order propagation, volume grating formation,
+  reflection Bragg replay, and sampled reconstructed fields remain open.
+- Plate-local source fields use scalar envelopes. A collimated source is a hard
+  circular profile, an object source is rectangular, and the current Gaussian
+  adapter uses the configured source radius at the observer without propagated
+  waist curvature. The ROI integrates only intercepted power and cannot claim
+  whole-plate exposure outside the explicitly sampled window.
 - The dynamic bench has its own bounded scene-wide undo/redo timeline. The
   separate legacy history still covers lesson-relevant fixed optical-bench,
   Wave Detector, Sampling Debugger, and SLM inputs, but not Real Lens or the

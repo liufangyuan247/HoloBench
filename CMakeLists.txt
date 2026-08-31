@@ -72,7 +72,9 @@ holobench_set_warnings(holobench_compute)
 add_library(holobench_optics STATIC
     optics/analysis/ChromaticAnalysis.cpp
     optics/analysis/SpotDiagram.cpp
+    optics/holography/BenchHologramRecording.cpp
     optics/holography/PhaseOnlyHologram.cpp
+    optics/holography/PlateFieldSampling.cpp
     optics/holography/PlateIncidentFields.cpp
     optics/holography/ThinHologram.cpp
     optics/holography/VolumeHologram.cpp
@@ -377,9 +379,11 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/compute/SamplingDiagnosticsTests.cpp
         tests/analytic/BenchTracerTests.cpp
         tests/analytic/BenchInteractionTests.cpp
+        tests/analytic/BenchHologramRecordingTests.cpp
         tests/analytic/BenchSceneTests.cpp
         tests/analytic/DynamicBenchTracerTests.cpp
         tests/analytic/ChromaticAnalysisTests.cpp
+        tests/analytic/PlateFieldSamplingTests.cpp
         tests/analytic/PlateIncidentFieldsTests.cpp
         tests/analytic/PhaseOnlyHologramTests.cpp
         tests/analytic/ThinHologramTests.cpp
