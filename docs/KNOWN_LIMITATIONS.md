@@ -116,6 +116,12 @@
   coherent field merging, detector intensity/phase views, and local wave-plane
   adapters remain open, so this is a functional layout sandbox rather than a
   completed holography experiment.
+- Plate candidates currently infer object branches from an Object/Wavefront
+  Source and reference branches from a Laser Source. They classify same-side
+  transmission versus opposite-side reflection geometry and reject
+  cross-wavelength/coherence pairs, but branch-role overrides, recording recipe
+  persistence, material exposure, grating formation, Bragg replay, and sampled
+  reconstructed fields are not implemented yet.
 - The dynamic bench has its own bounded scene-wide undo/redo timeline. The
   separate legacy history still covers lesson-relevant fixed optical-bench,
   Wave Detector, Sampling Debugger, and SLM inputs, but not Real Lens or the

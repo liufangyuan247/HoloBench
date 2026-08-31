@@ -25,6 +25,7 @@
 
 #include "compute/fft/CpuFftBackend.hpp"
 #include "core/field/FieldVisualization.hpp"
+#include "optics/holography/PlateIncidentFields.hpp"
 #include "optics/io/LensPrescriptionIO.hpp"
 #include "optics/slm/SlmResponseIO.hpp"
 #include "app/HolographyProject.hpp"
@@ -4887,6 +4888,54 @@ void Application::drawSandboxInspector() {
                     }
                     ImGui::TextDisabled(
                         "Centreline evidence only; intensity/phase fields require local wave refinement.");
+                    if (selected->kind == bench::BenchComponentKind::HolographicPlate) {
+                        ImGui::SeparatorText("Recording Geometry Candidates");
+                        const auto fields
+                            = optics::holography::collectPlateIncidentFields(
+                                benchProject_.scene,
+                                benchTraceGraph_,
+                                selected->id);
+                        std::size_t compatiblePairCount = 0;
+                        for (const auto& object : fields.branches) {
+                            if (object.role
+                                != optics::holography::RecordingBranchRole::Object) {
+                                continue;
+                            }
+                            for (const auto& reference : fields.branches) {
+                                if (reference.role
+                                        != optics::holography::RecordingBranchRole::Reference
+                                    || !bench::canInterfere(
+                                        object.beam, reference.beam)) {
+                                    continue;
+                                }
+                                const auto pair
+                                    = optics::holography::makePlateRecordingPair(
+                                        fields,
+                                        object.beam.provenance.branchId,
+                                        reference.beam.provenance.branchId);
+                                const char* geometry = pair.geometry
+                                        == optics::holography::PlateRecordingGeometry::Transmission
+                                    ? "Transmission"
+                                    : "Reflection / Denisyuk";
+                                ImGui::TextWrapped(
+                                    "%s | %.3f nm | object #%llu + reference #%llu | OPD %.6g m | crossing %.3f deg",
+                                    geometry,
+                                    pair.wavelengthMetres * 1e9,
+                                    static_cast<unsigned long long>(pair.objectBranchId),
+                                    static_cast<unsigned long long>(pair.referenceBranchId),
+                                    pair.signedOpticalPathDifferenceMetres,
+                                    pair.crossingAngleRadians * 180.0
+                                        / std::numbers::pi_v<double>);
+                                ++compatiblePairCount;
+                            }
+                        }
+                        if (compatiblePairCount == 0U) {
+                            ImGui::TextDisabled(
+                                "No same-wavelength, same-coherence object/reference pair is present.");
+                        }
+                        ImGui::TextDisabled(
+                            "Each wavelength is paired independently; RGB channels never cross-interfere.");
+                    }
                 }
             }
         }

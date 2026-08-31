@@ -73,6 +73,7 @@ add_library(holobench_optics STATIC
     optics/analysis/ChromaticAnalysis.cpp
     optics/analysis/SpotDiagram.cpp
     optics/holography/PhaseOnlyHologram.cpp
+    optics/holography/PlateIncidentFields.cpp
     optics/holography/ThinHologram.cpp
     optics/holography/VolumeHologram.cpp
     optics/io/LensPrescriptionIO.cpp
@@ -379,6 +380,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/BenchSceneTests.cpp
         tests/analytic/DynamicBenchTracerTests.cpp
         tests/analytic/ChromaticAnalysisTests.cpp
+        tests/analytic/PlateIncidentFieldsTests.cpp
         tests/analytic/PhaseOnlyHologramTests.cpp
         tests/analytic/ThinHologramTests.cpp
         tests/analytic/VolumeHologramTests.cpp

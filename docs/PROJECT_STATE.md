@@ -53,6 +53,16 @@ rebuilt on the shared bench.
   viewport drags participate in that timeline. Restoring a snapshot assigns a
   fresh monotonic scene revision so cached detector or plate observations can
   never become current merely because an old revision number reappeared.
+- **Plate-local recording input contract**: current plate hits convert into a
+  deterministic `PlateIncidentFieldSet` with object/reference source role,
+  local hit point and direction, local-Z incidence side, incidence angle,
+  wavelength, coherence identity, power, optical path, and scene revision.
+  Same-side coherent pairs classify as transmission geometry; opposite-side
+  pairs classify as reflection/Denisyuk geometry. Cross-wavelength and
+  cross-coherence pairing fails explicitly, and a common rigid transform of the
+  complete setup preserves the plate-local result. The selected-plate Inspector
+  now exposes every compatible per-wavelength candidate and its OPD/crossing
+  angle; actual material recording and replay remain M8 work.
 
 - **Dynamic scene foundation (headless)**: `BenchScene` is now the first shared
   scene truth source for the new product path. It owns a dynamic component
@@ -96,10 +106,10 @@ rebuilt on the shared bench.
   order; hop, branch, minimum-power, escape, clipping, absorption, and invalid
   interaction endings are explicit.
 - **Current verification**: Windows Clang 21 `core-ci` warnings-as-errors build
-  passes with 443/443 deterministic cases; the complete development build and
-  application link pass with 445/445 cases including the packaged-font and
+  passes with 448/448 deterministic cases; the complete development build and
+  application link pass with 450/450 cases including the packaged-font and
   hardware OpenGL tests. The development and warnings-as-errors application
-  smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Thirty-one M7
+  smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Thirty-six M7
   cases cover all twelve
   schemas, invalid IDs/transforms/physics, scene mutation/revision/staleness,
   RGB and arbitrary-transform canonical persistence, strict parser rejection,
@@ -109,7 +119,8 @@ rebuilt on the shared bench.
   bounded mirror loops, rigid local-rotation stability, complete bench history,
   branch clearing, bounded eviction, and revision-safe restore. Multi-ray beam
   envelopes, sampled detector fields, the resolved real-lens adapter, and local
-  wave-plane propagation/modulation adapters remain open,
+  wave-plane propagation/modulation adapters and M8 recording/replay remain
+  open,
   so M7 is not yet accepted even though the interactive M7.1 path is present.
 
 ## Completed
