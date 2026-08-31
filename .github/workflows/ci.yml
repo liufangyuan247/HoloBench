@@ -36,6 +36,12 @@ jobs:
       - name: Run M7 teaching-workflow performance gate (Linux)
         if: runner.os == 'Linux'
         run: ./out/build/core-ci/holobench_m7_benchmark
+      - name: Run M8 holography-sandbox performance gate (Windows)
+        if: runner.os == 'Windows'
+        run: .\out\build\core-ci\holobench_m8_benchmark.exe
+      - name: Run M8 holography-sandbox performance gate (Linux)
+        if: runner.os == 'Linux'
+        run: ./out/build/core-ci/holobench_m8_benchmark
 
   app-compile:
     name: Application Compile (${{ matrix.os }})

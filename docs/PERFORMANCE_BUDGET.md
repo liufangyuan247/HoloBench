@@ -182,3 +182,34 @@ These are explicit lesson-action refresh budgets, not per-frame rendering
 targets. `holobench_m7_benchmark` runs in both Windows and Ubuntu core CI. It
 contains no GPU dispatch, vendor/model branch, speculative compatibility
 workaround, precision reduction, or hardware-specific performance cap.
+
+## M8 Placed Holography Sandbox Benchmarks
+
+### Benchmark profiles: `holography/placed_*_256_record_replay_cpu`
+
+- **Hardware Profile**: Intel Core i7-9750H (6 cores / 12 logical processors),
+  Windows 10 10.0.19045, Clang 21.1.8 Release build.
+- **Workload**: Three ordinary editable M8 presets are traced from their placed
+  source geometry to `plate-h1`. Transmission records and replays one sampled
+  thin hologram to the placed screen; reflection records the counter-propagating
+  grating and propagates the Bragg-weighted field to the reflection-side probe;
+  RGB independently records and replays 638/532/450 nm channels to the placed
+  screen. Every local field is 256x256 over a 1 mm square plate window. The
+  benchmark calls the same public ray, plate-field, recording, and observation
+  APIs as the product and rejects stale, unresolved, zero-power, or non-finite
+  results.
+- **Execution Parameters**: Deterministic CPU double-precision backend, two
+  warmups and ten measured complete scene runs. The executable returns nonzero
+  when any scene misses its own p95 budget.
+
+| Named scene | Clang p50 | Clang p95 | p95 budget | Status |
+|---|---:|---:|---:|---|
+| `holography/placed_transmission_256_record_replay_cpu` | **71.628 ms** | **78.915 ms** | **< 750 ms** | Met |
+| `holography/placed_reflection_256_record_replay_cpu` | **46.293 ms** | **84.668 ms** | **< 500 ms** | Met |
+| `holography/placed_rgb_256_record_replay_cpu` | **218.359 ms** | **239.419 ms** | **< 2000 ms** | Met |
+
+These are explicit record/reconstruct actions, not per-frame rendering targets.
+The CPU reference contains no GPU dispatch, vendor/model branch, speculative
+compatibility workaround, precision reduction, or hardware-specific cap.
+Windows MSVC and Ubuntu GCC results remain to be recorded from the first remote
+CI run of this gate; both use the same platform-neutral budgets.

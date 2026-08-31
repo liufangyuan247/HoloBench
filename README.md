@@ -236,6 +236,13 @@ Named M6 CPU full-refresh performance gate:
 ./out/build/dev/holobench_m6_benchmark.exe
 ```
 
+Named M8 placed transmission, reflection, and RGB record/replay performance
+gates (256x256 CPU reference fields):
+
+```powershell
+./out/build/dev/holobench_m8_benchmark.exe
+```
+
 Automated 3D viewport throughput benchmark (disables VSync, forces per-frame `glFinish`):
 
 ```powershell

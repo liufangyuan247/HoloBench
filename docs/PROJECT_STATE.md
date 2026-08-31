@@ -378,6 +378,12 @@ completion because it is primarily driven through fixed parameter panels:
 - **Revision provenance**: Plate incident evidence, thin recordings, thin
   replays, volume recordings, and volume replays carry the exact scene
   revision and visibly become stale after a bench edit.
+- **Named M8 performance gates**: `holobench_m8_benchmark` executes complete
+  256x256 placed transmission, reflection, and independent RGB record/replay
+  paths through the public product APIs. On the reference i7-9750H Clang build,
+  p95 is **78.915/84.668/239.419 ms** against platform-neutral
+  **750/500/2000 ms** budgets. Each scene rejects stale, unresolved,
+  zero-power, or non-finite output and is registered in Windows/Linux core CI.
 - **Current local validation**: Windows Clang development build passes 504/504
   deterministic CPU, application, font, and OpenGL GPU cases after the placed
   volume/RGB/local-wave-path/recipe/SLM increments; `core-ci` passes 502/502, `app-ci` compiles
@@ -395,8 +401,8 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Add named M8 performance scenes and complete cross-compiler/application
-   validation for transmission, reflection, and RGB workflows.
+1. Complete remote cross-compiler/application validation for the named M8
+   transmission, reflection, and RGB performance scenes.
 2. Add corruption-safe autosave/recovery around unified bench documents.
 3. Compile a versioned M9 CHIMERA recipe into an editable bench.
 4. Simulate its hogel/angular data and SLM/RGB exposure events.

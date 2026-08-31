@@ -117,6 +117,12 @@ manual/automation provenance. Performance closure remains pending;
 unsupported powered/vector/high-NA
 geometry stays explicit.
 
+The local M8 performance gate now runs the real placed transmission,
+reflection, and RGB 256x256 record/replay paths, with p95 budgets of
+750/500/2000 ms respectively. Windows/Linux CI integration is present;
+cross-compiler evidence and corruption-safe project recovery remain before
+M8.5 acceptance.
+
 Recipe selectors use stable component paths, wavelength, and coherence identity
 instead of transient branch IDs. Sampling, thin response, and volume material
 parameters round-trip byte-stably, while recomputable complex fields and
