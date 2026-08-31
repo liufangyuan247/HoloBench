@@ -154,6 +154,7 @@ Previous: **M5 - SLM, Coherence & Interference: complete**
 - **Eight required templates CI**: GitHub Actions run [33400513560](https://github.com/liufangyuan247/HoloBench/actions/runs/33400513560) passes all four Windows/Ubuntu jobs at `00c4f4c`.
 - **Required-workflow benchmark CI**: GitHub Actions run [33402092954](https://github.com/liufangyuan247/HoloBench/actions/runs/33402092954) passes all four Windows/Ubuntu jobs at `c1f3c2b`.
 - **Packaged-font CI**: GitHub Actions run [33405406095](https://github.com/liufangyuan247/HoloBench/actions/runs/33405406095) passes all four Windows/Ubuntu jobs at `314f6b3`.
+- **Ten-workflow and capability-driven GPU CI**: GitHub Actions run [33411773549](https://github.com/liufangyuan247/HoloBench/actions/runs/33411773549) passes all four Windows/Ubuntu core and application-compile jobs at `0a48a56`.
 - **Current validation**: The advanced-course increment passes 412/412 deterministic core/application cases and complete warnings-as-errors applications with Windows Clang 21, MSVC 19.44, and Ubuntu/WSL GCC 15.2. The 589-glyph packaged-output atlas gate passes on all three toolchains. Clang and MSVC hidden OpenGL smoke pass on AMD Radeon Pro 5300M, render Chinese draw geometry, validate all ten packaged templates at startup, and retain all prior semantic round-trip checks. The capability-driven GPU revision additionally passes 9/9 cases and 3175/3175 assertions on both Windows compilers, while GCC compiles the same backend; no GPU identity branch remains.
 
 ## Known limitations (M1/M2)

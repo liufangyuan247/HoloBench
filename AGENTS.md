@@ -37,9 +37,10 @@ Use `core-ci` when no display/OpenGL environment is available.
 ## GPU compatibility and performance
 
 - Base GPU availability, limits, precision, and dispatch sizes on runtime capability queries, never on a GPU-vendor allowlist or denylist.
-- A confirmed driver or device defect may use a narrowly scoped quirk that matches the specific affected device and driver range. Keep the default path unchanged for all other GPUs.
-- Do not turn one GPU model's workaround into a global precision downgrade, feature disablement, dispatch cap, synchronization cost, or performance limit.
-- Every device quirk must document the triggering hardware/driver evidence, preserve the CPU reference oracle, have a regression test where practical, and include an explicit retirement condition.
+- Do not select behavior by matching GPU vendor, model, device ID, driver string, or renderer identity, even for a confirmed device defect.
+- Detect a defect through the smallest relevant runtime capability or numerical probe. Apply fallback only to the backend instance and operation whose probe actually failed; keep the normal path unchanged for every passing GPU.
+- Do not turn one GPU's failure into a global precision downgrade, feature disablement, dispatch cap, synchronization cost, or performance limit.
+- Every capability-driven fallback must preserve the CPU reference oracle, have a regression test where practical, and document its trigger and scope.
 - Treat NVIDIA parity and performance as a release validation target; record renderer, driver/OpenGL version, numerical parity, and the named benchmark result without assuming that AMD-derived workarounds apply.
 
 ## Definition of done
