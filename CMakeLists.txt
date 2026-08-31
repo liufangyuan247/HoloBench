@@ -122,6 +122,7 @@ add_library(holobench_app_logic STATIC
     app/BenchEditHistory.cpp
     app/BenchHolographyPresets.cpp
     app/BenchProject.cpp
+    app/BenchRecordingRecipe.cpp
     app/LessonEditHistory.cpp
     app/HolographyLabPipeline.cpp
     app/HolographyProject.cpp
@@ -430,6 +431,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/app/BenchEditHistoryTests.cpp
         tests/app/BenchHolographyPresetsTests.cpp
         tests/app/BenchProjectTests.cpp
+        tests/app/BenchRecordingRecipeTests.cpp
         tests/app/SlmInterferenceUiStateTests.cpp
         tests/app/HolographyUiStateTests.cpp
         tests/app/HolographyProjectTests.cpp

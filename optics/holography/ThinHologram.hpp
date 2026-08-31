@@ -16,6 +16,8 @@ struct ThinHologramResponseParameters final {
     double intensityToAmplitudeGain = 0.25;
     double minimumAmplitudeTransmission = 0.0;
     double maximumAmplitudeTransmission = 1.0;
+
+    bool operator==(const ThinHologramResponseParameters&) const = default;
 };
 
 struct ThinHologramRecordingDiagnostics final {

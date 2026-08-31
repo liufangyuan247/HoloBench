@@ -6,6 +6,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <limits>
+#include <set>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
@@ -373,6 +374,406 @@ project::ProjectProvenance provenanceFromJson(const Json& value) {
     return result;
 }
 
+std::string_view recordingModelName(HologramRecordingModel model) noexcept {
+    switch (model) {
+    case HologramRecordingModel::ThinTransmission:
+        return "thin_transmission";
+    case HologramRecordingModel::VolumeGrating:
+        return "volume_grating";
+    }
+    return "unknown";
+}
+
+HologramRecordingModel recordingModelFromName(std::string_view name) {
+    if (name == "thin_transmission") {
+        return HologramRecordingModel::ThinTransmission;
+    }
+    if (name == "volume_grating") {
+        return HologramRecordingModel::VolumeGrating;
+    }
+    throw std::runtime_error(
+        "unsupported hologram recording model: " + std::string(name));
+}
+
+Json branchSelectorToJson(const RecordingBranchSelector& selector) {
+    return {
+        {"coherence_id", selector.coherenceId},
+        {"component_path", selector.componentPath},
+        {"wavelength_m", selector.wavelengthMetres},
+    };
+}
+
+RecordingBranchSelector branchSelectorFromJson(const Json& value) {
+    requireKeys(
+        value,
+        {"coherence_id", "component_path", "wavelength_m"},
+        "recording branch selector");
+    if (!value.at("component_path").is_array()) {
+        throw std::runtime_error(
+            "recording branch component_path must be an array");
+    }
+    RecordingBranchSelector result;
+    result.wavelengthMetres = finiteNumber(
+        value.at("wavelength_m"), "recording branch wavelength_m");
+    result.coherenceId = requiredString(
+        value.at("coherence_id"), "recording branch coherence_id");
+    for (const auto& componentId : value.at("component_path")) {
+        result.componentPath.push_back(requiredString(
+            componentId, "recording branch component_path entry"));
+    }
+    return result;
+}
+
+Json channelRecipeToJson(const RecordingChannelRecipe& channel) {
+    return {
+        {"object_branch", branchSelectorToJson(channel.objectBranch)},
+        {"reference_branch", branchSelectorToJson(channel.referenceBranch)},
+    };
+}
+
+RecordingChannelRecipe channelRecipeFromJson(const Json& value) {
+    requireKeys(
+        value,
+        {"object_branch", "reference_branch"},
+        "recording channel recipe");
+    return {
+        .objectBranch = branchSelectorFromJson(value.at("object_branch")),
+        .referenceBranch = branchSelectorFromJson(
+            value.at("reference_branch")),
+    };
+}
+
+Json samplingToJson(
+    const optics::holography::PlateFieldSamplingOptions& sampling) {
+    return {
+        {"center_x_m", sampling.centreXMetres},
+        {"center_y_m", sampling.centreYMetres},
+        {"extent_height_m", sampling.extentHeightMetres},
+        {"extent_width_m", sampling.extentWidthMetres},
+        {"refractive_index", sampling.refractiveIndex},
+        {"sample_height", sampling.sampleHeight},
+        {"sample_width", sampling.sampleWidth},
+    };
+}
+
+optics::holography::PlateFieldSamplingOptions samplingFromJson(
+    const Json& value) {
+    requireKeys(
+        value,
+        {"center_x_m", "center_y_m", "extent_height_m", "extent_width_m",
+            "refractive_index", "sample_height", "sample_width"},
+        "recording sampling");
+    return {
+        .sampleWidth = rasterSize(
+            value.at("sample_width"), "recording sample_width"),
+        .sampleHeight = rasterSize(
+            value.at("sample_height"), "recording sample_height"),
+        .refractiveIndex = finiteNumber(
+            value.at("refractive_index"), "recording refractive_index"),
+        .extentWidthMetres = finiteNumber(
+            value.at("extent_width_m"), "recording extent_width_m"),
+        .extentHeightMetres = finiteNumber(
+            value.at("extent_height_m"), "recording extent_height_m"),
+        .centreXMetres = finiteNumber(
+            value.at("center_x_m"), "recording center_x_m"),
+        .centreYMetres = finiteNumber(
+            value.at("center_y_m"), "recording center_y_m"),
+    };
+}
+
+Json thinResponseToJson(
+    const optics::holography::ThinHologramResponseParameters& response) {
+    return {
+        {"amplitude_bias", response.amplitudeBias},
+        {"intensity_to_amplitude_gain", response.intensityToAmplitudeGain},
+        {"maximum_amplitude_transmission",
+            response.maximumAmplitudeTransmission},
+        {"minimum_amplitude_transmission",
+            response.minimumAmplitudeTransmission},
+    };
+}
+
+optics::holography::ThinHologramResponseParameters thinResponseFromJson(
+    const Json& value) {
+    requireKeys(
+        value,
+        {"amplitude_bias", "intensity_to_amplitude_gain",
+            "maximum_amplitude_transmission",
+            "minimum_amplitude_transmission"},
+        "thin recording response");
+    return {
+        .amplitudeBias = finiteNumber(
+            value.at("amplitude_bias"), "thin response amplitude_bias"),
+        .intensityToAmplitudeGain = finiteNumber(
+            value.at("intensity_to_amplitude_gain"),
+            "thin response intensity_to_amplitude_gain"),
+        .minimumAmplitudeTransmission = finiteNumber(
+            value.at("minimum_amplitude_transmission"),
+            "thin response minimum_amplitude_transmission"),
+        .maximumAmplitudeTransmission = finiteNumber(
+            value.at("maximum_amplitude_transmission"),
+            "thin response maximum_amplitude_transmission"),
+    };
+}
+
+Json volumeMaterialToJson(
+    const optics::holography::VolumePlateMaterial& material) {
+    return {
+        {"average_refractive_index", material.averageRefractiveIndex},
+        {"isotropic_linear_shrinkage_fraction",
+            material.isotropicLinearShrinkageFraction},
+        {"refractive_index_modulation",
+            material.refractiveIndexModulation},
+    };
+}
+
+optics::holography::VolumePlateMaterial volumeMaterialFromJson(
+    const Json& value) {
+    requireKeys(
+        value,
+        {"average_refractive_index",
+            "isotropic_linear_shrinkage_fraction",
+            "refractive_index_modulation"},
+        "volume recording material");
+    return {
+        .averageRefractiveIndex = finiteNumber(
+            value.at("average_refractive_index"),
+            "volume material average_refractive_index"),
+        .refractiveIndexModulation = finiteNumber(
+            value.at("refractive_index_modulation"),
+            "volume material refractive_index_modulation"),
+        .isotropicLinearShrinkageFraction = finiteNumber(
+            value.at("isotropic_linear_shrinkage_fraction"),
+            "volume material isotropic_linear_shrinkage_fraction"),
+    };
+}
+
+Json recordingRecipeToJson(const HologramRecordingRecipe& recipe) {
+    Json channels = Json::array();
+    for (const auto& channel : recipe.channels) {
+        channels.push_back(channelRecipeToJson(channel));
+    }
+    return {
+        {"channels", std::move(channels)},
+        {"model", recordingModelName(recipe.model)},
+        {"plate_component_id", recipe.plateComponentId},
+        {"recipe_id", recipe.recipeId},
+        {"recipe_version", recipe.recipeVersion},
+        {"relative_intensity_reference_w_m2",
+            recipe.relativeIntensityReferenceWattsPerSquareMetre},
+        {"sampling", samplingToJson(recipe.sampling)},
+        {"thin_response", thinResponseToJson(recipe.thinResponse)},
+        {"volume_material", volumeMaterialToJson(recipe.volumeMaterial)},
+    };
+}
+
+HologramRecordingRecipe recordingRecipeFromJson(const Json& value) {
+    requireKeys(
+        value,
+        {"channels", "model", "plate_component_id", "recipe_id",
+            "recipe_version", "relative_intensity_reference_w_m2",
+            "sampling", "thin_response", "volume_material"},
+        "hologram recording recipe");
+    if (!value.at("recipe_version").is_number_integer()) {
+        throw std::runtime_error(
+            "hologram recording recipe_version must be an integer");
+    }
+    if (!value.at("channels").is_array()) {
+        throw std::runtime_error(
+            "hologram recording recipe channels must be an array");
+    }
+    HologramRecordingRecipe result;
+    result.recipeVersion = value.at("recipe_version").get<int>();
+    result.recipeId = requiredString(
+        value.at("recipe_id"), "hologram recording recipe_id");
+    result.plateComponentId = requiredString(
+        value.at("plate_component_id"),
+        "hologram recording plate_component_id");
+    result.model = recordingModelFromName(requiredString(
+        value.at("model"), "hologram recording model"));
+    for (const auto& channel : value.at("channels")) {
+        result.channels.push_back(channelRecipeFromJson(channel));
+    }
+    result.sampling = samplingFromJson(value.at("sampling"));
+    result.relativeIntensityReferenceWattsPerSquareMetre = finiteNumber(
+        value.at("relative_intensity_reference_w_m2"),
+        "recording relative_intensity_reference_w_m2");
+    result.thinResponse = thinResponseFromJson(value.at("thin_response"));
+    result.volumeMaterial = volumeMaterialFromJson(
+        value.at("volume_material"));
+    return result;
+}
+
+bool sourceCarriesSelector(
+    const scene::BenchComponent& source,
+    const RecordingBranchSelector& selector) {
+    auto matches = [&](const scene::SpectralChannel& channel) {
+        return channel.wavelengthMetres == selector.wavelengthMetres
+            && channel.coherenceId == selector.coherenceId;
+    };
+    if (source.kind == scene::BenchComponentKind::LaserSource) {
+        const auto& channels = std::get<scene::LaserSourceParameters>(
+            source.parameters).channels;
+        return std::any_of(channels.begin(), channels.end(), matches);
+    }
+    if (source.kind == scene::BenchComponentKind::ObjectWavefrontSource) {
+        return matches(std::get<scene::ObjectWavefrontSourceParameters>(
+            source.parameters).channel);
+    }
+    return false;
+}
+
+void validateBranchSelector(
+    const BenchProject& projectValue,
+    const HologramRecordingRecipe& recipe,
+    const RecordingBranchSelector& selector,
+    scene::BenchComponentKind sourceKind) {
+    if (!std::isfinite(selector.wavelengthMetres)
+        || selector.wavelengthMetres <= 0.0
+        || !scene::isStableBenchId(selector.coherenceId)
+        || selector.componentPath.size() < 2U
+        || selector.componentPath.back() != recipe.plateComponentId) {
+        throw std::invalid_argument(
+            "recording branch selector identity or path is invalid");
+    }
+    for (const auto& componentId : selector.componentPath) {
+        if (!scene::isStableBenchId(componentId)
+            || projectValue.scene.find(componentId) == nullptr) {
+            throw std::invalid_argument(
+                "recording branch selector references a missing component");
+        }
+    }
+    const auto* source = projectValue.scene.find(selector.componentPath.front());
+    if (source == nullptr || source->kind != sourceKind
+        || !sourceCarriesSelector(*source, selector)) {
+        throw std::invalid_argument(
+            "recording branch selector does not match its declared source channel");
+    }
+}
+
+void validateRecordingRecipe(
+    const BenchProject& projectValue,
+    const HologramRecordingRecipe& recipe) {
+    if (recipe.recipeVersion != kHologramRecordingRecipeVersion
+        || !scene::isStableBenchId(recipe.recipeId)
+        || !scene::isStableBenchId(recipe.plateComponentId)) {
+        throw std::invalid_argument(
+            "hologram recording recipe version or identity is invalid");
+    }
+    const auto* plate = projectValue.scene.find(recipe.plateComponentId);
+    if (plate == nullptr
+        || plate->kind != scene::BenchComponentKind::HolographicPlate) {
+        throw std::invalid_argument(
+            "hologram recording recipe plate is missing or has the wrong kind");
+    }
+    if (recipe.channels.size() != 1U && recipe.channels.size() != 3U) {
+        throw std::invalid_argument(
+            "hologram recording recipe requires one or three channels");
+    }
+    if (recipe.model == HologramRecordingModel::VolumeGrating
+        && recipe.channels.size() != 1U) {
+        throw std::invalid_argument(
+            "volume recording recipe requires exactly one channel");
+    }
+    double previousWavelength = std::numeric_limits<double>::infinity();
+    for (const auto& channel : recipe.channels) {
+        validateBranchSelector(
+            projectValue,
+            recipe,
+            channel.objectBranch,
+            scene::BenchComponentKind::ObjectWavefrontSource);
+        validateBranchSelector(
+            projectValue,
+            recipe,
+            channel.referenceBranch,
+            scene::BenchComponentKind::LaserSource);
+        if (channel.objectBranch.wavelengthMetres
+                != channel.referenceBranch.wavelengthMetres
+            || channel.objectBranch.coherenceId
+                != channel.referenceBranch.coherenceId
+            || !(channel.objectBranch.wavelengthMetres
+                < previousWavelength)) {
+            throw std::invalid_argument(
+                "recording channels must pair one coherence identity and use descending distinct wavelengths");
+        }
+        previousWavelength = channel.objectBranch.wavelengthMetres;
+    }
+
+    const auto& sampling = recipe.sampling;
+    if (sampling.sampleWidth < 2U || sampling.sampleWidth > 4096U
+        || sampling.sampleHeight < 2U || sampling.sampleHeight > 4096U
+        || !std::isfinite(sampling.refractiveIndex)
+        || sampling.refractiveIndex <= 0.0
+        || !std::isfinite(sampling.extentWidthMetres)
+        || !std::isfinite(sampling.extentHeightMetres)
+        || sampling.extentWidthMetres < 0.0
+        || sampling.extentHeightMetres < 0.0
+        || !std::isfinite(sampling.centreXMetres)
+        || !std::isfinite(sampling.centreYMetres)) {
+        throw std::invalid_argument(
+            "hologram recording recipe sampling is invalid");
+    }
+    const auto& plateParameters
+        = std::get<scene::HolographicPlateParameters>(plate->parameters);
+    const double extentWidth = sampling.extentWidthMetres == 0.0
+        ? plateParameters.widthMetres
+        : sampling.extentWidthMetres;
+    const double extentHeight = sampling.extentHeightMetres == 0.0
+        ? plateParameters.heightMetres
+        : sampling.extentHeightMetres;
+    if (extentWidth > plateParameters.widthMetres
+        || extentHeight > plateParameters.heightMetres
+        || std::abs(sampling.centreXMetres) + 0.5 * extentWidth
+            > 0.5 * plateParameters.widthMetres
+        || std::abs(sampling.centreYMetres) + 0.5 * extentHeight
+            > 0.5 * plateParameters.heightMetres) {
+        throw std::invalid_argument(
+            "hologram recording recipe sampling window exceeds its plate");
+    }
+    if (!std::isfinite(
+            recipe.relativeIntensityReferenceWattsPerSquareMetre)
+        || recipe.relativeIntensityReferenceWattsPerSquareMetre <= 0.0) {
+        throw std::invalid_argument(
+            "hologram recording relative intensity reference is invalid");
+    }
+    const auto& response = recipe.thinResponse;
+    if (!std::isfinite(response.amplitudeBias)
+        || !std::isfinite(response.intensityToAmplitudeGain)
+        || !std::isfinite(response.minimumAmplitudeTransmission)
+        || !std::isfinite(response.maximumAmplitudeTransmission)
+        || response.minimumAmplitudeTransmission < 0.0
+        || response.maximumAmplitudeTransmission > 1.0
+        || response.minimumAmplitudeTransmission
+            > response.maximumAmplitudeTransmission) {
+        throw std::invalid_argument(
+            "hologram recording thin response is invalid");
+    }
+    const auto& material = recipe.volumeMaterial;
+    if (!std::isfinite(material.averageRefractiveIndex)
+        || material.averageRefractiveIndex <= 0.0
+        || !std::isfinite(material.refractiveIndexModulation)
+        || material.refractiveIndexModulation < 0.0
+        || material.refractiveIndexModulation
+            >= material.averageRefractiveIndex
+        || !std::isfinite(material.isotropicLinearShrinkageFraction)
+        || material.isotropicLinearShrinkageFraction < 0.0
+        || material.isotropicLinearShrinkageFraction >= 1.0) {
+        throw std::invalid_argument(
+            "hologram recording volume material is invalid");
+    }
+}
+
+void validateRecordingRecipes(const BenchProject& projectValue) {
+    std::set<std::string> recipeIds;
+    for (const auto& recipe : projectValue.recordingRecipes) {
+        if (!recipeIds.insert(recipe.recipeId).second) {
+            throw std::invalid_argument(
+                "hologram recording recipe IDs must be unique");
+        }
+        validateRecordingRecipe(projectValue, recipe);
+    }
+}
+
 } // namespace
 
 void validateBenchProject(const BenchProject& value) {
@@ -387,6 +788,7 @@ void validateBenchProject(const BenchProject& value) {
     }
     project::validateProjectProvenance(value.provenance);
     static_cast<void>(scene::BenchScene(value.scene.components(), value.scene.revision()));
+    validateRecordingRecipes(value);
 }
 
 std::string serializeBenchProject(const BenchProject& value) {
@@ -397,6 +799,14 @@ std::string serializeBenchProject(const BenchProject& value) {
     });
     Json componentArray = Json::array();
     for (const auto& component : components) componentArray.push_back(componentToJson(component));
+    std::vector<HologramRecordingRecipe> recipes = value.recordingRecipes;
+    std::sort(recipes.begin(), recipes.end(), [](const auto& first, const auto& second) {
+        return first.recipeId < second.recipeId;
+    });
+    Json recipeArray = Json::array();
+    for (const auto& recipe : recipes) {
+        recipeArray.push_back(recordingRecipeToJson(recipe));
+    }
     const Json root {
         {"components", std::move(componentArray)},
         {"format_version", value.formatVersion},
@@ -404,6 +814,7 @@ std::string serializeBenchProject(const BenchProject& value) {
         {"name", value.name},
         {"project_id", value.projectId},
         {"provenance", provenanceToJson(value.provenance)},
+        {"recording_recipes", std::move(recipeArray)},
         {"scene_revision", value.scene.revision()},
     };
     return root.dump(2) + '\n';
@@ -412,15 +823,26 @@ std::string serializeBenchProject(const BenchProject& value) {
 BenchProject parseBenchProject(std::string_view jsonText) {
     try {
         const Json root = Json::parse(jsonText);
-        requireKeys(root,
-            {"components", "format_version", "kind", "name", "project_id", "provenance", "scene_revision"},
-            "bench project");
         if (!root.at("format_version").is_number_integer()) {
             throw std::runtime_error("bench project format_version must be an integer");
         }
         const int formatVersion = root.at("format_version").get<int>();
-        if (formatVersion != kBenchProjectFormatVersion) {
+        if (formatVersion != kBenchProjectFormatVersion
+            && formatVersion != kLegacyBenchProjectFormatVersion) {
             throw std::runtime_error("unsupported bench project format version: " + std::to_string(formatVersion));
+        }
+        if (formatVersion == kLegacyBenchProjectFormatVersion) {
+            requireKeys(root,
+                {"components", "format_version", "kind", "name", "project_id", "provenance", "scene_revision"},
+                "legacy bench project");
+        } else {
+            requireKeys(root,
+                {"components", "format_version", "kind", "name", "project_id", "provenance", "recording_recipes", "scene_revision"},
+                "bench project");
+            if (!root.at("recording_recipes").is_array()) {
+                throw std::runtime_error(
+                    "bench recording_recipes must be an array");
+            }
         }
         if (requiredString(root.at("kind"), "bench project kind") != "optical_bench") {
             throw std::runtime_error("project is not an optical_bench document");
@@ -440,12 +862,19 @@ BenchProject parseBenchProject(std::string_view jsonText) {
         for (const auto& component : root.at("components")) {
             components.push_back(componentFromJson(component));
         }
+        std::vector<HologramRecordingRecipe> recipes;
+        if (formatVersion == kBenchProjectFormatVersion) {
+            for (const auto& recipe : root.at("recording_recipes")) {
+                recipes.push_back(recordingRecipeFromJson(recipe));
+            }
+        }
         BenchProject result {
-            .formatVersion = formatVersion,
+            .formatVersion = kBenchProjectFormatVersion,
             .projectId = requiredString(root.at("project_id"), "bench project project_id"),
             .name = requiredString(root.at("name"), "bench project name"),
             .provenance = provenanceFromJson(root.at("provenance")),
             .scene = scene::BenchScene(std::move(components), static_cast<scene::SceneRevision>(revisionValue)),
+            .recordingRecipes = std::move(recipes),
         };
         validateBenchProject(result);
         return result;

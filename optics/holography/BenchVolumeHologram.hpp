@@ -12,6 +12,8 @@ struct VolumePlateMaterial final {
     double averageRefractiveIndex = 1.5;
     double refractiveIndexModulation = 0.01;
     double isotropicLinearShrinkageFraction = 0.0;
+
+    bool operator==(const VolumePlateMaterial&) const = default;
 };
 
 struct VolumePlateRecordingResult final {

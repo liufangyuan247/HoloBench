@@ -31,6 +31,7 @@
 #include "optics/slm/SlmResponseIO.hpp"
 #include "app/HolographyProject.hpp"
 #include "app/BenchHolographyPresets.hpp"
+#include "app/BenchRecordingRecipe.hpp"
 #include "app/SlmInterferenceProject.hpp"
 #include "app/UiFont.hpp"
 #include "app/lessons/LessonProgress.hpp"
@@ -691,6 +692,117 @@ void Application::saveBenchProjectToPath() {
         errorMessage_ = error.what();
         statusMessage_.clear();
     }
+}
+
+void Application::recomputeRecordingRecipe(
+    const optics::holography::PlateIncidentFieldSet& fields,
+    const HologramRecordingRecipe& recipe) {
+    if (!detectorFftBackend_) {
+        throw std::runtime_error("CPU FFT backend is unavailable");
+    }
+    const auto resolved = resolveRecordingRecipe(fields, recipe);
+    sandboxPlateSampleSize_ = static_cast<int>(recipe.sampling.sampleWidth);
+    sandboxPlateWindowMillimetres_ = static_cast<float>(
+        recipe.sampling.extentWidthMetres * 1e3);
+    sandboxPlateRelativeReferenceKilowattsPerSquareMetre_
+        = static_cast<float>(
+            recipe.relativeIntensityReferenceWattsPerSquareMetre * 1e-3);
+
+    if (recipe.model == HologramRecordingModel::ThinTransmission) {
+        optics::holography::ThinPlateRecordingOptions options;
+        options.sampling = recipe.sampling;
+        options.relativeIntensityReferenceWattsPerSquareMetre
+            = recipe.relativeIntensityReferenceWattsPerSquareMetre;
+        options.response = recipe.thinResponse;
+        if (resolved.channels.size() == 1U) {
+            const auto& channel = resolved.channels.front();
+            auto recording = optics::holography::recordThinTransmissionPlate(
+                benchProject_.scene,
+                fields,
+                channel.objectBranchId,
+                channel.referenceBranchId,
+                options,
+                *detectorFftBackend_);
+            field::FieldVisualizationOptions viewOptions;
+            viewOptions.colormap = field::ColormapKind::Inferno;
+            const auto image = field::renderLinearIntensity(
+                recording.hologram.recordedRelativeIntensity, viewOptions);
+            if (!sandboxPlateTexture_
+                || !sandboxPlateTexture_->uploadImage(image)) {
+                throw std::runtime_error(
+                    "OpenGL rejected the sampled plate exposure texture");
+            }
+            sandboxPlateRecording_ = std::make_unique<
+                optics::holography::ThinPlateRecordingResult>(
+                    std::move(recording));
+            sandboxPlateReplay_.reset();
+            if (sandboxReplayTexture_) {
+                sandboxReplayTexture_->destroy();
+            }
+            statusMessage_ = "Recomputed saved thin recording recipe "
+                + recipe.recipeId;
+            return;
+        }
+        if (resolved.channels.size() == 3U) {
+            const std::array selections {
+                resolved.channels[0],
+                resolved.channels[1],
+                resolved.channels[2],
+            };
+            auto recording
+                = optics::holography::recordRgbThinTransmissionPlate(
+                    benchProject_.scene,
+                    fields,
+                    selections,
+                    options,
+                    *detectorFftBackend_);
+            sandboxRgbRecording_ = std::make_unique<
+                optics::holography::RgbThinPlateRecordingResult>(
+                    std::move(recording));
+            sandboxRgbReplay_.reset();
+            if (sandboxRgbReplayTexture_) {
+                sandboxRgbReplayTexture_->destroy();
+            }
+            statusMessage_ = "Recomputed saved RGB recording recipe "
+                + recipe.recipeId;
+            return;
+        }
+        throw std::invalid_argument(
+            "thin recording recipe must contain one or three channels");
+    }
+
+    if (resolved.channels.size() != 1U) {
+        throw std::invalid_argument(
+            "volume recording recipe must contain exactly one channel");
+    }
+    sandboxVolumeAverageRefractiveIndex_ = static_cast<float>(
+        recipe.volumeMaterial.averageRefractiveIndex);
+    sandboxVolumeIndexModulation_ = static_cast<float>(
+        recipe.volumeMaterial.refractiveIndexModulation);
+    sandboxVolumeShrinkagePercent_ = static_cast<float>(
+        recipe.volumeMaterial.isotropicLinearShrinkageFraction * 100.0);
+    const auto& channel = resolved.channels.front();
+    auto recording = optics::holography::recordVolumePlate(
+        benchProject_.scene,
+        fields,
+        channel.objectBranchId,
+        channel.referenceBranchId,
+        recipe.volumeMaterial);
+    sandboxVolumeReplayWavelengthNanometres_ = static_cast<float>(
+        recording.pair.wavelengthMetres * 1e9);
+    sandboxVolumeReplayAngleDegrees_ = static_cast<float>(
+        recording.equivalentSymmetricBraggAngleInMediumRadians * 180.0
+        / std::numbers::pi_v<double>);
+    sandboxVolumeRecording_ = std::make_unique<
+        optics::holography::VolumePlateRecordingResult>(
+            std::move(recording));
+    sandboxVolumeReplay_.reset();
+    sandboxVolumeObservationReplay_.reset();
+    if (sandboxVolumeReplayTexture_) {
+        sandboxVolumeReplayTexture_->destroy();
+    }
+    statusMessage_ = "Recomputed saved volume recording recipe "
+        + recipe.recipeId;
 }
 
 LessonEditState Application::captureLessonEditState() const {
@@ -4978,6 +5090,70 @@ void Application::drawSandboxInspector() {
                                 benchProject_.scene,
                                 benchTraceGraph_,
                                 selected->id);
+                        std::size_t savedRecipeCount = 0U;
+                        for (const auto& recipe
+                             : benchProject_.recordingRecipes) {
+                            if (recipe.plateComponentId == selected->id) {
+                                ++savedRecipeCount;
+                            }
+                        }
+                        if (savedRecipeCount > 0U) {
+                            ImGui::SeparatorText("Saved Recording Recipes");
+                            ImGui::TextDisabled(
+                                "Recipes preserve branch identity and physical parameters; sampled fields are recomputed, not loaded as truth.");
+                            for (const auto& recipe
+                                 : benchProject_.recordingRecipes) {
+                                if (recipe.plateComponentId != selected->id) {
+                                    continue;
+                                }
+                                ImGui::PushID(recipe.recipeId.c_str());
+                                const char* modelName
+                                    = recipe.model
+                                            == HologramRecordingModel::ThinTransmission
+                                    ? (recipe.channels.size() == 3U
+                                            ? "RGB thin transmission"
+                                            : "Thin transmission")
+                                    : "Volume grating";
+                                ImGui::TextWrapped(
+                                    "%s | %s | %zu channel(s) | %zux%zu over %.6g x %.6g mm",
+                                    recipe.recipeId.c_str(),
+                                    modelName,
+                                    recipe.channels.size(),
+                                    recipe.sampling.sampleWidth,
+                                    recipe.sampling.sampleHeight,
+                                    recipe.sampling.extentWidthMetres * 1e3,
+                                    recipe.sampling.extentHeightMetres * 1e3);
+                                try {
+                                    const auto resolved
+                                        = resolveRecordingRecipe(fields, recipe);
+                                    ImGui::TextColored(
+                                        ImVec4(0.35F, 0.9F, 0.45F, 1.0F),
+                                        "Resolvable against %zu current branch pair(s)",
+                                        resolved.channels.size());
+                                    if (ImGui::Button(
+                                            "Recompute from saved recipe")) {
+                                        try {
+                                            recomputeRecordingRecipe(
+                                                fields, recipe);
+                                            errorMessage_.clear();
+                                        } catch (const std::exception& error) {
+                                            errorMessage_
+                                                = "Saved recording recipe failed: "
+                                                + std::string(error.what());
+                                            statusMessage_.clear();
+                                        }
+                                    }
+                                } catch (const std::exception& error) {
+                                    ImGui::TextColored(
+                                        ImVec4(1.0F, 0.45F, 0.25F, 1.0F),
+                                        "UNRESOLVED: %s",
+                                        error.what());
+                                    ImGui::TextDisabled(
+                                        "The recipe will not silently switch to a different branch.");
+                                }
+                                ImGui::PopID();
+                            }
+                        }
                         std::size_t compatiblePairCount = 0;
                         for (const auto& object : fields.branches) {
                             if (object.role
@@ -5078,6 +5254,23 @@ void Application::drawSandboxInspector() {
                                             throw std::runtime_error(
                                                 "OpenGL rejected the sampled plate exposure texture");
                                         }
+                                        const std::array recipeChannels {
+                                            optics::holography::
+                                                PlateBranchPairSelection {
+                                                    .objectBranchId
+                                                        = pair.objectBranchId,
+                                                    .referenceBranchId
+                                                        = pair.referenceBranchId,
+                                                },
+                                        };
+                                        upsertRecordingRecipe(
+                                            benchProject_,
+                                            makeThinRecordingRecipe(
+                                                "thin-" + selected->id,
+                                                fields,
+                                                recipeChannels,
+                                                recordingOptions));
+                                        recordBenchEdit();
                                         sandboxPlateRecording_ = std::make_unique<
                                             optics::holography::ThinPlateRecordingResult>(
                                                 std::move(recording));
@@ -5100,6 +5293,36 @@ void Application::drawSandboxInspector() {
                                     == optics::holography::PlateRecordingGeometry::Reflection) {
                                     if (ImGui::Button("Record volume reflection")) {
                                         try {
+                                            if (sandboxPlateSampleSize_ < 2
+                                                || sandboxPlateSampleSize_ > 4096) {
+                                                throw std::invalid_argument(
+                                                    "plate sample size must be in [2, 4096]");
+                                            }
+                                            if (!std::isfinite(
+                                                    sandboxPlateWindowMillimetres_)
+                                                || sandboxPlateWindowMillimetres_
+                                                    <= 0.0F) {
+                                                throw std::invalid_argument(
+                                                    "plate analysis window must be positive");
+                                            }
+                                            const double extentMetres
+                                                = static_cast<double>(
+                                                    sandboxPlateWindowMillimetres_)
+                                                * 1e-3;
+                                            const optics::holography::
+                                                PlateFieldSamplingOptions sampling {
+                                                    .sampleWidth
+                                                        = static_cast<std::size_t>(
+                                                            sandboxPlateSampleSize_),
+                                                    .sampleHeight
+                                                        = static_cast<std::size_t>(
+                                                            sandboxPlateSampleSize_),
+                                                    .refractiveIndex = 1.0,
+                                                    .extentWidthMetres
+                                                        = extentMetres,
+                                                    .extentHeightMetres
+                                                        = extentMetres,
+                                                };
                                             const optics::holography::VolumePlateMaterial
                                                 material {
                                                     .averageRefractiveIndex
@@ -5120,6 +5343,20 @@ void Application::drawSandboxInspector() {
                                                     pair.objectBranchId,
                                                     pair.referenceBranchId,
                                                     material);
+                                            upsertRecordingRecipe(
+                                                benchProject_,
+                                                makeVolumeRecordingRecipe(
+                                                    "volume-" + selected->id,
+                                                    fields,
+                                                    {
+                                                        .objectBranchId
+                                                            = pair.objectBranchId,
+                                                        .referenceBranchId
+                                                            = pair.referenceBranchId,
+                                                    },
+                                                    sampling,
+                                                    material));
+                                            recordBenchEdit();
                                             sandboxVolumeReplayWavelengthNanometres_
                                                 = static_cast<float>(
                                                     recording.pair.wavelengthMetres
@@ -5225,6 +5462,14 @@ void Application::drawSandboxInspector() {
                                                 rgbSelections,
                                                 options,
                                                 *detectorFftBackend_);
+                                    upsertRecordingRecipe(
+                                        benchProject_,
+                                        makeThinRecordingRecipe(
+                                            "rgb-" + selected->id,
+                                            fields,
+                                            rgbSelections,
+                                            options));
+                                    recordBenchEdit();
                                     sandboxRgbRecording_ = std::make_unique<
                                         optics::holography::
                                             RgbThinPlateRecordingResult>(

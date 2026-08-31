@@ -13,7 +13,8 @@ bool sameBenchEditState(
         && lhs.projectId == rhs.projectId
         && lhs.name == rhs.name
         && lhs.provenance == rhs.provenance
-        && lhs.scene.components() == rhs.scene.components();
+        && lhs.scene.components() == rhs.scene.components()
+        && lhs.recordingRecipes == rhs.recordingRecipes;
 }
 
 BenchProject rebaseBenchEditStateRevision(

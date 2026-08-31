@@ -359,12 +359,20 @@ completion because it is primarily driven through fixed parameter panels:
   propagated intensities with explicit display gains/gamma and is labelled as
   an uncalibrated visualization; no cross-wavelength complex-field addition is
   possible.
+- **Persisted recording recipes**: Unified bench format v2 stores versioned
+  thin, RGB, and volume recording recipes with stable component-path,
+  wavelength, and coherence selectors plus sampling, response, and material
+  parameters. It does not serialize sampled complex fields or exposure caches.
+  The plate Inspector reports exact current resolution, refuses ambiguous or
+  missing branches, and can recompute a saved recipe. Recipes participate in
+  save/load and scene-wide undo/redo; legacy v1 benches migrate with an empty
+  recipe list. See [ADR 0013](adr/0013-recording-recipe-persistence.md).
 - **Revision provenance**: Plate incident evidence, thin recordings, thin
   replays, volume recordings, and volume replays carry the exact scene
   revision and visibly become stale after a bench edit.
-- **Current local validation**: Windows Clang development build passes 480/480
+- **Current local validation**: Windows Clang development build passes 486/486
   deterministic CPU, application, font, and OpenGL GPU cases after the placed
-  volume/RGB/local-wave-path increments; `core-ci` passes 478/478, `app-ci` compiles
+  volume/RGB/local-wave-path/recipe increments; `core-ci` passes 484/484, `app-ci` compiles
   warnings-as-errors, and the hidden OpenGL smoke exits successfully on AMD
   Radeon Pro 5300M. Remote cross-compiler CI remains required before the M8
   slice is closed.
@@ -379,15 +387,13 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Persist a versioned recording recipe and material/channel configuration in
-   the unified bench document without treating recomputable field caches as
-   project truth.
-2. Generalize local component and observation adapters with validated
+1. Generalize local component and observation adapters with validated
    tilted/decentred/folded-plane resampling and explicit finite-window support
    diagnostics.
-3. Add editable SLM command/pattern provenance so placed SLMs can carry more
+2. Add editable SLM command/pattern provenance so placed SLMs can carry more
    than the current explicit uniform zero-phase command.
-4. Add named M8 performance scenes and complete cross-compiler/application
+3. Add named M8 performance scenes and complete cross-compiler/application
    validation for transmission, reflection, and RGB workflows.
+4. Add corruption-safe autosave/recovery around unified bench documents.
 5. Compile a versioned M9 CHIMERA recipe into an editable bench, then simulate
    hogel/angular data, RGB exposure events, and bounded reconstruction.

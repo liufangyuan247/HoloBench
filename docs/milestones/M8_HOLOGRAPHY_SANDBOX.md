@@ -104,12 +104,19 @@ selectivity, then reconstructs a Bragg-weighted sampled field on the physical
 reflection side at a placed parallel/coaxial Screen/Probe. General off-axis
 observation resampling remains pending. M8.4 has an editable RGB layout and
 strict per-wavelength pairing, three-channel batch recording/replay, and
-display-only uncalibrated intensity composition. Persisted recording recipes,
-general tilted/folded path and observation resampling, and performance closure
-remain pending. Centred normally incident paths now propagate a sampled field
+display-only uncalibrated intensity composition. Unified format-v2 recording
+recipes now persist and recompute thin, RGB, and volume experiments. General
+tilted/folded path and observation resampling and performance closure remain
+pending. Centred normally incident paths now propagate a sampled field
 through placed ideal lenses, apertures, pinholes, and SLM finite-pixel/dead-space
 transforms; unsupported geometry stays explicit rather than being projected
 onto the coaxial model.
+
+Recipe selectors use stable component paths, wavelength, and coherence identity
+instead of transient branch IDs. Sampling, thin response, and volume material
+parameters round-trip byte-stably, while recomputable complex fields and
+exposure images remain transient. The Inspector exposes exact resolution
+failure and never substitutes another branch.
 
 ### M8.1 — Plate-local branch and coordinate contract
 

@@ -125,8 +125,9 @@
   cross-wavelength/coherence pairs. Thin same-side exposure is now available as
   a revision-bound recomputable result. Reflection volume recording/replay and
   RGB independent-channel recording/replay are operational; branch-role
-  overrides, persisted recording recipes, and general tilted/folded spatial-
-  image paths remain open.
+  overrides and general tilted/folded spatial-image paths remain open. Recording
+  recipes now persist stable path/wavelength/coherence selectors and physical
+  parameters, but deliberately do not persist numerical field caches.
 - Thin transmission replay currently keeps the recorded transverse grid and
   accepts only a parallel, axis-aligned, coaxial Screen/Detector or Field Probe that covers
   the sampled ROI and lies on the transmitted side. It exposes the physical
@@ -141,8 +142,8 @@
 - Transmission, reflection/Denisyuk, and RGB full-colour buttons load ordinary
   editable `BenchProject` layouts. All three have placed-bench recording and
   reconstruction paths in their stated thin/volume/scalar domains. General
-  off-axis resampling, calibrated material/colour response, and persisted
-  recording recipes remain incomplete.
+  off-axis resampling and calibrated material/colour response remain
+  incomplete.
 - The dynamic bench has its own bounded scene-wide undo/redo timeline. The
   separate legacy history still covers lesson-relevant fixed optical-bench,
   Wave Detector, Sampling Debugger, and SLM inputs, but not Real Lens or the

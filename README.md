@@ -25,6 +25,13 @@ local complex field before plate recording. Tilted, decentered, folded, and
 real-prescription paths remain visibly unrefined until validated plane
 resampling is implemented.
 
+Recording a placed thin, reflection-volume, or RGB hologram now writes a
+versioned recipe into the ordinary bench project. The recipe keeps stable
+source-to-plate branch selectors, sampling, response, and material parameters;
+large complex fields remain disposable results. After load, the plate
+Inspector reports whether each recipe still resolves uniquely and can
+recompute it without silently selecting another path.
+
 ## M1 Features
 
 - **Optical Sources & Elements**: Point Source, Collimated Source, Ideal Thin Lens, Circular Aperture, Screen / Detector Plane, Planar Mirror, and Planar Dielectric Interface.
@@ -173,7 +180,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (480 deterministic CPU/application cases,
+Standard dev build and test suite (486 deterministic CPU/application cases,
 including the OpenGL GPU test executable):
 
 ```powershell
@@ -182,7 +189,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 478/478 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 484/484 tests passing):
 
 ```powershell
 cmake --preset core-ci

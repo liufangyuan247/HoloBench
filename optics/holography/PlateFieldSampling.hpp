@@ -25,6 +25,8 @@ struct PlateFieldSamplingOptions final {
     double extentHeightMetres = 0.0;
     double centreXMetres = 0.0;
     double centreYMetres = 0.0;
+
+    bool operator==(const PlateFieldSamplingOptions&) const = default;
 };
 
 struct PlateFieldSamplingDiagnostics final {
