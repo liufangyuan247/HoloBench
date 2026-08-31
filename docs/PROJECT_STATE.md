@@ -77,6 +77,13 @@ Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 - **Release CI**: GitHub Actions run [33351374693](https://github.com/liufangyuan247/HoloBench/actions/runs/33351374693) passes all four final M3 integration jobs at `2f2a0c5`: Windows and Ubuntu core build/tests plus Windows and Ubuntu application compilation with warnings as errors.
 - **OpenGL smoke**: Three hidden frames exit 0 on AMD Radeon Pro 5300M and require the detector, angular spectrum, and all four 4-f plane textures to upload successfully with no reported OpenGL errors.
 
+## M4 progress
+
+- **Engineering conventions**: [ADR 0007](adr/0007-real-lens-prescription-and-tracing-conventions.md) fixes sequential `+Z` tracing, curvature/conic/asphere signs and SI units, explicit material transitions, rigid surface poses, root acceptance, spot-diagram contents, and independent Optiland/prysm validation provenance.
+- **Rotational surfaces**: The CPU double-precision reference implements plane, sphere, conic, and even-asphere sag/gradient models. Planes and base conics use stable analytic roots; even aspheres use safeguarded Newton iteration plus an ascending bracket fallback. Hits, misses, clear-aperture clipping, invalid domains, and non-convergence remain distinct.
+- **Surface validation**: Seven new deterministic cases with 41 assertions cover positive/negative curvature, explicit sphere sheet selection, an independent paraboloid result, independent asphere residuals, clear-aperture clipping, forward trace limits, and analytic normals against separate central differences.
+- **Local toolchain gate**: Windows Clang 21 warnings-as-errors core and application builds pass with 237/237 headless tests. MSVC 19.44 `/W4 /WX` also builds the complete headless target and passes 237/237.
+
 ## Known limitations (M1/M2)
 
 - **Paraxial approximation**: Thin-lens solver, Fresnel TF, and Fraunhofer propagators assume small angles and paraxial conditions.
@@ -87,8 +94,8 @@ Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 
 ## Next five tasks
 
-1. Lock M4 optical-surface, coordinate, ray-state, and tolerance conventions in an ADR.
-2. Implement robust spherical, conic, and even-asphere intersections with independent numerical oracles.
-3. Add thick-lens and multi-surface assembly tracing with Cauchy/Sellmeier dispersion and RGB rays.
-4. Add decenter/tilt transforms, spot diagrams, and versioned prescription JSON/CSV import/export.
+1. Implement constant, Cauchy, and Sellmeier media with declared wavelength domains and independent catalog-value tests.
+2. Add rigid surface poses plus thick-lens and multi-surface sequential tracing with per-surface evidence.
+3. Add RGB/polychromatic bundles, longitudinal chromatic shift, and wavelength/field-grouped spot diagrams.
+4. Add versioned prescription JSON/CSV import/export and the interactive prescription editor.
 5. Validate at least five benchmark lenses against an independent Optiland/prysm bridge before tagging `m4-real-lens`.

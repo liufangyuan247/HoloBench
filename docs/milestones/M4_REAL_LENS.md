@@ -8,7 +8,7 @@ against an independent optical-design implementation.
 
 ## Deliverables
 
-- [ ] Plane, spherical, conic, and even-asphere surface models with explicit SI
+- [x] Plane, spherical, conic, and even-asphere surface models with explicit SI
   conventions, clear apertures, analytic gradients, and robust intersections.
 - [ ] Constant, Cauchy, and Sellmeier material models with declared wavelength
   domains and explicit catalog-unit conversion.
@@ -29,9 +29,9 @@ against an independent optical-design implementation.
 
 ## Numerical gate
 
-- [ ] Plane and sphere intersections agree with independent analytic solutions;
+- [x] Plane and sphere intersections agree with independent analytic solutions;
   general surfaces satisfy named spatial residual and forward-root tolerances.
-- [ ] Analytic normals agree with independent finite differences, including
+- [x] Analytic normals agree with independent finite differences, including
   off-axis and negative-curvature cases.
 - [ ] Snell invariants and forward/reverse trace consistency pass away from
   clipping, absorption, and TIR.
@@ -55,4 +55,3 @@ Conventions are fixed by
 [ADR 0007](../adr/0007-real-lens-prescription-and-tracing-conventions.md).
 
 Completion tag: `m4-real-lens`.
-

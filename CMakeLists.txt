@@ -72,6 +72,7 @@ add_library(holobench_optics STATIC
     optics/ray/GeometricElements.cpp
     optics/ray/Interface.cpp
     optics/ray/Ray.cpp
+    optics/ray/RotationalSurface.cpp
     optics/ray/ThinLens.cpp
     optics/scene/GeometricComponents.cpp
     optics/scene/NumericalAperture.cpp
@@ -258,6 +259,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/FieldElementTests.cpp
         tests/analytic/FraunhoferDiffractionTests.cpp
         tests/analytic/NumericalApertureTests.cpp
+        tests/analytic/RotationalSurfaceTests.cpp
         tests/analytic/SnellTests.cpp
         tests/analytic/ThinLensTests.cpp
         tests/analytic/WaveDetectorPipelineTests.cpp

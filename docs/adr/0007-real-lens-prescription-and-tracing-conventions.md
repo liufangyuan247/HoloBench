@@ -49,9 +49,10 @@ z(r) = c r^2 / (1 + sqrt(1 - (1 + k)c^2 r^2))
 - `c = 0` is a plane. A spherical surface has `k = 0` and no asphere terms.
 - Coefficient `A_2i` has SI unit `m^(1-2i)`. Project JSON keys include the
   radial order and SI unit, for example `a4_per_m3`.
-- The clear semi-diameter is positive and finite. A candidate outside it is
-  clipped, not treated as a miss. A negative conic radicand is outside the
-  mathematical surface domain and cannot be silently clamped.
+- The clear semi-diameter is positive, finite, and remains inside the
+  differentiable conic domain. A candidate outside it is clipped, not treated
+  as a miss. A non-positive conic radicand at the clear edge is invalid and
+  cannot be silently clamped.
 - The geometric normal is derived from the analytic sag gradient. Refraction
   reuses the established vector Snell solver after orienting the normal toward
   the incident medium.
@@ -117,4 +118,3 @@ visible in the UI and persisted exports.
 - Sequential tracing intentionally excludes non-sequential stray light and
   ghost paths. These require a separate model rather than hidden branching in
   the M4 tracer.
-
