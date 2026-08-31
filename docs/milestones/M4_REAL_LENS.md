@@ -16,10 +16,11 @@ against an independent optical-design implementation.
   status, optical path length, refraction, TIR, clipping, and failure evidence.
 - [x] Rigid surface poses supporting decenter and tilt without scale/shear or
   Euler-order ambiguity.
-- [ ] Polychromatic/RGB ray bundles and longitudinal chromatic focal-shift
+- [x] Polychromatic/RGB ray bundles and longitudinal chromatic focal-shift
   analysis.
-- [ ] Image-plane spot diagrams with centroid, chief-ray reference, RMS radius,
-  geometric radius, wavelength/field grouping, and rejected-ray accounting.
+- [x] Image-plane spot diagrams with centroid, chief-ray reference, RMS radius,
+  geometric radius, wavelength grouping, and rejected-ray accounting.
+- [ ] Field-tagged ray bundles and field-grouped spot statistics.
 - [ ] Versioned prescription JSON plus deterministic CSV import/export with
   round-trip and malformed-input tests.
 - [ ] Interactive prescription editor, surface/ray visualization, spot diagram,

@@ -69,6 +69,7 @@ target_compile_features(holobench_compute PUBLIC cxx_std_20)
 holobench_set_warnings(holobench_compute)
 
 add_library(holobench_optics STATIC
+    optics/analysis/ChromaticAnalysis.cpp
     optics/analysis/SpotDiagram.cpp
     optics/material/OpticalMaterial.cpp
     optics/ray/BenchTracer.cpp
@@ -260,6 +261,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/compute/PlaneProbeTests.cpp
         tests/compute/SamplingDiagnosticsTests.cpp
         tests/analytic/BenchTracerTests.cpp
+        tests/analytic/ChromaticAnalysisTests.cpp
         tests/analytic/GeometricElementsTests.cpp
         tests/analytic/FieldElementTests.cpp
         tests/analytic/FraunhoferDiffractionTests.cpp

@@ -8,7 +8,7 @@
 | Geometric optics (M1) | Validated | 92/92 deterministic tests across `dev` and `core-ci` presets (`ThinLensTests.cpp`, `SnellTests.cpp`, `GeometricElementsTests.cpp`, `NumericalApertureTests.cpp`, `BenchTracerTests.cpp`) | Interactive ray tracing |
 | Wave optics (M2 CPU/GPU & detector) | Validated | 203 deterministic CPU/application cases; OpenGL executable 7/7 cases and 720/720 assertions; analytic oracles and three external full-field `waveprop 0.0.12` cross-validation cases | CPU reference, interactive GPU propagation, detector UI |
 | Fourier optics and Sampling Debugger (M3) | Validated | 229/229 deterministic cases; 4-f direct-DFT/inversion/filter/Airy oracles; 8/8 GPU cases and 1121/1121 assertions; seven-texture OpenGL smoke; named CPU debugger and GPU 4-f budgets pass; four-job release CI passes | Interactive 4-f filtering and sampling diagnostics |
-| Real-lens engineering (M4) | Foundation validation | Real surfaces, SI dispersion, rigid poses, and sequential assemblies; independent roots/normals/catalog lines plus parallel-plate geometric/optical path, chromatic dispatch, clipping and TIR; 249/249 tests on Clang/MSVC | Sequential engineering foundation; spot/UI prohibited |
+| Real-lens engineering (M4) | Foundation validation | Real surfaces, SI dispersion, rigid poses, sequential assemblies, wavelength-grouped spot statistics, and longitudinal chromatic focus; independent roots/normals/catalog lines plus analytic focal fits, parallel-plate path, clipping and TIR; 256/256 tests on Clang/MSVC | Sequential engineering and headless analysis foundation; editor/UI pending |
 | Holography (M6) | Not implemented | None | Prohibited |
 
 ## M1 Validation Breakdown
@@ -81,8 +81,9 @@
 ## Build and CI Execution Status
 
 - **M4 Local Foundation Gate**:
-  - Windows Clang 21.1.8: warnings-as-errors core/application builds pass; all 249 deterministic headless cases pass.
-  - Windows MSVC 19.44: `/W4 /WX` headless build passes; all 249 deterministic cases pass.
+  - Windows Clang 21.1.8: warnings-as-errors core/application builds pass; all 256 deterministic headless cases pass.
+  - Windows MSVC 19.44: `/W4 /WX` headless build passes; all 256 deterministic cases pass.
+  - M4 spot and chromatic cases retain rejected-ray evidence, verify spectral power conservation, recover an exact synthetic axial focus, distinguish bounded/collimated/insufficient fits, and demonstrate the expected blue-before-red N-BK7 longitudinal focus ordering.
 - **M3 Local Cross-platform Gate**:
   - Windows Clang 21.1.8: warnings-as-errors core/application and benchmark targets compile; 229/229 deterministic headless cases pass.
   - Windows MSVC 19.44: `/W4 /WX` builds all application, benchmark, CPU-test, and GPU-test targets; 230/230 registered tests pass, including the 8/8-case OpenGL executable.
