@@ -60,6 +60,12 @@ development. For the current repository state and roadmap, see
 - **Versioned experiment projects**: Strict, byte-stable M5 JSON preserves the
   complete draft experiment, embedded measured response, and provenance while
   leaving legacy optical-bench scene format v1 unchanged.
+- **Named CPU performance gate**: The fixed 128-square, three-wavelength,
+  ideal/LUT/LCD full refresh records p95 **188.482 ms** with Clang and
+  **278.183 ms** with MSVC on the reference i7-9750H, below the 350 ms budget.
+
+## M6 Feature Set (in progress)
+
 - **Thin-hologram reconstruction foundation**: M6 records fully coherent
   object/reference interference into an explicit bounded amplitude response,
   preserves the physical full replay, and separately exposes ordinary virtual
@@ -73,9 +79,12 @@ development. For the current repository state and roadmap, see
   propagate workflow reports best-fit complex gain, matched-mode power, complex
   residual, and intensity residual so discarded amplitude and phase
   quantization remain measurable.
-- **Named CPU performance gate**: The fixed 128-square, three-wavelength,
-  ideal/LUT/LCD full refresh records p95 **188.482 ms** with Clang and
-  **278.183 ms** with MSVC on the reference i7-9750H, below the 350 ms budget.
+- **H1-to-H2 transfer and RGB basics**: Conjugate H1 replay supplies the H2
+  object wave, H2 records/replays an explicit thin transmission order, and a
+  signed image distance classifies the image on the negative side, transplane,
+  or positive side of H2. Red, green, and blue run as independent coherent
+  wavelength channels on a shared transverse grid, with no artificial colour
+  offset and no claim that thin H2 represents a reflection volume hologram.
 
 ## Physical Assumptions & Limitations (M1)
 
@@ -95,7 +104,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (322 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (325 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -103,7 +112,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 322/322 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 325/325 tests passing):
 
 ```powershell
 cmake --preset core-ci

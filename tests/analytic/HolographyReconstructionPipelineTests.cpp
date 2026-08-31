@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <complex>
 #include <limits>
@@ -343,6 +344,149 @@ TEST_CASE("phase-only reconstruction rejects invalid geometry signal and backend
     CHECK_THROWS_AS(
         static_cast<void>(appholography::runPhaseOnlyReconstruction(
             unsupported, config, backend)),
+        std::invalid_argument);
+}
+
+TEST_CASE("H2 placement crosses the H1 real-image plane with signed geometry") {
+    const auto object = makeObjectField();
+    appholography::H1H2TransferConfig config;
+    config.h1.objectToPlateDistanceMetres = 0.012;
+    fft::CpuFftBackend backend;
+
+    config.h2AxialPositionMetres = 0.008;
+    const auto positiveSide = appholography::runH1H2Transfer(
+        object, config, backend);
+    config.h2AxialPositionMetres = 0.012;
+    const auto transplane = appholography::runH1H2Transfer(
+        object, config, backend);
+    config.h2AxialPositionMetres = 0.016;
+    const auto negativeSide = appholography::runH1H2Transfer(
+        object, config, backend);
+
+    CHECK(positiveSide.imagePlacement
+        == appholography::H2ImagePlacement::PositiveSide);
+    CHECK(positiveSide.imageDistanceFromH2Metres
+        == doctest::Approx(0.004).epsilon(1e-15));
+    CHECK(transplane.imagePlacement
+        == appholography::H2ImagePlacement::Transplane);
+    CHECK(transplane.imageDistanceFromH2Metres == 0.0);
+    CHECK(negativeSide.imagePlacement
+        == appholography::H2ImagePlacement::NegativeSide);
+    CHECK(negativeSide.imageDistanceFromH2Metres
+        == doctest::Approx(-0.004).epsilon(1e-15));
+    for (const auto* result : {&positiveSide, &transplane, &negativeSide}) {
+        CHECK(result->h2ImageQuality.normalizedComplexL2Error < 3e-11);
+        CHECK(result->h2ImageQuality.peakNormalizedMaximumComplexError < 3e-11);
+        CHECK(result->h1ToH2Propagation.evanescentBinCount == 0);
+        CHECK(result->h2ToImagePropagation.evanescentBinCount == 0);
+        CHECK(result->expectedH2ImageAmplitudeScale
+            == doctest::Approx(config.h2Response.intensityToAmplitudeGain
+                * std::norm(config.h2RecordingReference.amplitude)).epsilon(1e-15));
+        CHECK(maximumDifference(
+            result->h2FullReplayAtH1ImagePlane,
+            result->h2IsolatedImageAtH1ImagePlane) > 1e-3);
+    }
+}
+
+TEST_CASE("RGB H1 H2 channels preserve wavelength-specific Helmholtz scaling") {
+    constexpr std::size_t size = 16;
+    constexpr std::size_t xBin = 2;
+    constexpr std::size_t yBin = 1;
+    constexpr double pitch = 8e-6;
+    const auto makeSpectralField = [](double wavelength) {
+        field::ComplexField2D result(size, size, pitch, pitch, wavelength);
+        for (std::size_t y = 0; y < size; ++y) {
+            for (std::size_t x = 0; x < size; ++x) {
+                const double phase = 2.0 * std::numbers::pi
+                    * static_cast<double>(xBin * x + yBin * y)
+                    / static_cast<double>(size);
+                result.at(x, y) = 0.2 * std::polar(1.0, phase);
+            }
+        }
+        return result;
+    };
+    const std::array<field::ComplexField2D, 3> inputs {
+        makeSpectralField(638e-9),
+        makeSpectralField(532e-9),
+        makeSpectralField(450e-9),
+    };
+    appholography::H1H2TransferConfig config;
+    config.h1.objectToPlateDistanceMetres = 0.01;
+    config.h2AxialPositionMetres = 0.007;
+    fft::CpuFftBackend backend;
+
+    const auto result = appholography::runRgbH1H2Transfer(
+        inputs, config, backend);
+
+    const double fx = static_cast<double>(xBin)
+        / (static_cast<double>(size) * pitch);
+    const double fy = static_cast<double>(yBin)
+        / (static_cast<double>(size) * pitch);
+    for (std::size_t channel = 0; channel < inputs.size(); ++channel) {
+        const auto& input = inputs[channel];
+        const auto& output = result.channels[channel];
+        const double cutoff = input.refractiveIndex()
+            / input.vacuumWavelengthMetres();
+        const double longitudinalCycles = std::sqrt(
+            cutoff * cutoff - fx * fx - fy * fy);
+        const auto expectedTransfer = std::polar(
+            1.0,
+            2.0 * std::numbers::pi * longitudinalCycles
+                * config.h1.objectToPlateDistanceMetres);
+        CHECK(output.h1.objectAtRecordingPlate.vacuumWavelengthMetres()
+            == input.vacuumWavelengthMetres());
+        CHECK(output.h2IsolatedImageAtH1ImagePlane.vacuumWavelengthMetres()
+            == input.vacuumWavelengthMetres());
+        CHECK(output.h2ImageQuality.normalizedComplexL2Error < 3e-11);
+        for (std::size_t index = 0; index < input.sampleCount(); ++index) {
+            CHECK(std::abs(
+                output.h1.objectAtRecordingPlate.samples()[index]
+                    - input.samples()[index] * expectedTransfer) < 2e-12);
+        }
+    }
+}
+
+TEST_CASE("H1 H2 and RGB transfer reject invalid placement clipping and identity") {
+    const auto object = makeObjectField();
+    fft::CpuFftBackend backend;
+    appholography::H1H2TransferConfig config;
+
+    config.h2AxialPositionMetres = 0.0;
+    CHECK_THROWS_AS(
+        static_cast<void>(appholography::runH1H2Transfer(
+            object, config, backend)),
+        std::invalid_argument);
+    config = {};
+    config.transplaneToleranceMetres = -1.0;
+    CHECK_THROWS_AS(
+        static_cast<void>(appholography::runH1H2Transfer(
+            object, config, backend)),
+        std::invalid_argument);
+    config = {};
+    config.h2Response.maximumAmplitudeTransmission = 0.01;
+    CHECK_THROWS_AS(
+        static_cast<void>(appholography::runH1H2Transfer(
+            object, config, backend)),
+        std::invalid_argument);
+
+    const std::array<field::ComplexField2D, 3> wrongOrder {
+        field::ComplexField2D(16, 16, 8e-6, 8e-6, 450e-9),
+        field::ComplexField2D(16, 16, 8e-6, 8e-6, 532e-9),
+        field::ComplexField2D(16, 16, 8e-6, 8e-6, 638e-9),
+    };
+    config = {};
+    CHECK_THROWS_AS(
+        static_cast<void>(appholography::runRgbH1H2Transfer(
+            wrongOrder, config, backend)),
+        std::invalid_argument);
+    const std::array<field::ComplexField2D, 3> wrongGrid {
+        field::ComplexField2D(16, 16, 8e-6, 8e-6, 638e-9),
+        field::ComplexField2D(16, 16, 9e-6, 8e-6, 532e-9),
+        field::ComplexField2D(16, 16, 8e-6, 8e-6, 450e-9),
+    };
+    CHECK_THROWS_AS(
+        static_cast<void>(appholography::runRgbH1H2Transfer(
+            wrongGrid, config, backend)),
         std::invalid_argument);
 }
 

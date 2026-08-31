@@ -244,7 +244,9 @@ ThinHologramReconstructionResult runThinHologramReconstruction(
     auto virtualImage = std::move(ordinaryOrders.objectBearingOrderField);
     const auto virtualDiagnostics = propagator.propagateInPlace(
         virtualImage, -config.objectToPlateDistanceMetres);
-    auto realImage = std::move(conjugateOrders.conjugateOrderField);
+    auto conjugateImageOrderAtH1 = std::move(
+        conjugateOrders.conjugateOrderField);
+    auto realImage = conjugateImageOrderAtH1;
     const auto realDiagnostics = propagator.propagateInPlace(
         realImage, config.objectToPlateDistanceMetres);
 
@@ -275,6 +277,7 @@ ThinHologramReconstructionResult runThinHologramReconstruction(
         .ordinaryFullReplayAtVirtualPlane = std::move(ordinaryFullAtVirtual),
         .conjugateFullReplayAtRealPlane = std::move(conjugateFullAtReal),
         .isolatedVirtualImageOrder = std::move(virtualImage),
+        .isolatedConjugateImageOrderAtH1 = std::move(conjugateImageOrderAtH1),
         .isolatedRealImageOrder = std::move(realImage),
         .virtualImageQuality = virtualQuality,
         .realImageQuality = realQuality,
@@ -331,6 +334,121 @@ PhaseOnlyReconstructionResult runPhaseOnlyReconstruction(
         .quality = quality,
         .synthesisPropagation = synthesisDiagnostics,
         .replayPropagation = replayDiagnostics,
+    };
+}
+
+H1H2TransferResult runH1H2Transfer(
+    const field::ComplexField2D& objectPlaneField,
+    const H1H2TransferConfig& config,
+    compute::fft::IFftBackend& fftBackend) {
+    if (!std::isfinite(config.h2AxialPositionMetres)
+        || config.h2AxialPositionMetres <= 0.0) {
+        throw std::invalid_argument(
+            "H2 axial position must be positive and finite relative to H1");
+    }
+    if (!std::isfinite(config.transplaneToleranceMetres)
+        || config.transplaneToleranceMetres < 0.0) {
+        throw std::invalid_argument(
+            "H2 transplane tolerance must be finite and non-negative");
+    }
+
+    auto h1 = runThinHologramReconstruction(
+        objectPlaneField, config.h1, fftBackend);
+    const double imagePosition = config.h1.objectToPlateDistanceMetres;
+    const double imageDistanceFromH2 = imagePosition
+        - config.h2AxialPositionMetres;
+    H2ImagePlacement placement = H2ImagePlacement::Transplane;
+    if (imageDistanceFromH2 > config.transplaneToleranceMetres) {
+        placement = H2ImagePlacement::PositiveSide;
+    } else if (imageDistanceFromH2 < -config.transplaneToleranceMetres) {
+        placement = H2ImagePlacement::NegativeSide;
+    }
+
+    compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
+    auto objectAtH2 = h1.isolatedConjugateImageOrderAtH1;
+    const auto h1ToH2Diagnostics = propagator.propagateInPlace(
+        objectAtH2, config.h2AxialPositionMetres);
+    auto h2Reference = objectAtH2;
+    auto h2ReferenceParameters = config.h2RecordingReference;
+    h2ReferenceParameters.planeZMetres = config.h2AxialPositionMetres;
+    optics::wave::fillPlaneWave(h2Reference, h2ReferenceParameters);
+    auto h2 = optics::holography::recordThinAmplitudeHologram(
+        objectAtH2, h2Reference, config.h2Response);
+    auto h2FullReplay = optics::holography::replayThinAmplitudeHologram(
+        h2, h2Reference).field;
+    auto h2Orders = optics::holography::decomposeUnclampedLinearReplayOrders(
+        h2, objectAtH2, h2Reference, h2Reference);
+    auto h2IsolatedAtH2 = std::move(h2Orders.objectBearingOrderField);
+    auto h2IsolatedAtImage = h2IsolatedAtH2;
+    const auto h2ToImageDiagnostics = propagator.propagateInPlace(
+        h2IsolatedAtImage, imageDistanceFromH2);
+    auto h2FullAtImage = h2FullReplay;
+    static_cast<void>(propagator.propagateInPlace(
+        h2FullAtImage, imageDistanceFromH2));
+
+    const double expectedScale = config.h2Response.intensityToAmplitudeGain
+        * std::norm(config.h2RecordingReference.amplitude);
+    if (!std::isfinite(expectedScale) || expectedScale == 0.0) {
+        throw std::overflow_error(
+            "H2 expected reconstruction amplitude scale is not representable");
+    }
+    const auto expectedImage = scaledExpected(
+        h1.isolatedRealImageOrder, expectedScale, false);
+    const auto quality = compareFields(h2IsolatedAtImage, expectedImage);
+
+    return {
+        .h1 = std::move(h1),
+        .h1RealImageFieldAtH2 = std::move(objectAtH2),
+        .h2ReferenceAtH2 = std::move(h2Reference),
+        .h2 = std::move(h2),
+        .h2FullReplayAtH2 = std::move(h2FullReplay),
+        .h2IsolatedImageOrderAtH2 = std::move(h2IsolatedAtH2),
+        .h2FullReplayAtH1ImagePlane = std::move(h2FullAtImage),
+        .h2IsolatedImageAtH1ImagePlane = std::move(h2IsolatedAtImage),
+        .h2ImageQuality = quality,
+        .h1ToH2Propagation = h1ToH2Diagnostics,
+        .h2ToImagePropagation = h2ToImageDiagnostics,
+        .h1ImageAxialPositionMetres = imagePosition,
+        .imageDistanceFromH2Metres = imageDistanceFromH2,
+        .imagePlacement = placement,
+        .expectedH2ImageAmplitudeScale = expectedScale,
+    };
+}
+
+RgbH1H2TransferResult runRgbH1H2Transfer(
+    const std::array<field::ComplexField2D, 3>& objectPlaneFields,
+    const H1H2TransferConfig& config,
+    compute::fft::IFftBackend& fftBackend) {
+    const auto& red = objectPlaneFields[static_cast<std::size_t>(
+        RgbHologramChannel::Red)];
+    const auto& green = objectPlaneFields[static_cast<std::size_t>(
+        RgbHologramChannel::Green)];
+    const auto& blue = objectPlaneFields[static_cast<std::size_t>(
+        RgbHologramChannel::Blue)];
+    const bool sharedTransverseGrid = red.width() == green.width()
+        && red.width() == blue.width()
+        && red.height() == green.height()
+        && red.height() == blue.height()
+        && red.pitchXMetres() == green.pitchXMetres()
+        && red.pitchXMetres() == blue.pitchXMetres()
+        && red.pitchYMetres() == green.pitchYMetres()
+        && red.pitchYMetres() == blue.pitchYMetres();
+    if (!sharedTransverseGrid) {
+        throw std::invalid_argument(
+            "RGB holography channels must share one transverse sampling grid");
+    }
+    if (!(red.vacuumWavelengthMetres() > green.vacuumWavelengthMetres()
+            && green.vacuumWavelengthMetres() > blue.vacuumWavelengthMetres())) {
+        throw std::invalid_argument(
+            "RGB holography channels must be ordered red, green, blue by vacuum wavelength");
+    }
+
+    return {
+        .channels = {
+            runH1H2Transfer(red, config, fftBackend),
+            runH1H2Transfer(green, config, fftBackend),
+            runH1H2Transfer(blue, config, fftBackend),
+        },
     };
 }
 

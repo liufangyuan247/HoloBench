@@ -17,9 +17,10 @@ clearly separate first volume-hologram model.
   target masking, ideal replay, and phase-error diagnostics.
 - [x] Propagated phase-only synthesis/replay with matched-mode, complex-field,
   and intensity-shape reconstruction-quality metrics.
-- [ ] RGB recording/replay basics with wavelength identity preserved.
-- [ ] H1 record -> conjugate replay -> real image -> H2 record/replay pipeline.
-- [ ] Transplane placement controls and image-plane traversal diagnostics.
+- [x] RGB recording/replay basics with wavelength identity preserved.
+- [x] H1 record -> conjugate replay -> real image -> H2 record/replay pipeline.
+- [x] Signed H2 placement and negative-side/transplane/positive-side image
+  traversal diagnostics.
 - [ ] Dockable apply-gated Holography Lab and strict project persistence.
 - [ ] Separate volume-hologram data model and first Kogelnik coupled-wave path.
 - [ ] Named CPU performance profile and cross-platform compiler/CI gates.
@@ -32,7 +33,7 @@ clearly separate first volume-hologram model.
 - [x] Independent propagated real/virtual ASM round-trip oracle below `2e-12`
   normalized and peak-relative complex-field error, plus a direct Helmholtz
   spectral-bin phase oracle.
-- [ ] H1/H2 placement and RGB wavelength-scaling oracles.
+- [x] H1/H2 placement and RGB wavelength-scaling oracles.
 - [ ] Thin/volume boundary and Kogelnik limiting-case oracles.
 
 ## Product gate

@@ -88,6 +88,27 @@ photopolymer, or a complete radiometric exposure model.
   wavelength-specific encoded channels rather than pretending this command is
   achromatic.
 
+### H1-to-H2 transfer and RGB
+
+- H1 remains at `z=0`; its conjugate replay real-image plane is at the positive
+  object-to-H1 distance. H2 has an independent positive axial coordinate. The
+  signed distance `z_image - z_H2` is retained: positive means the image is on
+  H2's `+Z` side, zero within an explicit tolerance is transplane, and negative
+  means it is on H2's `-Z` side.
+- The image-bearing H1 order is propagated to H2 and recorded against a second
+  coherent reference. Ordinary H2 reference replay exposes both the physical
+  full field and an explicitly isolated object-bearing teaching order. The
+  isolated order is propagated by the signed image distance and compared with
+  the H1 real image after the analytic H2 response scale.
+- This H2 is still a zero-thickness transmission model. It teaches transfer and
+  image placement only; reflection/Denisyuk claims require the separate volume
+  hologram and Kogelnik path.
+- RGB consists of ordered red, green, and blue vacuum-wavelength channels on a
+  shared transverse sample grid. Each channel retains its own wavelength and
+  refractive index and independently evaluates recording, replay, and
+  propagation. No manual RGB spatial offset or cross-wavelength phase reuse is
+  permitted.
+
 ## Validation
 
 - Constant complex fields validate the exposure and response coefficient.
@@ -113,6 +134,11 @@ photopolymer, or a complete radiometric exposure model.
   intensity scales are reported explicitly; matched-mode power and residuals
   expose amplitude loss and phase-code quantization without conflating either
   with arbitrary relative-field gain or origin phase.
+- H2 positions before, at, and after the H1 real-image plane verify signed
+  placement and recover the isolated image below `3e-11` normalized complex
+  error after the longer FFT chain. Three independent spectral-bin oracles use
+  the Helmholtz longitudinal frequency at 638, 532, and 450 nm and prove that
+  wavelength identity, rather than an artificial colour offset, drives phase.
 
 ## Explicit limitations
 
@@ -122,6 +148,6 @@ photopolymer, or a complete radiometric exposure model.
 - A Denisyuk, reflection H2, or other volume hologram must use the later volume
   model/Kogelnik path. It must never be represented as this thin mask while
   being labelled physically complete.
-- Diffraction-order spatial separation, RGB workflows, H1-to-H2 orchestration,
-  propagated phase-only image-quality analysis, and calibrated exposure are
-  subsequent M6 increments.
+- Diffraction-order spatial separation, calibrated exposure, the interactive
+  teaching workflow, and strict experiment persistence are subsequent M6
+  increments.
