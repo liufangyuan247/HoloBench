@@ -10,7 +10,7 @@ against an independent optical-design implementation.
 
 - [x] Plane, spherical, conic, and even-asphere surface models with explicit SI
   conventions, clear apertures, analytic gradients, and robust intersections.
-- [ ] Constant, Cauchy, and Sellmeier material models with declared wavelength
+- [x] Constant, Cauchy, and Sellmeier material models with declared wavelength
   domains and explicit catalog-unit conversion.
 - [ ] Sequential thick-lens and multi-element assembly tracing with per-surface
   status, optical path length, refraction, TIR, clipping, and failure evidence.
@@ -35,7 +35,7 @@ against an independent optical-design implementation.
   off-axis and negative-curvature cases.
 - [ ] Snell invariants and forward/reverse trace consistency pass away from
   clipping, absorption, and TIR.
-- [ ] Cauchy and Sellmeier indices match independent hand-calculated and catalog
+- [x] Cauchy and Sellmeier indices match independent hand-calculated and catalog
   reference values across the declared wavelength domain.
 - [ ] At least five benchmark lenses cover focal position, full surface hit
   coordinates, spot diagram, and chromatic focal shift against pinned external

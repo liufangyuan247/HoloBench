@@ -82,7 +82,8 @@ Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 - **Engineering conventions**: [ADR 0007](adr/0007-real-lens-prescription-and-tracing-conventions.md) fixes sequential `+Z` tracing, curvature/conic/asphere signs and SI units, explicit material transitions, rigid surface poses, root acceptance, spot-diagram contents, and independent Optiland/prysm validation provenance.
 - **Rotational surfaces**: The CPU double-precision reference implements plane, sphere, conic, and even-asphere sag/gradient models. Planes and base conics use stable analytic roots; even aspheres use safeguarded Newton iteration plus an ascending bracket fallback. Hits, misses, clear-aperture clipping, invalid domains, and non-convergence remain distinct.
 - **Surface validation**: Seven new deterministic cases with 41 assertions cover positive/negative curvature, explicit sphere sheet selection, an independent paraboloid result, independent asphere residuals, clear-aperture clipping, forward trace limits, and analytic normals against separate central differences.
-- **Local toolchain gate**: Windows Clang 21 warnings-as-errors core and application builds pass with 237/237 headless tests. MSVC 19.44 `/W4 /WX` also builds the complete headless target and passes 237/237.
+- **Dispersion materials**: Constant-index, SI Cauchy, and SI Sellmeier models enforce declared wavelength domains, reject poles and non-physical indices, and include an explicit SCHOTT N-BK7 micrometre-squared-to-SI catalog conversion. Independent hand calculations and four N-BK7 catalog wavelengths cover F/d/C Fraunhofer lines and 1 um.
+- **Local toolchain gate**: Windows Clang 21 warnings-as-errors core and application builds pass with 243/243 headless tests. MSVC 19.44 `/W4 /WX` also builds the complete headless target and passes 243/243.
 
 ## Known limitations (M1/M2)
 
@@ -94,8 +95,8 @@ Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 
 ## Next five tasks
 
-1. Implement constant, Cauchy, and Sellmeier media with declared wavelength domains and independent catalog-value tests.
-2. Add rigid surface poses plus thick-lens and multi-surface sequential tracing with per-surface evidence.
-3. Add RGB/polychromatic bundles, longitudinal chromatic shift, and wavelength/field-grouped spot diagrams.
-4. Add versioned prescription JSON/CSV import/export and the interactive prescription editor.
-5. Validate at least five benchmark lenses against an independent Optiland/prysm bridge before tagging `m4-real-lens`.
+1. Add rigid surface poses plus thick-lens and multi-surface sequential tracing with per-surface evidence.
+2. Add RGB/polychromatic bundles, longitudinal chromatic shift, and wavelength/field-grouped spot diagrams.
+3. Add versioned prescription JSON/CSV import/export and the interactive prescription editor.
+4. Build the pinned Optiland/prysm generator and commit hashed golden prescriptions.
+5. Validate at least five benchmark lenses before the `m4-real-lens` release gate.

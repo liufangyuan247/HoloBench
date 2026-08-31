@@ -38,7 +38,7 @@ This file records active physical assumptions, sign conventions, and validity do
   - Infinity / Collimated: $u = f \implies v \to \infty$ (parallel output bundle).
 
 ### 5. Excluded Effects in M1 (Geometric Approximations)
-- **Monochromatic Propagation**: Rays have a single designated wavelength $\lambda$; no material chromatic dispersion $n(\lambda)$ is modeled.
+- **Legacy geometric scene**: M1 bench rays still carry one designated wavelength and its planar interfaces use caller-supplied constant indices. M4 defines validated constant, Cauchy, and Sellmeier phase-index models; they become physically active only through the explicit real-lens prescription tracer, not by silently changing legacy scenes.
 - **No Polarization**: Ray power/amplitude does not track transverse polarization states ($s/p$).
 - **No Fresnel Loss**: Interface transitions assume 100% transmission (or 100% reflection under TIR/mirror); Fresnel reflection and transmission power coefficients are omitted in M1.
 - **No Wave Diffraction / Interference**: Optical rays follow rectilinear geometric paths; wave interference and diffraction are deferred to M2.
