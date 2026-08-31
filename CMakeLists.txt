@@ -53,6 +53,7 @@ add_library(holobench_compute STATIC
     compute/fft/CpuFftBackend.cpp
     compute/fourier/FourFSystem.cpp
     compute/fourier/FourierOptics.cpp
+    compute/fourier/PsfMtf.cpp
     compute/propagation/AngularSpectrumPropagator.cpp
     compute/propagation/FraunhoferPropagator.cpp
     compute/propagation/FresnelPropagator.cpp
@@ -234,6 +235,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/compute/FresnelPropagatorTests.cpp
         tests/compute/FourFSystemTests.cpp
         tests/compute/FourierOpticsTests.cpp
+        tests/compute/PsfMtfTests.cpp
         tests/compute/SamplingDiagnosticsTests.cpp
         tests/analytic/BenchTracerTests.cpp
         tests/analytic/GeometricElementsTests.cpp

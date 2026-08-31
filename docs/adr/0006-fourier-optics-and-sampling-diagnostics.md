@@ -54,6 +54,40 @@ This is a monochromatic, coherent, scalar, paraxial, ideal-lens model. It does
 not claim aberrations, finite lens clear aperture, polarization, vector high-NA
 behaviour, or automatic padding.
 
+## Circular-pupil PSF and MTF convention
+
+For a physical circular pupil of radius `a` in the focal plane of a lens with
+focal length `f`, the coherent amplitude cutoff is
+
+```text
+nu_c = a / (lambda f)
+```
+
+where `lambda=lambda0/n` is the medium wavelength. The normalized coherent
+amplitude PSF and its normalized intensity PSF are
+
+```text
+A(r) = 2 J1(2 pi nu_c r) / (2 pi nu_c r)
+I(r) = |A(r)|^2
+```
+
+with the continuous on-axis limit `A(0)=I(0)=1`. The first dark radius is
+`3.8317059702/(2 pi nu_c)`. The reported MTF is explicitly the incoherent
+intensity MTF, not the coherent amplitude transfer function. With normalized
+frequency `rho=nu/(2 nu_c)`, it is
+
+```text
+MTF(rho) = 2/pi [acos(rho) - rho sqrt(1-rho^2)]  for 0 <= rho < 1
+MTF(rho) = 0                                      for rho >= 1
+```
+
+Thus the incoherent cutoff is `2 nu_c`. `n a/f` is reported only as a
+paraxial numerical-aperture mapping; it is not substituted for the exact
+geometrical high-NA sine condition. `a/f < 0.1` is the current reported
+paraxial validity gate. The implementation uses deterministic power-series and
+Hankel-asymptotic Bessel evaluation so availability does not depend on a
+platform standard library's optional special functions.
+
 ## Sampling-diagnostic decision
 
 For pitch `dx`, the axis Nyquist spatial frequency is `1/(2 dx)` and the
@@ -95,6 +129,10 @@ silently pad, resample, suppress evanescent bins, or change solver behaviour.
   high-pass, and band-pass selection. Closing the low-pass radius below the
   known harmonic removes its image-plane amplitude contrast while preserving
   the DC component.
+- The Airy response is checked against an independent J1 power series and
+  high-argument reference values. A discrete 4-f point source plus circular
+  stop agrees with the continuous Airy profile, while the incoherent MTF is
+  checked against an independently sampled overlap of two unit pupils.
 - The teaching example `lambda=532 nm`, `1024x1024`, `dx=4 um` reproduces a
   Nyquist half-angle of approximately `3.813 deg` and flags a requested
   `12 deg` field.
