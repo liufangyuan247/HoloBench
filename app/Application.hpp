@@ -29,6 +29,7 @@
 #include "optics/ray/DynamicBenchTracer.hpp"
 #include "optics/holography/BenchHologramRecording.hpp"
 #include "optics/holography/BenchHologramReplay.hpp"
+#include "optics/holography/BenchRgbHologram.hpp"
 #include "optics/holography/BenchVolumeHologram.hpp"
 #include "optics/holography/BenchVolumeHologramReplay.hpp"
 #include "optics/scene/NumericalAperture.hpp"
@@ -424,6 +425,9 @@ private:
     float sandboxPlateRelativeReferenceKilowattsPerSquareMetre_ = 100.0F;
     int sandboxPlateReplayKindIndex_ = 1;
     int sandboxPlateReplayViewIndex_ = 0;
+    int sandboxRgbReplayViewIndex_ = 0;
+    float sandboxRgbDisplayGains_[3] {1.0F, 1.0F, 1.0F};
+    float sandboxRgbDisplayGamma_ = 2.2F;
     float sandboxVolumeAverageRefractiveIndex_ = 1.5F;
     float sandboxVolumeIndexModulation_ = 0.01F;
     float sandboxVolumeShrinkagePercent_ = 0.0F;
@@ -454,6 +458,7 @@ private:
     std::unique_ptr<render::gl::Texture2D> sandboxPlateTexture_;
     std::unique_ptr<render::gl::Texture2D> sandboxReplayTexture_;
     std::unique_ptr<render::gl::Texture2D> sandboxVolumeReplayTexture_;
+    std::unique_ptr<render::gl::Texture2D> sandboxRgbReplayTexture_;
     std::unique_ptr<wave::WaveDetectorResult> detectorResult_;
     std::unique_ptr<samplingdebug::SamplingDebuggerResult> samplingDebuggerResult_;
     std::unique_ptr<reallens::RealLensWorkbenchResult> realLensResult_;
@@ -469,6 +474,10 @@ private:
         sandboxVolumeReplay_;
     std::unique_ptr<optics::holography::VolumePlateObservationReplayResult>
         sandboxVolumeObservationReplay_;
+    std::unique_ptr<optics::holography::RgbThinPlateRecordingResult>
+        sandboxRgbRecording_;
+    std::unique_ptr<optics::holography::RgbThinPlateReplayResult>
+        sandboxRgbReplay_;
     reflection::ReflectionRefractionConfig reflectionRefractionConfig_;
     reflection::ReflectionRefractionResult reflectionRefractionResult_;
     project::ProjectProvenance reflectionProjectProvenance_;

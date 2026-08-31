@@ -25,6 +25,7 @@
 
 #include "compute/fft/CpuFftBackend.hpp"
 #include "core/field/FieldVisualization.hpp"
+#include "core/field/RgbFieldVisualization.hpp"
 #include "optics/holography/PlateIncidentFields.hpp"
 #include "optics/io/LensPrescriptionIO.hpp"
 #include "optics/slm/SlmResponseIO.hpp"
@@ -479,6 +480,7 @@ Application::Application()
     , sandboxPlateTexture_(std::make_unique<render::gl::Texture2D>())
     , sandboxReplayTexture_(std::make_unique<render::gl::Texture2D>())
     , sandboxVolumeReplayTexture_(std::make_unique<render::gl::Texture2D>())
+    , sandboxRgbReplayTexture_(std::make_unique<render::gl::Texture2D>())
     , reflectionRefractionResult_(
           reflection::evaluateReflectionRefraction(
               reflectionRefractionConfig_))
@@ -1111,6 +1113,9 @@ void Application::shutdown() noexcept {
     if (sandboxVolumeReplayTexture_) {
         sandboxVolumeReplayTexture_->destroy();
     }
+    if (sandboxRgbReplayTexture_) {
+        sandboxRgbReplayTexture_->destroy();
+    }
     detectorResult_.reset();
     samplingDebuggerResult_.reset();
     realLensResult_.reset();
@@ -1121,6 +1126,8 @@ void Application::shutdown() noexcept {
     sandboxVolumeRecording_.reset();
     sandboxVolumeReplay_.reset();
     sandboxVolumeObservationReplay_.reset();
+    sandboxRgbRecording_.reset();
+    sandboxRgbReplay_.reset();
     if (imguiGlInitialized_) {
         ImGui_ImplOpenGL3_Shutdown();
         imguiGlInitialized_ = false;
@@ -5148,6 +5155,320 @@ void Application::drawSandboxInspector() {
                         }
                         ImGui::TextDisabled(
                             "Each wavelength is paired independently; RGB channels never cross-interfere.");
+                        std::array<
+                            optics::holography::PlateBranchPairSelection,
+                            3> rgbSelections {};
+                        bool hasRgbSelections = false;
+                        try {
+                            rgbSelections
+                                = optics::holography::
+                                    selectRgbThinTransmissionPairs(fields);
+                            hasRgbSelections = true;
+                        } catch (const std::exception&) {
+                            hasRgbSelections = false;
+                        }
+                        if (hasRgbSelections) {
+                            if (ImGui::Button("Record all RGB channels")) {
+                                try {
+                                    if (sandboxPlateSampleSize_ < 2
+                                        || sandboxPlateSampleSize_ > 4096) {
+                                        throw std::invalid_argument(
+                                            "plate sample size must be in [2, 4096]");
+                                    }
+                                    if (!std::isfinite(
+                                            sandboxPlateWindowMillimetres_)
+                                        || sandboxPlateWindowMillimetres_
+                                            <= 0.0F) {
+                                        throw std::invalid_argument(
+                                            "plate analysis window must be positive");
+                                    }
+                                    if (!std::isfinite(
+                                            sandboxPlateRelativeReferenceKilowattsPerSquareMetre_)
+                                        || sandboxPlateRelativeReferenceKilowattsPerSquareMetre_
+                                            <= 0.0F) {
+                                        throw std::invalid_argument(
+                                            "relative intensity reference must be positive");
+                                    }
+                                    const double extentMetres
+                                        = static_cast<double>(
+                                            sandboxPlateWindowMillimetres_)
+                                        * 1e-3;
+                                    optics::holography::ThinPlateRecordingOptions
+                                        options;
+                                    options.sampling = {
+                                        .sampleWidth = static_cast<std::size_t>(
+                                            sandboxPlateSampleSize_),
+                                        .sampleHeight = static_cast<std::size_t>(
+                                            sandboxPlateSampleSize_),
+                                        .refractiveIndex = 1.0,
+                                        .extentWidthMetres = extentMetres,
+                                        .extentHeightMetres = extentMetres,
+                                    };
+                                    options.relativeIntensityReferenceWattsPerSquareMetre
+                                        = static_cast<double>(
+                                            sandboxPlateRelativeReferenceKilowattsPerSquareMetre_)
+                                        * 1e3;
+                                    auto rgbRecording
+                                        = optics::holography::
+                                            recordRgbThinTransmissionPlate(
+                                                benchProject_.scene,
+                                                fields,
+                                                rgbSelections,
+                                                options);
+                                    sandboxRgbRecording_ = std::make_unique<
+                                        optics::holography::
+                                            RgbThinPlateRecordingResult>(
+                                                std::move(rgbRecording));
+                                    sandboxRgbReplay_.reset();
+                                    if (sandboxRgbReplayTexture_) {
+                                        sandboxRgbReplayTexture_->destroy();
+                                    }
+                                    errorMessage_.clear();
+                                    statusMessage_
+                                        = "Recorded three independent RGB channels on plate "
+                                        + selected->id;
+                                } catch (const std::exception& error) {
+                                    errorMessage_
+                                        = "RGB plate recording failed: "
+                                        + std::string(error.what());
+                                    statusMessage_.clear();
+                                }
+                            }
+                            ImGui::TextDisabled(
+                                "RGB batch available: exactly three distinct compatible transmission pairs.");
+                        }
+                        if (sandboxRgbRecording_
+                            && sandboxRgbRecording_->plateComponentId
+                                == selected->id) {
+                            ImGui::SeparatorText("Recorded RGB Exposure Set");
+                            const bool stale = sandboxRgbRecording_->isStaleFor(
+                                benchProject_.scene);
+                            if (stale) {
+                                ImGui::TextColored(
+                                    ImVec4(1.0F, 0.45F, 0.25F, 1.0F),
+                                    "STALE RGB recording: bench revision changed.");
+                            } else {
+                                ImGui::TextColored(
+                                    ImVec4(0.35F, 0.9F, 0.45F, 1.0F),
+                                    "Three current channels at revision %llu",
+                                    static_cast<unsigned long long>(
+                                        sandboxRgbRecording_->sourceRevision));
+                            }
+                            constexpr std::array<const char*, 3> kRgbNames {
+                                "Red", "Green", "Blue"};
+                            for (std::size_t channel = 0; channel < 3U;
+                                 ++channel) {
+                                const auto& recorded
+                                    = sandboxRgbRecording_->channels[channel];
+                                ImGui::TextWrapped(
+                                    "%s: %.3f nm | object #%llu + reference #%llu | fringe %.6g cycles/m | exposure %.6g .. %.6g",
+                                    kRgbNames[channel],
+                                    recorded.pair.wavelengthMetres * 1e9,
+                                    static_cast<unsigned long long>(
+                                        recorded.pair.objectBranchId),
+                                    static_cast<unsigned long long>(
+                                        recorded.pair.referenceBranchId),
+                                    std::hypot(
+                                        recorded.diagnostics
+                                            .fringeFrequencyXCyclesPerMetre,
+                                        recorded.diagnostics
+                                            .fringeFrequencyYCyclesPerMetre),
+                                    recorded.hologram.diagnostics
+                                        .minimumRecordedRelativeIntensity,
+                                    recorded.hologram.diagnostics
+                                        .maximumRecordedRelativeIntensity);
+                            }
+
+                            ImGui::SeparatorText("RGB Replay to Placed Observation");
+                            bool hasRgbObservationComponent = false;
+                            ImGui::BeginDisabled(stale);
+                            for (const auto& component
+                                 : benchProject_.scene.components()) {
+                                if (component.kind
+                                        != bench::BenchComponentKind::ScreenDetector
+                                    && component.kind
+                                        != bench::BenchComponentKind::FieldProbe) {
+                                    continue;
+                                }
+                                hasRgbObservationComponent = true;
+                                ImGui::PushID((
+                                    "rgb-observer-" + component.id).c_str());
+                                const std::string label
+                                    = "Replay RGB to " + component.id;
+                                if (ImGui::Button(label.c_str())) {
+                                    try {
+                                        if (!detectorFftBackend_) {
+                                            throw std::runtime_error(
+                                                "CPU FFT backend is unavailable");
+                                        }
+                                        const auto replayKind
+                                            = sandboxPlateReplayKindIndex_ == 0
+                                            ? optics::holography::
+                                                ThinPlateReplayKind::OrdinaryReference
+                                            : optics::holography::
+                                                ThinPlateReplayKind::ConjugateReference;
+                                        auto rgbReplay
+                                            = optics::holography::
+                                                replayRgbThinTransmissionToObservation(
+                                                    benchProject_.scene,
+                                                    *sandboxRgbRecording_,
+                                                    component.id,
+                                                    replayKind,
+                                                    *detectorFftBackend_);
+                                        const field::RgbIntensityVisualizationOptions
+                                            displayOptions {
+                                                .channelIntensityGains = {
+                                                    static_cast<double>(
+                                                        sandboxRgbDisplayGains_[0]),
+                                                    static_cast<double>(
+                                                        sandboxRgbDisplayGains_[1]),
+                                                    static_cast<double>(
+                                                        sandboxRgbDisplayGains_[2]),
+                                                },
+                                                .referenceIntensity = 0.0,
+                                                .displayGamma = static_cast<double>(
+                                                    sandboxRgbDisplayGamma_),
+                                            };
+                                        const auto image
+                                            = field::renderUncalibratedRgbIntensity(
+                                                rgbReplay.channels[0]
+                                                    .fullReplayAtObservation,
+                                                rgbReplay.channels[1]
+                                                    .fullReplayAtObservation,
+                                                rgbReplay.channels[2]
+                                                    .fullReplayAtObservation,
+                                                displayOptions);
+                                        if (!sandboxRgbReplayTexture_
+                                            || !sandboxRgbReplayTexture_
+                                                ->uploadImage(image)) {
+                                            throw std::runtime_error(
+                                                "OpenGL rejected the RGB replay texture");
+                                        }
+                                        sandboxRgbReplay_ = std::make_unique<
+                                            optics::holography::
+                                                RgbThinPlateReplayResult>(
+                                                    std::move(rgbReplay));
+                                        sandboxRgbReplayViewIndex_ = 0;
+                                        errorMessage_.clear();
+                                        statusMessage_
+                                            = "Replayed three independent spectral channels to "
+                                            + component.id;
+                                    } catch (const std::exception& error) {
+                                        errorMessage_
+                                            = "RGB plate replay failed: "
+                                            + std::string(error.what());
+                                        statusMessage_.clear();
+                                    }
+                                }
+                                ImGui::PopID();
+                            }
+                            ImGui::EndDisabled();
+                            if (!hasRgbObservationComponent) {
+                                ImGui::TextDisabled(
+                                    "Place a Screen / Detector or Field Probe to observe RGB reconstruction.");
+                            }
+                            if (sandboxRgbReplay_
+                                && sandboxRgbReplay_->plateComponentId
+                                    == selected->id) {
+                                if (sandboxRgbReplay_->isStaleFor(
+                                        benchProject_.scene)) {
+                                    ImGui::TextColored(
+                                        ImVec4(1.0F, 0.45F, 0.25F, 1.0F),
+                                        "STALE RGB replay: bench revision changed.");
+                                }
+                                bool refreshRgbView = ImGui::InputFloat3(
+                                    "RGB display gains",
+                                    sandboxRgbDisplayGains_,
+                                    "%.3f");
+                                refreshRgbView |= ImGui::InputFloat(
+                                    "RGB display gamma",
+                                    &sandboxRgbDisplayGamma_,
+                                    0.1F,
+                                    0.5F,
+                                    "%.3f");
+                                constexpr std::array<const char*, 4> kRgbViews {
+                                    "Combined RGB",
+                                    "Red intensity",
+                                    "Green intensity",
+                                    "Blue intensity",
+                                };
+                                refreshRgbView |= ImGui::Combo(
+                                    "RGB replay view",
+                                    &sandboxRgbReplayViewIndex_,
+                                    kRgbViews.data(),
+                                    static_cast<int>(kRgbViews.size()));
+                                if (refreshRgbView) {
+                                    try {
+                                        field::RgbaImage image = [&]() {
+                                            if (sandboxRgbReplayViewIndex_ == 0) {
+                                                return field::
+                                                    renderUncalibratedRgbIntensity(
+                                                        sandboxRgbReplay_->channels[0]
+                                                            .fullReplayAtObservation,
+                                                        sandboxRgbReplay_->channels[1]
+                                                            .fullReplayAtObservation,
+                                                        sandboxRgbReplay_->channels[2]
+                                                            .fullReplayAtObservation,
+                                                        {
+                                                            .channelIntensityGains = {
+                                                                static_cast<double>(
+                                                                    sandboxRgbDisplayGains_[0]),
+                                                                static_cast<double>(
+                                                                    sandboxRgbDisplayGains_[1]),
+                                                                static_cast<double>(
+                                                                    sandboxRgbDisplayGains_[2]),
+                                                            },
+                                                            .referenceIntensity = 0.0,
+                                                            .displayGamma
+                                                                = static_cast<double>(
+                                                                    sandboxRgbDisplayGamma_),
+                                                        });
+                                            }
+                                            field::FieldVisualizationOptions
+                                                options;
+                                            options.colormap
+                                                = field::ColormapKind::Inferno;
+                                            const std::size_t channel
+                                                = static_cast<std::size_t>(
+                                                    sandboxRgbReplayViewIndex_ - 1);
+                                            return field::renderLinearIntensity(
+                                                sandboxRgbReplay_->channels[channel]
+                                                    .fullReplayAtObservation,
+                                                options);
+                                        }();
+                                        if (!sandboxRgbReplayTexture_
+                                            || !sandboxRgbReplayTexture_
+                                                ->uploadImage(image)) {
+                                            throw std::runtime_error(
+                                                "OpenGL rejected the RGB replay view");
+                                        }
+                                        errorMessage_.clear();
+                                    } catch (const std::exception& error) {
+                                        errorMessage_
+                                            = "RGB replay visualization failed: "
+                                            + std::string(error.what());
+                                        statusMessage_.clear();
+                                    }
+                                }
+                                ImGui::TextWrapped(
+                                    "R/G/B propagated independently to %s; combined colour is an uncalibrated display transform, not coherent field addition.",
+                                    sandboxRgbReplay_
+                                        ->observationComponentId.c_str());
+                                if (sandboxRgbReplayTexture_
+                                    && sandboxRgbReplayTexture_->isValid()) {
+                                    const float availableWidth
+                                        = ImGui::GetContentRegionAvail().x;
+                                    const float imageSize = std::clamp(
+                                        availableWidth, 160.0F, 360.0F);
+                                    ImGui::Image(
+                                        toImTextureID(
+                                            sandboxRgbReplayTexture_->handle()),
+                                        ImVec2(imageSize, imageSize),
+                                        ImVec2(0.0F, 1.0F),
+                                        ImVec2(1.0F, 0.0F));
+                                }
+                            }
+                        }
                         if (sandboxVolumeRecording_
                             && sandboxVolumeRecording_->plateComponentId
                                 == selected->id) {

@@ -3,15 +3,17 @@
 HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator, and a long-term R&D tool for CHIMERA-like holographic printing.
 
 **Milestone status**: M1-M6 physics/reference foundations are validated in
-their documented domains. The application now includes an editable free-form
+their documented domains, and M7 provides the operational free-form bench
+foundation. The application now includes an editable free-form
 3D bench with typed placeable components, geometry-derived branched rays,
 ordinary transmission/reflection/RGB presets, placed thin-hologram recording,
 and reconstruction on placed Screen/Probe components. Reflection-volume
 recording derives the grating from the actual opposite-side plate branches and
 reconstructs a Bragg-weighted sampled field on a placed reflection-side
-Screen/Probe; the RGB batch workflow remains active M8 work. **M7 (Free-form 3D Optical Bench
-Sandbox)** and **M8 (transmission/reflection/RGB holography sandbox)** are the
-current product milestones, followed by **M9 (automated CHIMERA construction
+Screen/Probe. The RGB preset records and replays three independent spectral
+channels and combines only their display intensities. **M8
+(transmission/reflection/RGB holography sandbox)** is the current product
+milestone, followed directly by **M9 (automated CHIMERA construction
 and reconstruction)**. Distribution/store integration is outside the active
 roadmap. For the current repository state and roadmap, see
 [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and
@@ -165,7 +167,8 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (412 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (474 deterministic CPU/application cases,
+including the OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -173,7 +176,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 412/412 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 472/472 tests passing):
 
 ```powershell
 cmake --preset core-ci

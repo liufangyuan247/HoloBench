@@ -108,6 +108,17 @@ photopolymer, or a complete radiometric exposure model.
   refractive index and independently evaluates recording, replay, and
   propagation. No manual RGB spatial offset or cross-wavelength phase reuse is
   permitted.
+- The placed M8 adapter accepts exactly three unambiguous compatible
+  transmission pairs, requires distinct descending red/green/blue wavelengths,
+  and invokes the same single-channel record/replay path three times. Missing,
+  extra, duplicated-wavelength, reflection, stale, or reordered selections are
+  rejected. It never adds fields from different wavelengths.
+- Placed RGB colour is a display-only composition of the three independently
+  propagated intensities. Per-channel gains and monitor gamma are explicit UI
+  controls. The output uses uncalibrated RGB device primaries; it is not a CIE,
+  material spectral-response, or perceptual colour prediction. Changing a
+  channel phase without changing its intensity cannot change the combined
+  display.
 - Diffraction-order placement is diagnostic only. Under ordinary reference
   replay the zero carrier follows the recording reference and the twin carrier
   uses twice its transverse direction cosine; conjugate replay reverses both.

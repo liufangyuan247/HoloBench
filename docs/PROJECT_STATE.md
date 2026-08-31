@@ -6,9 +6,11 @@ Last updated: 2026-09-01
 
 **M1-M6 numerical/reference foundations: validated in their documented domains**
 
-Active development: **[M7 - Free-form 3D Optical Bench Sandbox](milestones/M7_OPTICAL_BENCH_SANDBOX.md)**
+Operational product foundation: **[M7 - Free-form 3D Optical Bench Sandbox](milestones/M7_OPTICAL_BENCH_SANDBOX.md)**
 
-Next: **[M8 - Transmission, reflection, and RGB holography sandbox](milestones/M8_HOLOGRAPHY_SANDBOX.md)**, then **[M9 - automated CHIMERA construction and reconstruction](milestones/M9_CHIMERA_AUTOMATION.md)**
+Active development: **[M8 - Transmission, reflection, and RGB holography sandbox](milestones/M8_HOLOGRAPHY_SANDBOX.md)**
+
+Next: **[M9 - automated CHIMERA construction and reconstruction](milestones/M9_CHIMERA_AUTOMATION.md)**
 
 Distribution/store milestones have been removed from the active roadmap.
 
@@ -307,8 +309,8 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Active free-form bench and holography sandbox state
 
-- **Product scope**: The primary product is the editable optical bench. Steam
-  and other store/distribution work are not active milestones. The delivery
+- **Product scope**: The primary product is the editable optical bench.
+  Store/distribution work is outside the active roadmap. The delivery
   sequence is M7 free-form bench, M8 placed transmission/reflection/RGB
   holography, then M9 CHIMERA-like automated construction and reconstruction.
 - **Editable bench foundation**: Twelve typed optical component kinds share one
@@ -340,12 +342,20 @@ completion because it is primarily driven through fixed parameter panels:
   side and propagate it to a placed parallel, coaxial Screen/Probe. The first
   adapter rejects off-axis/decentred resampling and TIR instead of wrapping the
   finite analysis window.
+- **Placed RGB workflow**: The RGB preset exposes exactly three unambiguous
+  same-wavelength/coherence transmission pairs ordered red, green, and blue.
+  Batch recording and replay invoke the validated single-channel path three
+  times, retain separate fields/wavelengths/diagnostics, and become stale as one
+  revision-bound result. Combined colour is computed only from the three
+  propagated intensities with explicit display gains/gamma and is labelled as
+  an uncalibrated visualization; no cross-wavelength complex-field addition is
+  possible.
 - **Revision provenance**: Plate incident evidence, thin recordings, thin
   replays, volume recordings, and volume replays carry the exact scene
   revision and visibly become stale after a bench edit.
-- **Current local validation**: Windows Clang development build passes 470/470
+- **Current local validation**: Windows Clang development build passes 474/474
   deterministic CPU, application, font, and OpenGL GPU cases after the placed
-  volume-reconstruction increment; `core-ci` passes 468/468, `app-ci` compiles
+  volume/RGB reconstruction increments; `core-ci` passes 472/472, `app-ci` compiles
   warnings-as-errors, and the hidden OpenGL smoke exits successfully on AMD
   Radeon Pro 5300M. Remote cross-compiler CI remains required before the M8
   slice is closed.
@@ -360,16 +370,15 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Record the RGB preset as three strictly independent same-wavelength pairs,
-   replay each channel independently, and combine only display intensities
-   through a labelled uncalibrated colour transform.
-2. Apply placed lens, aperture/filter, and SLM transformations to local complex
+1. Apply placed lens, aperture/filter, and SLM transformations to local complex
    fields so spatial object structure follows the actual upstream bench rather
    than only its centre ray.
-3. Generalize placed observation adapters with validated tilted/decentred
+2. Generalize placed observation adapters with validated tilted/decentred
    resampling and explicit finite-window support diagnostics.
-4. Persist a versioned recording recipe and material/channel configuration in
+3. Persist a versioned recording recipe and material/channel configuration in
    the unified bench document without treating recomputable field caches as
    project truth.
+4. Add named M8 performance scenes and complete cross-compiler/application
+   validation for transmission, reflection, and RGB workflows.
 5. Compile a versioned M9 CHIMERA recipe into an editable bench, then simulate
    hogel/angular data, RGB exposure events, and bounded reconstruction.

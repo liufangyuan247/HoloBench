@@ -40,6 +40,7 @@ add_library(holobench_core STATIC
     core/field/ComplexField2D.cpp
     core/field/FieldObservables.cpp
     core/field/FieldVisualization.cpp
+    core/field/RgbFieldVisualization.cpp
     core/field/ScalarField2D.cpp
     core/math/RigidTransform.cpp
     core/project/ProjectDocument.cpp
@@ -74,6 +75,7 @@ add_library(holobench_optics STATIC
     optics/analysis/SpotDiagram.cpp
     optics/holography/BenchHologramRecording.cpp
     optics/holography/BenchHologramReplay.cpp
+    optics/holography/BenchRgbHologram.cpp
     optics/holography/BenchVolumeHologram.cpp
     optics/holography/BenchVolumeHologramReplay.cpp
     optics/holography/PhaseOnlyHologram.cpp
@@ -370,6 +372,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/core/ComplexFieldTests.cpp
         tests/core/FieldObservablesTests.cpp
         tests/core/FieldVisualizationTests.cpp
+        tests/core/RgbFieldVisualizationTests.cpp
         tests/core/RigidTransformTests.cpp
         tests/compute/AngularSpectrumPropagatorTests.cpp
         tests/compute/CpuFftBackendTests.cpp
@@ -384,6 +387,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/BenchTracerTests.cpp
         tests/analytic/BenchInteractionTests.cpp
         tests/analytic/BenchHologramRecordingTests.cpp
+        tests/analytic/BenchRgbHologramTests.cpp
         tests/analytic/BenchVolumeHologramTests.cpp
         tests/analytic/BenchVolumeHologramReplayTests.cpp
         tests/analytic/BenchSceneTests.cpp

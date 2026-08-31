@@ -103,8 +103,10 @@ placed reflection grating vector and evaluates wavelength/angle/material Bragg
 selectivity, then reconstructs a Bragg-weighted sampled field on the physical
 reflection side at a placed parallel/coaxial Screen/Probe. General off-axis
 observation resampling remains pending. M8.4 has an editable RGB layout and
-strict per-wavelength pairing, but batch recording/replay and display-only
-colour composition remain pending.
+strict per-wavelength pairing, three-channel batch recording/replay, and
+display-only uncalibrated intensity composition. Persisted recording recipes,
+refined upstream spatial fields, and general observation resampling remain
+pending.
 
 ### M8.1 — Plate-local branch and coordinate contract
 
@@ -162,7 +164,7 @@ colour composition remain pending.
   replayed, and observed on a placed Screen / Probe.
 - [x] A reflection/Denisyuk-style hologram can be assembled with beams on
   opposite plate sides and reconstructed through the reflection Bragg path.
-- [ ] An RGB full-colour hologram can be assembled, recorded per wavelength,
+- [x] An RGB full-colour hologram can be assembled, recorded per wavelength,
   replayed per wavelength, and viewed as a labelled combined result.
 - [x] Every result is tied to the exact bench revision and becomes stale after
   any relevant component edit.
