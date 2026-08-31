@@ -15,7 +15,7 @@
 - **Unmodeled physical effects**: Monochromatic fields/rays only; no Fresnel transmission/reflection coefficients, no polarization/Stokes vector tracking, no material dispersion $n(\lambda)$, and no full-volume 3D non-homogeneous wave equation solving.
 - **Interface media specification**: For planar dielectric interfaces, `nIncident` and `nTransmitted` are supplied by the caller according to the propagation side and are not automatically swapped for reverse-incident rays.
 
-## Wave optics & observables (M2 in progress)
+## Wave optics & observables (M2)
 
 - **Phase wrapping & thresholding**: Phase extraction returns principal wrapped values in $[-\pi, +\pi)$ radians with explicit validity masking for exact zero ($0+0i$) or sub-threshold samples ($|U| < \sqrt{I_{\min}}$); 2D spatial phase unwrapping across branch cuts is deferred.
 - **Transverse intensity integration & representable domain**: Integrated intensity uses discrete rectangular Riemann summation ($\Delta x\,\Delta y \sum |U|^2$ / $\Delta x\,\Delta y \sum I$) with base-2 exponent scaling derived from `std::numeric_limits<double>`; non-zero values whose true mathematical result is strictly below double-precision `denorm_min` (`std::numeric_limits<double>::denorm_min()`) or exceeds max finite double throw explicit `std::underflow_error` or `std::overflow_error` before final rounding. Sub-pixel edge integration and high-order quadrature are not applied.
@@ -32,7 +32,7 @@
 - Requires an OpenGL 4.6 Core context; macOS is unsupported.
 - Local verification has been executed on Windows Clang/Ninja and MSVC/Ninja with warnings as errors.
 - The interactive GPU wave backend is FP32 and supports rectangular power-of-two grids. Unsupported dimensions and unavailable contexts fail explicitly; there is no silent CPU fallback.
-- GPU limits are queried at runtime. One exact AMD Radeon Pro 5300M driver build (`23.9.3.230915`) uses CPU-generated cached twiddle factors to avoid corrupt shader trigonometric results; all FFT data flow remains on the GPU, all other devices retain shader twiddle generation, and NVIDIA parity/performance is pending hardware confirmation.
+- GPU limits are queried at runtime. One exact AMD Radeon Pro 5300M driver build (`23.9.3.230915`) uses CPU-generated cached twiddle factors to avoid corrupt shader trigonometric results; all FFT data flow remains on the GPU and all other devices retain shader twiddle generation. NVIDIA and other unavailable hardware measurements are pending follow-up access, not release blockers; no unverified device-specific workaround is applied.
 - Remote GitHub Actions verification passes on Windows and Ubuntu for both core build/tests and application compilation ([run 33332649845](https://github.com/liufangyuan247/HoloBench/actions/runs/33332649845)).
 
 ## Architecture & data

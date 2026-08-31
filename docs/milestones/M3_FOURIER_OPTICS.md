@@ -54,7 +54,9 @@ Fourier-plane intensity transmission.
 - [x] The debugger explains the Fourier-plane centre/detail mapping, why a
   low-pass stop blurs, how pupil/NA changes PSF and MTF, and why sampling
   warnings can expose plausible-looking artefacts; the seven-texture smoke passes.
-- [ ] Remote CI evidence passes on the final M3 integration head.
+- [x] Remote CI evidence passes on the final M3 integration head: all four jobs
+  pass in [run 33351374693](https://github.com/liufangyuan247/HoloBench/actions/runs/33351374693)
+  at `2f2a0c5`.
 
 ## Teaching gate
 

@@ -2,7 +2,7 @@
 
 HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator, and a long-term R&D tool for CHIMERA-like holographic printing.
 
-**Milestone status**: **M0 (Engineering Foundation)** and **M1 (3D Optical Bench & Geometric Optics)** are complete. **M2 (Scalar Wave Optics & Propagation Solvers)** is in progress. For the current repository state and roadmap, see [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
+**Milestone status**: **M0–M3** are complete through Fourier optics and the Sampling Debugger. **M4 (Real Lens Engineering Model)** is next. For the current repository state and roadmap, see [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
 
 ## M1 Features
 
@@ -12,7 +12,7 @@ HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator
 - **Interactive 3D Bench UI**: Orbit/pan/zoom 3D camera, metric world grid, ray segment renderer, `+Z` forward-orientation gizmos for optical components, and Dear ImGui property inspector.
 - **Project Serialization**: Versioned JSON document model with semantic and byte-stable round-trip persistence.
 
-## M2 Features (In Progress)
+## M2 Features
 
 - **Sampled Wave Fields**: Complex and scalar 2D fields with explicit SI sampling, wavelength, and refractive-index metadata.
 - **CPU Reference Solvers**: Deterministic radix-2 FFT, Angular Spectrum Method, Fresnel transfer-function propagation, and Fraunhofer far-field propagation.
@@ -40,7 +40,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (203 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (229 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -48,7 +48,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 203/203 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 229/229 tests passing):
 
 ```powershell
 cmake --preset core-ci
@@ -100,7 +100,7 @@ Tested on AMD Radeon Pro 5300M (OpenGL 4.6.0 Core, GLSL 4.60):
 
 *Note*: The benchmark measures raw GPU rendering throughput with VSync disabled and synchronous CPU-GPU sync. In normal interactive mode (`vsync=1`), the application syncs to display refresh (e.g. 60 Hz). Earlier ~32 FPS observations on certain displays were due to window compositor swap pacing rather than GPU rendering bottlenecks.
 
-The M2 wave benchmark on the same AMD Radeon Pro 5300M records p50 = **35.433 ms**, p95 = **42.593 ms**, and max = **44.658 ms**, meeting the p95 < 50 ms budget. This exact renderer and driver build (`23.9.3.230915`) activates the documented CPU-twiddle device quirk; other GPUs use shader-generated twiddles by default. NVIDIA parity and performance remain a required release recheck.
+The M2 wave benchmark on the same AMD Radeon Pro 5300M records p50 = **35.433 ms**, p95 = **42.593 ms**, and max = **44.658 ms**, meeting the p95 < 50 ms budget. This exact renderer and driver build (`23.9.3.230915`) activates the documented CPU-twiddle device quirk; other GPUs use shader-generated twiddles by default. NVIDIA and other unavailable GPU measurements will be added when hardware is available and do not block releases; speculative device workarounds are prohibited.
 
 ## CI & Automated Workflows
 

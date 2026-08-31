@@ -4,11 +4,11 @@ Last updated: 2026-08-31
 
 ## Current milestone
 
-**M2 — Scalar Wave Optics & Propagation Solvers: release validation (NVIDIA hardware gate pending)**
+**M3 — Fourier Optics & Sampling Debugger: complete**
 
-Active development: **M3 — Fourier Optics & Sampling Debugger: in progress**
+Active development: **M4 — Real Lens Engineering Model**
 
-Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
+Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 
 ## Completed
 
@@ -53,13 +53,12 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
   - **Test Suite Status**: 203 deterministic CPU/application CTest cases plus one GPU executable containing 7/7 passing hardware cases and 720/720 assertions. Windows Clang and MSVC pass 204/204; WSL GCC passes 203 cases and explicitly skips the GPU executable when an OpenGL 4.6 context is unavailable. The hidden detector smoke and 120-frame OpenGL smoke both exit 0 on the reference AMD Radeon Pro 5300M.
   - **Cross-platform CI**: GitHub Actions run [33346353729](https://github.com/liufangyuan247/HoloBench/actions/runs/33346353729) passes all four final M2 integration gates at `c3e62a6`: Windows and Ubuntu core build/tests plus Windows and Ubuntu application compilation with warnings as errors.
 
-## In progress / Remaining for M2
+## M2 release status
 
-- M2 implementation and local integration gates are complete. The following release evidence is still pending before the milestone tag:
-  - NVIDIA hardware parity and named 1024x1024 benchmark, confirming the default `twiddle_source=gpu-shader` path without inheriting the AMD device quirk.
-  - Fast-forward integration to `main` and the `m2-wave-core` tag after all release gates are green.
+- M2 implementation, deterministic validation, hardware parity on the available AMD device, performance budgets, and cross-platform integration gates are complete.
+- Untested NVIDIA and other GPU families retain the default `twiddle_source=gpu-shader` path. Their parity and performance measurements are useful follow-up evidence, but are not a release blocker and must not be replaced by speculative vendor/model workarounds.
 
-## M3 progress
+## M3 completed
 
 - **Fourier conventions**: [ADR 0006](adr/0006-fourier-optics-and-sampling-diagnostics.md) defines the ideal front/back focal-plane transform, 4-f magnification and amplitude scaling, centred sampling, and diagnostic thresholds.
 - **Ideal Fourier lens**: A backend-neutral transform returns a physically sampled Fourier-plane `ComplexField2D`; an independent direct DFT validates every complex sample on a rectangular grid.
@@ -75,6 +74,7 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 - **M3 GPU parity**: The OpenGL executable now passes 8/8 cases and 1121/1121 assertions. A dedicated 4-f case compares the unfiltered Fourier plane, filtered Fourier plane, final image, filter geometry, physical sampling, and integrated-intensity transmission against the double-precision CPU reference.
 - **Teaching workflow**: An always-open guide maps Fourier-plane centre-to-edge position to average-to-fine spatial detail, explains low-pass blur and the pupil/NA effect on PSF/MTF, and explicitly warns that Nyquist, padding, boundary, or wrap failures can create plausible-looking numerical artefacts.
 - **Cross-platform gate**: Windows Clang warnings-as-errors core/application builds pass with 229/229 headless tests. Windows MSVC 19.44 `/W4 /WX` builds every application, benchmark, CPU-test, and GPU-test target and passes 230/230 registered tests. Ubuntu/WSL GCC 15.2 warnings-as-errors builds the same targets, passes all 229 deterministic tests, and skips the registered GPU executable with code 77 only because WSL exposes no compatible OpenGL 4.6 context.
+- **Release CI**: GitHub Actions run [33351374693](https://github.com/liufangyuan247/HoloBench/actions/runs/33351374693) passes all four final M3 integration jobs at `2f2a0c5`: Windows and Ubuntu core build/tests plus Windows and Ubuntu application compilation with warnings as errors.
 - **OpenGL smoke**: Three hidden frames exit 0 on AMD Radeon Pro 5300M and require the detector, angular spectrum, and all four 4-f plane textures to upload successfully with no reported OpenGL errors.
 
 ## Known limitations (M1/M2)
@@ -87,8 +87,8 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 
 ## Next five tasks
 
-1. Run and record GPU parity plus `wave/asm_1024_square_gpu_recompute` on the target NVIDIA card.
-2. Create the final M3 release-integration head including the `main` GPU policy commit.
-3. Run and record the GitHub Actions Windows/Linux matrix for that integration head.
-4. Complete M3 release-integration review.
-5. Merge/tag only after every M2 prerequisite and M3 gate is green.
+1. Lock M4 optical-surface, coordinate, ray-state, and tolerance conventions in an ADR.
+2. Implement robust spherical, conic, and even-asphere intersections with independent numerical oracles.
+3. Add thick-lens and multi-surface assembly tracing with Cauchy/Sellmeier dispersion and RGB rays.
+4. Add decenter/tilt transforms, spot diagrams, and versioned prescription JSON/CSV import/export.
+5. Validate at least five benchmark lenses against an independent Optiland/prysm bridge before tagging `m4-real-lens`.

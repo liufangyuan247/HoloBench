@@ -6,9 +6,10 @@
 | Project JSON round trip | Validated | Deterministic round-trip & version rejection tests (`ProjectDocumentTests.cpp`, `SceneProjectAdapterTests.cpp`) | Project persistence |
 | OpenGL context & 3D bench | Validated | 120-frame smoke run (exit 0, 0 GL errors, AMD Radeon Pro 5300M, GL 4.6/GLSL 4.60); camera & gizmo unit tests (`CameraTests.cpp`, `GizmoTests.cpp`) | Interactive UI shell |
 | Geometric optics (M1) | Validated | 92/92 deterministic tests across `dev` and `core-ci` presets (`ThinLensTests.cpp`, `SnellTests.cpp`, `GeometricElementsTests.cpp`, `NumericalApertureTests.cpp`, `BenchTracerTests.cpp`) | Interactive ray tracing |
-| Wave optics (M2 CPU/GPU & detector) | Release validation | 203 deterministic CPU/application cases; OpenGL executable 7/7 cases and 720/720 assertions; analytic oracles and three external full-field `waveprop 0.0.12` cross-validation cases | CPU reference, interactive GPU propagation, detector UI |
-| Fourier optics and Sampling Debugger (M3) | Local validation | 229/229 deterministic cases; 4-f direct-DFT/inversion/filter/Airy oracles; 8/8 GPU cases and 1121/1121 assertions; seven-texture OpenGL smoke; named CPU debugger and GPU 4-f budgets pass | Interactive 4-f filtering and sampling diagnostics |
-| Holography (M4–M5) | Not implemented | None | Prohibited |
+| Wave optics (M2 CPU/GPU & detector) | Validated | 203 deterministic CPU/application cases; OpenGL executable 7/7 cases and 720/720 assertions; analytic oracles and three external full-field `waveprop 0.0.12` cross-validation cases | CPU reference, interactive GPU propagation, detector UI |
+| Fourier optics and Sampling Debugger (M3) | Validated | 229/229 deterministic cases; 4-f direct-DFT/inversion/filter/Airy oracles; 8/8 GPU cases and 1121/1121 assertions; seven-texture OpenGL smoke; named CPU debugger and GPU 4-f budgets pass; four-job release CI passes | Interactive 4-f filtering and sampling diagnostics |
+| Real-lens engineering (M4) | Not implemented | None | Prohibited |
+| Holography (M6) | Not implemented | None | Prohibited |
 
 ## M1 Validation Breakdown
 
@@ -34,7 +35,7 @@
 - Off-axis paraxial validity warnings triggered when ray angle exceeds paraxial threshold ($> 0.1$ rad).
 - Rear-aperture clipping warnings triggered when marginal rays exceed downstream element clear apertures.
 
-## M2 Wave Optics Validation Breakdown (In Progress)
+## M2 Wave Optics Validation Breakdown
 
 ### 1. Complex Field Observables (`FieldObservablesTests.cpp`)
 - **Linear & decibel log intensity**: Pointwise intensity $I = |U|^2$ and decibel scaling $I_{\text{dB}} = \max(10(\log_{10} I - \log_{10} I_{\text{ref}}), \text{floor}_{\text{dB}})$ verified with strict non-positive floor clamp, exact-zero floor evaluation, pre-rounding sub-$\text{denorm\_min}$ ($< \text{std::numeric\_limits<double>::denorm\_min()}$) underflow detection via `frexp`/`ldexp` decomposition derived from `std::numeric_limits<double>`, exact $\text{denorm\_min}$ positive boundary retention, and log-difference underflow/overflow safety.
@@ -90,12 +91,13 @@
 - **GPU Numerical Validation**:
   - AMD Radeon Pro 5300M / OpenGL `4.6.0 Core Profile Context 23.9.3.230915`: 7/7 cases, 720/720 assertions; FFT forward/inverse per-component relative tolerance $3\times10^{-6}$; ASM and Fresnel parity tolerance $10^{-5}$.
   - M3 extends the same executable to 8/8 cases and 1121/1121 assertions: filtered and unfiltered 4-f Fourier planes, the image plane, sampling metadata, filter sample counts, and integrated-intensity transmission agree with the double-precision CPU reference.
-  - The exact AMD renderer/driver tuple reports `twiddle_source=cpu-device-quirk`; classification tests prove a different AMD driver and an NVIDIA renderer select the default `gpu-shader` path. NVIDIA numerical and performance execution remains a release gate.
+  - The exact AMD renderer/driver tuple reports `twiddle_source=cpu-device-quirk`; classification tests prove a different AMD driver and an NVIDIA renderer select the default `gpu-shader` path. NVIDIA and other unavailable hardware measurements remain follow-up evidence, not a release gate; no speculative workaround is applied.
 - **GPU Performance Validation**:
   - `wave/asm_1024_square_gpu_recompute`: 1024x1024, 4 um pitch, 532 nm, 0.10 m, 5 warmups, 30 synchronized samples; p50 **35.433 ms**, p95 **42.593 ms**, max **44.658 ms** on the reference AMD GPU; p95 < 50 ms target met.
 - **OpenGL Smoke Test**:
   - Hidden detector `--gl-smoke` and 120-frame application run on AMD Radeon Pro 5300M with OpenGL 4.6 Core / GLSL 4.60: both complete with exit code 0 and 0 reported OpenGL debug errors.
 - **GitHub Actions Remote CI**:
+  - Final M3 integration run [33351374693](https://github.com/liufangyuan247/HoloBench/actions/runs/33351374693): all four jobs pass at commit `2f2a0c5`.
   - Final M2 integration run [33346353729](https://github.com/liufangyuan247/HoloBench/actions/runs/33346353729): all four jobs pass at commit `c3e62a6`.
-  - Windows and Ubuntu `core-ci`: warnings-as-errors builds and all 203 headless tests pass, including all three external `waveprop` golden comparisons.
+  - Windows and Ubuntu `core-ci`: warnings-as-errors builds and all 229 M3 headless tests pass, including all three external `waveprop` golden comparisons.
   - Windows and Ubuntu `app-ci`: warnings-as-errors application compilation passes; the Windows job explicitly binds Glad generation to Python 3.14.7 with pinned Jinja2 3.1.6 and MarkupSafe 3.0.3 dependencies.
