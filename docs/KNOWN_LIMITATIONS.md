@@ -137,6 +137,12 @@
   adapter uses the configured source radius at the observer without propagated
   waist curvature. The ROI integrates only intercepted power and cannot claim
   whole-plate exposure outside the explicitly sampled window.
+- Transmission, reflection/Denisyuk, and RGB full-colour buttons load ordinary
+  editable `BenchProject` layouts. Only the transmission preset currently has
+  placed-bench recording and replay physics. The reflection preset validates
+  opposite-side geometry and the RGB preset validates three isolated spectral
+  pairs, but their volume-material and multiplexed recording/reconstruction
+  paths remain incomplete.
 - The dynamic bench has its own bounded scene-wide undo/redo timeline. The
   separate legacy history still covers lesson-relevant fixed optical-bench,
   Wave Detector, Sampling Debugger, and SLM inputs, but not Real Lens or the

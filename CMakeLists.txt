@@ -113,6 +113,7 @@ holobench_set_warnings(holobench_optics)
 # either lower-level library depend on the other implementation layer.
 add_library(holobench_app_logic STATIC
     app/BenchEditHistory.cpp
+    app/BenchHolographyPresets.cpp
     app/BenchProject.cpp
     app/LessonEditHistory.cpp
     app/HolographyLabPipeline.cpp
@@ -416,6 +417,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/validation/WavepropCrossValidationTests.cpp
         tests/app/WaveDetectorUiStateTests.cpp
         tests/app/BenchEditHistoryTests.cpp
+        tests/app/BenchHolographyPresetsTests.cpp
         tests/app/BenchProjectTests.cpp
         tests/app/SlmInterferenceUiStateTests.cpp
         tests/app/HolographyUiStateTests.cpp

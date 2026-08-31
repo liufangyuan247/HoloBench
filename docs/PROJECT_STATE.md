@@ -85,6 +85,15 @@ rebuilt on the shared bench.
   parallel, axis-aligned, coaxial, sufficiently large plane on the transmitted output side;
   tilted, decentered, backward, and undersized observers fail explicitly until
   off-axis resampling is independently validated.
+- **Editable holography bench presets**: the Inspector can load ordinary unified
+  projects for thin transmission, opposite-side reflection/Denisyuk, and RGB
+  full-colour layouts. Every source, plate, and observation component remains
+  editable and survives canonical project round-trip; there is no hidden preset
+  solver graph. The transmission layout passes placed record/replay end to end,
+  the reflection layout proves a real opposite-side pair, and the RGB layout
+  produces exactly three independent wavelength/coherence pairs with no
+  cross-colour interference. Reflection and RGB material recording remain the
+  next M8 physics slices.
 
 - **Dynamic scene foundation (headless)**: `BenchScene` is now the first shared
   scene truth source for the new product path. It owns a dynamic component
@@ -128,10 +137,10 @@ rebuilt on the shared bench.
   order; hop, branch, minimum-power, escape, clipping, absorption, and invalid
   interaction endings are explicit.
 - **Current verification**: Windows Clang 21 `core-ci` warnings-as-errors build
-  passes with 459/459 deterministic cases; the complete development build and
-  application link pass with 461/461 cases including the packaged-font and
+  passes with 462/462 deterministic cases; the complete development build and
+  application link pass with 464/464 cases including the packaged-font and
   hardware OpenGL tests. The development and warnings-as-errors application
-  smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Forty-seven M7
+  smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Fifty M7/M8
   cases cover all twelve
   schemas, invalid IDs/transforms/physics, scene mutation/revision/staleness,
   RGB and arbitrary-transform canonical persistence, strict parser rejection,
@@ -143,7 +152,7 @@ rebuilt on the shared bench.
   power/phase/Nyquist, ROI flux, and thin placed-plate exposure. Full
   path-dependent beam-envelope transforms, sampled screen/probe fields, the
   resolved real-lens adapter, lens/filter/SLM wave transforms, off-axis replay,
-  volume reflection, and RGB recording/replay remain open,
+  volume reflection and RGB recording/replay remain open,
   so M7 is not yet accepted even though the interactive M7.1 path is present.
 
 ## Completed

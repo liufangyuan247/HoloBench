@@ -29,6 +29,7 @@
 #include "optics/io/LensPrescriptionIO.hpp"
 #include "optics/slm/SlmResponseIO.hpp"
 #include "app/HolographyProject.hpp"
+#include "app/BenchHolographyPresets.hpp"
 #include "app/SlmInterferenceProject.hpp"
 #include "app/UiFont.hpp"
 #include "app/lessons/LessonProgress.hpp"
@@ -4533,11 +4534,30 @@ void Application::drawSandboxInspector() {
             std::move(empty), "Created an empty optical bench"));
     }
     ImGui::SameLine();
-    if (ImGui::Button("RGB Branch Preset")) {
+    if (ImGui::Button("Ray Branch Demo")) {
         BenchProject preset = makeDefaultSandboxProject();
         selectedBenchComponentId_.clear();
         static_cast<void>(applyDynamicBenchProject(
-            std::move(preset), "Loaded RGB branch preset"));
+            std::move(preset), "Loaded ray branch demo"));
+    }
+    if (ImGui::Button("Transmission Hologram")) {
+        selectedBenchComponentId_ = "plate-h1";
+        static_cast<void>(applyDynamicBenchProject(
+            makeTransmissionHolographyPreset(),
+            "Loaded editable transmission holography bench"));
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reflection / Denisyuk")) {
+        selectedBenchComponentId_ = "plate-h1";
+        static_cast<void>(applyDynamicBenchProject(
+            makeReflectionHolographyPreset(),
+            "Loaded editable reflection / Denisyuk bench"));
+    }
+    if (ImGui::Button("RGB Full-colour Hologram")) {
+        selectedBenchComponentId_ = "plate-h1";
+        static_cast<void>(applyDynamicBenchProject(
+            makeRgbHolographyPreset(),
+            "Loaded editable RGB full-colour holography bench"));
     }
 
     ImGui::SeparatorText("Bench Components");
