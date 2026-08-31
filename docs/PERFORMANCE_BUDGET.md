@@ -105,3 +105,19 @@ The Fourier-lens implementation precomputes separable centred X/Y phase factors.
 | Max refresh | **6.641 ms** | Informational | Recorded |
 
 MSVC 19.44 `/O2` independently records p50 **9.935 ms**, p95 **10.857 ms**, and max **11.022 ms**, meeting the same platform-neutral budget. This is a CPU benchmark and contains no GPU vendor/model dispatch or device-specific performance cap.
+
+## M5 Verified SLM and Interference Benchmark
+
+### Benchmark Profile: `wave/slm_interference_128_square_3w_3response_cpu_refresh`
+
+- **Hardware Profile**: Intel Core i7-9750H (6 cores / 12 logical processors), Windows 10 10.0.19045 and Ubuntu/WSL, Release builds.
+- **Workload**: 128x128 complex field, 2 um pitch, 450/532/638 nm vacuum wavelengths, 16x16 pixelated SLM, selected-pixel angular PSF, Fourier-plane angular mapping, and reference-beam mutual-coherence intensity. Every sample runs the ideal scalar, measured complex-LUT, and LCD polarizer/RGB teaching response paths.
+- **Execution Parameters**: Deterministic CPU double-precision backend, 3 warmups and 15 measured full three-response refreshes. Checksum is `809.806743551` on all three compilers.
+
+| Compiler | p50 refresh | p95 refresh | Target Budget | Status |
+|---|---:|---:|---:|---|
+| Clang 21.1.8 | **155.898 ms** | **188.482 ms** | **< 350 ms** | Met |
+| MSVC 19.44 `/O2` | **231.500 ms** | **278.183 ms** | **< 350 ms** | Met |
+| GCC 15.2 | **123.826 ms** | **175.544 ms** | **< 350 ms** | Met |
+
+M5 currently has no GPU execution path: the CPU reference is the product correctness and performance gate. No vendor/model dispatch, speculative GPU workaround, precision reduction, or performance cap is introduced. Future acceleration must use runtime capabilities and preserve this workload's numerical evidence.

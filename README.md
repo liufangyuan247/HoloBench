@@ -53,6 +53,9 @@ HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator
 - **Apply-gated SLM lab**: A dockable teaching workflow visualizes interference,
   angular intensity, and selected-pixel PSF without recomputing per frame;
   measured LUT import/export keeps calibration provenance visible.
+- **Named CPU performance gate**: The fixed 128-square, three-wavelength,
+  ideal/LUT/LCD full refresh records p95 **188.482 ms** with Clang and
+  **278.183 ms** with MSVC on the reference i7-9750H, below the 350 ms budget.
 
 ## Physical Assumptions & Limitations (M1)
 

@@ -21,7 +21,9 @@ model.
 - [x] SLM coordinate-to-angle, angular PSF, and multi-wavelength mapping results.
 - [x] Dockable apply-gated teaching workflow, fringe/angular/PSF visualization,
   and measured-LUT import/export with visible provenance.
-- [ ] Named CPU/GPU performance profiles and cross-platform release gates.
+- [x] Named three-response CPU performance profile and cross-platform compiler
+  gate. GPU acceleration is not part of the M5 correctness path and is not
+  emulated with device-specific dispatch.
 
 ## Numerical gate
 
