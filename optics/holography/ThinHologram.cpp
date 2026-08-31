@@ -37,6 +37,17 @@ void validateResponse(const ThinHologramResponseParameters& response) {
         && scalar.pitchYMetres() == complex.pitchYMetres();
 }
 
+[[nodiscard]] bool sameComplexGrid(
+    const field::ComplexField2D& first,
+    const field::ComplexField2D& second) noexcept {
+    return first.width() == second.width()
+        && first.height() == second.height()
+        && first.pitchXMetres() == second.pitchXMetres()
+        && first.pitchYMetres() == second.pitchYMetres()
+        && first.vacuumWavelengthMetres() == second.vacuumWavelengthMetres()
+        && first.refractiveIndex() == second.refractiveIndex();
+}
+
 [[nodiscard]] bool sameScalarGrid(
     const field::ScalarField2D& first,
     const field::ScalarField2D& second) noexcept {
@@ -89,6 +100,12 @@ void validateHologram(const ThinAmplitudeHologram& hologram) {
         throw std::overflow_error("thin-hologram exposure response is not representable");
     }
     return raw;
+}
+
+void requireFiniteComplex(std::complex<double> value, const char* message) {
+    if (!std::isfinite(value.real()) || !std::isfinite(value.imag())) {
+        throw std::overflow_error(message);
+    }
 }
 
 } // namespace
@@ -162,6 +179,88 @@ ThinHologramReplayResult replayThinAmplitudeHologram(
     return {
         .field = std::move(output),
         .zeroTransmissionSampleCount = zeroCount,
+    };
+}
+
+ThinHologramReplayOrders decomposeUnclampedLinearReplayOrders(
+    const ThinAmplitudeHologram& hologram,
+    const field::ComplexField2D& recordingObjectField,
+    const field::ComplexField2D& recordingReferenceField,
+    const field::ComplexField2D& replayField) {
+    validateHologram(hologram);
+    if (!sameComplexGrid(recordingObjectField, recordingReferenceField)
+        || !sameTransverseGrid(hologram.amplitudeTransmission, recordingObjectField)
+        || !sameTransverseGrid(hologram.amplitudeTransmission, replayField)) {
+        throw std::invalid_argument(
+            "thin-hologram order decomposition fields must match the recording plate grid");
+    }
+    auto zeroOrder = replayField;
+    auto objectOrder = replayField;
+    auto conjugateOrder = replayField;
+    for (std::size_t index = 0; index < replayField.sampleCount(); ++index) {
+        const auto object = recordingObjectField.samples()[index];
+        const auto reference = recordingReferenceField.samples()[index];
+        const auto replay = replayField.samples()[index];
+        requireFiniteComplex(object, "thin-hologram recording object field must be finite");
+        requireFiniteComplex(reference, "thin-hologram recording reference field must be finite");
+        requireFiniteComplex(replay, "thin-hologram replay field must be finite");
+        const double recordedIntensity = std::norm(object + reference);
+        if (!std::isfinite(recordedIntensity)) {
+            throw std::overflow_error(
+                "thin-hologram order decomposition intensity is not representable");
+        }
+        bool clampedMinimum = false;
+        bool clampedMaximum = false;
+        const double expectedTransmission = responseTransmission(
+            recordedIntensity,
+            hologram.response,
+            clampedMinimum,
+            clampedMaximum);
+        if (clampedMinimum || clampedMaximum) {
+            throw std::invalid_argument(
+                "clipped thin-hologram response cannot use linear order decomposition");
+        }
+        const double scale = std::max({
+            1.0,
+            std::abs(recordedIntensity),
+            std::abs(hologram.recordedRelativeIntensity.samples()[index])});
+        const double tolerance = 32.0 * std::numeric_limits<double>::epsilon() * scale;
+        const double transmissionTolerance = 32.0
+            * std::numeric_limits<double>::epsilon()
+            * std::max({
+                1.0,
+                std::abs(expectedTransmission),
+                std::abs(hologram.amplitudeTransmission.samples()[index])});
+        if (std::abs(
+                hologram.recordedRelativeIntensity.samples()[index] - recordedIntensity)
+                > tolerance
+            || std::abs(
+                hologram.amplitudeTransmission.samples()[index] - expectedTransmission)
+                > transmissionTolerance) {
+            throw std::invalid_argument(
+                "thin-hologram order decomposition inputs do not match the recorded plate");
+        }
+        const double backgroundTransmission = hologram.response.amplitudeBias
+            + hologram.response.intensityToAmplitudeGain
+                * (std::norm(object) + std::norm(reference));
+        const auto zero = replay * backgroundTransmission;
+        const auto objectTerm = replay
+            * (hologram.response.intensityToAmplitudeGain
+                * object * std::conj(reference));
+        const auto conjugateTerm = replay
+            * (hologram.response.intensityToAmplitudeGain
+                * std::conj(object) * reference);
+        requireFiniteComplex(zero, "thin-hologram zero order is not representable");
+        requireFiniteComplex(objectTerm, "thin-hologram object-bearing order is not representable");
+        requireFiniteComplex(conjugateTerm, "thin-hologram conjugate order is not representable");
+        zeroOrder.samples()[index] = zero;
+        objectOrder.samples()[index] = objectTerm;
+        conjugateOrder.samples()[index] = conjugateTerm;
+    }
+    return {
+        .zeroOrderField = std::move(zeroOrder),
+        .objectBearingOrderField = std::move(objectOrder),
+        .conjugateOrderField = std::move(conjugateOrder),
     };
 }
 

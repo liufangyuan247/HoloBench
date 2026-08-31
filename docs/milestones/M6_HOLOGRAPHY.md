@@ -11,7 +11,8 @@ clearly separate first volume-hologram model.
 - [x] Fully coherent object/reference thin-amplitude recording CPU reference.
 - [x] Explicit linear exposure-to-field-amplitude response with clamp diagnostics.
 - [x] Ordinary and conjugate replay-wave foundation without hidden order selection.
-- [ ] Propagated virtual/real reconstruction with image-plane diagnostics.
+- [x] Propagated ordinary virtual/conjugate real reconstruction, full-replay
+  comparison, explicit linear-order decomposition, and complex-field metrics.
 - [ ] Phase-only encoding and reconstruction-quality metrics.
 - [ ] RGB recording/replay basics with wavelength identity preserved.
 - [ ] H1 record -> conjugate replay -> real image -> H2 record/replay pipeline.
@@ -25,7 +26,9 @@ clearly separate first volume-hologram model.
 - [x] Independent analytic carrier-fringe oracle with non-zero phase offset.
 - [x] Independent pointwise record/replay algebra and conjugation tests.
 - [x] Clamp, grid, finite-domain, corruption, and compatibility rejection tests.
-- [ ] Independent propagated real/virtual reconstruction oracle.
+- [x] Independent propagated real/virtual ASM round-trip oracle below `2e-12`
+  normalized and peak-relative complex-field error, plus a direct Helmholtz
+  spectral-bin phase oracle.
 - [ ] H1/H2 placement and RGB wavelength-scaling oracles.
 - [ ] Thin/volume boundary and Kogelnik limiting-case oracles.
 

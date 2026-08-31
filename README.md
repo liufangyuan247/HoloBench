@@ -56,9 +56,10 @@ HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator
 - **Versioned experiment projects**: Strict, byte-stable M5 JSON preserves the
   complete draft experiment, embedded measured response, and provenance while
   leaving legacy optical-bench scene format v1 unchanged.
-- **Thin-hologram CPU foundation**: M6 records fully coherent object/reference
-  interference into an explicit bounded amplitude response and supports ordinary
-  or conjugate replay without hiding zero or conjugate diffraction orders.
+- **Thin-hologram reconstruction foundation**: M6 records fully coherent
+  object/reference interference into an explicit bounded amplitude response,
+  preserves the physical full replay, and separately exposes ordinary virtual
+  and conjugate real-image orders with complex-field quality metrics.
 - **Named CPU performance gate**: The fixed 128-square, three-wavelength,
   ideal/LUT/LCD full refresh records p95 **188.482 ms** with Clang and
   **278.183 ms** with MSVC on the reference i7-9750H, below the 350 ms budget.
@@ -81,7 +82,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (307 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (313 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -89,7 +90,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 307/307 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 313/313 tests passing):
 
 ```powershell
 cmake --preset core-ci

@@ -39,6 +39,12 @@ struct ThinHologramReplayResult final {
     std::size_t zeroTransmissionSampleCount = 0;
 };
 
+struct ThinHologramReplayOrders final {
+    field::ComplexField2D zeroOrderField;
+    field::ComplexField2D objectBearingOrderField;
+    field::ComplexField2D conjugateOrderField;
+};
+
 [[nodiscard]] ThinAmplitudeHologram recordThinAmplitudeHologram(
     const field::ComplexField2D& objectField,
     const field::ComplexField2D& referenceField,
@@ -48,6 +54,15 @@ struct ThinHologramReplayResult final {
 // field must retain the same transverse sample grid as the recorded plate.
 [[nodiscard]] ThinHologramReplayResult replayThinAmplitudeHologram(
     const ThinAmplitudeHologram& hologram,
+    const field::ComplexField2D& replayField);
+
+// Exact teaching decomposition for an unclamped linear response. The returned
+// fields sum to the full replay field. A clipped plate is rejected because its
+// nonlinear response cannot be represented by these three analytic terms.
+[[nodiscard]] ThinHologramReplayOrders decomposeUnclampedLinearReplayOrders(
+    const ThinAmplitudeHologram& hologram,
+    const field::ComplexField2D& recordingObjectField,
+    const field::ComplexField2D& recordingReferenceField,
     const field::ComplexField2D& replayField);
 
 // Under the repository exp(-i*omega*t) convention, complex conjugation at the

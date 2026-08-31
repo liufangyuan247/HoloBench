@@ -59,7 +59,13 @@ photopolymer, or a complete radiometric exposure model.
 - Expanding `I_record R` or `I_record R*` produces a zero-order/background term,
   an object-bearing term, and a conjugate term. The thin-mask API preserves all
   of them. It does not silently remove the zero order or select a diffraction
-  order.
+  order. For teaching, an explicitly labelled analytic decomposition may return
+  the three terms separately only when the linear response is unclipped; the
+  three returned fields must sum to the physical full replay sample-for-sample.
+- With an object plane at `z=-d` and the plate at `z=0`, the ordinary
+  object-bearing order is back-propagated by `-d` to inspect the virtual image.
+  The conjugate-bearing order under conjugated reference replay is propagated by
+  `+d` to inspect the real image. Both signed distances are explicit API state.
 
 ## Validation
 
@@ -68,6 +74,14 @@ photopolymer, or a complete radiometric exposure model.
   sample against the independent analytic `2 + 2 cos(delta_phi)` fringe.
 - Replay validates every complex output sample against the direct algebraic
   expansion, including a replay wavelength different from the recording.
+- An ASM round-trip oracle starts with an arbitrary complex object at `z=-d`,
+  records it at the plate, and verifies the isolated ordinary/virtual order
+  against the scaled object and the conjugate/real order against the scaled
+  complex conjugate. Normalized L2 and peak-relative complex errors are below
+  `2e-12`; the physical full replay is independently proven distinct.
+- A separate single-spectral-bin case computes longitudinal frequency and
+  `exp(+i 2 pi f_z d)` directly from the Helmholtz dispersion relation, checking
+  the recording-plane field without using a forward/backward cancellation.
 - Clamp boundaries, conjugation involution, grid mismatches, non-finite inputs,
   invalid response bounds, and corrupt stored masks fail deterministically.
 
@@ -79,6 +93,5 @@ photopolymer, or a complete radiometric exposure model.
 - A Denisyuk, reflection H2, or other volume hologram must use the later volume
   model/Kogelnik path. It must never be represented as this thin mask while
   being labelled physically complete.
-- Real/virtual image placement, diffraction-order separation, RGB workflows,
-  H1-to-H2 orchestration, phase-only encoding, and calibrated exposure are
-  subsequent M6 increments.
+- Diffraction-order spatial separation, RGB workflows, H1-to-H2 orchestration,
+  phase-only encoding, and calibrated exposure are subsequent M6 increments.

@@ -156,6 +156,60 @@ TEST_CASE("replay matches pointwise thin-mask algebra and permits a new waveleng
     }
 }
 
+TEST_CASE("explicit unclamped order decomposition sums to full replay") {
+    field::ComplexField2D object(3, 2, 4e-6, 5e-6, 532e-9);
+    field::ComplexField2D reference(3, 2, 4e-6, 5e-6, 532e-9);
+    for (std::size_t index = 0; index < object.sampleCount(); ++index) {
+        object.samples()[index] = {
+            0.1 + 0.03 * static_cast<double>(index),
+            -0.2 + 0.02 * static_cast<double>(index)};
+        reference.samples()[index] = {
+            0.4 - 0.01 * static_cast<double>(index),
+            0.15 + 0.02 * static_cast<double>(index)};
+    }
+    const auto hologram = holography::recordThinAmplitudeHologram(
+        object,
+        reference,
+        {
+            .amplitudeBias = 0.2,
+            .intensityToAmplitudeGain = 0.3,
+            .minimumAmplitudeTransmission = 0.0,
+            .maximumAmplitudeTransmission = 1.0,
+        });
+    const auto replay = holography::makeConjugateReplayField(reference);
+    const auto full = holography::replayThinAmplitudeHologram(hologram, replay);
+    const auto orders = holography::decomposeUnclampedLinearReplayOrders(
+        hologram, object, reference, replay);
+
+    for (std::size_t index = 0; index < full.field.sampleCount(); ++index) {
+        const auto sum = orders.zeroOrderField.samples()[index]
+            + orders.objectBearingOrderField.samples()[index]
+            + orders.conjugateOrderField.samples()[index];
+        CHECK(std::abs(sum - full.field.samples()[index]) <= 2e-16);
+    }
+
+    auto corrupted = hologram;
+    corrupted.recordedRelativeIntensity.samples()[0] += 1e-3;
+    CHECK_THROWS_AS(
+        static_cast<void>(holography::decomposeUnclampedLinearReplayOrders(
+            corrupted, object, reference, replay)),
+        std::invalid_argument);
+
+    const auto clipped = holography::recordThinAmplitudeHologram(
+        object,
+        reference,
+        {
+            .amplitudeBias = 0.0,
+            .intensityToAmplitudeGain = 10.0,
+            .minimumAmplitudeTransmission = 0.0,
+            .maximumAmplitudeTransmission = 0.1,
+        });
+    CHECK_THROWS_AS(
+        static_cast<void>(holography::decomposeUnclampedLinearReplayOrders(
+            clipped, object, reference, replay)),
+        std::invalid_argument);
+}
+
 TEST_CASE("conjugate replay reverses sample phase and is exactly involutive") {
     field::ComplexField2D reference(3, 2, 2e-6, 2e-6, 450e-9);
     reference.samples()[0] = {1.0, 2.0};

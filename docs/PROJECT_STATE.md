@@ -113,7 +113,8 @@ Previous: **M4 — Real Lens Engineering Model: complete**
 
 - **Thin-hologram convention**: [ADR 0009](adr/0009-thin-hologram-recording-and-replay-conventions.md) fixes coherent relative exposure `|O+R|^2`, bounded linear exposure-to-field-amplitude response, pointwise thin-mask replay, conjugate wavefront replay, and the separation from future volume/Bragg physics.
 - **CPU reference foundation**: Thin amplitude recording reports exposure/transmission ranges and both clamp counts. Replay preserves all zero, object, and conjugate terms, permits a different replay wavelength on the same transverse plate grid, and rejects non-finite, corrupt, or incompatible state.
-- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 307/307 deterministic cases; complete Clang/MSVC applications build. Six new cases cover constant-field exposure, a non-zero-phase analytic carrier fringe, positive/negative response slopes and clamps, direct replay algebra at a changed wavelength, conjugation involution, and strict invalid-state rejection.
+- **Propagated reconstruction**: A headless ASM workflow propagates an arbitrary complex object from `z=-d` to H1, records and fully replays the plate, and explicitly decomposes unclipped linear zero/object/conjugate orders. Ordinary replay back-propagates its object-bearing order to the virtual image; conjugated-reference replay propagates its conjugate-bearing order to the real image. Full replay fields remain available and visibly differ from isolated teaching orders.
+- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 313/313 deterministic cases; complete Clang/MSVC applications build. Twelve M6 cases cover constant-field exposure, a non-zero-phase analytic carrier fringe, positive/negative response slopes and clamps, direct replay algebra at a changed wavelength, exact three-order summation, conjugation involution, an independent Helmholtz spectral-bin phase, ordinary/conjugate ASM round trips below `2e-12`, full-versus-isolated replay distinction, determinism, and strict invalid-state rejection.
 
 ## Known limitations (M1/M2)
 
@@ -125,8 +126,8 @@ Previous: **M4 — Real Lens Engineering Model: complete**
 
 ## Next five tasks
 
-1. Add propagated ordinary/conjugate reconstruction and image-plane oracles.
-2. Add phase-only encoding and reconstruction-quality diagnostics.
-3. Build H1-to-H2, transplane, and RGB CPU-reference orchestration.
+1. Add phase-only encoding and reconstruction-quality diagnostics.
+2. Build H1-to-H2, transplane, and RGB CPU-reference orchestration.
+3. Add diffraction-order spatial placement and sampling diagnostics.
 4. Build the apply-gated Holography teaching workflow and persistence.
 5. Consider GPU acceleration only after the CPU/product model is stable; retain runtime capability dispatch and the default path on untested devices.
