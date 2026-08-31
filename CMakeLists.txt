@@ -71,6 +71,7 @@ holobench_set_warnings(holobench_compute)
 add_library(holobench_optics STATIC
     optics/analysis/ChromaticAnalysis.cpp
     optics/analysis/SpotDiagram.cpp
+    optics/io/LensPrescriptionIO.cpp
     optics/material/OpticalMaterial.cpp
     optics/ray/BenchTracer.cpp
     optics/ray/GeometricElements.cpp
@@ -263,6 +264,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/BenchTracerTests.cpp
         tests/analytic/ChromaticAnalysisTests.cpp
         tests/analytic/GeometricElementsTests.cpp
+        tests/analytic/LensPrescriptionIOTests.cpp
         tests/analytic/FieldElementTests.cpp
         tests/analytic/FraunhoferDiffractionTests.cpp
         tests/analytic/NumericalApertureTests.cpp

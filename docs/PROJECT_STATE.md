@@ -87,7 +87,8 @@ Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 - **Trace validation**: A parallel plate independently verifies geometric and optical path, N-BK7 blue/red rays prove wavelength-aware dispatch, and dedicated cases cover clipping, TIR termination, invalid medium continuity, and rigid-transform metric round trips.
 - **Spot analysis**: Image-plane samples retain source-ray identity, wavelength, and power; reports include centroid, RMS radius, geometric radius, optional chief-ray-relative coordinates, wavelength grouping, and explicit per-ray trace/image-plane rejection evidence.
 - **Chromatic analysis**: Fraunhofer F/d/C spectral expansion conserves source power, while the analytic axial variance fit reports best focus, bounded focus, collimation, or insufficient evidence. Sequential wavelength groups produce longitudinal focal shift without paraxial thin-lens substitution.
-- **Local toolchain gate**: Windows Clang 21 warnings-as-errors core and application builds pass with 256/256 headless tests. MSVC 19.44 `/W4 /WX` also builds the complete headless target and passes 256/256.
+- **Prescription persistence**: [Versioned JSON and normalized CSV](LENS_PRESCRIPTION_FORMAT.md) preserve complete material, surface, asphere, and rigid-pose state. CSV supports quoted editable text plus explicit Sellmeier/asphere child rows. Both formats validate the complete prescription after import and provide deterministic, lossless reserialization and file APIs.
+- **Local toolchain gate**: Windows Clang 21 warnings-as-errors core and application builds pass with 261/261 headless tests. MSVC 19.44 `/W4 /WX` also builds the complete headless target and passes 261/261.
 
 ## Known limitations (M1/M2)
 
@@ -99,8 +100,8 @@ Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 
 ## Next five tasks
 
-1. Add versioned prescription JSON/CSV import/export with malformed-input and deterministic round-trip coverage.
-2. Add field-tagged bundles plus the interactive prescription editor and surface/spot visualization.
+1. Add field-tagged bundles and field-grouped spot statistics.
+2. Build the interactive prescription editor and surface/ray/spot visualization.
 3. Build the pinned Optiland/prysm generator and commit hashed golden prescriptions.
 4. Validate at least five benchmark lenses against independent focal/spot/chromatic results.
 5. Run named performance, smoke, cross-platform CI, and the `m4-real-lens` release gate.
