@@ -100,9 +100,11 @@ stale until recomputation.
 Current implementation status (2026-09-01): M8.1 is implemented; M8.2 has an
 end-to-end placed thin-transmission record/replay path; M8.3 records the full
 placed reflection grating vector and evaluates wavelength/angle/material Bragg
-selectivity, while spatial reflection replay to a placed observation remains
-in progress; M8.4 has an editable RGB layout and strict per-wavelength pairing,
-but batch recording/replay and display-only colour composition remain pending.
+selectivity, then reconstructs a Bragg-weighted sampled field on the physical
+reflection side at a placed parallel/coaxial Screen/Probe. General off-axis
+observation resampling remains pending. M8.4 has an editable RGB layout and
+strict per-wavelength pairing, but batch recording/replay and display-only
+colour composition remain pending.
 
 ### M8.1 — Plate-local branch and coordinate contract
 
@@ -156,15 +158,15 @@ but batch recording/replay and display-only colour composition remain pending.
 
 ## Acceptance checklist
 
-- [ ] A transmission hologram can be assembled from an empty bench, recorded,
+- [x] A transmission hologram can be assembled from an empty bench, recorded,
   replayed, and observed on a placed Screen / Probe.
-- [ ] A reflection/Denisyuk-style hologram can be assembled with beams on
+- [x] A reflection/Denisyuk-style hologram can be assembled with beams on
   opposite plate sides and reconstructed through the reflection Bragg path.
 - [ ] An RGB full-colour hologram can be assembled, recorded per wavelength,
   replayed per wavelength, and viewed as a labelled combined result.
-- [ ] Every result is tied to the exact bench revision and becomes stale after
+- [x] Every result is tied to the exact bench revision and becomes stale after
   any relevant component edit.
-- [ ] The three examples are ordinary unified bench projects, not special
+- [x] The three examples are ordinary unified bench projects, not special
   hard-coded UI workflows.
 - [ ] Numerical oracles, project compatibility, performance budgets, OpenGL
   smoke, and Windows/Linux CI pass.

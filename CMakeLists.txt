@@ -75,6 +75,7 @@ add_library(holobench_optics STATIC
     optics/holography/BenchHologramRecording.cpp
     optics/holography/BenchHologramReplay.cpp
     optics/holography/BenchVolumeHologram.cpp
+    optics/holography/BenchVolumeHologramReplay.cpp
     optics/holography/PhaseOnlyHologram.cpp
     optics/holography/PlateFieldSampling.cpp
     optics/holography/PlateIncidentFields.cpp
@@ -384,6 +385,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/BenchInteractionTests.cpp
         tests/analytic/BenchHologramRecordingTests.cpp
         tests/analytic/BenchVolumeHologramTests.cpp
+        tests/analytic/BenchVolumeHologramReplayTests.cpp
         tests/analytic/BenchSceneTests.cpp
         tests/analytic/DynamicBenchTracerTests.cpp
         tests/analytic/ChromaticAnalysisTests.cpp

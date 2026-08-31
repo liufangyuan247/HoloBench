@@ -335,15 +335,20 @@ completion because it is primarily driven through fixed parameter panels:
   wavelength/internal angle, coupling, detuning, and Kogelnik efficiency. The
   current efficiency mapping uses the recorded vector magnitude as an
   equivalent symmetric Bragg angle and does not falsely claim arbitrary
-  slanted-grating coupled-wave fidelity. Spatial reflection reconstruction to
-  a placed observation plane is the next active slice.
+  slanted-grating coupled-wave fidelity. The recorded reference branch can
+  reconstruct a Bragg-weighted sampled complex field on the physical reflection
+  side and propagate it to a placed parallel, coaxial Screen/Probe. The first
+  adapter rejects off-axis/decentred resampling and TIR instead of wrapping the
+  finite analysis window.
 - **Revision provenance**: Plate incident evidence, thin recordings, thin
   replays, volume recordings, and volume replays carry the exact scene
   revision and visibly become stale after a bench edit.
-- **Current local validation**: Windows Clang development build passes 468/468
+- **Current local validation**: Windows Clang development build passes 470/470
   deterministic CPU, application, font, and OpenGL GPU cases after the placed
-  volume-recording increment. Cross-compiler CI and hidden-window application
-  smoke remain required before the M8 slice is closed.
+  volume-reconstruction increment; `core-ci` passes 468/468, `app-ci` compiles
+  warnings-as-errors, and the hidden OpenGL smoke exits successfully on AMD
+  Radeon Pro 5300M. Remote cross-compiler CI remains required before the M8
+  slice is closed.
 
 ## Known limitations (M1/M2)
 
@@ -355,15 +360,14 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Propagate a recorded reflection-volume order to a physically placed
-   observation plane, with explicit plate side/direction, sampling domain, and
-   field/intensity validation.
-2. Record the RGB preset as three strictly independent same-wavelength pairs,
+1. Record the RGB preset as three strictly independent same-wavelength pairs,
    replay each channel independently, and combine only display intensities
    through a labelled uncalibrated colour transform.
-3. Apply placed lens, aperture/filter, and SLM transformations to local complex
+2. Apply placed lens, aperture/filter, and SLM transformations to local complex
    fields so spatial object structure follows the actual upstream bench rather
    than only its centre ray.
+3. Generalize placed observation adapters with validated tilted/decentred
+   resampling and explicit finite-window support diagnostics.
 4. Persist a versioned recording recipe and material/channel configuration in
    the unified bench document without treating recomputable field caches as
    project truth.

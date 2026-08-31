@@ -8,8 +8,8 @@ their documented domains. The application now includes an editable free-form
 ordinary transmission/reflection/RGB presets, placed thin-hologram recording,
 and reconstruction on placed Screen/Probe components. Reflection-volume
 recording derives the grating from the actual opposite-side plate branches and
-exposes Bragg replay diagnostics; its spatial reconstructed observation and the
-RGB batch workflow remain active M8 work. **M7 (Free-form 3D Optical Bench
+reconstructs a Bragg-weighted sampled field on a placed reflection-side
+Screen/Probe; the RGB batch workflow remains active M8 work. **M7 (Free-form 3D Optical Bench
 Sandbox)** and **M8 (transmission/reflection/RGB holography sandbox)** are the
 current product milestones, followed by **M9 (automated CHIMERA construction
 and reconstruction)**. Distribution/store integration is outside the active

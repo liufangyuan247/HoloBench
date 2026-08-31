@@ -71,6 +71,27 @@ forms are fixed as
 At the reflection critical boundary `|xi|=nu`, the continuous finite limit is
 `nu^2/(nu^2+1)`. Both geometries are even in detuning, so `eta(+xi)=eta(-xi)`.
 
+### Placed reflection adapter
+
+- M8 records the complete plate-local vector
+  `K = k_object - k_reference` after Snell refraction into the configured
+  material. Its sign, period, and slant are retained even though the scalar
+  efficiency solver maps `|K|` to an equivalent symmetric Bragg angle.
+- A replay laser must be a reference-role branch that actually reaches the
+  same current plate. Its internal incidence angle is measured relative to the
+  recorded grating normal; the coupled reflected direction retains the
+  component tangent to the grating planes and selects the opposite normal
+  branch before Snell refraction back to air.
+- The first sampled reconstructed field is the replay field multiplied by the
+  recorded object/reference complex phase product. Isotropic shrinkage applies
+  the corresponding transverse `K` correction. The result is globally
+  normalized so its plane-normal power equals incident replay power times the
+  scalar Kogelnik efficiency.
+- No Fresnel boundary loss is applied. The first placed-observer adapter accepts
+  a parallel, coaxial Screen/Probe and an axis-aligned reconstructed order. It
+  rejects tilted, decentered, off-axis-resampled, unresolved-carrier, TIR, and
+  non-propagating cases instead of relying on periodic-window wraparound.
+
 ## Validation
 
 - Independent exact-Bragg oracles verify `sin^2(nu)` and `tanh^2(nu)`.
@@ -90,6 +111,9 @@ At the reflection critical boundary `|xi|=nu`, the continuous finite limit is
 
 - The volume model is a separate API and data model from every thin hologram.
 - Absorption, Fresnel boundary loss, polarization coupling, multiplexed
-  gratings, nonlinear recording, scattering, chirp, anisotropic shrinkage,
-  slanted reflection fringes, and rigorous Maxwell effects remain out of scope
-  and must not be inferred from the reported efficiency.
+  material cross-talk, nonlinear recording, scattering, chirp, anisotropic
+  shrinkage, rigorous slanted-grating coupled-wave efficiency, and Maxwell
+  effects remain out of scope and must not be inferred from the reported
+  scalar efficiency. The retained full grating vector and sampled phase
+  transfer are geometric/field evidence, not a claim that the one-dimensional
+  Kogelnik efficiency solves arbitrary slanted media.

@@ -478,6 +478,7 @@ Application::Application()
     , holographyTexture_(std::make_unique<render::gl::Texture2D>())
     , sandboxPlateTexture_(std::make_unique<render::gl::Texture2D>())
     , sandboxReplayTexture_(std::make_unique<render::gl::Texture2D>())
+    , sandboxVolumeReplayTexture_(std::make_unique<render::gl::Texture2D>())
     , reflectionRefractionResult_(
           reflection::evaluateReflectionRefraction(
               reflectionRefractionConfig_))
@@ -1107,6 +1108,9 @@ void Application::shutdown() noexcept {
     if (sandboxReplayTexture_) {
         sandboxReplayTexture_->destroy();
     }
+    if (sandboxVolumeReplayTexture_) {
+        sandboxVolumeReplayTexture_->destroy();
+    }
     detectorResult_.reset();
     samplingDebuggerResult_.reset();
     realLensResult_.reset();
@@ -1116,6 +1120,7 @@ void Application::shutdown() noexcept {
     sandboxPlateReplay_.reset();
     sandboxVolumeRecording_.reset();
     sandboxVolumeReplay_.reset();
+    sandboxVolumeObservationReplay_.reset();
     if (imguiGlInitialized_) {
         ImGui_ImplOpenGL3_Shutdown();
         imguiGlInitialized_ = false;
@@ -5117,6 +5122,10 @@ void Application::drawSandboxInspector() {
                                                 optics::holography::VolumePlateRecordingResult>(
                                                     std::move(recording));
                                             sandboxVolumeReplay_.reset();
+                                            sandboxVolumeObservationReplay_.reset();
+                                            if (sandboxVolumeReplayTexture_) {
+                                                sandboxVolumeReplayTexture_->destroy();
+                                            }
                                             errorMessage_.clear();
                                             statusMessage_
                                                 = "Recorded volume reflection grating on plate "
@@ -5245,7 +5254,162 @@ void Application::drawSandboxInspector() {
                                 } else {
                                     ImGui::TextColored(
                                         ImVec4(1.0F, 0.65F, 0.25F, 1.0F),
-                                        "Diffracted order is non-propagating; efficiency was not evaluated.");
+                                    "Diffracted order is non-propagating; efficiency was not evaluated.");
+                                }
+                            }
+                            ImGui::SeparatorText(
+                                "Reconstruct to Placed Observation");
+                            ImGui::TextDisabled(
+                                "Uses recorded reference branch #%llu as the physical replay illumination. First adapter accepts a coaxial reconstructed order and parallel Screen/Probe.",
+                                static_cast<unsigned long long>(
+                                    recording.pair.referenceBranchId));
+                            bool hasVolumeObservationComponent = false;
+                            ImGui::BeginDisabled(stale);
+                            for (const auto& component
+                                 : benchProject_.scene.components()) {
+                                if (component.kind
+                                        != bench::BenchComponentKind::ScreenDetector
+                                    && component.kind
+                                        != bench::BenchComponentKind::FieldProbe) {
+                                    continue;
+                                }
+                                hasVolumeObservationComponent = true;
+                                ImGui::PushID((
+                                    "volume-observer-" + component.id).c_str());
+                                const std::string label
+                                    = "Reconstruct on " + component.id;
+                                if (ImGui::Button(label.c_str())) {
+                                    try {
+                                        if (!detectorFftBackend_) {
+                                            throw std::runtime_error(
+                                                "CPU FFT backend is unavailable");
+                                        }
+                                        if (sandboxPlateSampleSize_ < 2
+                                            || sandboxPlateSampleSize_ > 4096) {
+                                            throw std::invalid_argument(
+                                                "plate sample size must be in [2, 4096]");
+                                        }
+                                        if (!std::isfinite(
+                                                sandboxPlateWindowMillimetres_)
+                                            || sandboxPlateWindowMillimetres_
+                                                <= 0.0F) {
+                                            throw std::invalid_argument(
+                                                "plate analysis window must be positive");
+                                        }
+                                        const double extentMetres
+                                            = static_cast<double>(
+                                                sandboxPlateWindowMillimetres_)
+                                            * 1e-3;
+                                        const optics::holography::PlateFieldSamplingOptions
+                                            sampling {
+                                                .sampleWidth
+                                                    = static_cast<std::size_t>(
+                                                        sandboxPlateSampleSize_),
+                                                .sampleHeight
+                                                    = static_cast<std::size_t>(
+                                                        sandboxPlateSampleSize_),
+                                                .refractiveIndex = 1.0,
+                                                .extentWidthMetres = extentMetres,
+                                                .extentHeightMetres = extentMetres,
+                                            };
+                                        auto observationReplay
+                                            = optics::holography::
+                                                replayVolumeReflectionToObservation(
+                                                    benchProject_.scene,
+                                                    fields,
+                                                    recording,
+                                                    recording.pair.referenceBranchId,
+                                                    component.id,
+                                                    sampling,
+                                                    *detectorFftBackend_);
+                                        field::FieldVisualizationOptions viewOptions;
+                                        viewOptions.colormap
+                                            = field::ColormapKind::Inferno;
+                                        const auto image
+                                            = field::renderLinearIntensity(
+                                                observationReplay
+                                                    .reconstructedAtObservation,
+                                                viewOptions);
+                                        if (!sandboxVolumeReplayTexture_
+                                            || !sandboxVolumeReplayTexture_
+                                                ->uploadImage(image)) {
+                                            throw std::runtime_error(
+                                                "OpenGL rejected the volume reconstruction texture");
+                                        }
+                                        sandboxVolumeObservationReplay_
+                                            = std::make_unique<
+                                                optics::holography::
+                                                    VolumePlateObservationReplayResult>(
+                                                        std::move(
+                                                            observationReplay));
+                                        errorMessage_.clear();
+                                        statusMessage_
+                                            = "Reconstructed reflection volume hologram on "
+                                            + component.id;
+                                    } catch (const std::exception& error) {
+                                        errorMessage_
+                                            = "Volume observation replay failed: "
+                                            + std::string(error.what());
+                                        statusMessage_.clear();
+                                    }
+                                }
+                                ImGui::PopID();
+                            }
+                            ImGui::EndDisabled();
+                            if (!hasVolumeObservationComponent) {
+                                ImGui::TextDisabled(
+                                    "Place a Screen / Detector or Field Probe on the reflected side.");
+                            }
+                            if (sandboxVolumeObservationReplay_
+                                && sandboxVolumeObservationReplay_
+                                       ->plateComponentId
+                                    == selected->id) {
+                                const auto& observation
+                                    = *sandboxVolumeObservationReplay_;
+                                if (observation.isStaleFor(
+                                        benchProject_.scene)) {
+                                    ImGui::TextColored(
+                                        ImVec4(1.0F, 0.45F, 0.25F, 1.0F),
+                                        "STALE reconstruction: bench revision changed.");
+                                }
+                                const auto& direction
+                                    = observation
+                                        .reconstructedDirectionExternalLocal;
+                                ImGui::TextWrapped(
+                                    "Branch #%llu -> %s | direction local (%.6g, %.6g, %.6g) | distance %.6g m",
+                                    static_cast<unsigned long long>(
+                                        observation.replayBranchId),
+                                    observation.observationComponentId.c_str(),
+                                    direction.x,
+                                    direction.y,
+                                    direction.z,
+                                    observation.signedObservationDistanceMetres);
+                                ImGui::TextWrapped(
+                                    "Sampled replay %.6g W -> reconstructed %.6g W | efficiency %.3f%% | %zu propagating, %zu evanescent bins",
+                                    observation
+                                        .replayPowerOnSampledWindowWatts,
+                                    observation
+                                        .reconstructedPowerOnSampledWindowWatts,
+                                    observation.braggReplay.volume.kogelnik
+                                            .diffractionEfficiency
+                                        * 100.0,
+                                    observation.propagation
+                                        .propagatingBinCount,
+                                    observation.propagation
+                                        .evanescentBinCount);
+                                if (sandboxVolumeReplayTexture_
+                                    && sandboxVolumeReplayTexture_->isValid()) {
+                                    const float availableWidth
+                                        = ImGui::GetContentRegionAvail().x;
+                                    const float imageSize = std::clamp(
+                                        availableWidth, 160.0F, 360.0F);
+                                    ImGui::Image(
+                                        toImTextureID(
+                                            sandboxVolumeReplayTexture_
+                                                ->handle()),
+                                        ImVec2(imageSize, imageSize),
+                                        ImVec2(0.0F, 1.0F),
+                                        ImVec2(1.0F, 0.0F));
                                 }
                             }
                             ImGui::TextDisabled(

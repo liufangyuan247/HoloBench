@@ -30,6 +30,7 @@
 #include "optics/holography/BenchHologramRecording.hpp"
 #include "optics/holography/BenchHologramReplay.hpp"
 #include "optics/holography/BenchVolumeHologram.hpp"
+#include "optics/holography/BenchVolumeHologramReplay.hpp"
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
 #include "render/Camera.hpp"
@@ -452,6 +453,7 @@ private:
     std::unique_ptr<render::gl::Texture2D> holographyTexture_;
     std::unique_ptr<render::gl::Texture2D> sandboxPlateTexture_;
     std::unique_ptr<render::gl::Texture2D> sandboxReplayTexture_;
+    std::unique_ptr<render::gl::Texture2D> sandboxVolumeReplayTexture_;
     std::unique_ptr<wave::WaveDetectorResult> detectorResult_;
     std::unique_ptr<samplingdebug::SamplingDebuggerResult> samplingDebuggerResult_;
     std::unique_ptr<reallens::RealLensWorkbenchResult> realLensResult_;
@@ -465,6 +467,8 @@ private:
         sandboxVolumeRecording_;
     std::unique_ptr<optics::holography::VolumePlateReplayResult>
         sandboxVolumeReplay_;
+    std::unique_ptr<optics::holography::VolumePlateObservationReplayResult>
+        sandboxVolumeObservationReplay_;
     reflection::ReflectionRefractionConfig reflectionRefractionConfig_;
     reflection::ReflectionRefractionResult reflectionRefractionResult_;
     project::ProjectProvenance reflectionProjectProvenance_;
