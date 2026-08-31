@@ -432,8 +432,18 @@ completion because it is primarily driven through fixed parameter panels:
   a 1024x1024 full-window sampling request; impossible FOV/stop designs remain
   inspectable but cannot report feasibility. See
   [ADR 0016](adr/0016-chimera-recipe-to-bench.md).
+- **Hashed hogel/angular data product**: Format-v1 `HogelDataset` separates
+  source perspective images, per-hogel angular samples, and sparse per-channel
+  SLM commands with explicit SI/radian/index units and a canonical content
+  hash. The ideal Fourier-lens mapping uses `x=f*tan(theta_x)` and
+  `y=f*tan(theta_y)` with a tested positive-Y-to-decreasing-row convention;
+  out-of-SLM samples reject. Source view insertion order is canonicalized, and
+  strict parsing rejects unknown fields, unsupported units, invalid grids, and
+  payload/hash disagreement. The packaged 5x3 synthetic view grid is only a
+  deterministic data-chain oracle, not a real scene renderer. See
+  [ADR 0017](adr/0017-chimera-hogel-angular-dataset.md).
 - **Current M9 validation**: Windows Clang warnings-as-errors core/application
-  builds pass; `core-ci` passes 510/510 and `dev` passes 512/512 including GPU
+  builds pass; `core-ci` passes 515/515 and `dev` passes 517/517 including GPU
   and font executables. Hidden OpenGL smoke renders and semantically
   round-trips the generated 23-component bench, finds its six plate branches,
   and exits with no GL errors on AMD Radeon Pro 5300M. Remote MSVC/GCC evidence
@@ -449,12 +459,11 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Define hashed hogel/angular-image data and map its samples to placed SLM
-   commands with analytic Fourier-lens validation.
-2. Generate deterministic stage/SLM/RGB exposure events that invoke the three
+1. Generate deterministic stage/SLM/RGB exposure events that invoke the three
    compiled M8 recording recipes.
-3. Add single- and bounded multi-hogel reconstruction with view/cross-talk
+2. Add single- and bounded multi-hogel reconstruction with view/cross-talk
    evidence.
-4. Add deterministic parameter sweeps and best-candidate constraint evidence.
+3. Add deterministic parameter sweeps and best-candidate constraint evidence.
+4. Add real perspective-image adapters and calibrated-raster interface hooks.
 5. Add resumable batch execution, corrupt-artifact rejection, named budgets,
    and cross-platform M9 acceptance gates.

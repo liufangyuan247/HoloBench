@@ -12,8 +12,11 @@ Current implementation status (2026-09-01): C9.1 format-v1 recipe parsing,
 validation, deterministic recipe-to-bench compiler, stable generated-component
 provenance, constraint report, three independent M8 reflection recording
 recipes, and Lab build controls are implemented. The canonical output is a
-23-component ordinary editable bench. Hogel/angular datasets, exposure events,
-bounded multi-hogel reconstruction, sweeps, and resumable batches remain open.
+23-component ordinary editable bench. Format-v1 hashed hogel/angular datasets,
+deterministic synthetic perspective-view oracles, Fourier-lens position
+mapping, and sparse RGB SLM commands are implemented. Exposure events, real
+perspective-image adapters, bounded multi-hogel reconstruction, sweeps, and
+resumable batches remain open.
 
 ## User-visible outcome
 
