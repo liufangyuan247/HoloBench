@@ -104,6 +104,17 @@ target_link_libraries(holobench_app_logic PUBLIC
 target_compile_features(holobench_app_logic PUBLIC cxx_std_20)
 holobench_set_warnings(holobench_app_logic)
 
+add_executable(holobench_m3_benchmark
+    benchmarks/FourierSamplingBenchmark.cpp
+)
+target_include_directories(holobench_m3_benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(holobench_m3_benchmark PRIVATE
+    HoloBench::AppLogic
+    HoloBench::Compute
+    HoloBench::Core
+)
+holobench_set_warnings(holobench_m3_benchmark)
+
 set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(

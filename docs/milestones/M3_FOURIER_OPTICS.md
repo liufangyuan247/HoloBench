@@ -44,8 +44,14 @@ Fourier-plane intensity transmission.
 - [x] A circular Fourier-plane stop produces the independently predicted Airy
   PSF, and the incoherent MTF matches independent pupil-overlap samples and its
   analytic cutoff.
-- [ ] Windows/Linux warnings-as-errors, GPU parity where applicable, UI smoke,
-  and named M3 performance budgets pass.
+- [x] Named CPU full-debugger and GPU 1024-square 4-f performance budgets pass
+  on the reference workstation without vendor-wide limits or capability caps.
+- [x] OpenGL 4-f filter-before/filter-after/image planes and diagnostics agree
+  with the double-precision CPU reference on the AMD validation device.
+- [x] Windows Clang/MSVC and Linux GCC warnings-as-errors builds pass; 229
+  headless cases pass on every platform, the Windows GPU executable passes,
+  and WSL skips it only because no OpenGL 4.6 context is available.
+- [ ] Final UI/teaching acceptance and remote CI evidence pass.
 
 ## Teaching gate
 

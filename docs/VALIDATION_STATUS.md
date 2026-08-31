@@ -7,6 +7,7 @@
 | OpenGL context & 3D bench | Validated | 120-frame smoke run (exit 0, 0 GL errors, AMD Radeon Pro 5300M, GL 4.6/GLSL 4.60); camera & gizmo unit tests (`CameraTests.cpp`, `GizmoTests.cpp`) | Interactive UI shell |
 | Geometric optics (M1) | Validated | 92/92 deterministic tests across `dev` and `core-ci` presets (`ThinLensTests.cpp`, `SnellTests.cpp`, `GeometricElementsTests.cpp`, `NumericalApertureTests.cpp`, `BenchTracerTests.cpp`) | Interactive ray tracing |
 | Wave optics (M2 CPU/GPU & detector) | Release validation | 203 deterministic CPU/application cases; OpenGL executable 7/7 cases and 720/720 assertions; analytic oracles and three external full-field `waveprop 0.0.12` cross-validation cases | CPU reference, interactive GPU propagation, detector UI |
+| Fourier optics and Sampling Debugger (M3) | Local validation | 229/229 deterministic cases; 4-f direct-DFT/inversion/filter/Airy oracles; 8/8 GPU cases and 1121/1121 assertions; seven-texture OpenGL smoke; named CPU debugger and GPU 4-f budgets pass | Interactive 4-f filtering and sampling diagnostics |
 | Holography (M4–M5) | Not implemented | None | Prohibited |
 
 ## M1 Validation Breakdown
@@ -78,12 +79,17 @@
 
 ## Build and CI Execution Status
 
+- **M3 Local Cross-platform Gate**:
+  - Windows Clang 21.1.8: warnings-as-errors core/application and benchmark targets compile; 229/229 deterministic headless cases pass.
+  - Windows MSVC 19.44: `/W4 /WX` builds all application, benchmark, CPU-test, and GPU-test targets; 230/230 registered tests pass, including the 8/8-case OpenGL executable.
+  - Ubuntu/WSL GCC 15.2: warnings-as-errors builds all corresponding targets; 229 deterministic cases pass and the registered GPU executable skips with code 77 because WSL has no compatible OpenGL 4.6 context.
 - **Local Build & Tests**:
   - Windows Clang 21 `app-ci`: warnings-as-errors build and 204/204 CTest cases pass, including the hardware GPU executable.
   - Windows MSVC 19.44: `/W4 /WX` build and 204/204 CTest cases pass, including the hardware GPU executable.
   - Ubuntu/WSL GCC 15.2: warnings-as-errors application and GPU targets compile; 203 deterministic cases pass and the registered GPU executable skips with code 77 because WSL has no compatible OpenGL 4.6 context.
 - **GPU Numerical Validation**:
   - AMD Radeon Pro 5300M / OpenGL `4.6.0 Core Profile Context 23.9.3.230915`: 7/7 cases, 720/720 assertions; FFT forward/inverse per-component relative tolerance $3\times10^{-6}$; ASM and Fresnel parity tolerance $10^{-5}$.
+  - M3 extends the same executable to 8/8 cases and 1121/1121 assertions: filtered and unfiltered 4-f Fourier planes, the image plane, sampling metadata, filter sample counts, and integrated-intensity transmission agree with the double-precision CPU reference.
   - The exact AMD renderer/driver tuple reports `twiddle_source=cpu-device-quirk`; classification tests prove a different AMD driver and an NVIDIA renderer select the default `gpu-shader` path. NVIDIA numerical and performance execution remains a release gate.
 - **GPU Performance Validation**:
   - `wave/asm_1024_square_gpu_recompute`: 1024x1024, 4 um pitch, 532 nm, 0.10 m, 5 warmups, 30 synchronized samples; p50 **35.433 ms**, p95 **42.593 ms**, max **44.658 ms** on the reference AMD GPU; p95 < 50 ms target met.

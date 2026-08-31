@@ -71,7 +71,10 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 - **Interactive Sampling Debugger**: A dedicated dockable window exposes requested-angle and relative-z controls, Nyquist/padding/wrap warnings, colour-classified angular spectrum and energy fractions, fixed-grid complex probes at the source and arbitrary positive/negative z, radial Airy PSF, and explicitly labelled incoherent MTF. Refresh is explicit rather than per-frame.
 - **Interactive 4-f filtering**: The Sampling Debugger exposes independent `f1`/`f2` controls and pass-all, circular low-pass, high-pass, and band-pass filters in physical Fourier-plane units. A 2x2 view shows the object, Fourier plane before filtering, Fourier plane after filtering, and inverted image plane. Each log image is peak-normalized independently for shape inspection, while geometric sample counts and integrated-intensity transmission remain explicit diagnostics.
 - **Sampling diagnostics foundation**: Reports physical extent, Nyquist angles, requested-band aliasing, periodic wrap-around, required padding factor, aperture/support boundary clearance, and sampled evanescent bins. Caller support claims are checked against every non-zero sample.
-- **Local gate**: Windows Clang warnings-as-errors core and application builds pass with 229/229 headless tests, including twenty-six new M3 cases. Three-frame OpenGL smoke exits 0 on AMD Radeon Pro 5300M and requires the detector, angular spectrum, and all four 4-f plane textures to upload successfully with no reported OpenGL errors.
+- **M3 named performance gates**: On the reference Windows workstation, `fourier/sampling_debugger_256_square_cpu_refresh` records p50 **117.736 ms** and p95 **118.458 ms** against a 250 ms budget on an Intel Core i7-9750H. `fourier/four_f_1024_square_gpu_recompute` records p50 **243.114 ms** and p95 **249.959 ms** against a 300 ms budget on AMD Radeon Pro 5300M. The GPU benchmark uses runtime capabilities and the existing exact driver quirk only; it introduces no vendor/model dispatch or precision limit.
+- **M3 GPU parity**: The OpenGL executable now passes 8/8 cases and 1121/1121 assertions. A dedicated 4-f case compares the unfiltered Fourier plane, filtered Fourier plane, final image, filter geometry, physical sampling, and integrated-intensity transmission against the double-precision CPU reference.
+- **Cross-platform gate**: Windows Clang warnings-as-errors core/application builds pass with 229/229 headless tests. Windows MSVC 19.44 `/W4 /WX` builds every application, benchmark, CPU-test, and GPU-test target and passes 230/230 registered tests. Ubuntu/WSL GCC 15.2 warnings-as-errors builds the same targets, passes all 229 deterministic tests, and skips the registered GPU executable with code 77 only because WSL exposes no compatible OpenGL 4.6 context.
+- **OpenGL smoke**: Three hidden frames exit 0 on AMD Radeon Pro 5300M and require the detector, angular spectrum, and all four 4-f plane textures to upload successfully with no reported OpenGL errors.
 
 ## Known limitations (M1/M2)
 
@@ -84,7 +87,7 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 ## Next five tasks
 
 1. Run and record GPU parity plus `wave/asm_1024_square_gpu_recompute` on the target NVIDIA card.
-2. Define and pass named M3 CPU/GPU performance budgets without applying device-wide caps.
-3. Pass the M3 Windows MSVC and Linux GCC warnings-as-errors gates.
-4. Complete the M3 teaching-workflow acceptance review and remote UI smoke evidence.
-5. Complete M3 release-integration review and tag only after every gate is green.
+2. Complete the M3 teaching-workflow acceptance review and remote UI smoke evidence.
+3. Run and record the GitHub Actions Windows/Linux matrix for the M3 integration head.
+4. Complete M3 documentation and release-integration review.
+5. Tag only after every M2 prerequisite and M3 gate is green.

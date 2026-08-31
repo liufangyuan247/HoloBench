@@ -15,12 +15,14 @@
 
 #include "compute/fft/CpuFftBackend.hpp"
 #include "compute/fft/OpenGlComputeFftBackend.hpp"
+#include "compute/fourier/FourFSystem.hpp"
 #include "compute/propagation/AngularSpectrumPropagator.hpp"
 #include "compute/propagation/OpenGlAngularSpectrumPropagator.hpp"
 #include "compute/propagation/FresnelPropagator.hpp"
 #include "core/field/ComplexField2D.hpp"
 
 namespace fft = holobench::compute::fft;
+namespace fourier = holobench::compute::fourier;
 namespace propagation = holobench::compute::propagation;
 namespace field = holobench::field;
 
@@ -318,6 +320,48 @@ TEST_CASE("ASM and Fresnel propagation through the GPU backend agree with CPU re
     CHECK(gpuFresnelDiagnostics.transferFunctionUndersampled
         == cpuFresnelDiagnostics.transferFunctionUndersampled);
     checkFieldsNear(gpuFresnelField, cpuFresnelField, tolerance);
+
+    gpuFft.releaseGpuResources();
+    CHECK_FALSE(gpuFft.hasGpuResources());
+    CHECK(glGetError() == GL_NO_ERROR);
+}
+
+TEST_CASE("4-f Fourier planes filter diagnostics and image agree with the CPU reference") {
+    constexpr double fieldTolerance = 1e-5;
+    constexpr double diagnosticsTolerance = 2e-5;
+    auto input = makeField(16, 8);
+    fillDeterministic(input);
+    const auto filter = fourier::CircularFourierFilter::bandPass(0.25e-3, 1.30e-3);
+
+    fft::CpuFftBackend cpuFft;
+    fourier::FourFSystem cpuSystem(cpuFft);
+    const auto expected = cpuSystem.run(input, 0.050, 0.075, filter);
+
+    fft::OpenGlComputeFftBackend gpuFft;
+    fourier::FourFSystem gpuSystem(gpuFft);
+    const auto actual = gpuSystem.run(input, 0.050, 0.075, filter);
+
+    checkFieldsNear(
+        actual.fourierPlaneBeforeFilter,
+        expected.fourierPlaneBeforeFilter,
+        fieldTolerance);
+    checkFieldsNear(
+        actual.fourierPlaneAfterFilter,
+        expected.fourierPlaneAfterFilter,
+        fieldTolerance);
+    checkFieldsNear(actual.imagePlane, expected.imagePlane, fieldTolerance);
+    CHECK(actual.filterDiagnostics.kind == expected.filterDiagnostics.kind);
+    CHECK(actual.filterDiagnostics.transmittedSampleCount
+        == expected.filterDiagnostics.transmittedSampleCount);
+    CHECK(actual.filterDiagnostics.blockedSampleCount
+        == expected.filterDiagnostics.blockedSampleCount);
+    CHECK(actual.filterDiagnostics.integratedIntensityTransmission
+        == doctest::Approx(expected.filterDiagnostics.integratedIntensityTransmission)
+            .epsilon(diagnosticsTolerance));
+    CHECK(actual.imagePlane.pitchXMetres()
+        == doctest::Approx(expected.imagePlane.pitchXMetres()).epsilon(2e-15));
+    CHECK(actual.imagePlane.pitchYMetres()
+        == doctest::Approx(expected.imagePlane.pitchYMetres()).epsilon(2e-15));
 
     gpuFft.releaseGpuResources();
     CHECK_FALSE(gpuFft.hasGpuResources());

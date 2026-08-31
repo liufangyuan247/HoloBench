@@ -38,6 +38,8 @@ Performance claims are accepted only when they identify hardware, build type, sc
 - `ray/thin_lens_bench_5k_rays_10k_segs` — Validated (M1)
 - `ray/thin_lens_100k` — Future M1+ stress benchmark
 - `wave/asm_1024_square_gpu_recompute` — Validated on AMD Radeon Pro 5300M (M2)
+- `fourier/sampling_debugger_256_square_cpu_refresh` — Validated on Intel Core i7-9750H (M3)
+- `fourier/four_f_1024_square_gpu_recompute` — Validated on AMD Radeon Pro 5300M (M3)
 - `wave/asm_2048_square_single_step` — Target for M2 Angular Spectrum Method
 - `project/load_reference_scene` — Target for scene load latency
 
@@ -57,3 +59,32 @@ Performance claims are accepted only when they identify hardware, build type, sc
 | Max recompute | **44.658 ms** | Informational | Recorded |
 
 NVIDIA results must be appended with renderer/driver identity and `twiddle_source=gpu-shader`; the AMD quirk is not a basis for a vendor-wide limit.
+
+## M3 Verified Fourier and Sampling Benchmarks
+
+### Benchmark Profile: `fourier/sampling_debugger_256_square_cpu_refresh`
+
+- **Hardware Profile**: Intel Core i7-9750H (6 cores / 12 logical processors), Windows 10 10.0.19045, Clang 21.1.8 Release build.
+- **Workload**: 256x256 complex Gaussian-plus-carrier field, 4 um square pitch, 532 nm vacuum wavelength. One explicit refresh performs sampling analysis, centred angular-spectrum analysis, source/positive-z plane probes, Airy PSF and incoherent MTF sampling, circular low-pass 4-f relay, and all five diagnostic image renders.
+- **Execution Parameters**: CPU double-precision reference backend, 3 warmups and 15 measured refreshes. The UI does not run this workload every frame.
+
+| Metric | Result | Target Budget | Status |
+|---|---|---|---|
+| p50 refresh | **117.736 ms** | Informational | Recorded |
+| p95 refresh | **118.458 ms** | **< 250 ms** | Met |
+| Max refresh | **118.458 ms** | Informational | Recorded |
+
+### Benchmark Profile: `fourier/four_f_1024_square_gpu_recompute`
+
+- **Hardware Profile**: AMD Radeon Pro 5300M, OpenGL `4.6.0 Core Profile Context 23.9.3.230915`.
+- **Workload**: 1024x1024 complex Gaussian field, 4 um square pitch, 532 nm vacuum wavelength, 50 mm / 75 mm coherent 4-f relay, and a 0.50 mm circular low-pass stop.
+- **Execution Parameters**: Two OpenGL forward FFTs with host-visible physical Fourier-plane scaling, hard-mask filtering, integrated-intensity diagnostics, and output assembly; 3 warmups, 15 measured recomputes, and `glFinish()` around each sample.
+- **Device path**: `twiddle_source=cpu-device-quirk` applies only to the already documented exact AMD renderer/driver tuple. The benchmark does not select dispatch sizes, precision, or performance caps by vendor or model.
+
+| Metric | Result | Target Budget | Status |
+|---|---|---|---|
+| p50 recompute | **243.114 ms** | Informational | Recorded |
+| p95 recompute | **249.959 ms** | **< 300 ms** | Met |
+| Max recompute | **249.959 ms** | Informational | Recorded |
+
+The Fourier-lens implementation precomputes separable centred X/Y phase factors. This preserves the same numerical-domain checks and direct-DFT oracle tolerances while avoiding per-pixel trigonometric recomputation. NVIDIA evidence remains additive: it must identify renderer/driver, confirm `twiddle_source=gpu-shader`, and satisfy the same named workload budget without changing defaults for other devices.

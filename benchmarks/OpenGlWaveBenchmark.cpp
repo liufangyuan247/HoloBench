@@ -5,15 +5,18 @@
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <complex>
 #include <cstdio>
 #include <exception>
 #include <vector>
 
 #include "compute/fft/OpenGlComputeFftBackend.hpp"
+#include "compute/fourier/FourFSystem.hpp"
 #include "compute/propagation/OpenGlAngularSpectrumPropagator.hpp"
 #include "core/field/ComplexField2D.hpp"
 
 namespace fft = holobench::compute::fft;
+namespace fourier = holobench::compute::fourier;
 namespace propagation = holobench::compute::propagation;
 namespace field = holobench::field;
 
@@ -27,6 +30,12 @@ constexpr double kVacuumWavelengthMetres = 532.0e-9;
 constexpr double kBeamRadiusMetres = 0.65e-3;
 constexpr double kDistanceMetres = 0.10;
 constexpr double kP95TargetMilliseconds = 50.0;
+constexpr std::size_t kFourFWarmupCount = 3;
+constexpr std::size_t kFourFMeasuredCount = 15;
+constexpr double kFourFFirstFocalLengthMetres = 0.050;
+constexpr double kFourFSecondFocalLengthMetres = 0.075;
+constexpr double kFourFFilterRadiusMetres = 0.50e-3;
+constexpr double kFourFP95TargetMilliseconds = 300.0;
 
 GLADapiproc loadOpenGlProcedure(const char* name) {
     return reinterpret_cast<GLADapiproc>(SDL_GL_GetProcAddress(name));
@@ -175,6 +184,42 @@ int main() {
         const bool targetMet = p95 < kP95TargetMilliseconds;
         const auto twiddleMode = backend.twiddleGenerationMode();
 
+        fourier::FourFSystem fourFSystem(backend);
+        const auto fourFFilter = fourier::CircularFourierFilter::lowPass(
+            kFourFFilterRadiusMetres);
+        double fourFChecksum = 0.0;
+        for (std::size_t iteration = 0; iteration < kFourFWarmupCount; ++iteration) {
+            const auto result = fourFSystem.run(
+                source,
+                kFourFFirstFocalLengthMetres,
+                kFourFSecondFocalLengthMetres,
+                fourFFilter);
+            fourFChecksum += result.filterDiagnostics.integratedIntensityTransmission;
+            glFinish();
+        }
+        std::vector<double> fourFMilliseconds;
+        fourFMilliseconds.reserve(kFourFMeasuredCount);
+        for (std::size_t iteration = 0; iteration < kFourFMeasuredCount; ++iteration) {
+            glFinish();
+            const auto start = std::chrono::steady_clock::now();
+            const auto result = fourFSystem.run(
+                source,
+                kFourFFirstFocalLengthMetres,
+                kFourFSecondFocalLengthMetres,
+                fourFFilter);
+            glFinish();
+            const auto finish = std::chrono::steady_clock::now();
+            fourFMilliseconds.push_back(
+                std::chrono::duration<double, std::milli>(finish - start).count());
+            fourFChecksum += result.filterDiagnostics.integratedIntensityTransmission
+                + std::abs(result.imagePlane.at(kGridSize / 2U, kGridSize / 2U));
+        }
+        const double fourFP50 = nearestRankPercentile(fourFMilliseconds, 0.50);
+        const double fourFP95 = nearestRankPercentile(fourFMilliseconds, 0.95);
+        const double fourFMaximum = *std::max_element(
+            fourFMilliseconds.begin(), fourFMilliseconds.end());
+        const bool fourFTargetMet = fourFP95 < kFourFP95TargetMilliseconds;
+
         backend.releaseGpuResources();
         if (glGetError() != GL_NO_ERROR) {
             std::fprintf(stderr, "GPU benchmark failed: OpenGL error remained after the run\n");
@@ -203,7 +248,33 @@ int main() {
             fftRoundTripP50,
             kP95TargetMilliseconds,
             targetMet ? "true" : "false");
-        return targetMet ? 0 : 2;
+        std::printf(
+            "benchmark=fourier/four_f_1024_square_gpu_recompute renderer=\"%s\" "
+            "version=\"%s\" twiddle_source=%.*s grid=%zux%zu pitch_um=%.3f "
+            "wavelength_nm=%.3f f1_mm=%.3f f2_mm=%.3f filter=low-pass "
+            "filter_radius_mm=%.3f warmup=%zu samples=%zu gpu_sync=true "
+            "p50_ms=%.6f p95_ms=%.6f max_ms=%.6f target_p95_ms=%.3f "
+            "target_met=%s checksum=%.12g\n",
+            renderer != nullptr ? renderer : "unknown",
+            version != nullptr ? version : "unknown",
+            static_cast<int>(fft::OpenGlComputeFftBackend::twiddleGenerationModeName(twiddleMode).size()),
+            fft::OpenGlComputeFftBackend::twiddleGenerationModeName(twiddleMode).data(),
+            kGridSize,
+            kGridSize,
+            kPitchMetres * 1.0e6,
+            kVacuumWavelengthMetres * 1.0e9,
+            kFourFFirstFocalLengthMetres * 1.0e3,
+            kFourFSecondFocalLengthMetres * 1.0e3,
+            kFourFFilterRadiusMetres * 1.0e3,
+            kFourFWarmupCount,
+            kFourFMeasuredCount,
+            fourFP50,
+            fourFP95,
+            fourFMaximum,
+            kFourFP95TargetMilliseconds,
+            fourFTargetMet ? "true" : "false",
+            fourFChecksum);
+        return (targetMet && fourFTargetMet) ? 0 : 2;
     } catch (const std::exception& error) {
         std::fprintf(stderr, "GPU benchmark failed: %s\n", error.what());
         return 1;
