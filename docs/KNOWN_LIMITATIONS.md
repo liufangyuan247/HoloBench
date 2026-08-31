@@ -1,5 +1,20 @@
 # Known limitations
 
+## M5 SLM and interference scope
+
+- The current SLM reference is scalar and polarization-independent. It does not
+  yet model liquid-crystal director physics, Jones/Mueller response, fringing
+  fields, pixel crosstalk, surface flatness, or measured wavelength LUTs.
+- Fill factor is a centred rectangular active area sampled at field points.
+  Coarse field grids can bias the sampled active centroid; the angular pipeline
+  reports both geometric and sampled centroids instead of hiding this error.
+- Gaussian and exponential coherence envelopes are 1/e teaching models, not a
+  substitute for a measured laser spectrum or full temporal/spatial coherence
+  propagation. Orthogonal polarization suppression is not yet represented.
+- The SLM-to-angle workflow uses an ideal scalar paraxial Fourier lens. Reported
+  direction cosines outside `[-1, 1]` have no physical angle, and large-angle
+  vector diffraction or real-lens aberrations are outside the current result.
+
 ## Optical models (M1–M4)
 
 - **Geometric optics (M1)**: M1 supports paraxial thin-lens imaging, deterministic ray-plane intersections, specular reflection, Snell's law refraction, Total Internal Reflection (TIR), and Numerical Aperture (NA) cone analysis.

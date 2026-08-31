@@ -73,6 +73,7 @@ add_library(holobench_optics STATIC
     optics/analysis/SpotDiagram.cpp
     optics/io/LensPrescriptionIO.cpp
     optics/material/OpticalMaterial.cpp
+    optics/slm/SpatialLightModulator.cpp
     optics/ray/BenchTracer.cpp
     optics/ray/GeometricElements.cpp
     optics/ray/Interface.cpp
@@ -86,6 +87,7 @@ add_library(holobench_optics STATIC
     optics/scene/SceneProjectAdapter.cpp
     optics/wave/FieldElements.cpp
     optics/wave/FieldSources.cpp
+    optics/wave/CoherentInterference.cpp
 )
 add_library(HoloBench::Optics ALIAS holobench_optics)
 target_include_directories(holobench_optics PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -99,6 +101,7 @@ holobench_set_warnings(holobench_optics)
 add_library(holobench_app_logic STATIC
     app/RealLensWorkbenchPipeline.cpp
     app/SamplingDebuggerPipeline.cpp
+    app/SlmInterferencePipeline.cpp
     app/WaveDetectorPipeline.cpp
     app/WaveDetectorUiState.cpp
 )
@@ -277,6 +280,8 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/GeometricElementsTests.cpp
         tests/analytic/LensPrescriptionIOTests.cpp
         tests/analytic/RealLensWorkbenchPipelineTests.cpp
+        tests/analytic/SpatialLightModulatorTests.cpp
+        tests/analytic/CoherentInterferenceTests.cpp
         tests/analytic/FieldElementTests.cpp
         tests/analytic/FraunhoferDiffractionTests.cpp
         tests/analytic/NumericalApertureTests.cpp
@@ -288,6 +293,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/ThinLensTests.cpp
         tests/analytic/WaveDetectorPipelineTests.cpp
         tests/analytic/SamplingDebuggerPipelineTests.cpp
+        tests/analytic/SlmInterferencePipelineTests.cpp
         tests/analytic/WaveSourceTests.cpp
         tests/project/ProjectDocumentTests.cpp
         tests/project/SceneProjectAdapterTests.cpp

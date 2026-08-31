@@ -95,6 +95,14 @@ Previous: **M3 — Fourier Optics & Sampling Debugger: complete**
 - **Local toolchain gate**: Windows Clang 21 warnings-as-errors core and application builds pass with 270/270 headless tests. MSVC 19.44 `/W4 /WX` passes 270/270 and builds the complete SDL/OpenGL/ImGui application and all benchmark targets. Ubuntu/WSL GCC 15.2 warnings-as-errors passes 270/270 and builds the complete application. Hidden OpenGL smoke passes for both Clang and MSVC builds on the available AMD device and requires drawable Real Lens Workbench output.
 - **M4 release CI**: GitHub Actions run [33357679559](https://github.com/liufangyuan247/HoloBench/actions/runs/33357679559) passes all four Windows/Ubuntu core-test and application-compile jobs at integration commit `a943123`.
 
+## M5 progress
+
+- **Locked conventions**: [ADR 0008](adr/0008-slm-coherence-and-interference-conventions.md) fixes pixel/grid edges, pitch and linear fill factors, opaque dead space, normalized commands, phase and bit-depth semantics, scalar mutual coherence, 1/e coherence-length envelopes, and lens/angular-probe signs.
+- **SLM CPU reference**: Ideal amplitude and phase modulators plus a finite pixelated SLM preserve strong exception safety, reject non-finite/non-representable state, and expose active, dead-space, outside-grid, and quantized-sample evidence.
+- **Interference CPU reference**: Fully coherent fields add as complex amplitudes. Partial scalar coherence evaluates `|U1|^2 + |U2|^2 + 2 Re(gamma U1 conj(U2))` with bounded `|gamma|`, Gaussian/exponential visibility envelopes, and explicit polarization limitations.
+- **Angular experiment**: A deterministic headless `Laser -> SLM -> ideal Fourier lens -> Angular Probe` pipeline emits multi-wavelength angular distributions, normalized single-pixel angular PSFs, geometric and sampled pixel-centre predictions, measured angular-spectrum centroids, and SLM/reference-beam interference.
+- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors builds pass 284/284 deterministic cases; the complete Windows Clang application also builds. Analytic gates cover ideal modulation endpoints, phase invariance, fill-factor boundaries, bit-depth quantization, fringe period and translation, visibility, coherence length, pixel-to-angle mapping, wavelength scaling, invalid input, and determinism.
+
 ## Known limitations (M1/M2)
 
 - **Paraxial approximation**: Thin-lens solver, Fresnel TF, and Fraunhofer propagators assume small angles and paraxial conditions.
@@ -105,8 +113,8 @@ Previous: **M3 — Fourier Optics & Sampling Debugger: complete**
 
 ## Next five tasks
 
-1. Start M5 with an ADR fixing SLM pixel, phase, fill-factor, coherence, and interference conventions.
-2. Implement the deterministic CPU complex-field modulation/coherent-combination reference.
-3. Add analytic two-beam interference and sampled-SLM validation before GPU acceleration.
-4. Add explicit temporal/spatial coherence envelopes without presenting scalar approximations as full polarization models.
-5. Integrate the validated M5 pipeline into a dockable, apply-gated teaching workflow.
+1. Add a pinned independent SLM diffraction/angular-mapping oracle and committed golden data.
+2. Add calibrated wavelength-response/LUT persistence and an explicitly limited LCD/polarizer teaching model.
+3. Integrate the validated M5 pipeline into a dockable, apply-gated teaching workflow.
+4. Add the named M5 CPU performance workload and repeat Clang/MSVC/GCC release gates.
+5. Consider GPU acceleration only after the CPU/product model is stable; retain runtime capability dispatch and the default path on untested devices.

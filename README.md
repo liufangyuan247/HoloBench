@@ -35,6 +35,19 @@ HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator
 - **Independent engineering validation**: Five committed plano-convex, meniscus, achromat, conic, and even-asphere prescriptions compare every surface hit, outgoing direction, optical path, spot coordinate, best focus, and longitudinal colour shift with pinned Optiland 0.6.2 data and hashes.
 - **Named performance gate**: The complete default 729-ray workbench refresh records p50 **6.422 ms**, p95 **6.594 ms**, and max **6.641 ms** on the reference Intel Core i7-9750H, meeting the p95 < 50 ms budget.
 
+## M5 Feature Set (in progress)
+
+- **SLM CPU reference**: Ideal amplitude/phase modulation plus a finite pixel
+  grid with physical pitch, independent X/Y fill factor, opaque dead space,
+  phase range, and bit-depth quantization.
+- **Coherence and interference**: Fully coherent complex-field addition and a
+  scalar mutual-coherence intensity model with explicit Gaussian/exponential
+  1/e coherence-length conventions.
+- **Angular experiment pipeline**: Headless `Laser -> SLM -> Lens -> Angular
+  Probe` orchestration reports multi-wavelength angular coordinates, a selected
+  pixel angular PSF, analytic-versus-measured pixel-to-angle mapping, and
+  reference-beam interference.
+
 ## Physical Assumptions & Limitations (M1)
 
 - **Paraxial Approximation**: Thin lenses and ray propagation assume small angles relative to the optical axis ($+Z$).
@@ -53,7 +66,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (270 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (284 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -61,7 +74,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 270/270 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 284/284 tests passing):
 
 ```powershell
 cmake --preset core-ci

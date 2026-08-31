@@ -1,0 +1,264 @@
+#include "app/SlmInterferencePipeline.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+#include <utility>
+
+#include "compute/fft/IFftBackend.hpp"
+#include "compute/sampling/AngularSpectrumAnalysis.hpp"
+#include "core/field/ComplexField2D.hpp"
+#include "core/field/FieldObservables.hpp"
+
+namespace holobench::app::slmexperiment {
+namespace {
+
+[[nodiscard]] std::size_t checkedPixelCount(
+    const optics::slm::PixelatedSlmParameters& parameters) {
+    if (parameters.pixelColumns == 0 || parameters.pixelRows == 0) {
+        throw std::invalid_argument("SLM experiment pixel dimensions must be nonzero");
+    }
+    if (parameters.pixelColumns > std::numeric_limits<std::size_t>::max()
+            / parameters.pixelRows) {
+        throw std::overflow_error("SLM experiment pixel count overflows size_t");
+    }
+    return parameters.pixelColumns * parameters.pixelRows;
+}
+
+[[nodiscard]] std::vector<double> commandsFor(
+    const SlmInterferenceExperimentConfig& config,
+    std::size_t pixelCount) {
+    if (config.normalizedPixelCommands.empty()) {
+        return std::vector<double>(pixelCount, 1.0);
+    }
+    if (config.normalizedPixelCommands.size() != pixelCount) {
+        throw std::invalid_argument("SLM experiment command count does not match pixel grid");
+    }
+    return config.normalizedPixelCommands;
+}
+
+void validateConfig(
+    const SlmInterferenceExperimentConfig& config,
+    const compute::fft::IFftBackend& fftBackend) {
+    if (!fftBackend.supportsDimensions(config.fieldWidth, config.fieldHeight)) {
+        throw std::invalid_argument("FFT backend does not support SLM experiment field dimensions");
+    }
+    if (config.vacuumWavelengthsMetres.empty()) {
+        throw std::invalid_argument("SLM experiment needs at least one wavelength");
+    }
+    for (const double wavelength : config.vacuumWavelengthsMetres) {
+        if (!std::isfinite(wavelength) || wavelength <= 0.0) {
+            throw std::invalid_argument("SLM experiment wavelengths must be positive and finite");
+        }
+    }
+    if (!std::isfinite(config.lensFocalLengthMetres)
+        || config.lensFocalLengthMetres <= 0.0) {
+        throw std::invalid_argument("SLM experiment focal length must be positive and finite");
+    }
+    if (config.selectedPixelColumn >= config.slm.pixelColumns
+        || config.selectedPixelRow >= config.slm.pixelRows) {
+        throw std::out_of_range("selected SLM pixel is outside the pixel grid");
+    }
+}
+
+[[nodiscard]] field::ScalarField2D peakNormalizedIntensity(
+    const field::ComplexField2D& value) {
+    auto intensity = field::computeIntensity(value);
+    const double maximum = *std::max_element(intensity.samples().begin(), intensity.samples().end());
+    if (maximum > 0.0) {
+        for (double& sample : intensity.samples()) {
+            sample /= maximum;
+        }
+    }
+    return intensity;
+}
+
+[[nodiscard]] AngularAxes makeAngularAxes(
+    const field::ComplexField2D& focalPlane,
+    double focalLengthMetres) {
+    AngularAxes result;
+    result.directionCosinesX.reserve(focalPlane.width());
+    result.anglesXRadians.reserve(focalPlane.width());
+    for (std::size_t x = 0; x < focalPlane.width(); ++x) {
+        const double direction = focalPlane.xCoordinateMetres(x) / focalLengthMetres;
+        result.directionCosinesX.push_back(direction);
+        result.anglesXRadians.push_back(
+            std::abs(direction) <= 1.0
+                ? std::asin(direction)
+                : std::numeric_limits<double>::quiet_NaN());
+    }
+    result.directionCosinesY.reserve(focalPlane.height());
+    result.anglesYRadians.reserve(focalPlane.height());
+    for (std::size_t y = 0; y < focalPlane.height(); ++y) {
+        const double direction = focalPlane.yCoordinateMetres(y) / focalLengthMetres;
+        result.directionCosinesY.push_back(direction);
+        result.anglesYRadians.push_back(
+            std::abs(direction) <= 1.0
+                ? std::asin(direction)
+                : std::numeric_limits<double>::quiet_NaN());
+    }
+    return result;
+}
+
+struct ActiveCentroid final {
+    double xMetres = 0.0;
+    double yMetres = 0.0;
+};
+
+[[nodiscard]] ActiveCentroid activeCentroid(const field::ComplexField2D& value) {
+    long double weightedX = 0.0L;
+    long double weightedY = 0.0L;
+    long double totalWeight = 0.0L;
+    for (std::size_t y = 0; y < value.height(); ++y) {
+        for (std::size_t x = 0; x < value.width(); ++x) {
+            const auto sample = value.at(x, y);
+            const long double weight = static_cast<long double>(sample.real()) * sample.real()
+                + static_cast<long double>(sample.imag()) * sample.imag();
+            weightedX += weight * value.xCoordinateMetres(x);
+            weightedY += weight * value.yCoordinateMetres(y);
+            totalWeight += weight;
+        }
+    }
+    if (!(totalWeight > 0.0L)) {
+        throw std::invalid_argument(
+            "selected SLM pixel has no sampled active area; refine field sampling");
+    }
+    return {
+        .xMetres = static_cast<double>(weightedX / totalWeight),
+        .yMetres = static_cast<double>(weightedY / totalWeight),
+    };
+}
+
+[[nodiscard]] SelectedPixelAngleMapping measureSelectedPixelMapping(
+    const SlmInterferenceExperimentConfig& config,
+    const field::ComplexField2D& selectedPixelInput,
+    const field::ComplexField2D& selectedPixelFocalPlane,
+    compute::fft::IFftBackend& fftBackend) {
+    const double gridWidth = static_cast<double>(config.slm.pixelColumns)
+        * config.slm.pixelPitchXMetres;
+    const double gridHeight = static_cast<double>(config.slm.pixelRows)
+        * config.slm.pixelPitchYMetres;
+    const double centerX = config.slm.centerXMetres - 0.5 * gridWidth
+        + (static_cast<double>(config.selectedPixelColumn) + 0.5)
+            * config.slm.pixelPitchXMetres;
+    const double centerY = config.slm.centerYMetres - 0.5 * gridHeight
+        + (static_cast<double>(config.selectedPixelRow) + 0.5)
+            * config.slm.pixelPitchYMetres;
+    const auto sampledCentroid = activeCentroid(selectedPixelInput);
+    const auto spectrum = compute::sampling::analyzeAngularSpectrum(
+        selectedPixelFocalPlane, fftBackend);
+
+    long double weightedDirectionX = 0.0L;
+    long double weightedDirectionY = 0.0L;
+    long double propagatingWeight = 0.0L;
+    long double totalWeight = 0.0L;
+    const double mediumWavelength = selectedPixelFocalPlane.vacuumWavelengthMetres()
+        / selectedPixelFocalPlane.refractiveIndex();
+    for (const auto& bin : spectrum.centeredBins) {
+        const long double weight = bin.normalizedSpectralIntensity;
+        totalWeight += weight;
+        if (bin.kind != compute::sampling::AngularSpectrumBinKind::Propagating) {
+            continue;
+        }
+        weightedDirectionX += weight * mediumWavelength * bin.frequencyXCyclesPerMetre;
+        weightedDirectionY += weight * mediumWavelength * bin.frequencyYCyclesPerMetre;
+        propagatingWeight += weight;
+    }
+    if (!(propagatingWeight > 0.0L) || !(totalWeight > 0.0L)) {
+        throw std::runtime_error("selected SLM pixel produced no propagating angular spectrum");
+    }
+
+    return {
+        .geometricCenterXMetres = centerX,
+        .geometricCenterYMetres = centerY,
+        .sampledActiveCentroidXMetres = sampledCentroid.xMetres,
+        .sampledActiveCentroidYMetres = sampledCentroid.yMetres,
+        .predictedDirectionCosineX = -centerX / config.lensFocalLengthMetres,
+        .predictedDirectionCosineY = -centerY / config.lensFocalLengthMetres,
+        .sampledPredictedDirectionCosineX =
+            -sampledCentroid.xMetres / config.lensFocalLengthMetres,
+        .sampledPredictedDirectionCosineY =
+            -sampledCentroid.yMetres / config.lensFocalLengthMetres,
+        .measuredDirectionCosineX = static_cast<double>(
+            weightedDirectionX / propagatingWeight),
+        .measuredDirectionCosineY = static_cast<double>(
+            weightedDirectionY / propagatingWeight),
+        .measuredPropagatingSpectralEnergyFraction = static_cast<double>(
+            propagatingWeight / totalWeight),
+    };
+}
+
+} // namespace
+
+SlmInterferenceExperimentResult runSlmInterferenceExperiment(
+    const SlmInterferenceExperimentConfig& config,
+    compute::fft::IFftBackend& fftBackend) {
+    const auto pixelCount = checkedPixelCount(config.slm);
+    validateConfig(config, fftBackend);
+    const auto commands = commandsFor(config, pixelCount);
+    std::vector<double> selectedCommands(pixelCount, 0.0);
+    selectedCommands[config.selectedPixelRow * config.slm.pixelColumns
+        + config.selectedPixelColumn] = 1.0;
+    auto selectedSlm = config.slm;
+    selectedSlm.mode = optics::slm::ModulationMode::Amplitude;
+    selectedSlm.bitDepth = 0;
+
+    SlmInterferenceExperimentResult result;
+    result.wavelengths.reserve(config.vacuumWavelengthsMetres.size());
+    compute::fourier::FourierLensTransform lensTransform(fftBackend);
+    for (const double wavelength : config.vacuumWavelengthsMetres) {
+        field::ComplexField2D source(
+            config.fieldWidth,
+            config.fieldHeight,
+            config.fieldPitchXMetres,
+            config.fieldPitchYMetres,
+            wavelength,
+            config.refractiveIndex);
+        optics::wave::PlaneWaveParameters laser;
+        laser.amplitude = config.laserAmplitude;
+        optics::wave::fillPlaneWave(source, laser);
+
+        auto modulated = source;
+        const auto modulationDiagnostics = optics::slm::applyPixelatedSlm(
+            modulated, config.slm, commands);
+        auto angularDistribution = lensTransform.transformFrontToBackFocalPlane(
+            modulated, config.lensFocalLengthMetres);
+        auto normalizedAngularIntensity = peakNormalizedIntensity(angularDistribution.field);
+
+        auto selectedPixelInput = source;
+        optics::slm::applyPixelatedSlm(
+            selectedPixelInput, selectedSlm, selectedCommands);
+        auto selectedPixelAngularField = lensTransform.transformFrontToBackFocalPlane(
+            selectedPixelInput, config.lensFocalLengthMetres);
+        auto normalizedAngularPsf = peakNormalizedIntensity(selectedPixelAngularField.field);
+        auto axes = makeAngularAxes(
+            angularDistribution.field, config.lensFocalLengthMetres);
+        const auto selectedMapping = measureSelectedPixelMapping(
+            config,
+            selectedPixelInput,
+            selectedPixelAngularField.field,
+            fftBackend);
+
+        auto reference = source;
+        optics::wave::fillPlaneWave(reference, config.referenceBeam);
+        auto interference = optics::wave::evaluateTwoBeamInterference(
+            modulated, reference, config.mutualCoherence);
+
+        result.wavelengths.push_back({
+            .vacuumWavelengthMetres = wavelength,
+            .modulatedSlmPlane = std::move(modulated),
+            .modulationDiagnostics = modulationDiagnostics,
+            .angularDistribution = std::move(angularDistribution),
+            .normalizedAngularIntensity = std::move(normalizedAngularIntensity),
+            .selectedPixelAngularField = std::move(selectedPixelAngularField),
+            .normalizedAngularPsf = std::move(normalizedAngularPsf),
+            .angularAxes = std::move(axes),
+            .selectedPixelMapping = selectedMapping,
+            .interference = std::move(interference),
+        });
+    }
+    return result;
+}
+
+} // namespace holobench::app::slmexperiment
