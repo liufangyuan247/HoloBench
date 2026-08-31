@@ -200,6 +200,7 @@ TEST_CASE("DockLayoutConfig defines valid constants and window identifiers") {
     CHECK(std::string(holobench::app::docking::DockLayoutConfig::kOpticalBenchWindowName) == "Optical Bench");
     CHECK(std::string(holobench::app::docking::DockLayoutConfig::kInspectorWindowName) == "Inspector");
     CHECK(std::string(holobench::app::docking::DockLayoutConfig::kValidationWindowName) == "Validation");
+    CHECK(std::string(holobench::app::docking::DockLayoutConfig::kSamplingDebuggerWindowName) == "Sampling Debugger");
     CHECK(std::string(holobench::app::docking::DockLayoutConfig::kDockSpaceIdStr) == "HoloBenchDockSpace");
 }
 
@@ -338,5 +339,4 @@ TEST_CASE("computeDockPanelRectangles rejects degenerate inputs gracefully") {
 }
 
 } // TEST_SUITE("app::Docking")
-
 

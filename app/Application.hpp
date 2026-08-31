@@ -10,6 +10,7 @@
 #include <glm/glm.hpp>
 
 #include "app/WaveDetectorUiState.hpp"
+#include "app/SamplingDebuggerPipeline.hpp"
 #include "optics/ray/BenchTracer.hpp"
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
@@ -177,6 +178,7 @@ struct DockLayoutConfig {
     static constexpr const char* kInspectorWindowName = "Inspector";
     static constexpr const char* kValidationWindowName = "Validation";
     static constexpr const char* kWaveDetectorWindowName = "Wave Detector / Screen";
+    static constexpr const char* kSamplingDebuggerWindowName = "Sampling Debugger";
     static constexpr const char* kDockSpaceIdStr = "HoloBenchDockSpace";
 };
 
@@ -264,7 +266,9 @@ private:
     void shutdown() noexcept;
     void drawWorkspace();
     void drawWaveDetectorPanel();
+    void drawSamplingDebuggerPanel();
     void updateWaveDetector();
+    void refreshSamplingDebugger();
     bool applyScene(
         const optics::scene::OpticalBenchScene& candidateScene,
         const optics::ray::BenchTracerOptions& candidateOptions);
@@ -294,13 +298,18 @@ private:
     std::unique_ptr<render::OpticalBenchRenderer> renderer_;
     std::unique_ptr<compute::fft::CpuFftBackend> detectorFftBackend_;
     std::unique_ptr<render::gl::Texture2D> detectorTexture_;
+    std::unique_ptr<render::gl::Texture2D> samplingSpectrumTexture_;
     std::unique_ptr<wave::WaveDetectorResult> detectorResult_;
+    std::unique_ptr<samplingdebug::SamplingDebuggerResult> samplingDebuggerResult_;
     waveui::WaveDetectorUiState detectorUiState_;
+    samplingdebug::SamplingDebuggerConfig samplingDebuggerConfig_;
     waveui::DetectorPixel detectorProbe_;
     bool hasDetectorProbe_ = false;
     bool detectorProbeLocked_ = false;
     std::string detectorErrorMessage_;
     std::string detectorStatusMessage_;
+    std::string samplingDebuggerErrorMessage_;
+    std::string samplingDebuggerStatusMessage_;
 
     optics::scene::OpticalBenchScene scene_;
     optics::scene::ThinLensImagePrediction prediction_;

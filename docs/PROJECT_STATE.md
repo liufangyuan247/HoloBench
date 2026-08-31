@@ -68,8 +68,9 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 - **Circular-pupil PSF/MTF**: Computes normalized coherent amplitude/Airy intensity PSF and explicitly incoherent MTF with cutoffs `a/(lambda f)` and `2a/(lambda f)`. Independent J1 references, discrete pupil overlap, and a real 4-f point-source/circular-stop result validate the model without relying on optional standard-library special functions.
 - **Angular spectrum and plane probes**: A centred, physical-frequency angular-spectrum map exposes complex coefficients, propagating/evanescent classification, longitudinal/decay frequency, and independent spectral-energy fractions. Fixed-grid probes evaluate arbitrary positive/negative ASM distances while preserving the exact source field at `z=0`.
 - **Sampling Debugger orchestration**: A headless application pipeline aggregates sampling warnings, a deterministic propagating/evanescent spectrum image, arbitrary-plane probes, sampled Airy PSF, and explicitly incoherent MTF without placing physics in ImGui code.
+- **Interactive Sampling Debugger**: A dedicated dockable window exposes requested-angle and relative-z controls, Nyquist/padding/wrap warnings, colour-classified angular spectrum and energy fractions, fixed-grid complex probes at the source and arbitrary positive/negative z, radial Airy PSF, and explicitly labelled incoherent MTF. Refresh is explicit rather than per-frame.
 - **Sampling diagnostics foundation**: Reports physical extent, Nyquist angles, requested-band aliasing, periodic wrap-around, required padding factor, aperture/support boundary clearance, and sampled evanescent bins. Caller support claims are checked against every non-zero sample.
-- **Local gate**: Windows Clang warnings-as-errors core and application builds pass with 228/228 headless tests, including twenty-five new M3 cases. UI smoke is rerun at each interactive integration boundary.
+- **Local gate**: Windows Clang warnings-as-errors core and application builds pass with 228/228 headless tests, including twenty-five new M3 cases. Three-frame OpenGL smoke exits 0 on AMD Radeon Pro 5300M and now requires both detector and angular-spectrum textures to upload successfully.
 
 ## Known limitations (M1/M2)
 
@@ -82,7 +83,7 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 ## Next five tasks
 
 1. Run and record GPU parity plus `wave/asm_1024_square_gpu_recompute` on the target NVIDIA card.
-2. Connect angular-spectrum classification, plane probes, Fourier filtering, PSF/MTF, and sampling diagnostics to the Sampling Debugger UI.
+2. Add the interactive 4-f object/Fourier/filtered/image workflow and circular low/high/band-pass controls.
 3. Define and pass named M3 CPU/GPU performance budgets without applying device-wide caps.
 4. Pass the M3 Windows/Linux warnings-as-errors and UI smoke gates.
 5. Complete M3 documentation, release-integration review, and tag only after every gate is green.

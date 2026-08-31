@@ -13,17 +13,15 @@ numerically false.
   physical SI output sampling.
 - [x] 4-f compute orchestration with circular Fourier-plane low-pass,
   high-pass, and band-pass filters; interactive UI controls remain pending.
-- [ ] Angular-spectrum visualizer UI with propagating/evanescent identification;
-  centred physical-frequency data, energy fractions, and arbitrary-plane probe
-  backend are complete.
+- [x] Angular-spectrum visualizer UI with propagating/evanescent identification,
+  centred physical-frequency data, and independent spectral-energy fractions.
 - [x] Circular-pupil coherent amplitude/intensity PSF and explicitly
   incoherent MTF computation with independent diffraction oracles.
 - [x] Sampling diagnostics data model for aliasing, angular bandwidth,
   wrap-around, required padding, support-to-boundary clearance, and evanescent
   sampled bins.
-- [ ] Sampling Debugger UI and arbitrary-plane probe workflow.
-  Headless orchestration and deterministic spectrum-image generation are
-  complete; interactive controls and smoke validation remain.
+- [x] Sampling Debugger UI and arbitrary-plane probe workflow with explicit
+  refresh semantics and OpenGL texture smoke validation.
 
 ## Numerical gate
 

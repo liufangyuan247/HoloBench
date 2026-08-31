@@ -17,6 +17,7 @@
 #include <cstring>
 #include <filesystem>
 #include <numeric>
+#include <numbers>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -162,6 +163,7 @@ Application::Application()
     : renderer_(std::make_unique<render::OpticalBenchRenderer>())
     , detectorFftBackend_(std::make_unique<compute::fft::CpuFftBackend>())
     , detectorTexture_(std::make_unique<render::gl::Texture2D>())
+    , samplingSpectrumTexture_(std::make_unique<render::gl::Texture2D>())
     , scene_(optics::scene::createDefaultRealImageScene())
     , naResult_(optics::scene::computeObjectSideNumericalAperture(scene_)) {
     tracerOptions_.rayCount = 64;
@@ -380,7 +382,11 @@ void Application::shutdown() noexcept {
     if (detectorTexture_) {
         detectorTexture_->destroy();
     }
+    if (samplingSpectrumTexture_) {
+        samplingSpectrumTexture_->destroy();
+    }
     detectorResult_.reset();
+    samplingDebuggerResult_.reset();
     if (imguiGlInitialized_) {
         ImGui_ImplOpenGL3_Shutdown();
         imguiGlInitialized_ = false;
@@ -431,12 +437,19 @@ void Application::updateWaveDetector() {
             detectorStatusMessage_ = "Detector field recomputed on the deterministic CPU reference backend";
             hasDetectorProbe_ = false;
             detectorProbeLocked_ = false;
+            samplingDebuggerConfig_.probeXIndex = detectorResult_->field.width() / 2U;
+            samplingDebuggerConfig_.probeYIndex = detectorResult_->field.height() / 2U;
+            refreshSamplingDebugger();
         } catch (const std::exception& ex) {
             detectorErrorMessage_ = "Propagation failed: " + std::string(ex.what());
             detectorStatusMessage_.clear();
             detectorResult_.reset();
             if (detectorTexture_) {
                 detectorTexture_->destroy();
+            }
+            samplingDebuggerResult_.reset();
+            if (samplingSpectrumTexture_) {
+                samplingSpectrumTexture_->destroy();
             }
             hasDetectorProbe_ = false;
             detectorProbeLocked_ = false;
@@ -460,6 +473,51 @@ void Application::updateWaveDetector() {
         } catch (const std::exception& ex) {
             detectorErrorMessage_ = "Visualization failed: " + std::string(ex.what());
             detectorStatusMessage_.clear();
+        }
+    }
+}
+
+void Application::refreshSamplingDebugger() {
+    if (!detectorResult_) {
+        samplingDebuggerErrorMessage_ = "Sampling Debugger requires a detector field";
+        samplingDebuggerStatusMessage_.clear();
+        samplingDebuggerResult_.reset();
+        return;
+    }
+    try {
+        if (!detectorFftBackend_) {
+            throw std::runtime_error("CPU FFT backend is unavailable");
+        }
+        if (hasDetectorProbe_
+            && detectorProbe_.x < detectorResult_->field.width()
+            && detectorProbe_.y < detectorResult_->field.height()) {
+            samplingDebuggerConfig_.probeXIndex = detectorProbe_.x;
+            samplingDebuggerConfig_.probeYIndex = detectorProbe_.y;
+        }
+        samplingDebuggerConfig_.probeDistancesMetres = {0.0};
+        if (samplingDebuggerConfig_.propagationDistanceMetres != 0.0) {
+            samplingDebuggerConfig_.probeDistancesMetres.push_back(
+                samplingDebuggerConfig_.propagationDistanceMetres);
+        }
+        auto result = samplingdebug::analyzeSamplingDebugger(
+            detectorResult_->field,
+            samplingDebuggerConfig_,
+            *detectorFftBackend_);
+        if (!samplingSpectrumTexture_
+            || !samplingSpectrumTexture_->uploadImage(result.angularSpectrumImage)) {
+            throw std::runtime_error("OpenGL rejected the angular-spectrum texture upload");
+        }
+        samplingDebuggerResult_ = std::make_unique<samplingdebug::SamplingDebuggerResult>(
+            std::move(result));
+        samplingDebuggerErrorMessage_.clear();
+        samplingDebuggerStatusMessage_ =
+            "Debugger refreshed from the selected detector plane on the CPU reference backend";
+    } catch (const std::exception& ex) {
+        samplingDebuggerErrorMessage_ = "Sampling Debugger failed: " + std::string(ex.what());
+        samplingDebuggerStatusMessage_.clear();
+        samplingDebuggerResult_.reset();
+        if (samplingSpectrumTexture_) {
+            samplingSpectrumTexture_->destroy();
         }
     }
 }
@@ -680,6 +738,135 @@ void Application::drawWaveDetectorPanel() {
     ImGui::End();
 }
 
+void Application::drawSamplingDebuggerPanel() {
+    ImGui::Begin(docking::DockLayoutConfig::kSamplingDebuggerWindowName);
+    ImGui::TextDisabled("Selected plane: current Wave Detector output (relative probe z)");
+
+    double angleXDegrees = samplingDebuggerConfig_.requestedHalfAngleXRadians
+        * 180.0 / std::numbers::pi;
+    double angleYDegrees = samplingDebuggerConfig_.requestedHalfAngleYRadians
+        * 180.0 / std::numbers::pi;
+    double probeDistanceMillimetres = samplingDebuggerConfig_.propagationDistanceMetres * 1e3;
+    double focalLengthMillimetres = samplingDebuggerConfig_.psfFocalLengthMetres * 1e3;
+    double pupilRadiusMillimetres = samplingDebuggerConfig_.psfPupilRadiusMetres * 1e3;
+    ImGui::InputDouble("Requested half-angle X", &angleXDegrees, 0.1, 1.0, "%.4g deg");
+    ImGui::InputDouble("Requested half-angle Y", &angleYDegrees, 0.1, 1.0, "%.4g deg");
+    ImGui::InputDouble("Probe offset z", &probeDistanceMillimetres, 0.1, 1.0, "%.6g mm");
+    ImGui::InputDouble("PSF lens focal length", &focalLengthMillimetres, 0.1, 1.0, "%.6g mm");
+    ImGui::InputDouble("Circular pupil radius", &pupilRadiusMillimetres, 0.01, 0.1, "%.6g mm");
+    samplingDebuggerConfig_.requestedHalfAngleXRadians = angleXDegrees
+        * std::numbers::pi / 180.0;
+    samplingDebuggerConfig_.requestedHalfAngleYRadians = angleYDegrees
+        * std::numbers::pi / 180.0;
+    samplingDebuggerConfig_.propagationDistanceMetres = probeDistanceMillimetres * 1e-3;
+    samplingDebuggerConfig_.psfFocalLengthMetres = focalLengthMillimetres * 1e-3;
+    samplingDebuggerConfig_.psfPupilRadiusMetres = pupilRadiusMillimetres * 1e-3;
+    if (ImGui::Button("Refresh Sampling Debugger")) {
+        refreshSamplingDebugger();
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("Explicit refresh; no per-frame FFT");
+
+    if (!samplingDebuggerErrorMessage_.empty()) {
+        ImGui::TextColored(
+            ImVec4(1.0F, 0.35F, 0.35F, 1.0F),
+            "%s",
+            samplingDebuggerErrorMessage_.c_str());
+    } else if (!samplingDebuggerStatusMessage_.empty()) {
+        ImGui::TextColored(
+            ImVec4(0.4F, 0.9F, 0.5F, 1.0F),
+            "%s",
+            samplingDebuggerStatusMessage_.c_str());
+    }
+    if (!samplingDebuggerResult_) {
+        ImGui::TextDisabled("Apply a Wave Detector configuration to create debugger data.");
+        ImGui::End();
+        return;
+    }
+
+    const auto& result = *samplingDebuggerResult_;
+    const auto& diagnostics = result.sampling;
+    ImGui::SeparatorText("Sampling validity");
+    ImGui::Text(
+        "Grid: %.6g x %.6g mm | Nyquist: %.5g deg X, %.5g deg Y",
+        diagnostics.physicalWidthMetres * 1e3,
+        diagnostics.physicalHeightMetres * 1e3,
+        diagnostics.nyquistHalfAngleXRadians * 180.0 / std::numbers::pi,
+        diagnostics.nyquistHalfAngleYRadians * 180.0 / std::numbers::pi);
+    ImGui::Text(
+        "Required padding: %.4gx X, %.4gx Y | periodic boundary: %s",
+        diagnostics.requiredPaddingFactorX,
+        diagnostics.requiredPaddingFactorY,
+        diagnostics.periodicBoundary ? "yes" : "no");
+    if (!diagnostics.warning.empty()) {
+        ImGui::TextColored(ImVec4(1.0F, 0.72F, 0.2F, 1.0F), "%s", diagnostics.warning.c_str());
+    } else {
+        ImGui::TextColored(ImVec4(0.4F, 0.9F, 0.5F, 1.0F), "No active sampling warning.");
+    }
+
+    ImGui::SeparatorText("Angular spectrum");
+    ImGui::Text(
+        "Propagating: %zu bins, %.6g%% energy | Evanescent: %zu bins, %.6g%% energy",
+        result.angularSpectrum.propagatingBinCount,
+        100.0 * result.angularSpectrum.propagatingSpectralEnergyFraction,
+        result.angularSpectrum.evanescentBinCount,
+        100.0 * result.angularSpectrum.evanescentSpectralEnergyFraction);
+    ImGui::TextDisabled("Turbo = propagating; magenta tint = evanescent; intensity shown on a dB floor.");
+    if (samplingSpectrumTexture_ && samplingSpectrumTexture_->isValid()) {
+        const float availableWidth = ImGui::GetContentRegionAvail().x;
+        const float imageSize = std::clamp(availableWidth, 160.0F, 360.0F);
+        ImGui::Image(
+            toImTextureID(samplingSpectrumTexture_->handle()),
+            ImVec2(imageSize, imageSize),
+            ImVec2(0.0F, 1.0F),
+            ImVec2(1.0F, 0.0F));
+    }
+
+    ImGui::SeparatorText("Arbitrary-plane probe");
+    ImGui::Text(
+        "Fixed pixel (%zu, %zu), x=%.6g mm, y=%.6g mm",
+        result.planeProbe.xIndex,
+        result.planeProbe.yIndex,
+        result.planeProbe.xCoordinateMetres * 1e3,
+        result.planeProbe.yCoordinateMetres * 1e3);
+    for (const auto& sample : result.planeProbe.samples) {
+        ImGui::BulletText(
+            "z=%+.6g mm: E=%.7g%+.7gi, I=%.7g, phase=%+.7g rad (%s)",
+            sample.distanceMetres * 1e3,
+            sample.fieldValue.real(),
+            sample.fieldValue.imag(),
+            sample.intensity,
+            sample.wrappedPhaseRadians,
+            sample.phaseValid ? "valid" : "undefined");
+    }
+
+    ImGui::SeparatorText("Circular-pupil PSF / incoherent MTF");
+    ImGui::Text(
+        "First dark radius: %.6g um | coherent cutoff: %.6g cyc/mm | incoherent cutoff: %.6g cyc/mm",
+        result.pupilDiagnostics.firstDarkRadiusMetres * 1e6,
+        result.pupilDiagnostics.coherentCutoffCyclesPerMetre * 1e-3,
+        result.pupilDiagnostics.incoherentCutoffCyclesPerMetre * 1e-3);
+    ImGui::TextDisabled("MTF convention: incoherent intensity; PSF is normalized Airy intensity.");
+    std::vector<float> psfProfile;
+    const std::size_t psfCenter = result.normalizedPsf.width() / 2U;
+    psfProfile.reserve(result.normalizedPsf.width() - psfCenter);
+    for (std::size_t x = psfCenter; x < result.normalizedPsf.width(); ++x) {
+        psfProfile.push_back(static_cast<float>(result.normalizedPsf.at(x, psfCenter)));
+    }
+    std::vector<float> mtfProfile;
+    mtfProfile.reserve(result.incoherentMtf.size());
+    for (const auto& sample : result.incoherentMtf) {
+        mtfProfile.push_back(static_cast<float>(sample.normalizedIncoherentMtf));
+    }
+    if (!psfProfile.empty()) {
+        ImGui::PlotLines("Airy PSF radial", psfProfile.data(), static_cast<int>(psfProfile.size()), 0, nullptr, 0.0F, 1.0F, ImVec2(0.0F, 80.0F));
+    }
+    if (!mtfProfile.empty()) {
+        ImGui::PlotLines("Incoherent MTF", mtfProfile.data(), static_cast<int>(mtfProfile.size()), 0, nullptr, 0.0F, 1.0F, ImVec2(0.0F, 80.0F));
+    }
+    ImGui::End();
+}
+
 void Application::drawWorkspace() {
     updateWaveDetector();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -732,6 +919,7 @@ void Application::drawWorkspace() {
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kInspectorWindowName, dockRightId);
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kValidationWindowName, dockBottomId);
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kWaveDetectorWindowName, dockBottomId);
+            ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kSamplingDebuggerWindowName, dockBottomId);
 
             ImGui::DockBuilderFinish(dockspaceId);
         }
@@ -1354,6 +1542,7 @@ void Application::drawWorkspace() {
     ImGui::End();
 
     drawWaveDetectorPanel();
+    drawSamplingDebuggerPanel();
 }
 
 int Application::run(const RunOptions& options) {
@@ -1482,6 +1671,10 @@ int Application::run(const RunOptions& options) {
     const bool debugCallbackClean = render::gl::errorCount() == 0;
     if (glSmokeMode_ && !detectorTexture_->isValid()) {
         SDL_Log("OpenGL smoke check failed: detector texture was never uploaded");
+        rawGlError = true;
+    }
+    if (glSmokeMode_ && (!samplingSpectrumTexture_ || !samplingSpectrumTexture_->isValid())) {
+        SDL_Log("OpenGL smoke check failed: angular-spectrum texture was never uploaded");
         rawGlError = true;
     }
 
