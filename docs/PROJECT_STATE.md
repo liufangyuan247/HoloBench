@@ -330,6 +330,15 @@ completion because it is primarily driven through fixed parameter panels:
   propagates the physical complete field and separately labelled zero,
   object-bearing, and conjugate orders to a physically placed coaxial
   Screen/Detector or Field Probe.
+- **Placed local wave path**: Ordered trace lineage now drives an injected-FFT
+  angular-spectrum field through centred, normally incident local planes.
+  Ideal lens clear aperture/quadratic phase, circular/elliptical or rectangular aperture,
+  explicit pinhole, and SLM finite bounds/pixel dead space affect the field
+  that reaches the plate. Applied component IDs, intercepted power, boundary
+  risk, and limitations are visible in the Inspector. Tilted, decentered,
+  folded, direction-changing, and real-prescription paths retain explicit
+  unrefined evidence instead of being mislabeled as sampled propagation; see
+  [ADR 0012](adr/0012-placed-local-wave-path-conventions.md).
 - **Placed volume workflow**: Counter-propagating reflection recording refracts
   both actual local branch directions into the configured material and records
   the full vector `K = k_object - k_reference`, its period and slant. The UI
@@ -353,9 +362,9 @@ completion because it is primarily driven through fixed parameter panels:
 - **Revision provenance**: Plate incident evidence, thin recordings, thin
   replays, volume recordings, and volume replays carry the exact scene
   revision and visibly become stale after a bench edit.
-- **Current local validation**: Windows Clang development build passes 474/474
+- **Current local validation**: Windows Clang development build passes 480/480
   deterministic CPU, application, font, and OpenGL GPU cases after the placed
-  volume/RGB reconstruction increments; `core-ci` passes 472/472, `app-ci` compiles
+  volume/RGB/local-wave-path increments; `core-ci` passes 478/478, `app-ci` compiles
   warnings-as-errors, and the hidden OpenGL smoke exits successfully on AMD
   Radeon Pro 5300M. Remote cross-compiler CI remains required before the M8
   slice is closed.
@@ -370,14 +379,14 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Apply placed lens, aperture/filter, and SLM transformations to local complex
-   fields so spatial object structure follows the actual upstream bench rather
-   than only its centre ray.
-2. Generalize placed observation adapters with validated tilted/decentred
-   resampling and explicit finite-window support diagnostics.
-3. Persist a versioned recording recipe and material/channel configuration in
+1. Persist a versioned recording recipe and material/channel configuration in
    the unified bench document without treating recomputable field caches as
    project truth.
+2. Generalize local component and observation adapters with validated
+   tilted/decentred/folded-plane resampling and explicit finite-window support
+   diagnostics.
+3. Add editable SLM command/pattern provenance so placed SLMs can carry more
+   than the current explicit uniform zero-phase command.
 4. Add named M8 performance scenes and complete cross-compiler/application
    validation for transmission, reflection, and RGB workflows.
 5. Compile a versioned M9 CHIMERA recipe into an editable bench, then simulate

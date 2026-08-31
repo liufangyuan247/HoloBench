@@ -4,12 +4,19 @@
 
 ```text
 app -> render -> optics -> core
-  |
-  +-> app logic -> optics  -> core
-               +-> compute -> core
+  |                |
+  |                +-> compute -> core
+  +-> app logic -> optics / compute
 ```
 
-`core` must not depend on SDL, OpenGL, ImGui, CUDA, or product UI. `optics` owns solver-independent physical models and does not depend on concrete numerical propagation implementations. `compute` owns those numerical backends. The headless `HoloBench::AppLogic` target composes both layers into product use cases such as the detector pipeline without acquiring an SDL, ImGui, or OpenGL dependency. `render` consumes optical results without defining them, and the executable `app` wires lifecycle, UI, rendering, and application logic together.
+`core` must not depend on SDL, OpenGL, ImGui, CUDA, or product UI. `optics`
+owns physical models and may invoke `compute` propagation through an injected
+backend in solver adapters; it never selects a GPU implementation or moves
+physics into rendering. `compute` owns FFT/propagation implementations and
+backend capability. The headless `HoloBench::AppLogic` target composes these
+layers into product use cases without acquiring an SDL, ImGui, or OpenGL
+dependency. `render` consumes optical results without defining them, and the
+executable `app` wires lifecycle, UI, rendering, and application logic together.
 
 ## Runtime layers
 
@@ -83,7 +90,7 @@ observation preferences, and provenance. Recomputable ray/field results are not
 persisted as scene truth. No new feature may create another disconnected
 panel-specific project format.
 
-## Architectural decisions & current milestone (M7)
+## Architectural decisions & current milestone (M8)
 
 The following wave and Fourier-optics architecture decisions are locked:
 - Wave optics Fourier sign, FFT normalization, and complex phasor time convention (ADR 0005).
@@ -92,3 +99,5 @@ The following wave and Fourier-optics architecture decisions are locked:
 - Boundary condition absorption and grid sampling limits for Angular Spectrum Method (ASM).
 - Real-lens prescription, rotational-surface, material-dispersion, sequential
   tracing, and independent-validation conventions (ADR 0007).
+- Placed local field paths, supported coaxial transforms, and explicit
+  tilted/folded fallback boundaries (ADR 0012).

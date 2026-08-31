@@ -55,6 +55,20 @@ TEST_CASE("circular aperture includes its boundary and supports decentering") {
     CHECK(decentered.at(1, 2) == std::complex<double>(0.0, 0.0));
 }
 
+TEST_CASE("elliptical aperture preserves independent physical half axes") {
+    auto value = makeGrid(7, 7, 1.0);
+    wave::EllipticalApertureParameters parameters;
+    parameters.halfWidthMetres = 2.0;
+    parameters.halfHeightMetres = 1.0;
+    const auto diagnostics = wave::applyEllipticalAperture(value, parameters);
+
+    CHECK(diagnostics.transmittedSampleCount == 7U);
+    CHECK(value.at(1, 3) == std::complex<double>(1.0, 0.0));
+    CHECK(value.at(3, 2) == std::complex<double>(1.0, 0.0));
+    CHECK(value.at(2, 2) == std::complex<double>(0.0, 0.0));
+    CHECK(value.at(3, 1) == std::complex<double>(0.0, 0.0));
+}
+
 TEST_CASE("rectangular aperture includes edge samples and rejects exterior samples") {
     auto value = makeGrid();
     wave::RectangularApertureParameters parameters;
@@ -162,6 +176,13 @@ TEST_CASE("field elements reject invalid inputs and numerical overflow without m
     wave::CircularApertureParameters circular;
     circular.radiusMetres = 0.0;
     CHECK_THROWS_AS(wave::applyCircularAperture(value, circular), std::invalid_argument);
+    checkExactly(value, original);
+
+    wave::EllipticalApertureParameters elliptical;
+    elliptical.halfHeightMetres = 0.0;
+    CHECK_THROWS_AS(
+        wave::applyEllipticalAperture(value, elliptical),
+        std::invalid_argument);
     checkExactly(value, original);
 
     wave::DoubleSlitParameters doubleSlit;

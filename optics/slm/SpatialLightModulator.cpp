@@ -237,6 +237,41 @@ struct PixelLocation final {
     return diagnostics;
 }
 
+[[nodiscard]] SlmApplicationDiagnostics applyUniformPixelTransfer(
+    field::ComplexField2D& field,
+    const PixelatedSlmParameters& parameters,
+    std::complex<double> transfer,
+    bool commandWasQuantized) {
+    static_cast<void>(checkedPixelCount(parameters));
+    validateParameters(parameters);
+    requireFiniteField(field);
+    auto modulated = field;
+    SlmApplicationDiagnostics diagnostics;
+    for (std::size_t y = 0; y < modulated.height(); ++y) {
+        const double yMetres = modulated.yCoordinateMetres(y);
+        for (std::size_t x = 0; x < modulated.width(); ++x) {
+            auto& sample = modulated.at(x, y);
+            const auto location = locatePixel(
+                modulated.xCoordinateMetres(x), yMetres, parameters);
+            if (!location.insideGrid) {
+                sample = {0.0, 0.0};
+                ++diagnostics.outsideActiveAreaSampleCount;
+            } else if (!location.insideActivePixel) {
+                sample = {0.0, 0.0};
+                ++diagnostics.deadSpaceSampleCount;
+            } else {
+                multiplyFinite(sample, transfer);
+                ++diagnostics.modulatedSampleCount;
+                if (commandWasQuantized) {
+                    ++diagnostics.quantizedSampleCount;
+                }
+            }
+        }
+    }
+    field = std::move(modulated);
+    return diagnostics;
+}
+
 } // namespace
 
 void validatePixelatedSlmParameters(const PixelatedSlmParameters& parameters) {
@@ -300,6 +335,30 @@ SlmApplicationDiagnostics applyPixelatedSlm(
         }
     }
     return applyPixelTransfers(field, parameters, transfers, quantized);
+}
+
+SlmApplicationDiagnostics applyUniformPixelatedSlm(
+    field::ComplexField2D& field,
+    const PixelatedSlmParameters& parameters,
+    double normalizedCommand) {
+    static_cast<void>(checkedPixelCount(parameters));
+    validateParameters(parameters);
+    requireCommands(
+        std::span<const double>(&normalizedCommand, 1U), 1U, true);
+    const double effectiveCommand = quantizeCommand(
+        normalizedCommand, parameters.bitDepth);
+    const std::complex<double> transfer
+        = parameters.mode == ModulationMode::Amplitude
+        ? std::complex<double> {effectiveCommand, 0.0}
+        : finitePhasor(std::fma(
+            effectiveCommand,
+            parameters.phaseRangeRadians,
+            parameters.phaseOffsetRadians));
+    return applyUniformPixelTransfer(
+        field,
+        parameters,
+        transfer,
+        effectiveCommand != normalizedCommand);
 }
 
 SlmApplicationDiagnostics applyCalibratedPixelatedSlm(

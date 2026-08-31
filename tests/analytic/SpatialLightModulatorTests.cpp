@@ -174,3 +174,33 @@ TEST_CASE("SLM operations are deterministic and reject bad input without mutatio
     CHECK_THROWS_AS(slm::applyIdealPhaseSlm(invalid, phases), std::invalid_argument);
     checkExactly(invalid, nonFinite);
 }
+
+TEST_CASE("uniform pixelated SLM matches an explicit constant command raster") {
+    auto uniform = makeField(17, 11, 0.5);
+    auto raster = uniform;
+    slm::PixelatedSlmParameters parameters;
+    parameters.pixelColumns = 4;
+    parameters.pixelRows = 3;
+    parameters.pixelPitchXMetres = 2.0;
+    parameters.pixelPitchYMetres = 2.0;
+    parameters.fillFactorX = 0.6;
+    parameters.fillFactorY = 0.7;
+    parameters.bitDepth = 3;
+    parameters.phaseRangeRadians = std::numbers::pi;
+    const std::vector<double> commands(12U, 0.37);
+
+    const auto uniformDiagnostics = slm::applyUniformPixelatedSlm(
+        uniform, parameters, 0.37);
+    const auto rasterDiagnostics = slm::applyPixelatedSlm(
+        raster, parameters, commands);
+
+    CHECK(uniformDiagnostics.modulatedSampleCount
+        == rasterDiagnostics.modulatedSampleCount);
+    CHECK(uniformDiagnostics.deadSpaceSampleCount
+        == rasterDiagnostics.deadSpaceSampleCount);
+    CHECK(uniformDiagnostics.outsideActiveAreaSampleCount
+        == rasterDiagnostics.outsideActiveAreaSampleCount);
+    CHECK(uniformDiagnostics.quantizedSampleCount
+        == rasterDiagnostics.quantizedSampleCount);
+    checkExactly(uniform, copySamples(raster));
+}

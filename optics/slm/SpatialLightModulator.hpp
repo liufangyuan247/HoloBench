@@ -60,4 +60,12 @@ SlmApplicationDiagnostics applyPixelatedSlm(
     const PixelatedSlmParameters& parameters,
     std::span<const double> normalizedPixelCommands);
 
+// Applies one normalized command to every active pixel without allocating a
+// full device-resolution command raster. Finite device bounds and dead space
+// are still evaluated sample by sample.
+SlmApplicationDiagnostics applyUniformPixelatedSlm(
+    field::ComplexField2D& field,
+    const PixelatedSlmParameters& parameters,
+    double normalizedCommand);
+
 } // namespace holobench::optics::slm

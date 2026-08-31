@@ -5056,13 +5056,18 @@ void Application::drawSandboxInspector() {
                                             = static_cast<double>(
                                                 sandboxPlateRelativeReferenceKilowattsPerSquareMetre_)
                                             * 1e3;
+                                        if (!detectorFftBackend_) {
+                                            throw std::runtime_error(
+                                                "CPU FFT backend is unavailable");
+                                        }
                                         auto recording
                                             = optics::holography::recordThinTransmissionPlate(
                                                 benchProject_.scene,
                                                 fields,
                                                 pair.objectBranchId,
                                                 pair.referenceBranchId,
-                                                recordingOptions);
+                                                recordingOptions,
+                                                *detectorFftBackend_);
                                         field::FieldVisualizationOptions viewOptions;
                                         viewOptions.colormap = field::ColormapKind::Inferno;
                                         const auto image = field::renderLinearIntensity(
@@ -5208,13 +5213,18 @@ void Application::drawSandboxInspector() {
                                         = static_cast<double>(
                                             sandboxPlateRelativeReferenceKilowattsPerSquareMetre_)
                                         * 1e3;
+                                    if (!detectorFftBackend_) {
+                                        throw std::runtime_error(
+                                            "CPU FFT backend is unavailable");
+                                    }
                                     auto rgbRecording
                                         = optics::holography::
                                             recordRgbThinTransmissionPlate(
                                                 benchProject_.scene,
                                                 fields,
                                                 rgbSelections,
-                                                options);
+                                                options,
+                                                *detectorFftBackend_);
                                     sandboxRgbRecording_ = std::make_unique<
                                         optics::holography::
                                             RgbThinPlateRecordingResult>(
@@ -5772,6 +5782,37 @@ void Application::drawSandboxInspector() {
                                     .minimumRecordedRelativeIntensity,
                                 sandboxPlateRecording_->hologram.diagnostics
                                     .maximumRecordedRelativeIntensity);
+                            const auto drawWavePathEvidence = [](
+                                const char* label,
+                                const optics::holography::
+                                    SampledPlateIncidentField& incident) {
+                                const auto& path = incident.diagnostics;
+                                ImGui::Text(
+                                    "%s wave path: %s",
+                                    label,
+                                    path.appliedCoaxialWavePath
+                                        ? "sampled propagation applied"
+                                        : "centreline/source-envelope evidence");
+                                for (const auto& componentId
+                                     : path.appliedWaveComponentIds) {
+                                    ImGui::BulletText(
+                                        "Applied local field transform: %s",
+                                        componentId.c_str());
+                                }
+                                for (const auto& warning : path.warnings) {
+                                    ImGui::TextColored(
+                                        ImVec4(1.0F, 0.68F, 0.25F, 1.0F),
+                                        "%s: %s",
+                                        label,
+                                        warning.c_str());
+                                }
+                            };
+                            drawWavePathEvidence(
+                                "Object",
+                                sandboxPlateRecording_->objectIncident);
+                            drawWavePathEvidence(
+                                "Reference",
+                                sandboxPlateRecording_->referenceIncident);
                             if (sandboxPlateTexture_
                                 && sandboxPlateTexture_->isValid()) {
                                 const float availableWidth

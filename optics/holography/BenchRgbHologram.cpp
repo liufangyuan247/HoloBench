@@ -16,6 +16,13 @@ struct Candidate final {
     double wavelengthMetres = 0.0;
 };
 
+RgbThinPlateRecordingResult recordRgbThinTransmissionPlateImpl(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    const std::array<PlateBranchPairSelection, 3>& selections,
+    const ThinPlateRecordingOptions& options,
+    compute::fft::IFftBackend* fftBackend);
+
 } // namespace
 
 bool RgbThinPlateRecordingResult::isStaleFor(
@@ -94,6 +101,28 @@ RgbThinPlateRecordingResult recordRgbThinTransmissionPlate(
     const PlateIncidentFieldSet& fields,
     const std::array<PlateBranchPairSelection, 3>& selections,
     const ThinPlateRecordingOptions& options) {
+    return recordRgbThinTransmissionPlateImpl(
+        bench, fields, selections, options, nullptr);
+}
+
+RgbThinPlateRecordingResult recordRgbThinTransmissionPlate(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    const std::array<PlateBranchPairSelection, 3>& selections,
+    const ThinPlateRecordingOptions& options,
+    compute::fft::IFftBackend& fftBackend) {
+    return recordRgbThinTransmissionPlateImpl(
+        bench, fields, selections, options, &fftBackend);
+}
+
+namespace {
+
+RgbThinPlateRecordingResult recordRgbThinTransmissionPlateImpl(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    const std::array<PlateBranchPairSelection, 3>& selections,
+    const ThinPlateRecordingOptions& options,
+    compute::fft::IFftBackend* fftBackend) {
     if (fields.isStaleFor(bench)) {
         throw std::invalid_argument(
             "RGB thin recording requires current plate incident evidence");
@@ -123,31 +152,34 @@ RgbThinPlateRecordingResult recordRgbThinTransmissionPlate(
                 "RGB thin recording requires transmission geometry");
         }
     }
+    auto record = [&](std::size_t index) {
+        return fftBackend == nullptr
+            ? recordThinTransmissionPlate(
+                bench,
+                fields,
+                selections[index].objectBranchId,
+                selections[index].referenceBranchId,
+                options)
+            : recordThinTransmissionPlate(
+                bench,
+                fields,
+                selections[index].objectBranchId,
+                selections[index].referenceBranchId,
+                options,
+                *fftBackend);
+    };
     return {
         .plateComponentId = fields.plateComponentId,
         .sourceRevision = fields.sourceRevision,
         .channels = {{
-            recordThinTransmissionPlate(
-                bench,
-                fields,
-                selections[0].objectBranchId,
-                selections[0].referenceBranchId,
-                options),
-            recordThinTransmissionPlate(
-                bench,
-                fields,
-                selections[1].objectBranchId,
-                selections[1].referenceBranchId,
-                options),
-            recordThinTransmissionPlate(
-                bench,
-                fields,
-                selections[2].objectBranchId,
-                selections[2].referenceBranchId,
-                options),
+            record(0U),
+            record(1U),
+            record(2U),
         }},
     };
 }
+
+} // namespace
 
 RgbThinPlateReplayResult replayRgbThinTransmissionToObservation(
     const scene::BenchScene& bench,

@@ -19,6 +19,13 @@ struct CircularApertureParameters final {
     double centerYMetres = 0.0;
 };
 
+struct EllipticalApertureParameters final {
+    double halfWidthMetres = 1e-3;
+    double halfHeightMetres = 1e-3;
+    double centerXMetres = 0.0;
+    double centerYMetres = 0.0;
+};
+
 struct RectangularApertureParameters final {
     double halfWidthMetres = 1e-3;
     double halfHeightMetres = 1e-3;
@@ -48,6 +55,10 @@ struct ThinLensPhaseDiagnostics final {
 BinaryMaskDiagnostics applyCircularAperture(
     field::ComplexField2D& field,
     const CircularApertureParameters& parameters);
+
+BinaryMaskDiagnostics applyEllipticalAperture(
+    field::ComplexField2D& field,
+    const EllipticalApertureParameters& parameters);
 
 BinaryMaskDiagnostics applyRectangularAperture(
     field::ComplexField2D& field,

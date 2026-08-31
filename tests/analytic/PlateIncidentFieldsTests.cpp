@@ -89,6 +89,9 @@ TEST_CASE("same-side plate branches form a coherent transmission recording pair"
     CHECK(reference.side == holography::PlateIncidenceSide::NegativeLocalZ);
     CHECK(object.incidenceAngleRadians == doctest::Approx(0.0));
     CHECK(reference.incidenceAngleRadians == doctest::Approx(0.0));
+    REQUIRE(object.pathInteractions.size() == 1U);
+    CHECK(object.pathInteractions.front().componentId == "plate");
+    CHECK_FALSE(object.pathInteractions.front().hasOutgoingBeam);
 
     const auto pair = holography::makePlateRecordingPair(
         fields,

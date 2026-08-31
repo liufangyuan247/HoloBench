@@ -105,8 +105,11 @@ reflection side at a placed parallel/coaxial Screen/Probe. General off-axis
 observation resampling remains pending. M8.4 has an editable RGB layout and
 strict per-wavelength pairing, three-channel batch recording/replay, and
 display-only uncalibrated intensity composition. Persisted recording recipes,
-refined upstream spatial fields, and general observation resampling remain
-pending.
+general tilted/folded path and observation resampling, and performance closure
+remain pending. Centred normally incident paths now propagate a sampled field
+through placed ideal lenses, apertures, pinholes, and SLM finite-pixel/dead-space
+transforms; unsupported geometry stays explicit rather than being projected
+onto the coaxial model.
 
 ### M8.1 — Plate-local branch and coordinate contract
 

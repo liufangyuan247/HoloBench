@@ -13,6 +13,16 @@ enum class RecordingBranchRole { Object, Reference };
 enum class PlateIncidenceSide { NegativeLocalZ, PositiveLocalZ };
 enum class PlateRecordingGeometry { Transmission, Reflection };
 
+struct PlatePathInteraction final {
+    std::string componentId;
+    math::Vec3d hitPointMetres {};
+    scene::BeamState incidentBeam;
+    bool hasOutgoingBeam = false;
+    scene::BeamState outgoingBeam;
+
+    bool operator==(const PlatePathInteraction&) const = default;
+};
+
 struct PlateIncidentBranch final {
     RecordingBranchRole role = RecordingBranchRole::Reference;
     PlateIncidenceSide side = PlateIncidenceSide::NegativeLocalZ;
@@ -20,6 +30,9 @@ struct PlateIncidentBranch final {
     math::Vec3d localDirection {};
     double incidenceAngleRadians = 0.0;
     scene::BeamState beam;
+    // Ordered source-to-plate interaction evidence. The plate itself is the
+    // final entry and has no outgoing beam.
+    std::vector<PlatePathInteraction> pathInteractions;
 
     bool operator==(const PlateIncidentBranch&) const = default;
 };

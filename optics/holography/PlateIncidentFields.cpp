@@ -63,6 +63,72 @@ const PlateIncidentBranch& requireBranch(
     return *found;
 }
 
+std::vector<PlatePathInteraction> collectPathInteractions(
+    const scene::BenchTraceGraph& traceGraph,
+    const scene::OpticalInteraction& plateInteraction) {
+    const auto& componentPath
+        = plateInteraction.incidentBeam.provenance.componentPath;
+    if (componentPath.size() < 2U) {
+        throw std::invalid_argument(
+            "plate incident branch has no traced source-to-plate path");
+    }
+
+    std::vector<const scene::OpticalInteraction*> ordered;
+    ordered.reserve(componentPath.size() - 1U);
+    for (std::size_t pathIndex = 1U; pathIndex < componentPath.size();
+         ++pathIndex) {
+        const auto found = std::find_if(
+            traceGraph.interactions.begin(),
+            traceGraph.interactions.end(),
+            [&](const auto& candidate) {
+                const auto& candidatePath
+                    = candidate.incidentBeam.provenance.componentPath;
+                return candidate.componentId == componentPath[pathIndex]
+                    && candidatePath.size() == pathIndex + 1U
+                    && std::equal(
+                        candidatePath.begin(),
+                        candidatePath.end(),
+                        componentPath.begin());
+            });
+        if (found == traceGraph.interactions.end()) {
+            throw std::invalid_argument(
+                "plate incident branch path is missing interaction evidence");
+        }
+        ordered.push_back(&*found);
+    }
+
+    std::vector<PlatePathInteraction> result;
+    result.reserve(ordered.size());
+    for (std::size_t index = 0; index < ordered.size(); ++index) {
+        const auto& interaction = *ordered[index];
+        PlatePathInteraction evidence {
+            .componentId = interaction.componentId,
+            .hitPointMetres = interaction.hitPointMetres,
+            .incidentBeam = interaction.incidentBeam,
+            .hasOutgoingBeam = false,
+            .outgoingBeam = {},
+        };
+        if (index + 1U < ordered.size()) {
+            const std::uint64_t nextBranchId
+                = ordered[index + 1U]->incidentBeam.provenance.branchId;
+            const auto outgoing = std::find_if(
+                interaction.outgoing.begin(),
+                interaction.outgoing.end(),
+                [nextBranchId](const auto& candidate) {
+                    return candidate.beam.provenance.branchId == nextBranchId;
+                });
+            if (outgoing == interaction.outgoing.end()) {
+                throw std::invalid_argument(
+                    "plate incident branch path has no connected outgoing beam");
+            }
+            evidence.hasOutgoingBeam = true;
+            evidence.outgoingBeam = outgoing->beam;
+        }
+        result.push_back(std::move(evidence));
+    }
+    return result;
+}
+
 } // namespace
 
 bool PlateIncidentFieldSet::isStaleFor(
@@ -110,6 +176,8 @@ PlateIncidentFieldSet collectPlateIncidentFields(
             .incidenceAngleRadians = std::acos(std::clamp(
                 std::abs(localDirection.z), 0.0, 1.0)),
             .beam = interaction.incidentBeam,
+            .pathInteractions = collectPathInteractions(
+                traceGraph, interaction),
         });
     }
 

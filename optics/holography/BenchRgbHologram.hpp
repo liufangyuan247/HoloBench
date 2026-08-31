@@ -57,6 +57,13 @@ selectRgbThinTransmissionPairs(const PlateIncidentFieldSet& fields);
     const std::array<PlateBranchPairSelection, 3>& selections,
     const ThinPlateRecordingOptions& options = {});
 
+[[nodiscard]] RgbThinPlateRecordingResult recordRgbThinTransmissionPlate(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    const std::array<PlateBranchPairSelection, 3>& selections,
+    const ThinPlateRecordingOptions& options,
+    compute::fft::IFftBackend& fftBackend);
+
 // Replays and propagates all three channels independently onto one placed
 // observation component. Colour composition is a separate display operation.
 [[nodiscard]] RgbThinPlateReplayResult replayRgbThinTransmissionToObservation(

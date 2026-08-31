@@ -108,24 +108,25 @@
   revision/staleness, and deterministic centreline routing through placed
   mirrors, splitters, ideal thin lenses, apertures, and screens. The current
   tracer still emits only one centre ray per laser/object-source spectral
-  channel; it does not yet sample the full beam envelope. Spatial filters clip
-  that centreline against the pinhole, SLMs preserve it without applying a
-  sampled mask, probes observe it non-destructively, and plates collect it as
-  recording input. Real-lens components stop explicitly until their persisted
+  channel for global layout. Probes observe it non-destructively, and plates
+  collect it as recording input. Real-lens components stop explicitly until their persisted
   prescription IDs can be resolved into sequential assemblies. Complete
   coherent field merging and detector intensity/phase views remain open. A
   plate can now sample source envelopes into local complex fields and record a
-  same-side thin transmission exposure over an explicit ROI. Mirrors and
-  splitters are reflected in direction, path, phase, and power, but lens phase,
-  spatial-filter diffraction, SLM modulation, and real-lens wave transforms are
-  not yet applied; affected paths carry explicit refinement warnings.
+  same-side thin transmission exposure over an explicit ROI. A centred,
+  normally incident chain now applies angular-spectrum propagation, ideal-lens
+  phase/aperture, circular/rectangular masks, explicit pinholes, and SLM finite
+  pixels/dead space. Tilted, decentered, folded, direction-changing, and real-
+  prescription paths retain explicit unrefined warnings; the placed SLM command
+  is currently uniform zero phase.
 - Plate candidates currently infer object branches from an Object/Wavefront
   Source and reference branches from a Laser Source. They classify same-side
   transmission versus opposite-side reflection geometry and reject
   cross-wavelength/coherence pairs. Thin same-side exposure is now available as
-  a revision-bound recomputable result, but branch-role overrides, persisted
-  recording recipes, volume grating formation, reflection Bragg replay, and
-  spatial-image reconstruction through refined upstream paths remain open.
+  a revision-bound recomputable result. Reflection volume recording/replay and
+  RGB independent-channel recording/replay are operational; branch-role
+  overrides, persisted recording recipes, and general tilted/folded spatial-
+  image paths remain open.
 - Thin transmission replay currently keeps the recorded transverse grid and
   accepts only a parallel, axis-aligned, coaxial Screen/Detector or Field Probe that covers
   the sampled ROI and lies on the transmitted side. It exposes the physical
@@ -138,11 +139,10 @@
   waist curvature. The ROI integrates only intercepted power and cannot claim
   whole-plate exposure outside the explicitly sampled window.
 - Transmission, reflection/Denisyuk, and RGB full-colour buttons load ordinary
-  editable `BenchProject` layouts. Only the transmission preset currently has
-  placed-bench recording and replay physics. The reflection preset validates
-  opposite-side geometry and the RGB preset validates three isolated spectral
-  pairs, but their volume-material and multiplexed recording/reconstruction
-  paths remain incomplete.
+  editable `BenchProject` layouts. All three have placed-bench recording and
+  reconstruction paths in their stated thin/volume/scalar domains. General
+  off-axis resampling, calibrated material/colour response, and persisted
+  recording recipes remain incomplete.
 - The dynamic bench has its own bounded scene-wide undo/redo timeline. The
   separate legacy history still covers lesson-relevant fixed optical-bench,
   Wave Detector, Sampling Debugger, and SLM inputs, but not Real Lens or the

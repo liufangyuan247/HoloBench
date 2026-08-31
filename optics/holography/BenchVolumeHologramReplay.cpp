@@ -215,12 +215,13 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
     }
 
     auto object = samplePlateIncidentField(
-        bench, fields, recording.pair.objectBranchId, sampling);
+        bench, fields, recording.pair.objectBranchId, sampling, fftBackend);
     auto reference = samplePlateIncidentField(
-        bench, fields, recording.pair.referenceBranchId, sampling);
+        bench, fields, recording.pair.referenceBranchId, sampling, fftBackend);
     auto replay = replayBranchId == recording.pair.referenceBranchId
         ? reference
-        : samplePlateIncidentField(bench, fields, replayBranchId, sampling);
+        : samplePlateIncidentField(
+            bench, fields, replayBranchId, sampling, fftBackend);
     requireResolvedCarrier(object, "recorded object");
     requireResolvedCarrier(reference, "recorded reference");
     requireResolvedCarrier(replay, "replay illumination");

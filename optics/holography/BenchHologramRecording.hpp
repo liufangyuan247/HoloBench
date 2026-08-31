@@ -48,12 +48,22 @@ struct ThinPlateRecordingResult final {
 
 // Records the thin transmission response from two branches that physically hit
 // the same placed plate. Opposite-side reflection geometry is deliberately
-// rejected here and is handled by the volume-reflection path.
+// rejected here and is handled by the volume-reflection path. The default
+// overload retains direct source-envelope sampling; product recording passes
+// a validated FFT backend to the refinement overload below.
 [[nodiscard]] ThinPlateRecordingResult recordThinTransmissionPlate(
     const scene::BenchScene& bench,
     const PlateIncidentFieldSet& fields,
     std::uint64_t objectBranchId,
     std::uint64_t referenceBranchId,
     const ThinPlateRecordingOptions& options = {});
+
+[[nodiscard]] ThinPlateRecordingResult recordThinTransmissionPlate(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    std::uint64_t objectBranchId,
+    std::uint64_t referenceBranchId,
+    const ThinPlateRecordingOptions& options,
+    compute::fft::IFftBackend& fftBackend);
 
 } // namespace holobench::optics::holography

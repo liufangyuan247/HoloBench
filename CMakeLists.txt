@@ -108,7 +108,10 @@ add_library(holobench_optics STATIC
 )
 add_library(HoloBench::Optics ALIAS holobench_optics)
 target_include_directories(holobench_optics PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(holobench_optics PUBLIC HoloBench::Core)
+target_link_libraries(holobench_optics PUBLIC
+    HoloBench::Core
+    HoloBench::Compute
+)
 target_compile_features(holobench_optics PUBLIC cxx_std_20)
 holobench_set_warnings(holobench_optics)
 

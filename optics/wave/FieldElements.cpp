@@ -72,6 +72,37 @@ BinaryMaskDiagnostics applyCircularAperture(
     });
 }
 
+BinaryMaskDiagnostics applyEllipticalAperture(
+    field::ComplexField2D& field,
+    const EllipticalApertureParameters& parameters) {
+    requireFinite(
+        parameters.halfWidthMetres,
+        "elliptical aperture half-width must be finite");
+    requireFinite(
+        parameters.halfHeightMetres,
+        "elliptical aperture half-height must be finite");
+    requireFinite(
+        parameters.centerXMetres,
+        "elliptical aperture center X must be finite");
+    requireFinite(
+        parameters.centerYMetres,
+        "elliptical aperture center Y must be finite");
+    if (parameters.halfWidthMetres <= 0.0
+        || parameters.halfHeightMetres <= 0.0) {
+        throw std::invalid_argument(
+            "elliptical aperture half-sizes must be positive");
+    }
+    return applyBinaryMask(field, [&](double xMetres, double yMetres) {
+        const double x = finiteCoordinateOffset(
+            xMetres, parameters.centerXMetres)
+            / parameters.halfWidthMetres;
+        const double y = finiteCoordinateOffset(
+            yMetres, parameters.centerYMetres)
+            / parameters.halfHeightMetres;
+        return std::hypot(x, y) <= 1.0;
+    });
+}
+
 BinaryMaskDiagnostics applyRectangularAperture(
     field::ComplexField2D& field,
     const RectangularApertureParameters& parameters) {

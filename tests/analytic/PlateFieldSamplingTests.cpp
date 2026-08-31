@@ -6,6 +6,7 @@
 #include <numbers>
 #include <stdexcept>
 
+#include "compute/fft/CpuFftBackend.hpp"
 #include "optics/holography/PlateFieldSampling.hpp"
 #include "optics/ray/DynamicBenchTracer.hpp"
 
@@ -51,6 +52,50 @@ scene::BenchScene singleBranchBench(
     plate.parameters = plateParameters;
     bench.add(std::move(plate));
     return bench;
+}
+
+scene::BenchScene coaxialElementBench(
+    scene::BenchComponent element,
+    double wavelengthMetres = 532e-9,
+    double beamRadiusMetres = 0.003) {
+    scene::BenchScene bench;
+    auto source = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource, "reference");
+    source.transform.translationMetres.z = -0.1;
+    auto sourceParameters = std::get<scene::LaserSourceParameters>(
+        source.parameters);
+    sourceParameters.beamRadiusMetres = beamRadiusMetres;
+    sourceParameters.channels = {{
+        .wavelengthMetres = wavelengthMetres,
+        .powerWatts = 0.4,
+        .coherenceId = "recording",
+    }};
+    source.parameters = sourceParameters;
+    bench.add(std::move(source));
+
+    element.transform.translationMetres.z = -0.05;
+    bench.add(std::move(element));
+
+    auto plate = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::HolographicPlate, "plate");
+    auto plateParameters = std::get<scene::HolographicPlateParameters>(
+        plate.parameters);
+    plateParameters.widthMetres = 0.012;
+    plateParameters.heightMetres = 0.012;
+    plate.parameters = plateParameters;
+    bench.add(std::move(plate));
+    return bench;
+}
+
+holography::PlateFieldSamplingOptions coaxialSampling(
+    std::size_t samples = 128U) {
+    return {
+        .sampleWidth = samples,
+        .sampleHeight = samples,
+        .refractiveIndex = 1.0,
+        .extentWidthMetres = 0.012,
+        .extentHeightMetres = 0.012,
+    };
 }
 
 holography::PlateIncidentFieldSet incidentFields(
@@ -266,4 +311,127 @@ TEST_CASE("plate sampling rejects stale evidence invalid grids and unknown branc
         static_cast<void>(holography::samplePlateIncidentField(
             bench, currentFields, 999999U)),
         std::invalid_argument);
+}
+
+TEST_CASE("coaxial placed aperture clips the propagated plate field with analytic power") {
+    auto aperture = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::Aperture, "aperture");
+    auto parameters = std::get<scene::ApertureParameters>(
+        aperture.parameters);
+    parameters.shape = scene::ApertureShape::Circular;
+    parameters.widthMetres = 0.002;
+    parameters.heightMetres = 0.002;
+    aperture.parameters = parameters;
+    const auto bench = coaxialElementBench(std::move(aperture));
+    const auto fields = incidentFields(bench);
+    const auto branchId = fields.branches.front().beam.provenance.branchId;
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto sampled = holography::samplePlateIncidentField(
+        bench, fields, branchId, coaxialSampling(), fft);
+
+    CHECK(sampled.diagnostics.appliedCoaxialWavePath);
+    CHECK(sampled.diagnostics.appliedWaveComponentIds
+        == std::vector<std::string> {"aperture"});
+    std::size_t transmitted = 0U;
+    for (std::size_t y = 0; y < sampled.field.height(); ++y) {
+        for (std::size_t x = 0; x < sampled.field.width(); ++x) {
+            if (std::hypot(
+                    sampled.field.xCoordinateMetres(x),
+                    sampled.field.yCoordinateMetres(y))
+                <= 0.001) {
+                ++transmitted;
+            }
+        }
+    }
+    const double expectedPower = 0.4
+        / (std::numbers::pi * 0.003 * 0.003)
+        * static_cast<double>(transmitted)
+        * sampled.field.pitchXMetres() * sampled.field.pitchYMetres();
+    CHECK(sampled.diagnostics.integratedPowerWatts
+        == doctest::Approx(expectedPower).epsilon(1e-4));
+}
+
+TEST_CASE("coaxial placed thin lens creates a sampled focal-plane concentration") {
+    auto lens = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::IdealThinLens, "lens");
+    auto parameters = std::get<scene::IdealThinLensParameters>(lens.parameters);
+    parameters.focalLengthMetres = 0.05;
+    parameters.clearApertureDiameterMetres = 0.006;
+    lens.parameters = parameters;
+    const auto bench = coaxialElementBench(std::move(lens), 10e-6);
+    const auto fields = incidentFields(bench);
+    const auto branchId = fields.branches.front().beam.provenance.branchId;
+    const auto baseline = holography::samplePlateIncidentField(
+        bench, fields, branchId, coaxialSampling(256U));
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto focused = holography::samplePlateIncidentField(
+        bench, fields, branchId, coaxialSampling(256U), fft);
+
+    REQUIRE(focused.diagnostics.appliedCoaxialWavePath);
+    CHECK(std::find(
+        focused.diagnostics.appliedWaveComponentIds.begin(),
+        focused.diagnostics.appliedWaveComponentIds.end(),
+        "lens") != focused.diagnostics.appliedWaveComponentIds.end());
+    const std::size_t center = focused.field.width() / 2U;
+    CHECK(std::norm(focused.field.at(center, center))
+        > 10.0 * std::norm(baseline.field.at(center, center)));
+}
+
+TEST_CASE("coaxial placed SLM applies finite active pixels and dead space") {
+    auto device = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::SpatialLightModulator, "slm");
+    auto parameters = std::get<scene::SpatialLightModulatorParameters>(
+        device.parameters);
+    parameters.widthMetres = 0.008;
+    parameters.heightMetres = 0.008;
+    parameters.pixelWidth = 8U;
+    parameters.pixelHeight = 8U;
+    parameters.fillFactor = 0.5;
+    device.parameters = parameters;
+    const auto bench = coaxialElementBench(std::move(device), 532e-9, 0.005);
+    const auto fields = incidentFields(bench);
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto sampled = holography::samplePlateIncidentField(
+        bench,
+        fields,
+        fields.branches.front().beam.provenance.branchId,
+        coaxialSampling(256U),
+        fft);
+
+    REQUIRE(sampled.diagnostics.appliedCoaxialWavePath);
+    CHECK(sampled.diagnostics.appliedWaveComponentIds
+        == std::vector<std::string> {"slm"});
+    const double expectedPower = 0.4
+        * (0.008 * 0.008 * 0.25)
+        / (std::numbers::pi * 0.005 * 0.005);
+    CHECK(sampled.diagnostics.integratedPowerWatts
+        == doctest::Approx(expectedPower).epsilon(0.08));
+}
+
+TEST_CASE("tilted local element remains explicit unrefined evidence") {
+    auto aperture = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::Aperture, "tilted-aperture");
+    constexpr double angle = 0.1;
+    aperture.transform.localXAxisInWorld = {
+        std::cos(angle), 0.0, -std::sin(angle)};
+    aperture.transform.localYAxisInWorld = {0.0, 1.0, 0.0};
+    aperture.transform.localZAxisInWorld = {
+        std::sin(angle), 0.0, std::cos(angle)};
+    const auto bench = coaxialElementBench(std::move(aperture));
+    const auto fields = incidentFields(bench);
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto sampled = holography::samplePlateIncidentField(
+        bench,
+        fields,
+        fields.branches.front().beam.provenance.branchId,
+        coaxialSampling(),
+        fft);
+
+    CHECK_FALSE(sampled.diagnostics.appliedCoaxialWavePath);
+    CHECK(std::any_of(
+        sampled.diagnostics.warnings.begin(),
+        sampled.diagnostics.warnings.end(),
+        [](const std::string& warning) {
+            return warning.find("refinement skipped") != std::string::npos;
+        }));
 }

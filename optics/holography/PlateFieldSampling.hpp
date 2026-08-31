@@ -8,6 +8,10 @@
 #include "core/field/ComplexField2D.hpp"
 #include "optics/holography/PlateIncidentFields.hpp"
 
+namespace holobench::compute::fft {
+class IFftBackend;
+}
+
 namespace holobench::optics::holography {
 
 struct PlateFieldSamplingOptions final {
@@ -38,6 +42,8 @@ struct PlateFieldSamplingDiagnostics final {
     bool carrierSampled = false;
     bool supportTouchesPlateBoundary = false;
     bool usesApproximateSourceEnvelope = false;
+    bool appliedCoaxialWavePath = false;
+    std::vector<std::string> appliedWaveComponentIds;
     std::vector<std::string> warnings;
 };
 
@@ -59,12 +65,23 @@ struct SampledPlateIncidentField final {
 // local analysis window integrates only the power that it actually intercepts.
 // Mirrors and ideal splitters are already represented by direction, phase/path,
 // and branch power.
-// Wave-level effects of lenses, apertures, spatial filters, and SLMs are
-// reported explicitly until their local-plane adapters refine this field.
+// This overload intentionally returns the direct centreline/source-envelope
+// evidence and reports every component that still needs wave refinement.
 [[nodiscard]] SampledPlateIncidentField samplePlateIncidentField(
     const scene::BenchScene& bench,
     const PlateIncidentFieldSet& fields,
     std::uint64_t branchId,
     const PlateFieldSamplingOptions& options = {});
+
+// Refines a supported coaxial, normally incident component path with sampled
+// propagation and local thin-element transforms. Unsupported tilted,
+// decentered, folded, or prescription-lens paths fall back to the explicit
+// centreline-envelope result and retain refinement warnings.
+[[nodiscard]] SampledPlateIncidentField samplePlateIncidentField(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    std::uint64_t branchId,
+    const PlateFieldSamplingOptions& options,
+    compute::fft::IFftBackend& fftBackend);
 
 } // namespace holobench::optics::holography

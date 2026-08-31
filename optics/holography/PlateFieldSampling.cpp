@@ -9,6 +9,11 @@
 #include <string_view>
 #include <utility>
 
+#include "compute/fft/IFftBackend.hpp"
+#include "compute/propagation/AngularSpectrumPropagator.hpp"
+#include "optics/slm/SpatialLightModulator.hpp"
+#include "optics/wave/FieldElements.hpp"
+
 namespace holobench::optics::holography {
 namespace {
 
@@ -137,6 +142,19 @@ bool requiresWaveRefinement(scene::BenchComponentKind kind) noexcept {
     }
 }
 
+bool hasWaveRefinementComponent(
+    const scene::BenchScene& bench,
+    const PlateIncidentBranch& branch) {
+    return std::any_of(
+        branch.beam.provenance.componentPath.begin(),
+        branch.beam.provenance.componentPath.end(),
+        [&bench](const auto& componentId) {
+            const auto* component = bench.find(componentId);
+            return component != nullptr
+                && requiresWaveRefinement(component->kind);
+        });
+}
+
 void appendRefinementWarnings(
     const scene::BenchScene& bench,
     const PlateIncidentBranch& branch,
@@ -158,6 +176,250 @@ std::complex<double> finitePhasor(double phaseRadians) {
     return std::polar(
         1.0,
         std::remainder(phaseRadians, 2.0 * std::numbers::pi));
+}
+
+bool approximatelyAligned(math::Vec3d first, math::Vec3d second) {
+    constexpr double kAlignmentTolerance = 1e-10;
+    return math::dot(math::normalized(first), math::normalized(second))
+        >= 1.0 - kAlignmentTolerance;
+}
+
+bool supportsCoaxialWavePath(
+    const scene::BenchScene& bench,
+    const scene::BenchComponent& source,
+    const PlateIncidentBranch& branch,
+    std::string& reason) {
+    constexpr double kCentredToleranceMetres = 1e-10;
+    if (branch.pathInteractions.empty()) {
+        reason = "ordered source-to-plate interaction evidence is unavailable";
+        return false;
+    }
+    const math::Vec3d pathDirection = source.transform.localZAxisInWorld;
+    for (const auto& interaction : branch.pathInteractions) {
+        const auto* component = bench.find(interaction.componentId);
+        if (component == nullptr) {
+            reason = "a traced component no longer exists";
+            return false;
+        }
+        if (component->kind == scene::BenchComponentKind::RealLensAssembly) {
+            reason = "real-lens prescription wave propagation is not available";
+            return false;
+        }
+        if (!approximatelyAligned(
+                interaction.incidentBeam.direction, pathDirection)) {
+            reason = "folded or direction-changing paths require plane resampling";
+            return false;
+        }
+        if (interaction.hasOutgoingBeam
+            && !approximatelyAligned(
+                interaction.outgoingBeam.direction, pathDirection)) {
+            reason = "a component changes the centre-ray direction";
+            return false;
+        }
+        if (!approximatelyAligned(
+                component->transform.localZAxisInWorld, pathDirection)
+            || !approximatelyAligned(
+                component->transform.localXAxisInWorld,
+                source.transform.localXAxisInWorld)
+            || !approximatelyAligned(
+                component->transform.localYAxisInWorld,
+                source.transform.localYAxisInWorld)) {
+            reason = "a local optical plane is tilted or rotated relative to the sampled path";
+            return false;
+        }
+        const auto localHit = math::transformPointWorldToLocal(
+            component->transform, interaction.hitPointMetres);
+        if (std::abs(localHit.x) > kCentredToleranceMetres
+            || std::abs(localHit.y) > kCentredToleranceMetres) {
+            reason = "a local optical element is decentered from the traced axis";
+            return false;
+        }
+    }
+    return true;
+}
+
+void applyCoaxialElement(
+    field::ComplexField2D& value,
+    const scene::BenchComponent& component,
+    const PlateFieldSamplingOptions& options,
+    PlateFieldSamplingDiagnostics& diagnostics) {
+    const double centreX = -options.centreXMetres;
+    const double centreY = -options.centreYMetres;
+    switch (component.kind) {
+    case scene::BenchComponentKind::IdealThinLens: {
+        const auto& parameters = std::get<scene::IdealThinLensParameters>(
+            component.parameters);
+        static_cast<void>(wave::applyCircularAperture(value, {
+            .radiusMetres = 0.5 * parameters.clearApertureDiameterMetres,
+            .centerXMetres = centreX,
+            .centerYMetres = centreY,
+        }));
+        static_cast<void>(wave::applyIdealThinLensPhase(value, {
+            .focalLengthMetres = parameters.focalLengthMetres,
+            .centerXMetres = centreX,
+            .centerYMetres = centreY,
+        }));
+        break;
+    }
+    case scene::BenchComponentKind::Aperture: {
+        const auto& parameters = std::get<scene::ApertureParameters>(
+            component.parameters);
+        if (parameters.shape == scene::ApertureShape::Circular) {
+            static_cast<void>(wave::applyEllipticalAperture(value, {
+                .halfWidthMetres = 0.5 * parameters.widthMetres,
+                .halfHeightMetres = 0.5 * parameters.heightMetres,
+                .centerXMetres = centreX,
+                .centerYMetres = centreY,
+            }));
+        } else {
+            static_cast<void>(wave::applyRectangularAperture(value, {
+                .halfWidthMetres = 0.5 * parameters.widthMetres,
+                .halfHeightMetres = 0.5 * parameters.heightMetres,
+                .centerXMetres = centreX,
+                .centerYMetres = centreY,
+            }));
+        }
+        break;
+    }
+    case scene::BenchComponentKind::SpatialFilter: {
+        const auto& parameters = std::get<scene::SpatialFilterParameters>(
+            component.parameters);
+        static_cast<void>(wave::applyCircularAperture(value, {
+            .radiusMetres = 0.5 * parameters.pinholeDiameterMetres,
+            .centerXMetres = centreX,
+            .centerYMetres = centreY,
+        }));
+        diagnostics.warnings.push_back(
+            component.id
+            + ": modeled as its explicit pinhole plane; the compound focusing objective requires separately placed lenses");
+        break;
+    }
+    case scene::BenchComponentKind::SpatialLightModulator: {
+        const auto& parameters
+            = std::get<scene::SpatialLightModulatorParameters>(
+                component.parameters);
+        slm::PixelatedSlmParameters slmParameters;
+        slmParameters.pixelColumns = parameters.pixelWidth;
+        slmParameters.pixelRows = parameters.pixelHeight;
+        slmParameters.pixelPitchXMetres = parameters.widthMetres
+            / static_cast<double>(parameters.pixelWidth);
+        slmParameters.pixelPitchYMetres = parameters.heightMetres
+            / static_cast<double>(parameters.pixelHeight);
+        slmParameters.fillFactorX = parameters.fillFactor;
+        slmParameters.fillFactorY = parameters.fillFactor;
+        slmParameters.centerXMetres = centreX;
+        slmParameters.centerYMetres = centreY;
+        slmParameters.mode = slm::ModulationMode::Phase;
+        static_cast<void>(slm::applyUniformPixelatedSlm(
+            value, slmParameters, 0.0));
+        diagnostics.warnings.push_back(
+            component.id
+            + ": active-pixel bounds and dead space are applied with a uniform zero-phase command");
+        break;
+    }
+    default:
+        return;
+    }
+    diagnostics.appliedWaveComponentIds.push_back(component.id);
+}
+
+SampledPlateIncidentField sampleCoaxialWavePath(
+    const scene::BenchScene& bench,
+    const PlateIncidentBranch& branch,
+    const PlateFieldSamplingOptions& options,
+    compute::fft::IFftBackend& fftBackend,
+    SampledPlateIncidentField baseline) {
+    const auto& source = requireSource(bench, branch);
+    const double extentWidth = baseline.diagnostics.sampledExtentWidthMetres;
+    const double extentHeight = baseline.diagnostics.sampledExtentHeightMetres;
+    field::ComplexField2D propagated(
+        options.sampleWidth,
+        options.sampleHeight,
+        extentWidth / static_cast<double>(options.sampleWidth),
+        extentHeight / static_cast<double>(options.sampleHeight),
+        branch.beam.wavelengthMetres,
+        options.refractiveIndex);
+
+    const double amplitudeScale = std::sqrt(
+        branch.beam.powerWatts / sourceNormalizationAreaSquareMetres(source));
+    const auto sourcePhase = finitePhasor(branch.beam.phaseRadians);
+    for (std::size_t y = 0; y < propagated.height(); ++y) {
+        for (std::size_t x = 0; x < propagated.width(); ++x) {
+            const auto envelope = sourceEnvelope(
+                source,
+                propagated.xCoordinateMetres(x) + options.centreXMetres,
+                propagated.yCoordinateMetres(y) + options.centreYMetres);
+            propagated.at(x, y) = envelope.amplitude
+                * amplitudeScale * sourcePhase;
+        }
+    }
+
+    compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
+    math::Vec3d previousPoint = source.transform.translationMetres;
+    for (const auto& interaction : branch.pathInteractions) {
+        const double distance = math::length(
+            interaction.hitPointMetres - previousPoint);
+        static_cast<void>(propagator.propagateInPlace(propagated, distance));
+        const auto* component = bench.find(interaction.componentId);
+        if (component == nullptr) {
+            throw std::logic_error(
+                "coaxial path component disappeared during sampling");
+        }
+        if (component->kind != scene::BenchComponentKind::HolographicPlate) {
+            applyCoaxialElement(
+                propagated, *component, options, baseline.diagnostics);
+        }
+        previousPoint = interaction.hitPointMetres;
+    }
+
+    baseline.field = std::move(propagated);
+    baseline.diagnostics.appliedCoaxialWavePath = true;
+    baseline.diagnostics.usesApproximateSourceEnvelope = false;
+    baseline.diagnostics.illuminatedSampleCount = 0U;
+    baseline.diagnostics.integratedPowerWatts = 0.0;
+    baseline.diagnostics.supportTouchesPlateBoundary = false;
+    baseline.diagnostics.warnings.erase(
+        std::remove_if(
+            baseline.diagnostics.warnings.begin(),
+            baseline.diagnostics.warnings.end(),
+            [](const std::string& warning) {
+                return warning.find(
+                    "sampled wave transform is not yet applied")
+                    != std::string::npos
+                    || warning.find(
+                        "propagated waist curvature awaits local-plane refinement")
+                    != std::string::npos
+                    || warning.find(
+                        "incident source support reaches the sampled plate boundary")
+                    != std::string::npos;
+            }),
+        baseline.diagnostics.warnings.end());
+
+    const double pixelArea = baseline.field.pitchXMetres()
+        * baseline.field.pitchYMetres();
+    const double incidenceCosine = std::abs(branch.localDirection.z);
+    for (std::size_t y = 0; y < baseline.field.height(); ++y) {
+        for (std::size_t x = 0; x < baseline.field.width(); ++x) {
+            const double intensity = std::norm(baseline.field.at(x, y));
+            baseline.diagnostics.integratedPowerWatts += intensity
+                * pixelArea * incidenceCosine;
+            if (intensity > 0.0) {
+                ++baseline.diagnostics.illuminatedSampleCount;
+            }
+            if (isBoundarySample(
+                    x, y, baseline.field.width(), baseline.field.height())
+                && intensity > kBoundaryEnvelopeThreshold
+                    * kBoundaryEnvelopeThreshold * amplitudeScale
+                    * amplitudeScale) {
+                baseline.diagnostics.supportTouchesPlateBoundary = true;
+            }
+        }
+    }
+    if (baseline.diagnostics.supportTouchesPlateBoundary) {
+        baseline.diagnostics.warnings.emplace_back(
+            "propagated field reaches the sampled boundary; periodic FFT wrap may contaminate this window");
+    }
+    return baseline;
 }
 
 } // namespace
@@ -335,6 +597,33 @@ SampledPlateIncidentField samplePlateIncidentField(
         .field = std::move(sampled),
         .diagnostics = std::move(diagnostics),
     };
+}
+
+SampledPlateIncidentField samplePlateIncidentField(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    std::uint64_t branchId,
+    const PlateFieldSamplingOptions& options,
+    compute::fft::IFftBackend& fftBackend) {
+    auto baseline = samplePlateIncidentField(
+        bench, fields, branchId, options);
+    const auto& branch = requireBranch(fields, branchId);
+    if (!hasWaveRefinementComponent(bench, branch)) {
+        return baseline;
+    }
+    const auto& source = requireSource(bench, branch);
+    std::string reason;
+    if (!supportsCoaxialWavePath(bench, source, branch, reason)) {
+        baseline.diagnostics.warnings.push_back(
+            "coaxial wave refinement skipped: " + reason);
+        return baseline;
+    }
+    return sampleCoaxialWavePath(
+        bench,
+        branch,
+        options,
+        fftBackend,
+        std::move(baseline));
 }
 
 } // namespace holobench::optics::holography

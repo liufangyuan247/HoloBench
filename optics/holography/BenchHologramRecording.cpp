@@ -27,21 +27,13 @@ field::ComplexField2D makeRelativeField(
     return result;
 }
 
-} // namespace
-
-bool ThinPlateRecordingResult::isStaleFor(
-    const scene::BenchScene& bench) const noexcept {
-    return sourceRevision != bench.revision()
-        || objectIncident.isStaleFor(bench)
-        || referenceIncident.isStaleFor(bench);
-}
-
-ThinPlateRecordingResult recordThinTransmissionPlate(
+ThinPlateRecordingResult recordThinTransmissionPlateImpl(
     const scene::BenchScene& bench,
     const PlateIncidentFieldSet& fields,
     std::uint64_t objectBranchId,
     std::uint64_t referenceBranchId,
-    const ThinPlateRecordingOptions& options) {
+    const ThinPlateRecordingOptions& options,
+    compute::fft::IFftBackend* fftBackend) {
     if (fields.isStaleFor(bench)) {
         throw std::invalid_argument(
             "thin-plate recording requires current incident branch evidence");
@@ -52,10 +44,14 @@ ThinPlateRecordingResult recordThinTransmissionPlate(
         throw std::invalid_argument(
             "thin-amplitude plate recording requires same-side transmission geometry");
     }
-    auto object = samplePlateIncidentField(
-        bench, fields, objectBranchId, options.sampling);
-    auto reference = samplePlateIncidentField(
-        bench, fields, referenceBranchId, options.sampling);
+    auto sample = [&](std::uint64_t branchId) {
+        return fftBackend == nullptr
+            ? samplePlateIncidentField(bench, fields, branchId, options.sampling)
+            : samplePlateIncidentField(
+                bench, fields, branchId, options.sampling, *fftBackend);
+    };
+    auto object = sample(objectBranchId);
+    auto reference = sample(referenceBranchId);
 
     ThinPlateRecordingDiagnostics diagnostics;
     diagnostics.fringeFrequencyXCyclesPerMetre
@@ -107,6 +103,46 @@ ThinPlateRecordingResult recordThinTransmissionPlate(
         .hologram = std::move(hologram),
         .diagnostics = diagnostics,
     };
+}
+
+} // namespace
+
+bool ThinPlateRecordingResult::isStaleFor(
+    const scene::BenchScene& bench) const noexcept {
+    return sourceRevision != bench.revision()
+        || objectIncident.isStaleFor(bench)
+        || referenceIncident.isStaleFor(bench);
+}
+
+ThinPlateRecordingResult recordThinTransmissionPlate(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    std::uint64_t objectBranchId,
+    std::uint64_t referenceBranchId,
+    const ThinPlateRecordingOptions& options) {
+    return recordThinTransmissionPlateImpl(
+        bench,
+        fields,
+        objectBranchId,
+        referenceBranchId,
+        options,
+        nullptr);
+}
+
+ThinPlateRecordingResult recordThinTransmissionPlate(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    std::uint64_t objectBranchId,
+    std::uint64_t referenceBranchId,
+    const ThinPlateRecordingOptions& options,
+    compute::fft::IFftBackend& fftBackend) {
+    return recordThinTransmissionPlateImpl(
+        bench,
+        fields,
+        objectBranchId,
+        referenceBranchId,
+        options,
+        &fftBackend);
 }
 
 } // namespace holobench::optics::holography

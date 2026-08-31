@@ -19,6 +19,12 @@ roadmap. For the current repository state and roadmap, see
 [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and
 [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
 
+For supported centred, normally incident paths, placed ideal lenses,
+apertures, pinholes, and SLM finite pixels/dead space now act on a propagated
+local complex field before plate recording. Tilted, decentered, folded, and
+real-prescription paths remain visibly unrefined until validated plane
+resampling is implemented.
+
 ## M1 Features
 
 - **Optical Sources & Elements**: Point Source, Collimated Source, Ideal Thin Lens, Circular Aperture, Screen / Detector Plane, Planar Mirror, and Planar Dielectric Interface.
@@ -167,7 +173,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (474 deterministic CPU/application cases,
+Standard dev build and test suite (480 deterministic CPU/application cases,
 including the OpenGL GPU test executable):
 
 ```powershell
@@ -176,7 +182,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 472/472 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 478/478 tests passing):
 
 ```powershell
 cmake --preset core-ci
