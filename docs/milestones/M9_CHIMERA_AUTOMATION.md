@@ -1,0 +1,104 @@
+# M9 — Automated CHIMERA Construction and Reconstruction Simulation
+
+## Goal
+
+Build an automation layer on the same optical-bench and holography contracts so
+HoloBench can instantiate, validate, simulate, and sweep a CHIMERA-like RGB
+holographic printer. The first release is a virtual printer and reconstruction
+simulator, not a claim to reproduce proprietary CHIMERA optics or calibrated
+hardware.
+
+## User-visible outcome
+
+A user provides a printing specification—scene/views, hogel pitch and count,
+RGB wavelengths, target field of view, SLM sampling, candidate lenses,
+reference geometry, plate/material parameters, and exposure policy. HoloBench
+then:
+
+1. creates an editable ordinary M7 bench from a versioned construction recipe;
+2. places and configures RGB lasers, SLM/object paths, relay/Fourier optics,
+   apertures, mirrors/splitters, reference paths, and holographic material;
+3. generates the angular/hogel data and SLM commands;
+4. simulates the per-hogel RGB exposure sequence;
+5. reconstructs selected hogels or a bounded printed region under chosen replay
+   illumination; and
+6. reports geometric, sampling, NA/FOV, overlap, Bragg, exposure, colour, and
+   performance limitations.
+
+Automation output remains fully editable. It may never create a hidden special
+solver graph that cannot be represented by the shared bench document.
+
+## Scope
+
+### C9.1 — Versioned construction recipe
+
+- Stable schema for target FOV, hogel geometry, RGB sources, SLM, relay optics,
+  reference beam, plate/material, exposure, and reconstruction requests.
+- Deterministic recipe-to-bench compiler with component/branch provenance.
+- Explicit constraint report: feasible, warning, or unsupported with reasons.
+
+### C9.2 — Hogel and angular-image pipeline
+
+- Camera/view sampling and perspective-image inputs.
+- Mapping from hogel angular samples to SLM commands using ideal optics first.
+- Sampling, aliasing, NA, PSF, angular overlap, and field-window diagnostics.
+- Deterministic data products with hashes and units.
+
+### C9.3 — Virtual printing sequence
+
+- Stage/hogel traversal order.
+- Per-hogel and per-wavelength SLM command, laser/reference state, and exposure
+  event timeline.
+- Reuse M8 RGB plate recording; no separate “printer hologram” physics.
+- Bounded preview for one hogel/region and batch/offline mode for larger jobs.
+
+### C9.4 — Reconstruction simulation
+
+- Select replay wavelength, spectrum, angle, pupil/view position, and screen or
+  camera plane.
+- Reconstruct directional views from one hogel and a bounded multi-hogel
+  region, then report view separation/cross-talk and spatial/angular resolution.
+- Keep scalar/high-NA/material limitations explicit.
+
+### C9.5 — Parameter sweeps and calibration-ready interfaces
+
+- Automated sweeps over hogel pitch, FOV, NA, SLM sampling, focal length,
+  reference angle, exposure, thickness, and shrinkage.
+- Machine-readable metrics and deterministic best-candidate selection under
+  user-stated constraints; no opaque “AI optimized” result.
+- Versioned hooks for later measured SLM/camera/stage/material LUTs. Hardware
+  control is outside this virtual milestone.
+
+## Architecture rules
+
+- `ChimeraRecipe` compiles to an ordinary `BenchDocument` plus explicit batch
+  jobs. Recipe and generated component provenance are stable and inspectable.
+- `HogelDataset` separates source content, angular samples, SLM commands, and
+  validation metrics.
+- `ExposurePlan` is a deterministic event list, not direct device control.
+- `ReconstructionJob` consumes M8 recorded state/recipes and produces
+  observation fields/images with full parameter provenance.
+- Batch execution uses bounded memory, cancellation, progress, deterministic
+  seeds/order, and resumable artifacts.
+- The automation layer calls public M7/M8 physics APIs and cannot duplicate or
+  weaken their validation.
+
+## Validation and acceptance
+
+- [ ] A canonical recipe deterministically builds a complete editable RGB
+  CHIMERA-like bench with no hidden components.
+- [ ] Ideal SLM-position-to-angle mapping agrees with the analytic Fourier-lens
+  oracle, and sampling/NA violations are reported.
+- [ ] A single-hogel RGB exposure plan reuses the M8 recording path and is
+  byte-stable across supported compilers.
+- [ ] Single-hogel reconstruction produces the requested directional samples
+  within stated scalar/paraxial tolerances.
+- [ ] A bounded multi-hogel example reconstructs at least two distinguishable
+  viewpoints and reports cross-talk/resolution evidence.
+- [ ] Parameter sweeps are deterministic and retain every constraint/metric
+  used to select a candidate.
+- [ ] Batch cancellation/resume and corrupt-artifact rejection are tested.
+- [ ] Named CPU/GPU performance and memory budgets, renderer smoke, and
+  Windows/Linux CI pass.
+
+Completion tag: `m9-chimera-automation`.

@@ -100,8 +100,14 @@
   stores incidence angle, refractive indices, name, and provenance, but not
   recomputable rays/results; it does not model Fresnel power, polarization,
   roughness, absorption, dispersion, or multilayer coatings.
+- The current “Optical Bench” is a fixed point-source/lens/aperture/screen
+  reference scene. Mirrors and interfaces exist as isolated validated
+  primitives, while wave, SLM, and holography are separate fixed parameter
+  panels. There is not yet a unified component library, arbitrary 6-DoF
+  placement, geometric branch/merge graph, freely placed Screen/Probe/Plate,
+  or one complete bench project. M7 explicitly owns that product correction.
 - Undo/redo currently covers lesson-relevant optical-bench, Wave Detector,
-  Sampling Debugger, and SLM inputs. Real Lens and Holography Lab editing are
-  not yet included. There is no autosave, crash recovery, accessibility layer,
-  or Steam integration.
+  Sampling Debugger, and SLM inputs. Real Lens, Holography Lab, and the planned
+  dynamic bench scene are not yet included. There is no autosave, crash
+  recovery, or complete accessibility layer.
 - Hardware control and digital-twin calibration are long-term roadmap modules.

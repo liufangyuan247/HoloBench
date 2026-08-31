@@ -2,9 +2,13 @@
 
 HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator, and a long-term R&D tool for CHIMERA-like holographic printing.
 
-**Milestone status**: **M0-M6** are complete through the validated thin,
-phase-only, RGB H1/H2, and volume/Kogelnik holography workflow. **M7 (Teaching
-Product Alpha)** is active development. For the current repository state and roadmap, see
+**Milestone status**: M1-M6 physics/reference foundations are validated in
+their documented domains. The current application still uses a fixed-axis scene
+and separate experiment panels, so it is not yet the intended optical bench.
+**M7 (Free-form 3D Optical Bench Sandbox)** is the active blocking milestone,
+followed by **M8 (transmission/reflection/RGB holography sandbox)** and **M9
+(automated CHIMERA construction and reconstruction)**. For the current
+repository state and roadmap, see
 [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and
 [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
 
@@ -13,7 +17,7 @@ Product Alpha)** is active development. For the current repository state and roa
 - **Optical Sources & Elements**: Point Source, Collimated Source, Ideal Thin Lens, Circular Aperture, Screen / Detector Plane, Planar Mirror, and Planar Dielectric Interface.
 - **Geometric Ray Tracing**: Deterministic CPU ray-plane intersections, paraxial thin-lens refraction ($1/f = 1/u + 1/v$), specular reflection, Snell's law refraction, and Total Internal Reflection (TIR).
 - **Physical Analysis & Diagnostics**: Real, virtual, and collimated/infinity image plane prediction, Numerical Aperture (NA) cone visualization, and automated warnings for off-axis paraxial approximations and rear-aperture clipping.
-- **Interactive 3D Bench UI**: Orbit/pan/zoom 3D camera, metric world grid, ray segment renderer, `+Z` forward-orientation gizmos for optical components, and Dear ImGui property inspector.
+- **Fixed-axis 3D Reference UI**: Orbit/pan/zoom camera, metric world grid, ray segment renderer, and lens/screen `+Z` gizmos around a fixed point-source/lens/aperture/screen scene. M7 replaces this with a dynamic component sandbox.
 - **Project Serialization**: Versioned JSON document model with semantic and byte-stable round-trip persistence.
 
 ## M2 Features
@@ -118,49 +122,25 @@ Product Alpha)** is active development. For the current repository state and roa
   p95 values are **38.675 / 51.780 / 43.410 ms**, all below the platform-neutral
   150 ms budget with identical checksum `1512.57504282`.
 
-## M7 Teaching Product Alpha (in progress)
+## Active sandbox roadmap
 
-- **Learn mode foundation**: A docked course catalog presents ten stable lesson
-  identities, prerequisite locking, ordered steps, visible objectives, review/
-  reset controls, and a progress file kept separate from physics projects.
-- **Ten shared-physics workflows**: Reflection / Refraction calls the existing
-  mirror and dielectric-interface tracers; Thin Lens and Real / Virtual Images
-  observe the normal optical-bench scene and shared paraxial solver; Diffraction
-  measures the existing Wave Detector result; Fourier Plane, Spatial Filtering,
-  and NA / PSF observe the shared Sampling Debugger; Coherence / Interference
-  observes the existing SLM mutual-coherence result; Holography and H1/H2
-  Advanced observe the normal RGB Holography Lab pipeline, physical replay-order
-  diagnostics, and signed transplane placement. No lesson owns a duplicate
-  physics model or project format.
-- **Packaged English/Chinese UI font**: English and `zh-Hans` resources resolve
-  from stable message keys with English fallback. Noto Sans CJK SC and its OFL
-  license ship beside the executable; startup never depends on a system font.
-  CI builds a real ImGui atlas and checks every required code point, while the
-  hidden OpenGL smoke submits Chinese text through the rendering backend.
-- **Deterministic edit history**: A capacity-bounded 64-state history covers the
-  optical bench, Wave Detector draft, Sampling Debugger inputs, and SLM draft
-  plus calibration provenance. Undo/redo restores editable inputs through the
-  normal validation paths, leaves numerical Apply/Refresh explicit, and never
-  stores or mutates lesson progress.
-- **Ten ordinary packaged templates**: Every lesson opens versioned
-  project data through a normal Lab surface. Reflection / Refraction has its
-  own strict workbench document and Inspector Load/Save controls; Thin Lens and
-  Real / Virtual Images use ordinary scene projects; the four Fourier/wave
-  lessons share the byte-stable Wave & Sampling Workbench; Coherence /
-  Interference uses its independent format-v2 SLM document with strict v1
-  migration; both Holography lessons use ordinary format-v3 Holography Lab
-  documents with strict v1/v2 migration. Template ID/version provenance survives
-  Lab edits, Save As, and reload. Computed results are never embedded in a
-  template.
-- **Named M7 performance gate**: Eight `teaching/*` CPU-reference scenes run
-  each guided workflow from baseline through the required learner change and
-  shared observation. The executable reports per-scene p50/p95/checksum,
-  enforces platform-neutral budgets, and runs in Windows and Linux CI.
-- **Advanced holography lessons**: Holography requires a real shared H1 result,
-  an explicit H1 real-image view, and correct identification of the physical
-  zero/desired/twin replay. H1/H2 Advanced permits only a real H2 axial move to
-  the H1 image plane and accepts the learner's transplane classification only
-  from a current shared result.
+- **M7 — Free-form 3D Optical Bench**: One dynamic project with a placeable
+  component library, arbitrary rigid transforms, viewport editing, and
+  deterministic branching/merging optical paths. RGB lasers, mirrors,
+  splitters/combiners, lenses, apertures, spatial filters, SLMs, screens,
+  probes, and holographic plates must interact through their actual 3D
+  placement. See [the M7 brief](docs/milestones/M7_OPTICAL_BENCH_SANDBOX.md).
+- **M8 — Holography Sandbox**: Transmission, reflection/Denisyuk, and RGB
+  full-colour hologram recording and reconstruction are driven by coherent
+  branches reaching placed plates. See [the M8 brief](docs/milestones/M8_HOLOGRAPHY_SANDBOX.md).
+- **M9 — CHIMERA Automation**: A versioned recipe compiles to an editable
+  CHIMERA-like bench, generates hogel/angular and SLM data, creates RGB exposure
+  events, and simulates bounded reconstruction. See [the M9 brief](docs/milestones/M9_CHIMERA_AUTOMATION.md).
+
+The existing ten guided panel workflows, templates, localization/font,
+progress, history, and teaching benchmarks remain tested reference assets.
+They are deferred as product UI because fixed controls cannot substitute for
+building the experiment on the shared bench.
 
 ## Physical Assumptions & Limitations (M1)
 

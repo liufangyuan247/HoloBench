@@ -1,14 +1,32 @@
 # Project state
 
-Last updated: 2026-08-31
+Last updated: 2026-09-01
 
 ## Current milestone
 
-**M6 - Holography Core: complete**
+**M1-M6 numerical/reference foundations: validated in their documented domains**
 
-Active development: **M7 - Teaching Product Alpha**
+Active development: **[M7 - Free-form 3D Optical Bench Sandbox](milestones/M7_OPTICAL_BENCH_SANDBOX.md)**
 
-Previous: **M5 - SLM, Coherence & Interference: complete**
+Next: **[M8 - Transmission, reflection, and RGB holography sandbox](milestones/M8_HOLOGRAPHY_SANDBOX.md)**, then **[M9 - automated CHIMERA construction and reconstruction](milestones/M9_CHIMERA_AUTOMATION.md)**
+
+Distribution/store milestones have been removed from the active roadmap.
+
+## Product rebaseline (2026-09-01)
+
+The existing application is not yet the intended optical experiment bench. It
+contains a fixed-axis source/lens/aperture/screen scene plus separate parameter
+panels for wave, Fourier, SLM, and holography pipelines. Those surfaces provide
+validated solver evidence, but they do not let a user freely place, orient,
+split, combine, and observe a complete spatial optical path.
+
+Product completion now requires one unified dynamic 3D bench. M7 delivers the
+component library and branching optical graph; M8 drives transmission,
+reflection, and full-colour hologram recording/reconstruction from the placed
+components; M9 adds recipe-driven CHIMERA-like bench construction, hogel and
+exposure generation, and bounded reconstruction simulation. The former guided
+panel workflows are retained only as regression/reference assets until they are
+rebuilt on the shared bench.
 
 ## Completed
 
@@ -19,11 +37,11 @@ Previous: **M5 - SLM, Coherence & Interference: complete**
   - SDL3 + OpenGL 4.6 Core debug context + Dear ImGui docking workbench.
   - Versioned JSON project document model with semantic and byte-stable round-trip persistence.
 
-- **M1 Geometric Optics & 3D Optical Bench**:
+- **M1 Geometric Optics & fixed-axis 3D reference scene**:
   - **Optical Primitives**: Point source, collimated source, ideal thin lens, circular aperture, detector screen, planar mirror, and planar dielectric interface.
   - **CPU Physics Solvers**: Deterministic ray-plane intersections (forward, backward, parallel, grazing), paraxial thin-lens imaging ($1/f = 1/u + 1/v$), specular reflection, Snell's law refraction, and Total Internal Reflection (TIR).
   - **Image Diagnostics**: Real, virtual, and infinity/collimated image plane evaluation, Numerical Aperture (NA) cone calculation, off-axis paraxial validity warnings, and rear-aperture clipping warnings.
-  - **3D Bench Visualization**: Interactive orbit/pan/zoom camera, metric world grid, dynamic ray segment renderer, `+Z` forward-orientation gizmos for lenses and screens, and Dear ImGui property inspector.
+  - **3D Reference Visualization**: Interactive orbit/pan/zoom camera, metric world grid, dynamic ray segment renderer, and `+Z` gizmos for the fixed lens/screen scene. This is renderer and solver evidence, not the free-form component sandbox required by M7.
   - **Verification & Test Suite**: 92/92 deterministic unit tests passing across `dev` and `core-ci` presets (`ThinLensTests`, `SnellTests`, `GeometricElementsTests`, `NumericalApertureTests`, `BenchTracerTests`, `CameraTests`, `GizmoTests`, `UnitsTests`, `ProjectDocumentTests`, `SceneProjectAdapterTests`).
   - **Cross-platform CI**: GitHub Actions run [33332649845](https://github.com/liufangyuan247/HoloBench/actions/runs/33332649845) passes all four gates: Windows and Ubuntu core build/tests plus Windows and Ubuntu application compilation with warnings as errors.
   - **First-run workspace**: the empty DockSpace is initialized with Optical Bench in the center, Inspector on the right (25%), and Validation at the bottom (20%); a layout restored from `imgui.ini` is preserved.
@@ -126,7 +144,10 @@ Previous: **M5 - SLM, Coherence & Interference: complete**
 - **M6 closure validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors passed 347/347 deterministic cases; the Clang development preset passed 348/348 including the GPU executable. Complete Clang/MSVC applications built and both passed the 120-frame hidden-window smoke, which required a valid Holography Lab texture, no Lab error, and the then-current semantic format-v2 project round trip. Forty-six M6 cases covered exact `sin^2(nu)` transmission and `tanh^2(nu)` reflection Bragg limits, detuning symmetry, the reflection critical limit, wavelength/shrinkage detuning, evanescent-order classification, v1-to-v2 project migration, plus the prior thin/phase/H1/H2/Lab gates. Current format-v3 and teaching evidence is recorded under M7 below.
 - **Release CI**: GitHub Actions run [33378162951](https://github.com/liufangyuan247/HoloBench/actions/runs/33378162951) passes Windows and Ubuntu core build/tests, the named M6 CPU performance gate on both systems, and Windows/Ubuntu application compilation with warnings as errors at `eea50c6`.
 
-## M7 progress
+## [Deferred teaching/reference assets](DEFERRED_TEACHING_ASSETS.md)
+
+The following work remains tested and useful, but does not count as M7 product
+completion because it is primarily driven through fixed parameter panels:
 
 - **Lesson catalog**: `app/lessons/` defines ten stable, non-localized course IDs, three ordered steps per course, template references, localization message keys, and an explicit prerequisite DAG. Construction rejects empty catalogs, duplicate or unstable IDs, duplicate steps/prerequisites, missing prerequisites, and direct or indirect cycles.
 - **Independent progress persistence**: Format-v1 `holobench_lesson_progress` JSON stores only ordered completed-step prefixes and never embeds or mutates physics-project state. Lock/unlock, completion, unknown IDs, out-of-order steps, impossible prerequisite state, transitive dependent reset, strict keys/types/version/kind, malformed input, file I/O, and byte-stable round trips are covered.
@@ -167,8 +188,8 @@ Previous: **M5 - SLM, Coherence & Interference: complete**
 
 ## Next five tasks
 
-1. Run the external learner product gate for lessons 1-7 and record the human acceptance evidence.
-2. Close remaining accessibility and release-readiness gaps needed for the M7 tag.
-3. Prepare the M7 release candidate once automated CI and human product evidence are both complete.
-4. Begin M8 distribution and Steam Early Access integration after the M7 acceptance boundary is met.
-5. Preserve the capability-driven GPU policy while collecting future NVIDIA and other-device evidence.
+1. Lock the unified dynamic bench document, component variant, rigid-transform, beam-state, interaction, branch-provenance, and observation contracts.
+2. Implement the M7 component library and viewport editing for RGB lasers, mirrors, splitters/combiners, lenses, apertures, screens/probes, SLMs, and holographic plates.
+3. Implement deterministic spatial next-hit tracing, branch power/path/coherence accounting, loop termination, and stale scene-revision diagnostics.
+4. Deliver M8 transmission, reflection/Denisyuk, and RGB full-colour recording/reconstruction as ordinary bench presets with independent numerical oracles.
+5. Compile a versioned M9 CHIMERA recipe into an editable bench, then simulate hogel/angular data, RGB exposure events, and bounded reconstruction.

@@ -1,5 +1,13 @@
 # M1 — 3D optical bench and geometric optics
 
+> Historical scope correction (2026-09-01): M1 validated a fixed-axis
+> point-source/lens/aperture/screen reference scene plus isolated mirror,
+> interface, and collimated-source primitives. It did **not** deliver a dynamic
+> component library, arbitrary 6-DoF placement, branching/merging paths, or a
+> unified optical-bench project. Those product requirements are now the
+> blocking [M7 Optical Bench Sandbox](M7_OPTICAL_BENCH_SANDBOX.md). The
+> numerical evidence below remains valid within its stated domains.
+
 ## Goal
 
 Deliver the first physically validated product vertical slice: a user can inspect optical sources, ideal thin lenses, apertures, planar mirrors, planar interfaces, and detector screens in an interactive 3D optical bench, observe ray propagation, and evaluate analytically predicted image planes.
@@ -50,7 +58,7 @@ Deliver the first physically validated product vertical slice: a user can inspec
 
 - [x] Analytic thin-lens CPU error is at most 0.1% for the defined benchmark domain (`ThinLensTests.cpp`).
 - [x] Snell and TIR tests pass at the documented tolerance (`SnellTests.cpp`).
-- [x] Source/lens/screen scene is interactive and saveable (`SceneProjectAdapterTests.cpp`).
+- [x] The fixed source/lens/aperture/screen reference scene is interactive and saveable (`SceneProjectAdapterTests.cpp`); this is not free-form bench acceptance.
 - [x] Real and virtual image visualization is correctly distinguished (`BenchTracerTests.cpp`).
 - [x] OpenGL debug error count remains zero during the benchmark smoke run (0 errors on AMD Radeon Pro 5300M).
 - [x] Project-owned code builds with warnings as errors across `dev` and `app-ci` presets.

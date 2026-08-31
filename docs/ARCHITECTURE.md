@@ -20,6 +20,36 @@ app -> render -> optics -> core
 - **Numerical backends:** CPU reference, OpenGL Compute and optional CUDA implementations.
 - **Calibration/hardware:** later plugin boundaries; neither may contaminate solver equations.
 
+## Active product architecture: free-form optical bench
+
+The existing fixed-axis scene and independent Wave/SLM/Holography panels are
+validated reference applications, not the target Lab architecture. M7 replaces
+their product role with one dynamic bench document and a spatial interaction
+graph:
+
+```text
+Component library + rigid transforms
+                 ↓
+       3D intersection/routing
+                 ↓
+Beam branches: wavelength / power / coherence / optical path
+          ┌──────┴──────┐
+          ↓             ↓
+    fast ray layout   local 2D field planes
+          ↓             ↓
+ Screen / Probe / Holographic Plate observations
+```
+
+Splitters can create multiple deterministic branches; branches combine only
+through physical scene interactions. M8 transmission/reflection/RGB recording
+consumes coherent fields that actually reach a placed plate. M9 automation
+compiles a versioned CHIMERA recipe into the same ordinary editable bench and
+invokes the same M8 recording/reconstruction APIs.
+
+The laboratory is never a uniformly sampled 3D electromagnetic volume. Global
+layout uses rays; wave propagation uses local sampled planes with explicit
+frame/resampling diagnostics.
+
 ## Packaged UI assets
 
 The executable resolves lessons and UI assets relative to `SDL_GetBasePath()`.
@@ -47,7 +77,13 @@ Following ADR 0003:
 
 Project JSON carries an explicit integer `format_version`. Loading an unknown version fails rather than silently misinterpreting physical data. Canonical persisted length values use keys suffixed with `_m` and SI metres. Optical-bench format v2 adds validated user/lesson-template provenance; v1 migrates to v2 with user provenance. The format-v1 Reflection & Refraction Workbench stores the incidence angle and both refractive indices, while the separate format-v1 Wave & Sampling Workbench persists the complete Wave Detector and Sampling Debugger drafts together. The independent SLM & Interference Experiment schema is format v2; its format-v1 files migrate strictly to v2 user provenance. All workbenches share the provenance contract, and packaged lesson templates are ordinary project documents that use the same Lab load/save surface (ADR 0011).
 
-## Architectural decisions & current milestone (M4)
+Those schemas remain compatibility inputs. M7 introduces one unified dynamic
+bench document for typed components, rigid transforms, physical parameters,
+observation preferences, and provenance. Recomputable ray/field results are not
+persisted as scene truth. No new feature may create another disconnected
+panel-specific project format.
+
+## Architectural decisions & current milestone (M7)
 
 The following wave and Fourier-optics architecture decisions are locked:
 - Wave optics Fourier sign, FFT normalization, and complex phasor time convention (ADR 0005).

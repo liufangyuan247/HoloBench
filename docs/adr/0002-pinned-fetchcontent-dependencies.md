@@ -9,4 +9,4 @@ Use CMake `FetchContent` with immutable commit archives and SHA-256 verification
 
 ## Consequences
 
-Fresh configuration needs network access but is reproducible at the named revisions. Before Steam packaging, dependency acquisition may move to a lockfile/package-cache workflow and all runtime licenses must be audited.
+Fresh configuration needs network access but is reproducible at the named revisions. Before any binary distribution, dependency acquisition may move to a lockfile/package-cache workflow and all runtime licenses must be audited.

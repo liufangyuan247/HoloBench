@@ -16,7 +16,7 @@
 
 项目分为三个长期层次：
 
-1. **教学产品**：直观展示焦距、成像、NA、衍射、傅里叶面、空间滤波、SLM、干涉、全息记录/重建、hogel 等概念，并达到可以在 Steam 上作为严肃科学教育软件销售的完成度。
+1. **交互式实验沙箱**：直观展示焦距、成像、NA、衍射、傅里叶面、空间滤波、SLM、干涉、全息记录/重建、hogel 等概念，并形成可独立使用的严肃光学实验软件。
 2. **工程模拟器**：支持真实透镜 prescription、自定义非球面、玻璃色散、真实器件误差、精确标量波传播、PSF/MTF/角谱等，能够指导实际光路搭建。
 3. **CHIMERA 工具链**：模拟和标定 SLM → 光学打印头 → hogel 的角度映射，生成 hogel 数据，仿真参考光干涉、记录材料和重建，并逐步接入真实运动平台、SLM/DMD、激光器、相机和功率计。
 
@@ -110,7 +110,7 @@ CHIMERA 的具体商业打印头 prescription 没有完全公开，因此真正�
 
 它应该比传统教学 App 严肃，比专业光学 CAD 容易理解。
 
-Steam 版本应让一个没有专业光学背景的用户通过交互逐步理解：
+第一阶段沙箱应让用户通过真实器件摆放和观察逐步理解：
 
 1. 光线与波前；
 2. 反射与折射；
@@ -155,7 +155,7 @@ Steam 版本应让一个没有专业光学背景的用户通过交互逐步理�
 4. 不一开始实现完整偏振、矢量衍射、非线性介质和量子光学。
 5. 不一开始做 120° / NA≈0.866 的 CHIMERA 打印头完整物理复现。
 6. 不承诺 simulator 第一版就能替代真实实验。
-7. Steam 教学内容和工程模式必须共用同一物理核心，不能维护两套互相矛盾的代码。
+7. 教学引导、自由沙箱和工程模式必须共用同一物理核心，不能维护互相矛盾的代码。
 
 ---
 
@@ -177,9 +177,9 @@ Steam 版本应让一个没有专业光学背景的用户通过交互逐步理�
 
 快速模式下用户拖动元件时必须立即看到结果；高精度计算允许异步执行。
 
-## G4：Steam 产品化
+## G4：光学实验沙箱产品化
 
-提供完整教学课程、Sandbox、实验任务、保存/分享和高质量 UI。
+提供自由 3D Sandbox、实验任务、保存/分享、自动化构建和高质量 UI。
 
 ## G5：数字孪生
 
@@ -296,13 +296,13 @@ n_1\sin\theta_1=n_2\sin\theta_2
 - **LightPipes**：BSD-3-Clause，可作为额外衍射参考。  
   https://github.com/opticspy/lightpipes
 
-这些库建议作为**参考实现和自动验证工具**，而不是 Steam runtime 的强依赖。
+这些库建议作为**参考实现和自动验证工具**，而不是桌面 runtime 的强依赖。
 
 ---
 
-## 5.4 教学系统 v1.0 验收
+## 5.4 光学实验沙箱验收
 
-Steam-ready 教学版至少满足：
+沙箱主线至少满足：
 
 - 可自由旋转/平移/缩放 3D 光学台；
 - 拖放至少 12 类光学元件；
@@ -316,8 +316,9 @@ Steam-ready 教学版至少满足：
 - 可以演示 NA 变化对 PSF 的影响；
 - 可以演示 SLM position → angle；
 - 可以演示两束相干光干涉；
-- 可以完成简单 hologram record/reconstruct；
-- 至少 8 个完整教学章节；
+- 可以完成透射式、反射式和 RGB 全彩 hologram record/reconstruct；
+- 可以从版本化 recipe 自动构建并检查 CHIMERA-like 虚拟光路；
+- 可以生成 hogel/SLM/曝光计划并做有限区域重建模拟；
 - Sandbox 可以保存工程；
 - UI 操作不依赖公式输入。
 
@@ -482,7 +483,7 @@ dx \lesssim 0.307\,\mu m
 ```text
 ┌──────────────────────────────────────────────┐
 │                  Application                 │
-│ SDL3 / Window / Input / Steam / Project IO  │
+│ SDL3 / Window / Input / Project IO          │
 ├──────────────────────────────────────────────┤
 │                  Editor UI                   │
 │ Dear ImGui / Inspector / Timeline / Lesson  │
@@ -521,7 +522,7 @@ dx \lesssim 0.307\,\mu m
 - 与 SDL/OpenGL/CUDA 集成直接；
 - 适合长期桌面产品；
 - 可控制 GPU memory；
-- Steam 部署简单；
+- 适合跨平台桌面部署；
 - 方便接真实设备 SDK。
 
 ---
@@ -530,7 +531,7 @@ dx \lesssim 0.307\,\mu m
 
 推荐 **SDL3**。
 
-SDL 的授权允许商业应用使用，适合 Steam 产品。  
+SDL 的授权允许商业桌面应用使用。
 官方项目：https://github.com/libsdl-org/SDL
 
 ---
@@ -575,7 +576,7 @@ https://github.com/ocornut/imgui
 - Windows x64；
 - Linux x64。
 
-若未来 Steam 需要 macOS，可提前把 Renderer API 抽象出来，再增加 Metal/Vulkan backend。
+若未来需要 macOS，可提前把 Renderer API 抽象出来，再增加 Metal/Vulkan backend。
 
 ---
 
@@ -615,7 +616,7 @@ public:
 4. 如果未来采用 Vulkan backend，可考虑 **VkFFT**（MIT，支持 Vulkan/CUDA/HIP/OpenCL/Metal 等）  
    https://github.com/DTolm/VkFFT
 
-不建议直接把 FFTW 作为 Steam 闭源 runtime 默认依赖，因为 FFTW 的标准授权是 GPL；如使用需认真处理许可证问题。
+不建议直接把 FFTW 作为闭源桌面 runtime 默认依赖，因为 FFTW 的标准授权是 GPL；如使用需认真处理许可证问题。
 
 ---
 
@@ -872,7 +873,7 @@ U'=U\cdot A(x,y)
 
 # 15. 空间滤波教学模块
 
-这是 Steam 教学版必须重点做好的实验。
+这是自由光学实验沙箱必须重点做好的实验。
 
 场景：
 
@@ -1160,30 +1161,21 @@ Digital Twin Prediction
 
 ---
 
-# 22. Steam 教学产品设计
+# 22. 交互式光学实验沙箱设计
 
-## 22.1 两种模式
+## 22.1 当前模式优先级
 
-### Learn
+### Lab — 当前主产品
 
-逐步课程：
+自由 3D Sandbox：用户摆放、旋转和连接真实空间中的光学器件，完成透射式、反射式和 RGB 全彩全息录制/重建。
 
-1. 光线是什么；
-2. 折射；
-3. 薄透镜；
-4. Real/Virtual image；
-5. diffraction；
-6. Fourier optics；
-7. spatial filter；
-8. NA 与 resolution；
-9. coherent interference；
-10. holography；
-11. H1/H2；
-12. CHIMERA。
+### Automation — M9
 
-### Lab
+用版本化 recipe 自动构建可编辑的 CHIMERA-like bench，生成 hogel/SLM/曝光任务并模拟重建。
 
-自由 Sandbox。
+### Learn — 延后
+
+已有教学 catalog/panel 保留为回归资产。只有当课程改为引导用户操作同一个自由 bench，而不是在独立参数面板中完成实验时，才恢复教学产品开发。
 
 ---
 
@@ -1474,25 +1466,22 @@ Object → H1 → Conjugate Replay → Real Image → H2
 
 ---
 
-## Phase 7 — Steam v1.0（2–4 个月）
+## Phase 7 — Free-form Sandbox 与自动化构建
 
 工作：
 
-- tutorial flow；
-- experiment presets；
-- achievements（可选）；
-- localization；
-- settings；
-- save compatibility；
-- Steam packaging；
-- crash reporting；
-- onboarding。
+- dynamic component scene；
+- component library 与 6-DoF transforms；
+- branching/merging optical paths；
+- transmission/reflection/RGB holography bench presets；
+- CHIMERA recipe-to-bench compiler；
+- hogel/exposure/reconstruction jobs；
+- unified save compatibility；
+- deterministic validation and performance gates。
 
-### Steam v1.0 的边界
+### 软件阶段边界
 
-不需要完整 CHIMERA。
-
-只要软件已经是一个非常好的“可视化物理光学实验室”，就可以发布。
+不声称复现未公开的商业打印头，也不控制真实硬件；先完成可检查、可编辑、可验证的虚拟 CHIMERA 构建和重建模拟。
 
 ---
 
@@ -1507,7 +1496,7 @@ Object → H1 → Conjugate Replay → Real Image → H2
 - 大规模性能优化；
 - 第三方库/驱动/显卡兼容问题；
 - 教学 UX 是否真的容易理解；
-- Steam 产品打磨；
+- 自由沙箱、全息实验和自动化构建的交互质量；
 - 真实光学器件、材料、机械与激光器的实验验证；
 - CHIMERA 打印头中尚未公开的工程 know-how。
 
@@ -1565,9 +1554,10 @@ Milestone Acceptance
 | 第一个“值得展示”的几何光学 Demo | **2–3 周** | 实像/虚像、光线、焦点、NA 基础 |
 | 第一个波动光学 Internal Alpha | **6–8 周** | FFT、ASM、衍射、Airy、Gaussian、Probe |
 | Fourier Optics Alpha | **10–12 周** | 4-f、空间滤波、角谱、Sampling Debugger |
-| Serious Teaching Alpha | **4–5 个月** | 几何+波动+真实透镜+SLM 基础，课程雏形 |
-| Steam Early Access 候选 | **5–8 个月** | 教程、Sandbox、存档、设置、稳定性、打包 |
-| Steam v1.0 候选 | **8–12 个月** | 完整教学链路、全息/H1-H2、验证和产品打磨 |
+| Fixed-pipeline physics foundation | **已完成并保留回归** | 几何+波动+真实透镜+SLM+全息求解器资产 |
+| Free-form Optical Bench | **重新基线后优先完成** | 动态器件、空间光路、Screen/Probe/Plate、统一存档 |
+| Holography Sandbox | **M7 后** | 透射式、反射式、RGB 全彩录制与重建 |
+| CHIMERA Automation | **M8 后** | 自动建台、hogel/曝光计划、有限区域重建 |
 | 工程版 Digital Twin 初版 | **12–18 个月** | 实测 LUT、硬件标定接口、真实器件模型 |
 
 这些是**目标区间，不是承诺工期**。如果物理核心的某个模型不能通过验证，不允许为了赶时间跳过验证进入后续阶段。
@@ -1826,96 +1816,78 @@ H2 Replay
 
 ---
 
-## M7 — Teaching Product Alpha
+## M7 — Free-form 3D Optical Bench Sandbox
 
-**目标工期：3–5 周**
+**优先级：当前最高，阻断 M8/M9**
 
 ### Deliverables
 
-至少完成 8 个教学实验：
-
-1. Reflection / Refraction；
-2. Thin Lens；
-3. Real / Virtual Image；
-4. Diffraction；
-5. Fourier Plane；
-6. Spatial Filtering；
-7. NA / PSF；
-8. Coherence / Interference；
-9. Holography；
-10. H1/H2（可作为进阶）。
-
-同时完成：
-
-- project templates；
-- contextual explanation；
-- undo/redo；
-- save/load compatibility；
-- basic localization architecture；
-- benchmark scenes。
+- 统一、动态、可保存的 3D bench scene，而不是固定的 `source → lens → screen` 结构；
+- 用户从器件库拖入并摆放/旋转至少 12 类器件；
+- RGB Laser、Object/Wavefront Source、Mirror、Beam Splitter/Combiner、Thin Lens、Real Lens、Aperture、Spatial Filter、SLM、Screen、Probe、Holographic Plate；
+- 从实际三维几何自动求交并生成分支/合束光路；
+- 每条光束显式携带 wavelength、power、coherence ID、optical path 和 branch provenance；
+- Ray Mode 用于整体布局，局部 2D complex field 用于 wave analysis，禁止把整个空间 voxel 化；
+- 视口 gizmo、Inspector 精确输入、选择/复制/删除、全场景 undo/redo；
+- 一个普通统一 project 保存全部器件、变换、参数和来源，不再新增互不相通的 panel project。
 
 ### Gate
 
-找没有参与开发的人，仅依靠内置教学完成 1–7，并能够正确解释关键概念。
+用户可以从空白 bench 只依靠器件库搭出包含激光、分光、反射、透镜、光阑、合束、白屏/Probe 和全息干板的有效光路。分光功率守恒，循环有显式终止诊断，移动器件会使依赖结果失效，保存/加载保持完整语义。
 
-**完成后 tag：`m7-teaching-alpha`**
+详细规范：[M7 Optical Bench Sandbox](docs/milestones/M7_OPTICAL_BENCH_SANDBOX.md)。
+
+**完成后 tag：`m7-optical-bench-sandbox`**
 
 ---
 
-## M8 — Steam Early Access
-
-**目标工期：4–6 周**
+## M8 — Holography Recording and Reconstruction Sandbox
 
 ### Deliverables
 
-- Steamworks integration；
-- installation/package；
-- settings；
-- input rebinding；
-- localization 第一版；
-- crash handling；
-- autosave；
-- tutorial polish；
-- GPU compatibility matrix；
-- performance presets；
-- public demo；
-- store assets/description（产品阶段再制作）。
+- 透射式薄全息和体全息的录制、物理重放与观察；
+- 反射式体全息（包含 Denisyuk-style 对向入射）的录制与 Bragg 选择性重建；
+- RGB 全彩全息按波长分别录制/重建，再以明确的未标定显示变换合成；
+- object/reference 光必须来自 M7 bench 中真实到达干板的 coherent branches；
+- 干板局部坐标、入射侧、OPD、grating vector/period、exposure、detuning、efficiency、sampling 和 stale provenance 全部可见；
+- 透射、反射、全彩三套示例都是普通统一 bench project，不是特殊计算器。
 
 ### Gate
 
-- 无已知数据损坏问题；
-- 中端参考 PC 稳定运行；
-- 所有教学核心 solver 都有 regression tests；
-- public demo 可独立完成至少前三个课程。
+用户能从空白或普通 preset 搭建并完成：
 
-**完成后 tag：`steam-ea`**
+1. transmission hologram record/reconstruct；
+2. reflection hologram record/reconstruct；
+3. RGB full-colour hologram record/reconstruct。
+
+三条路径必须通过独立数值 oracle、保存兼容、性能和 renderer smoke。
+
+详细规范：[M8 Holography Sandbox](docs/milestones/M8_HOLOGRAPHY_SANDBOX.md)。
+
+**完成后 tag：`m8-holography-sandbox`**
 
 ---
 
-## M9 — Steam 1.0 / Serious Teaching System
-
-**目标工期：2–4 个月（EA 后持续迭代）**
+## M9 — Automated CHIMERA Construction and Reconstruction
 
 ### Deliverables
 
-- 教学课程完整化；
-- Holography 章节完成；
-- sampling/physical limitation explanation；
-- workshop/share 方案评估；
-- presets；
-- advanced engineering mode；
-- performance & stability；
-- accessibility；
-- validation report；
-- user-facing physics reference。
+- versioned `ChimeraRecipe` 自动生成一个完全可编辑的普通 M7 RGB 打印头 bench；
+- scene/view → hogel angular samples → SLM commands 数据链；
+- RGB laser / SLM / relay optics / reference path / material 的自动放置与约束报告；
+- hogel-by-hogel、wavelength-by-wavelength 的虚拟 stage/SLM/laser/exposure event plan；
+- 复用 M8 干板录制，不维护另一套 printer hologram physics；
+- 单 hogel 与有限多 hogel 区域的方向视图/重建模拟；
+- hogel pitch、FOV、NA、SLM sampling、focal length、reference angle、exposure、thickness、shrinkage 的确定性参数扫描；
+- 为未来 measured SLM/camera/stage/material LUT 留下版本化接口，但本 milestone 不控制真实硬件。
 
 ### Gate
 
-Steam v1.0 的标准不是“功能多”，而是：
+一个 canonical recipe 能确定性构建完整 RGB CHIMERA-like bench，生成单 hogel RGB 曝光计划，并重建至少两个可区分观察方向的有限多 hogel 示例。所有自动生成器件都有来源，结果可由用户在同一个 bench 中检查和修改，不存在隐藏 solver graph。
 
-> **从高中/大学基础光学，一路到傅里叶光学、相干和全息，形成一条严肃、连续、可交互、物理上可信的学习路径。**
+详细规范：[M9 CHIMERA Automation](docs/milestones/M9_CHIMERA_AUTOMATION.md)。
 
-**完成后 tag：`v1.0`**
+**完成后 tag：`m9-chimera-automation`**
 
 ---
 
@@ -2180,8 +2152,9 @@ ChatGPT 对软件开发加速明显，但对真实 CHIMERA 硬件的加速会逐
 | 长期节点 | 目标 | 合理日历尺度 |
 |---|---|---:|
 | SW-Alpha | 严肃可视化光学实验室 | 3–5 个月 |
-| Steam EA | 可销售教学产品 | 5–8 个月 |
-| Steam 1.0 | 完整教学主线 | 8–12 个月 |
+| Optical Bench Sandbox | 可自由搭建并保存空间光路 | 当前软件最高优先级 |
+| Holography Sandbox | 透射/反射/RGB 录制与重建 | M7 完成后 |
+| CHIMERA Automation | 虚拟打印头、hogel 与重建 | M8 完成后 |
 | Digital Twin v0 | 理论模型 + 实测 LUT | 12–18 个月 |
 | CH-1 | 实物 SLM position→angle 标定台 | 1–2 年内 |
 | CH-2 | 单色 1 mm hogel HPO | 1–3 年 |
@@ -2209,24 +2182,23 @@ ChatGPT 对软件开发加速明显，但对真实 CHIMERA 硬件的加速会逐
 
 ---
 
-# 26F. 建议的发布节奏
+# 26F. 建议的工程交付节奏
 
 为了避免一个十年项目长期没有外部反馈，建议：
 
 ```text
-Month 1     Dev videos / screenshots
-Month 2–3   Closed Alpha
-Month 3–4   Public interactive demo / playtest
-Month 5–8   Steam Early Access
-Month 8–12  Steam 1.0 candidate
-Year 2+     Engineering / Holography Lab updates
-Year 2+     Physical CHIMERA devlog
+Step 1      Free-form Optical Bench vertical slice
+Step 2      Transmission holography record/reconstruct
+Step 3      Reflection and RGB holography record/reconstruct
+Step 4      CHIMERA recipe and single-hogel virtual exposure
+Step 5      Bounded multi-hogel reconstruction and parameter sweeps
+Later       Measured calibration and physical CHIMERA experiments
 ```
 
-Steam 产品和 CHIMERA 研发应形成正反馈：
+软件沙箱和 CHIMERA 研发应形成正反馈：
 
 ```text
-Steam 用户
+光学实验与仿真用户
    ↓
 反馈 / 收入 / 社区
    ↓
@@ -2679,7 +2651,7 @@ Material model 必须支持 empirical LUT，而不是只依赖理论公式。
 
 ---
 
-## Risk 6：Steam 商业发布许可证
+## Risk 6：桌面 runtime 许可证
 
 ### 对策
 
@@ -2699,7 +2671,7 @@ CUDA 永远是 optional backend；核心接口以 vendor-neutral backend 抽象�
 
 ## 34.1 不建议
 
-把一个 Python optical library 直接嵌入 C++ Steam 程序作为核心 runtime。
+把一个 Python optical library 直接嵌入 C++ 桌面程序作为核心 runtime。
 
 原因：
 
@@ -2756,7 +2728,7 @@ https://github.com/spacetelescope/poppy
 
 它可以形成至少三个独立成果：
 
-### A. Steam 科学教育产品
+### A. 交互式科学教育与光学实验沙箱
 
 有明确商业价值。
 
@@ -2827,7 +2799,7 @@ https://github.com/spacetelescope/poppy
 7. **所有物理核心必须有解析/开源库对照测试。**
 8. **透镜从一开始预留真实 prescription 架构。**
 9. **Measured LUT / Digital Twin 从数据结构层面预留。**
-10. **Steam v1.0 不依赖真实 CHIMERA 完成。**
+10. **虚拟 CHIMERA milestone 不依赖真实硬件完成。**
 11. **最终 CHIMERA 通过逐级 hardware milestone 实现，不直接跳到 250 μm / 120°。**
 
 ---
@@ -2922,4 +2894,3 @@ Ray Visualization
 四个表。
 
 尤其任何看起来“很漂亮”的新物理效果，在加入教学课程之前必须先进入 validation suite。
-

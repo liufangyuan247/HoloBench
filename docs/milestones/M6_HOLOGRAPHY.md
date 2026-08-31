@@ -1,5 +1,11 @@
 # M6 — Holography Core
 
+> Product-scope correction (2026-09-01): M6 validates fixed holography
+> pipelines and parameter workbenches. It is physics/reference evidence, not a
+> freely constructed recording experiment. Placed transmission, reflection,
+> and RGB recording/reconstruction are owned by
+> [M8 Holography Sandbox](M8_HOLOGRAPHY_SANDBOX.md) after the M7 dynamic bench.
+
 ## Goal
 
 Build a physically explicit thin-hologram record/replay workflow, then extend it
