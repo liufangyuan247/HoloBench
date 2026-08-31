@@ -29,6 +29,7 @@
 #include "optics/slm/SlmResponseIO.hpp"
 #include "app/HolographyProject.hpp"
 #include "app/SlmInterferenceProject.hpp"
+#include "app/UiFont.hpp"
 #include "app/lessons/LessonProgress.hpp"
 #include "app/lessons/LessonTemplateRepository.hpp"
 #include "optics/ray/BenchTracer.hpp"
@@ -205,6 +206,13 @@ void drawViewportHud(
     return std::filesystem::path(
         basePath != nullptr && basePath[0] != '\0' ? basePath : ".")
         / "lesson_templates";
+}
+
+[[nodiscard]] std::filesystem::path packagedFontPath() {
+    const char* basePath = SDL_GetBasePath();
+    return std::filesystem::path(
+        basePath != nullptr && basePath[0] != '\0' ? basePath : ".")
+        / "assets" / "fonts" / "NotoSansCJKsc-Regular.otf";
 }
 
 [[nodiscard]] math::Vec3d rotateAroundAxis(
@@ -698,6 +706,7 @@ bool Application::initialize(const RunOptions& options) {
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
     glSmokeMode_ = options.glSmoke;
+    localizedSmokeTextSubmitted_ = false;
     auto windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
     if (glSmokeMode_) {
         windowFlags |= SDL_WINDOW_HIDDEN;
@@ -761,6 +770,16 @@ bool Application::initialize(const RunOptions& options) {
     imguiContextCreated_ = true;
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     ImGui::StyleColorsDark();
+
+    try {
+        uiFont_ = std::make_unique<UiFontAsset>(
+            packagedFontPath(), lessonLocalization_);
+        uiFont_->install(ImGui::GetIO());
+    } catch (const std::exception& ex) {
+        SDL_Log("Packaged UI font initialization failed: %s", ex.what());
+        shutdown();
+        return false;
+    }
 
     imguiSdlInitialized_ = ImGui_ImplSDL3_InitForOpenGL(window_, glContext_);
     imguiGlInitialized_ = imguiSdlInitialized_ && ImGui_ImplOpenGL3_Init("#version 460 core");
@@ -853,6 +872,7 @@ void Application::shutdown() noexcept {
         imguiSdlInitialized_ = false;
     }
     if (imguiContextCreated_) {
+        uiFont_.reset();
         ImGui::DestroyContext();
         imguiContextCreated_ = false;
     }
@@ -4802,6 +4822,17 @@ int Application::run(const RunOptions& options) {
 
         drawWorkspace();
 
+        if (glSmokeMode_) {
+            ImDrawList* foreground = ImGui::GetForegroundDrawList();
+            const int vertexCountBefore = foreground->VtxBuffer.Size;
+            foreground->AddText(
+                ImVec2(8.0F, 8.0F), IM_COL32_WHITE,
+                "中文光学渲染检查");
+            localizedSmokeTextSubmitted_
+                = localizedSmokeTextSubmitted_
+                || foreground->VtxBuffer.Size > vertexCountBefore;
+        }
+
         ImGui::Render();
 
         int width = 0;
@@ -4890,6 +4921,23 @@ int Application::run(const RunOptions& options) {
     if (glSmokeMode_ && !detectorTexture_->isValid()) {
         SDL_Log("OpenGL smoke check failed: detector texture was never uploaded");
         rawGlError = true;
+    }
+    if (glSmokeMode_) {
+        try {
+            if (!uiFont_) {
+                throw std::runtime_error("packaged UI font state is missing");
+            }
+            uiFont_->validateBakedCoverage();
+            if (!localizedSmokeTextSubmitted_) {
+                throw std::runtime_error(
+                    "localized smoke text produced no draw geometry");
+            }
+        } catch (const std::exception& ex) {
+            SDL_Log(
+                "OpenGL smoke check failed: packaged UI font: %s",
+                ex.what());
+            rawGlError = true;
+        }
     }
     if (glSmokeMode_ && (!samplingSpectrumTexture_ || !samplingSpectrumTexture_->isValid())) {
         SDL_Log("OpenGL smoke check failed: angular-spectrum texture was never uploaded");

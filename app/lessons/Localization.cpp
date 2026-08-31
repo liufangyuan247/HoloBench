@@ -75,6 +75,17 @@ const std::string& LocalizationCatalog::text(
     throw std::invalid_argument("missing localized lesson message");
 }
 
+std::vector<std::string_view> LocalizationCatalog::messages(
+    LessonLocale locale) const {
+    std::vector<std::string_view> values;
+    for (const auto& [key, value] : messages_) {
+        if (key.first == locale) {
+            values.emplace_back(value);
+        }
+    }
+    return values;
+}
+
 std::string_view lessonLocaleCode(LessonLocale locale) noexcept {
     switch (locale) {
     case LessonLocale::English:

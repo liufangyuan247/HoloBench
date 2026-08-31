@@ -25,6 +25,10 @@ TEST_CASE("default localization covers catalog identity in English and Chinese")
     CHECK(lessons::lessonLocaleCode(lessons::LessonLocale::English) == "en");
     CHECK(lessons::lessonLocaleCode(lessons::LessonLocale::SimplifiedChinese)
         == "zh-Hans");
+    CHECK_FALSE(localization.messages(lessons::LessonLocale::English).empty());
+    CHECK(localization.messages(lessons::LessonLocale::English).size()
+        == localization.messages(
+            lessons::LessonLocale::SimplifiedChinese).size());
 }
 
 TEST_CASE("implemented workflows localize every step and fall back to English") {

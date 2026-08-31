@@ -129,9 +129,11 @@ Product Alpha)** is active development. For the current repository state and roa
   and NA / PSF observe the shared Sampling Debugger; Coherence / Interference
   observes the existing SLM mutual-coherence result. No lesson owns a duplicate
   physics model.
-- **Localization architecture**: English and `zh-Hans` resources resolve from
-  stable message keys with English fallback. The first eight workflows have full
-  step text; packaged CJK font coverage remains work in progress.
+- **Packaged English/Chinese UI font**: English and `zh-Hans` resources resolve
+  from stable message keys with English fallback. Noto Sans CJK SC and its OFL
+  license ship beside the executable; startup never depends on a system font.
+  CI builds a real ImGui atlas and checks every required code point, while the
+  hidden OpenGL smoke submits Chinese text through the rendering backend.
 - **Deterministic edit history**: A capacity-bounded 64-state history covers the
   optical bench, Wave Detector draft, Sampling Debugger inputs, and SLM draft
   plus calibration provenance. Undo/redo restores editable inputs through the

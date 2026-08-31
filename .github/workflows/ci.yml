@@ -87,7 +87,13 @@ jobs:
         if: runner.os == 'Linux'
         run: cmake --preset app-ci
       - name: Build
-        run: cmake --build --preset app-ci --target holobench_app
+        run: cmake --build --preset app-ci --target holobench_app holobench_font_validation
+      - name: Validate packaged English/CJK font (Windows)
+        if: runner.os == 'Windows'
+        run: .\out\build\app-ci\holobench_font_validation.exe
+      - name: Validate packaged English/CJK font (Linux)
+        if: runner.os == 'Linux'
+        run: ./out/build/app-ci/holobench_font_validation
       - name: Annotate Windows build failure
         if: failure() && runner.os == 'Windows'
         shell: pwsh

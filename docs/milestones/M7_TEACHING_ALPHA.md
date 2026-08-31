@@ -49,8 +49,9 @@ lessons during M7.
   history.
 - [x] Basic English/`zh-Hans` localization architecture based on stable message
   keys, English fallback, and no localized strings used as serialized identity.
-  Packaged CJK font coverage is still required before localization is a
-  release-complete user experience.
+  Noto Sans CJK SC 2.004 and its OFL license ship beside the application. A
+  corpus-derived atlas covers every current English/Chinese lesson message and
+  fixed UI label without consulting host fonts.
 - [x] Named benchmark scenes covering the guided workflows and a documented
   reference-hardware profile.
 
@@ -83,6 +84,8 @@ lessons during M7.
 - [x] Windows Clang/MSVC and Ubuntu GCC warnings-as-errors builds pass for
   every currently integrated M7 increment.
 - [x] Complete application smoke and named M7 benchmark scenes pass.
+- [x] Windows/Linux CI builds the packaged font atlas and verifies every
+  required English/Chinese glyph; hardware smoke submits Chinese draw geometry.
 
 ## Product gate
 

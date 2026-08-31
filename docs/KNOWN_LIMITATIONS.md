@@ -100,6 +100,6 @@
   roughness, absorption, dispersion, or multilayer coatings.
 - Undo/redo currently covers lesson-relevant optical-bench, Wave Detector,
   Sampling Debugger, and SLM inputs. Real Lens and Holography Lab editing are
-  not yet included. There is no autosave, crash recovery, release-complete CJK
-  font coverage, accessibility layer, or Steam integration.
+  not yet included. There is no autosave, crash recovery, accessibility layer,
+  or Steam integration.
 - Hardware control and digital-twin calibration are long-term roadmap modules.

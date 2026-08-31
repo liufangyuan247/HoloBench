@@ -46,6 +46,8 @@ struct WaveDetectorResult;
 
 namespace holobench::app {
 
+class UiFontAsset;
+
 namespace gizmo {
 
 struct ProjectedPoint {
@@ -345,6 +347,7 @@ private:
 
     render::OrbitCamera camera_;
     std::unique_ptr<render::OpticalBenchRenderer> renderer_;
+    std::unique_ptr<UiFontAsset> uiFont_;
     std::unique_ptr<compute::fft::CpuFftBackend> detectorFftBackend_;
     std::unique_ptr<render::gl::Texture2D> detectorTexture_;
     std::unique_ptr<render::gl::Texture2D> samplingSpectrumTexture_;
@@ -434,6 +437,7 @@ private:
     int lastViewportWidth_ = 0;
     int lastViewportHeight_ = 0;
     bool glSmokeMode_ = false;
+    bool localizedSmokeTextSubmitted_ = false;
 };
 
 } // namespace holobench::app

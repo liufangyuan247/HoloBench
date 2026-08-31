@@ -28,6 +28,8 @@ public:
     [[nodiscard]] const std::string& text(
         LessonLocale locale,
         std::string_view key) const;
+    [[nodiscard]] std::vector<std::string_view> messages(
+        LessonLocale locale) const;
 
 private:
     std::map<std::pair<LessonLocale, std::string>, std::string> messages_;

@@ -263,6 +263,17 @@ if(HOLOBENCH_BUILD_APP)
     target_link_libraries(holobench_imgui PUBLIC SDL3::SDL3-static OpenGL::GL)
     target_compile_features(holobench_imgui PUBLIC cxx_std_20)
 
+    add_library(holobench_ui STATIC
+        app/UiFont.cpp
+    )
+    target_include_directories(holobench_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(holobench_ui PUBLIC
+        HoloBench::AppLogic
+        holobench_imgui
+    )
+    target_compile_features(holobench_ui PUBLIC cxx_std_20)
+    holobench_set_warnings(holobench_ui)
+
     add_executable(holobench_app
         app/main.cpp
         app/Application.cpp
@@ -278,6 +289,9 @@ if(HOLOBENCH_BUILD_APP)
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/lesson_templates"
             "$<TARGET_FILE_DIR:holobench_app>/lesson_templates"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+            "$<TARGET_FILE_DIR:holobench_app>/assets"
         VERBATIM
     )
     target_include_directories(holobench_app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -286,6 +300,7 @@ if(HOLOBENCH_BUILD_APP)
         HoloBench::AppLogic
         HoloBench::Compute
         HoloBench::Optics
+        holobench_ui
         holobench_imgui
         holobench_glad
         glm::glm
@@ -293,6 +308,25 @@ if(HOLOBENCH_BUILD_APP)
         OpenGL::GL
     )
     holobench_set_warnings(holobench_app)
+
+    add_executable(holobench_font_validation
+        tests/app/PackagedFontValidation.cpp
+    )
+    target_compile_definitions(holobench_font_validation PRIVATE
+        HOLOBENCH_PACKAGED_FONT_FILE="$<TARGET_FILE_DIR:holobench_app>/assets/fonts/NotoSansCJKsc-Regular.otf"
+    )
+    target_link_libraries(holobench_font_validation PRIVATE holobench_ui)
+    add_dependencies(holobench_font_validation holobench_app)
+    holobench_set_warnings(holobench_font_validation)
+    if(BUILD_TESTING)
+        add_test(
+            NAME holobench_font_validation
+            COMMAND holobench_font_validation
+        )
+        set_tests_properties(holobench_font_validation PROPERTIES
+            LABELS "ui;font;localization"
+        )
+    endif()
 
     add_executable(holobench_gpu_benchmark
         benchmarks/OpenGlWaveBenchmark.cpp

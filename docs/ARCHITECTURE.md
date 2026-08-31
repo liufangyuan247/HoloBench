@@ -20,6 +20,17 @@ app -> render -> optics -> core
 - **Numerical backends:** CPU reference, OpenGL Compute and optional CUDA implementations.
 - **Calibration/hardware:** later plugin boundaries; neither may contaminate solver equations.
 
+## Packaged UI assets
+
+The executable resolves lessons and UI assets relative to `SDL_GetBasePath()`.
+`assets/fonts/NotoSansCJKsc-Regular.otf` and its `OFL.txt` license are copied
+beside every application build, and startup fails explicitly if either is
+missing. The ImGui atlas derives a persistent glyph range from all current
+English and `zh-Hans` lesson messages plus fixed UI text; this keeps rendering
+independent of host fonts without rasterizing the font's entire CJK repertoire.
+The standalone font gate validates source and baked-atlas coverage, while the
+hidden OpenGL smoke submits Chinese draw geometry through the normal backend.
+
 ## OpenGL ownership
 
 The main/render thread exclusively owns the OpenGL context (ADR 0004). CPU work may execute on worker threads; future GPU simulation jobs must be submitted back to the context-owning thread and synchronized with fences or buffered resources. HoloBench does not create shared worker contexts.
