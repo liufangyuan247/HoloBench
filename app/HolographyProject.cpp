@@ -163,6 +163,84 @@ void requireKeys(
     };
 }
 
+[[nodiscard]] const char* volumeGeometryName(
+    optics::holography::VolumeHologramGeometry geometry) {
+    switch (geometry) {
+    case optics::holography::VolumeHologramGeometry::Transmission:
+        return "transmission";
+    case optics::holography::VolumeHologramGeometry::Reflection:
+        return "reflection";
+    }
+    throw std::invalid_argument("unsupported volume hologram geometry");
+}
+
+[[nodiscard]] optics::holography::VolumeHologramGeometry parseVolumeGeometry(
+    const Json& value) {
+    if (!value.is_string()) {
+        throw std::invalid_argument("volume geometry must be a string");
+    }
+    const auto name = value.get<std::string>();
+    if (name == "transmission") {
+        return optics::holography::VolumeHologramGeometry::Transmission;
+    }
+    if (name == "reflection") {
+        return optics::holography::VolumeHologramGeometry::Reflection;
+    }
+    throw std::invalid_argument("unsupported volume hologram geometry");
+}
+
+[[nodiscard]] Json volumeJson(
+    const optics::holography::VolumeHologramParameters& volume) {
+    return {
+        {"average_refractive_index", volume.averageRefractiveIndex},
+        {"geometry", volumeGeometryName(volume.geometry)},
+        {"index_modulation", volume.refractiveIndexModulation},
+        {"isotropic_linear_shrinkage_fraction",
+            volume.isotropicLinearShrinkageFraction},
+        {"recorded_thickness_m", volume.recordedThicknessMetres},
+        {"recording_bragg_angle_in_medium_rad",
+            volume.recordingBraggAngleInMediumRadians},
+        {"recording_vacuum_wavelength_m",
+            volume.recordingVacuumWavelengthMetres},
+        {"replay_angle_in_medium_rad", volume.replayAngleInMediumRadians},
+        {"replay_vacuum_wavelength_m", volume.replayVacuumWavelengthMetres},
+    };
+}
+
+[[nodiscard]] optics::holography::VolumeHologramParameters parseVolume(
+    const Json& value) {
+    requireKeys(value,
+        {"average_refractive_index", "geometry", "index_modulation",
+            "isotropic_linear_shrinkage_fraction", "recorded_thickness_m",
+            "recording_bragg_angle_in_medium_rad",
+            "recording_vacuum_wavelength_m", "replay_angle_in_medium_rad",
+            "replay_vacuum_wavelength_m"},
+        "volume hologram config");
+    return {
+        .geometry = parseVolumeGeometry(value.at("geometry")),
+        .recordedThicknessMetres = finiteNumber(
+            value.at("recorded_thickness_m"), "volume thickness"),
+        .averageRefractiveIndex = finiteNumber(
+            value.at("average_refractive_index"), "volume average index"),
+        .refractiveIndexModulation = finiteNumber(
+            value.at("index_modulation"), "volume index modulation"),
+        .recordingVacuumWavelengthMetres = finiteNumber(
+            value.at("recording_vacuum_wavelength_m"),
+            "volume recording wavelength"),
+        .replayVacuumWavelengthMetres = finiteNumber(
+            value.at("replay_vacuum_wavelength_m"),
+            "volume replay wavelength"),
+        .recordingBraggAngleInMediumRadians = finiteNumber(
+            value.at("recording_bragg_angle_in_medium_rad"),
+            "volume recording Bragg angle"),
+        .replayAngleInMediumRadians = finiteNumber(
+            value.at("replay_angle_in_medium_rad"), "volume replay angle"),
+        .isotropicLinearShrinkageFraction = finiteNumber(
+            value.at("isotropic_linear_shrinkage_fraction"),
+            "volume shrinkage"),
+    };
+}
+
 [[nodiscard]] Json configJson(
     const holographylab::HolographyLabConfig& config) {
     holographylab::validateHolographyLabConfig(config);
@@ -190,16 +268,26 @@ void requireKeys(
             {"transplane_tolerance_m", config.transfer.transplaneToleranceMetres},
         }},
         {"vacuum_wavelengths_m", config.vacuumWavelengthsMetres},
+        {"volume", volumeJson(config.volume)},
     };
 }
 
 [[nodiscard]] holographylab::HolographyLabConfig parseConfig(
-    const Json& value) {
-    requireKeys(value,
-        {"field_height", "field_pitch_x_m", "field_pitch_y_m", "field_width",
-            "object_features", "refractive_indices", "transfer",
-            "vacuum_wavelengths_m"},
-        "holography config");
+    const Json& value,
+    int formatVersion) {
+    if (formatVersion == kLegacyHolographyProjectFormatVersion) {
+        requireKeys(value,
+            {"field_height", "field_pitch_x_m", "field_pitch_y_m", "field_width",
+                "object_features", "refractive_indices", "transfer",
+                "vacuum_wavelengths_m"},
+            "legacy holography config");
+    } else {
+        requireKeys(value,
+            {"field_height", "field_pitch_x_m", "field_pitch_y_m", "field_width",
+                "object_features", "refractive_indices", "transfer",
+                "vacuum_wavelengths_m", "volume"},
+            "holography config");
+    }
     const auto& features = value.at("object_features");
     const auto& wavelengths = value.at("vacuum_wavelengths_m");
     const auto& indices = value.at("refractive_indices");
@@ -247,6 +335,9 @@ void requireKeys(
         transfer.at("h2_response"), "H2 response");
     config.transfer.transplaneToleranceMetres = finiteNumber(
         transfer.at("transplane_tolerance_m"), "transplane tolerance");
+    if (formatVersion == kHolographyProjectFormatVersion) {
+        config.volume = parseVolume(value.at("volume"));
+    }
     holographylab::validateHolographyLabConfig(config);
     return config;
 }
@@ -280,9 +371,12 @@ HolographyProjectDocument deserializeHolographyProjectJson(
             || root.at("kind").get<std::string>() != "holography_lab_project") {
             throw std::invalid_argument("unsupported holography project kind");
         }
-        if (!root.at("format_version").is_number_integer()
-            || root.at("format_version").get<int>()
-                != kHolographyProjectFormatVersion) {
+        if (!root.at("format_version").is_number_integer()) {
+            throw std::invalid_argument("unsupported holography project format version");
+        }
+        const int formatVersion = root.at("format_version").get<int>();
+        if (formatVersion != kHolographyProjectFormatVersion
+            && formatVersion != kLegacyHolographyProjectFormatVersion) {
             throw std::invalid_argument("unsupported holography project format version");
         }
         if (!root.at("name").is_string()
@@ -292,7 +386,7 @@ HolographyProjectDocument deserializeHolographyProjectJson(
         return {
             .formatVersion = kHolographyProjectFormatVersion,
             .name = root.at("name").get<std::string>(),
-            .config = parseConfig(root.at("config")),
+            .config = parseConfig(root.at("config"), formatVersion),
         };
     } catch (const std::invalid_argument&) {
         throw;

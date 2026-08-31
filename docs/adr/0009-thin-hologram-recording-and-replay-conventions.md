@@ -122,13 +122,15 @@ photopolymer, or a complete radiometric exposure model.
   grid, spectrum, object, H1/H2 geometry, reference, response, or transplane
   tolerance marks the draft dirty but cannot trigger simulation until Apply.
   Selecting a displayed plane or RGB channel requests visualization only.
-- Holography experiments use a separate format-v1
+- Holography experiments initially used a separate format-v1
   `holography_lab_project` document. Strict keys preserve two analytic complex-
   Gaussian object features, the three ordered wavelengths and refractive
   indices, and all H1/H2 parameters. Unknown keys, versions, kinds, non-finite
   numbers, and non-physical configurations are rejected; load updates the draft
-  and remains apply-gated. The legacy optical-bench and M5 experiment formats
-  are not reinterpreted.
+  and remains apply-gated. ADR 0010 extends this document to format v2 with
+  separate volume-grating state and a strict v1 migration to default volume
+  parameters. The legacy optical-bench and M5 experiment formats are not
+  reinterpreted.
 
 ## Validation
 

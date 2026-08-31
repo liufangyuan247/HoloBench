@@ -35,6 +35,25 @@ namespace {
         && lhs.maximumAmplitudeTransmission == rhs.maximumAmplitudeTransmission;
 }
 
+[[nodiscard]] bool sameVolume(
+    const optics::holography::VolumeHologramParameters& lhs,
+    const optics::holography::VolumeHologramParameters& rhs) noexcept {
+    return lhs.geometry == rhs.geometry
+        && lhs.recordedThicknessMetres == rhs.recordedThicknessMetres
+        && lhs.averageRefractiveIndex == rhs.averageRefractiveIndex
+        && lhs.refractiveIndexModulation == rhs.refractiveIndexModulation
+        && lhs.recordingVacuumWavelengthMetres
+            == rhs.recordingVacuumWavelengthMetres
+        && lhs.replayVacuumWavelengthMetres
+            == rhs.replayVacuumWavelengthMetres
+        && lhs.recordingBraggAngleInMediumRadians
+            == rhs.recordingBraggAngleInMediumRadians
+        && lhs.replayAngleInMediumRadians
+            == rhs.replayAngleInMediumRadians
+        && lhs.isotropicLinearShrinkageFraction
+            == rhs.isotropicLinearShrinkageFraction;
+}
+
 } // namespace
 
 bool sameHolographyLabConfig(
@@ -61,7 +80,8 @@ bool sameHolographyLabConfig(
         && sameReference(
             lhs.transfer.h2RecordingReference,
             rhs.transfer.h2RecordingReference)
-        && sameResponse(lhs.transfer.h2Response, rhs.transfer.h2Response);
+        && sameResponse(lhs.transfer.h2Response, rhs.transfer.h2Response)
+        && sameVolume(lhs.volume, rhs.volume);
 }
 
 HolographyUiState::HolographyUiState()

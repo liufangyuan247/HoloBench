@@ -4,6 +4,7 @@
 #include <cstddef>
 
 #include "app/HolographyReconstructionPipeline.hpp"
+#include "optics/holography/VolumeHologram.hpp"
 
 namespace holobench::compute::fft {
 class IFftBackend;
@@ -46,10 +47,12 @@ struct HolographyLabConfig final {
         },
     };
     holography::H1H2TransferConfig transfer;
+    optics::holography::VolumeHologramParameters volume;
 };
 
 struct HolographyLabResult final {
     holography::RgbH1H2TransferResult rgbTransfer;
+    optics::holography::VolumeHologramResult volume;
 };
 
 [[nodiscard]] HolographyLabConfig makeDefaultHolographyLabConfig();

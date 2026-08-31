@@ -18,6 +18,11 @@ TEST_CASE("default lab runs the complete RGB H1 H2 workflow") {
 
     const auto result = lab::runHolographyLab(config, backend);
 
+    CHECK(result.volume.kogelnikEfficiencyEvaluated);
+    CHECK(result.volume.kogelnik.detuningParameter == doctest::Approx(0.0));
+    CHECK(result.volume.kogelnik.diffractionEfficiency
+        == doctest::Approx(result.volume.exactBraggEfficiencyAtReplayCoupling));
+
     for (std::size_t channel = 0; channel < 3U; ++channel) {
         const auto& transfer = result.rgbTransfer.channels[channel];
         CHECK(transfer.h1.objectAtRecordingPlate.vacuumWavelengthMetres()
@@ -68,6 +73,10 @@ TEST_CASE("lab validation rejects invalid grid spectrum object and transfer") {
 
     config = lab::makeDefaultHolographyLabConfig();
     config.transfer.h2Response.intensityToAmplitudeGain = 0.0;
+    CHECK_THROWS_AS(lab::validateHolographyLabConfig(config), std::invalid_argument);
+
+    config = lab::makeDefaultHolographyLabConfig();
+    config.volume.isotropicLinearShrinkageFraction = 1.0;
     CHECK_THROWS_AS(lab::validateHolographyLabConfig(config), std::invalid_argument);
 }
 

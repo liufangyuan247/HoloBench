@@ -2449,6 +2449,20 @@ void Application::drawHolographyPanel() {
             physicsEdited = true;
         }
     };
+    const auto inputDegrees = [&physicsEdited](
+                                  const char* label, double& radians) {
+        double degrees = radians * 180.0 / std::numbers::pi_v<double>;
+        if (ImGui::InputDouble(
+                label,
+                &degrees,
+                0.05,
+                0.5,
+                "%.7g deg",
+                ImGuiInputTextFlags_CharsScientific)) {
+            radians = degrees * std::numbers::pi_v<double> / 180.0;
+            physicsEdited = true;
+        }
+    };
 
     if (ImGui::CollapsingHeader(
             "Grid and RGB media", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -2592,6 +2606,73 @@ void Application::drawHolographyPanel() {
         editResponse("H2 thin-plate response", draft.transfer.h2Response);
     }
 
+    if (ImGui::CollapsingHeader(
+            "Separate volume / Kogelnik model", ImGuiTreeNodeFlags_DefaultOpen)) {
+        auto& volume = draft.volume;
+        int geometry = static_cast<int>(volume.geometry);
+        constexpr std::array<const char*, 2> geometryNames {
+            "Transmission", "Reflection"};
+        if (ImGui::Combo(
+                "Volume geometry",
+                &geometry,
+                geometryNames.data(),
+                static_cast<int>(geometryNames.size()))) {
+            volume.geometry
+                = static_cast<optics::holography::VolumeHologramGeometry>(geometry);
+            if (volume.geometry
+                    == optics::holography::VolumeHologramGeometry::Transmission
+                && volume.recordingBraggAngleInMediumRadians == 0.0) {
+                constexpr double kTeachingAngleRadians
+                    = 20.0 * std::numbers::pi_v<double> / 180.0;
+                volume.recordingBraggAngleInMediumRadians
+                    = kTeachingAngleRadians;
+                volume.replayAngleInMediumRadians = kTeachingAngleRadians;
+            }
+            physicsEdited = true;
+        }
+        inputMicrometres("Recorded thickness", volume.recordedThicknessMetres);
+        if (ImGui::InputDouble(
+                "Average refractive index",
+                &volume.averageRefractiveIndex,
+                0.001,
+                0.01,
+                "%.8g")) {
+            physicsEdited = true;
+        }
+        if (ImGui::InputDouble(
+                "Index modulation",
+                &volume.refractiveIndexModulation,
+                0.0001,
+                0.001,
+                "%.8g")) {
+            physicsEdited = true;
+        }
+        inputNanometres(
+            "Volume recording wavelength",
+            volume.recordingVacuumWavelengthMetres);
+        inputNanometres(
+            "Volume replay wavelength", volume.replayVacuumWavelengthMetres);
+        inputDegrees(
+            "Recording Bragg angle in medium",
+            volume.recordingBraggAngleInMediumRadians);
+        inputDegrees(
+            "Replay angle in medium", volume.replayAngleInMediumRadians);
+        double shrinkagePercent
+            = volume.isotropicLinearShrinkageFraction * 100.0;
+        if (ImGui::InputDouble(
+                "Isotropic linear shrinkage",
+                &shrinkagePercent,
+                0.01,
+                0.1,
+                "%.7g %%")) {
+            volume.isotropicLinearShrinkageFraction
+                = shrinkagePercent * 0.01;
+            physicsEdited = true;
+        }
+        ImGui::TextWrapped(
+            "Independent lossless scalar-TE sinusoidal phase grating. It does not reuse H1/H2 thin masks; absorption, Fresnel loss, polarization, multiplexing, and calibrated processing remain out of scope.");
+    }
+
     if (physicsEdited) {
         holographyUiState_.setDraftConfig(draft);
     }
@@ -2712,6 +2793,39 @@ void Application::drawHolographyPanel() {
             h2Order.twinOrderCarrierSampled ? "yes" : "no",
             h2Order.twinOrderCarrierPropagating ? "yes" : "no",
             h2Order.twinOrderCentreInsidePeriodicWindow ? "yes" : "no");
+
+        const auto& volume = holographyResult_->volume;
+        const auto volumeGeometry
+            = holographyUiState_.appliedConfig().volume.geometry;
+        ImGui::SeparatorText("Volume / Kogelnik result");
+        ImGui::Text(
+            "%s grating | replay thickness %.6g um | period %.6g -> %.6g um",
+            volumeGeometry
+                    == optics::holography::VolumeHologramGeometry::Transmission
+                ? "Transmission"
+                : "Reflection",
+            volume.replayThicknessMetres * 1e6,
+            volume.recordedGratingPeriodMetres * 1e6,
+            volume.replayGratingPeriodMetres * 1e6);
+        ImGui::Text(
+            "Coupling nu %.7g | detuning xi %.7g | mismatch %.7g rad/m",
+            volume.kogelnik.couplingStrength,
+            volume.kogelnik.detuningParameter,
+            volume.phaseMismatchRadiansPerMetre);
+        if (volume.kogelnikEfficiencyEvaluated) {
+            ImGui::Text(
+                "Diffraction efficiency %.6f | exact-Bragg limit at this coupling %.6f",
+                volume.kogelnik.diffractionEfficiency,
+                volume.exactBraggEfficiencyAtReplayCoupling);
+            ImGui::Text(
+                "Diffracted internal angle %.6g deg | order propagating: yes",
+                volume.diffractedInternalAngleRadians
+                    * 180.0 / std::numbers::pi_v<double>);
+        } else {
+            ImGui::TextColored(
+                ImVec4(1.0F, 0.6F, 0.25F, 1.0F),
+                "Selected transmission order is non-propagating; no Kogelnik efficiency is assigned.");
+        }
 
         if (holographyTexture_ && holographyTexture_->isValid()) {
             const ImVec2 available = ImGui::GetContentRegionAvail();

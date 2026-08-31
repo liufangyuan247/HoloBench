@@ -51,6 +51,11 @@ TEST_CASE("project JSON round trip is lossless and byte stable") {
     expected.config.fieldPitchXMetres = 7e-6;
     expected.config.transfer.h2AxialPositionMetres = 0.009;
     expected.config.objectFeatures[1].phaseRadians = 0.75;
+    expected.config.volume.geometry
+        = holobench::optics::holography::VolumeHologramGeometry::Transmission;
+    expected.config.volume.recordingBraggAngleInMediumRadians = 0.25;
+    expected.config.volume.replayAngleInMediumRadians = 0.24;
+    expected.config.volume.isotropicLinearShrinkageFraction = 0.015;
 
     const auto first = project::serializeHolographyProjectJson(expected);
     const auto restored = project::deserializeHolographyProjectJson(first);
@@ -83,7 +88,7 @@ TEST_CASE("strict project parser rejects unknown version kind keys and bad physi
         std::invalid_argument);
 
     json = nlohmann::json::parse(validText);
-    json["format_version"] = 2;
+    json["format_version"] = 3;
     CHECK_THROWS_AS(
         static_cast<void>(project::deserializeHolographyProjectJson(json.dump())),
         std::invalid_argument);
@@ -105,6 +110,36 @@ TEST_CASE("strict project parser rejects unknown version kind keys and bad physi
     CHECK_THROWS_AS(
         static_cast<void>(project::deserializeHolographyProjectJson(json.dump())),
         std::invalid_argument);
+
+    json = nlohmann::json::parse(validText);
+    json["config"]["volume"]["geometry"] = "thin_mask";
+    CHECK_THROWS_AS(
+        static_cast<void>(project::deserializeHolographyProjectJson(json.dump())),
+        std::invalid_argument);
+}
+
+TEST_CASE("format v1 projects migrate to v2 with explicit default volume state") {
+    project::HolographyProjectDocument current;
+    current.config.transfer.h2AxialPositionMetres = 0.0092;
+    auto legacy = nlohmann::json::parse(
+        project::serializeHolographyProjectJson(current));
+    legacy["format_version"] = project::kLegacyHolographyProjectFormatVersion;
+    legacy["config"].erase("volume");
+
+    const auto migrated = project::deserializeHolographyProjectJson(legacy.dump());
+
+    CHECK(migrated.formatVersion == project::kHolographyProjectFormatVersion);
+    CHECK(migrated.config.transfer.h2AxialPositionMetres
+        == current.config.transfer.h2AxialPositionMetres);
+    CHECK(migrated.config.volume.geometry
+        == holobench::optics::holography::VolumeHologramGeometry::Reflection);
+    CHECK(migrated.config.volume.recordingVacuumWavelengthMetres
+        == doctest::Approx(532e-9));
+    const auto upgraded = nlohmann::json::parse(
+        project::serializeHolographyProjectJson(migrated));
+    CHECK(upgraded.at("format_version").get<int>()
+        == project::kHolographyProjectFormatVersion);
+    CHECK(upgraded.at("config").contains("volume"));
 }
 
 TEST_CASE("loaded projects stay draft until explicit Apply") {

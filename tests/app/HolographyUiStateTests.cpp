@@ -25,6 +25,12 @@ TEST_CASE("draft edits remain dirty and do not simulate until Apply") {
     CHECK(state.consumeSimulationRequest());
     CHECK(state.appliedConfig().transfer.h2AxialPositionMetres
         == draft.transfer.h2AxialPositionMetres);
+
+    draft = state.draftConfig();
+    draft.volume.replayVacuumWavelengthMetres = 633e-9;
+    state.setDraftConfig(draft);
+    CHECK(state.isDirty());
+    CHECK_FALSE(state.consumeSimulationRequest());
 }
 
 TEST_CASE("display-only changes request visualization without physics recompute") {

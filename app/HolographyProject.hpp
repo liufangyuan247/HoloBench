@@ -8,7 +8,8 @@
 
 namespace holobench::app::holographyproject {
 
-inline constexpr int kHolographyProjectFormatVersion = 1;
+inline constexpr int kHolographyProjectFormatVersion = 2;
+inline constexpr int kLegacyHolographyProjectFormatVersion = 1;
 
 struct HolographyProjectDocument final {
     int formatVersion = kHolographyProjectFormatVersion;

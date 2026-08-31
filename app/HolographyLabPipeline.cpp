@@ -144,6 +144,8 @@ void validateHolographyLabConfig(const HolographyLabConfig& config) {
     validateReference(transfer.h2RecordingReference, "H2");
     validateResponse(transfer.h1.response, "H1");
     validateResponse(transfer.h2Response, "H2");
+    static_cast<void>(
+        optics::holography::evaluateVolumeHologram(config.volume));
 }
 
 HolographyLabResult runHolographyLab(
@@ -162,6 +164,7 @@ HolographyLabResult runHolographyLab(
     return {
         .rgbTransfer = holography::runRgbH1H2Transfer(
             objects, config.transfer, fftBackend),
+        .volume = optics::holography::evaluateVolumeHologram(config.volume),
     };
 }
 
