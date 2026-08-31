@@ -7,7 +7,6 @@
 namespace holobench::optics::scene {
 namespace {
 
-constexpr double kDirectionOffsetMetres = 1e-9;
 constexpr double kFrameTolerance = 2e-12;
 
 math::RigidTransform3d beamFrame(math::Vec3d originMetres, math::Vec3d direction) {
@@ -26,33 +25,27 @@ math::RigidTransform3d beamFrame(math::Vec3d originMetres, math::Vec3d direction
 }
 
 BranchProvenance childProvenance(
-    const BeamState& incoming,
-    const BenchComponent& component,
+    const BeamState& incidentAtHit,
     std::uint64_t branchId) {
     BranchProvenance result {
         .branchId = branchId,
-        .parentBranchId = incoming.provenance.branchId,
-        .componentPath = incoming.provenance.componentPath,
+        .parentBranchId = incidentAtHit.provenance.branchId,
+        .componentPath = incidentAtHit.provenance.componentPath,
     };
-    result.componentPath.push_back(component.id);
     return result;
 }
 
 BeamState makeOutgoing(
-    const BeamState& incoming,
-    const BenchComponent& splitter,
-    math::Vec3d hitPointMetres,
+    const BeamState& incidentAtHit,
     math::Vec3d direction,
     double powerScale,
-    double pathIncrementMetres,
     std::uint64_t branchId) {
-    BeamState result = incoming;
+    BeamState result = incidentAtHit;
     result.powerWatts *= powerScale;
     result.direction = math::normalized(direction);
-    result.originMetres = hitPointMetres + result.direction * kDirectionOffsetMetres;
-    result.accumulatedOpticalPathMetres += pathIncrementMetres;
+    result.originMetres = incidentAtHit.originMetres;
     result.localFrame = beamFrame(result.originMetres, result.direction);
-    result.provenance = childProvenance(incoming, splitter, branchId);
+    result.provenance = childProvenance(incidentAtHit, branchId);
     return result;
 }
 
@@ -95,14 +88,17 @@ void validateBeamState(const BeamState& beam) {
 }
 
 void validateTraceBudget(const TraceBudget& budget) {
-    if (budget.maximumHopsPerBranch == 0) {
-        throw std::invalid_argument("trace hop budget must be positive");
+    if (budget.maximumHopsPerBranch == 0 || budget.maximumHopsPerBranch > 100'000) {
+        throw std::invalid_argument("trace hop budget must be in [1, 100000]");
     }
-    if (budget.maximumBranches == 0) {
-        throw std::invalid_argument("trace branch budget must be positive");
+    if (budget.maximumBranches == 0 || budget.maximumBranches > 1'000'000) {
+        throw std::invalid_argument("trace branch budget must be in [1, 1000000]");
     }
     if (!std::isfinite(budget.minimumPowerWatts) || budget.minimumPowerWatts < 0.0) {
         throw std::invalid_argument("trace minimum power_w must be finite and non-negative");
+    }
+    if (!std::isfinite(budget.escapeDistanceMetres) || budget.escapeDistanceMetres <= 0.0) {
+        throw std::invalid_argument("trace escape distance_m must be finite and positive");
     }
 }
 
@@ -140,11 +136,18 @@ OpticalInteraction interactIdealBeamSplitter(
     const math::Vec3d normal = splitter.transform.localZAxisInWorld;
     const math::Vec3d reflectedDirection = incomingDirection
         - normal * (2.0 * math::dot(incomingDirection, normal));
+    BeamState incidentAtHit = incoming;
+    incidentAtHit.originMetres = hitPointMetres;
+    incidentAtHit.accumulatedOpticalPathMetres += hitDistance;
+    incidentAtHit.localFrame = beamFrame(hitPointMetres, incomingDirection);
+    incidentAtHit.provenance.componentPath.push_back(splitter.id);
+    validateBeamState(incidentAtHit);
 
     OpticalInteraction result {
         .componentId = splitter.id,
         .hitPointMetres = hitPointMetres,
         .distanceMetres = hitDistance,
+        .incidentBeam = incidentAtHit,
         .outgoing = {},
         .diagnostics = {},
     };
@@ -152,12 +155,9 @@ OpticalInteraction interactIdealBeamSplitter(
         result.outgoing.push_back({
             .interaction = BranchInteractionKind::Reflected,
             .beam = makeOutgoing(
-                incoming,
-                splitter,
-                hitPointMetres,
+                incidentAtHit,
                 reflectedDirection,
                 parameters.powerReflectivity,
-                hitDistance,
                 reflectedBranchId),
         });
     }
@@ -165,12 +165,9 @@ OpticalInteraction interactIdealBeamSplitter(
         result.outgoing.push_back({
             .interaction = BranchInteractionKind::Transmitted,
             .beam = makeOutgoing(
-                incoming,
-                splitter,
-                hitPointMetres,
+                incidentAtHit,
                 incomingDirection,
                 parameters.powerTransmissivity,
-                hitDistance,
                 transmittedBranchId),
         });
     }

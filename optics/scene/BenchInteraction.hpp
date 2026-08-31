@@ -48,6 +48,7 @@ struct OpticalInteraction final {
     std::string componentId;
     math::Vec3d hitPointMetres {};
     double distanceMetres = 0.0;
+    BeamState incidentBeam;
     std::vector<OutgoingBeam> outgoing;
     std::vector<std::string> diagnostics;
 
@@ -94,6 +95,7 @@ struct TraceBudget final {
     std::size_t maximumHopsPerBranch = 64;
     std::size_t maximumBranches = 1024;
     double minimumPowerWatts = 1e-12;
+    double escapeDistanceMetres = 2.0;
 };
 
 void validateBeamState(const BeamState& beam);

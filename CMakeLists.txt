@@ -81,6 +81,7 @@ add_library(holobench_optics STATIC
     optics/slm/SlmResponse.cpp
     optics/slm/SlmResponseIO.cpp
     optics/ray/BenchTracer.cpp
+    optics/ray/DynamicBenchTracer.cpp
     optics/ray/GeometricElements.cpp
     optics/ray/Interface.cpp
     optics/ray/Ray.cpp
@@ -375,6 +376,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/BenchTracerTests.cpp
         tests/analytic/BenchInteractionTests.cpp
         tests/analytic/BenchSceneTests.cpp
+        tests/analytic/DynamicBenchTracerTests.cpp
         tests/analytic/ChromaticAnalysisTests.cpp
         tests/analytic/PhaseOnlyHologramTests.cpp
         tests/analytic/ThinHologramTests.cpp

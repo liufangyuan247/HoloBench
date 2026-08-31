@@ -54,17 +54,29 @@ rebuilt on the shared bench.
   interaction conserves configured power, preserves wavelength/coherence
   identity, advances optical path, and constructs a direction-consistent local
   frame. Different wavelengths cannot cross-interfere.
+- **Deterministic centreline routing foundation**: RGB laser spectral channels
+  now emit independent centreline branches from each source's placed local
+  `+Z` axis. The dynamic tracer selects the nearest finite component in actual
+  3D geometry and supports reciprocal planar mirrors/splitters, arbitrary-pose
+  paraxial thin lenses, circular/rectangular apertures, and intercepting
+  screens. Every detector hit retains the complete incident beam state at the
+  plane, including wavelength, coherence identity, power, accumulated optical
+  path, local frame, and component provenance. Stable component/source ordering
+  makes results independent of insertion order; hop, branch, minimum-power,
+  escape, clipping, and absorption endings are explicit.
 - **Current verification**: Windows Clang 21 `core-ci` warnings-as-errors build
-  passes with 421/421 deterministic cases; the complete development build and
-  application link pass with 423/423 cases including the packaged-font and
+  passes with 429/429 deterministic cases; the complete development build and
+  application link pass with 431/431 cases including the packaged-font and
   hardware OpenGL tests. The hidden application smoke exits 0 with no reported
-  GL errors on AMD Radeon Pro 5300M. Nine new M7 cases cover all twelve
+  GL errors on AMD Radeon Pro 5300M. Seventeen new M7 cases cover all twelve
   schemas, invalid IDs/transforms/physics, scene mutation/revision/staleness,
   RGB and arbitrary-transform canonical persistence, strict parser rejection,
   splitter power/spectral identity, wavelength/coherence separation, and trace
-  budget validation. Viewport editing, generic rendering, full spatial
-  next-hit tracing, and local wave-plane adapters remain open, so M7.1 and M7
-  are not yet accepted.
+  budget validation, plus arbitrary-pose mirror/lens paths, split-screen power,
+  aperture clipping, insertion-order determinism, RGB detector identity, and
+  bounded mirror loops. Multi-ray beam envelopes, generic rendering, viewport
+  editing, remaining component interactions, and local wave-plane adapters
+  remain open, so M7 and the interactive part of M7.1 are not yet accepted.
 
 ## Completed
 
