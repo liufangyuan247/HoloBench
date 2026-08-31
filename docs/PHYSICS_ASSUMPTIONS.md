@@ -86,3 +86,17 @@ This file records active physical assumptions, sign conventions, and validity do
 - Fraunhofer propagation requires strictly positive finite propagation distance $z > 0$ and far-field conditions $z \gg D^2/\lambda$ (Fresnel number $N_F = D^2 / (\lambda z) \ll 1$). Diagnostics report $N_F$, support source (caller diameter/extents or conservative full grid default), maximum paraxial parameter $\lambda \sqrt{f_{x,\max}^2 + f_{y,\max}^2} = \max(r_{\text{out}})/z$, maximum adjacent quadratic phase step $\Delta\psi_{\max}$ evaluated from exact discrete index differences $(2m_{\max}-1)$ across both even and odd grids, and combine diagnostic warning messages when $N_F \ge 0.1$, paraxial parameter $\ge 0.1$, or $\Delta\psi_{\max} > \pi$.
 - Boundary conditions are periodic on the discrete sampling grid without automatic padding (`periodicBoundary = true`, `automaticPadding = false`).
 - Phasor angles are range-reduced via `std::remainder(phase, 2*pi)` to keep arguments to `std::polar` in $[-\pi, \pi]$. Extreme distances or coordinates exceeding double-precision capacity ($kz \gtrsim 2^{52} \approx 4.5\times 10^{15}\text{ rad}$) will undergo numerical precision loss, and intermediate quadratic phase overflows throw explicit `std::overflow_error`.
+
+## M3 Fourier Optics and Sampling Assumptions
+
+[ADR 0006](adr/0006-fourier-optics-and-sampling-diagnostics.md) locks the complete convention. Its active summary is:
+
+- The ideal Fourier-lens transform represents propagation from the front focal plane through an ideal positive thin lens to the back focal plane. Its ABCD system is $P(f)L(f)P(f)$ with $A=D=0$, $B=f$, and $C=-1/f$; it is not implemented as or described as Fraunhofer free-space propagation.
+- For medium wavelength $\lambda=\lambda_0/n$, the output sampling is $\Delta x_f=\lambda f/(N_x\Delta x)$ and $\Delta y_f=\lambda f/(N_y\Delta y)$. The field scale is $\Delta x\Delta y/(i\lambda f)$ with global axial phase $e^{i2kf}$.
+- Two ideal Fourier-lens transforms form an ideal 4-f relay: the periodic-grid image is inverted, coordinate magnification is $M=-f_2/f_1$, complex-amplitude magnitude scales by $f_1/f_2$, and transverse integrated intensity is conserved.
+- Large global axial phase is range-reduced before centred-index shift phases are added. This avoids turning cancellation error in a physically global phase into a spatially varying numerical phase error.
+- The model is monochromatic, coherent, scalar, paraxial, and ideal. It does not include finite lens aperture, aberration, polarization, vector high-NA behaviour, automatic padding, or resampling.
+- Axis Nyquist half-angle is $\theta_N=\arcsin(\min(1,\lambda/(2\Delta x)))$. Angular requests beyond this limit are reported as aliased; the solver is not silently restricted or modified.
+- Periodic wrap-around and required padding use the conservative centred-support envelope $D_\text{required}=D+2|z|\tan\theta$. Caller-provided support must contain every non-zero field sample.
+- The maximum sampled radial frequency uses the exact discrete FFT bins, including the smaller maximum positive/negative magnitude on odd grids, and is compared with $1/\lambda$ to report sampled evanescent content.
+- Sampling diagnostics report risks only. They never silently pad, suppress spectral bins, change propagation settings, or introduce device-specific performance limits.

@@ -38,7 +38,8 @@ Project JSON carries an explicit integer `format_version`. Loading an unknown ve
 
 ## Architectural decisions & next milestone (M2)
 
-M1 conventions (coordinates, GL loader, entity registry, ray tracer architecture) are established. Decisions planned for M2:
+The following wave and Fourier-optics architecture decisions are locked:
 - Wave optics Fourier sign, FFT normalization, and complex phasor time convention (ADR 0005).
+- Ideal Fourier-lens transforms and solver-independent sampling-risk diagnostics (ADR 0006).
 - 2D complex optical field data structure and GPU/CPU backend dispatch.
 - Boundary condition absorption and grid sampling limits for Angular Spectrum Method (ASM).

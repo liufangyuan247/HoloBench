@@ -4,7 +4,9 @@ Last updated: 2026-08-31
 
 ## Current milestone
 
-**M2 — Scalar Wave Optics & Propagation Solvers: in progress**
+**M2 — Scalar Wave Optics & Propagation Solvers: release validation (NVIDIA hardware gate pending)**
+
+Active development: **M3 — Fourier Optics & Sampling Debugger: in progress**
 
 Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 
@@ -57,6 +59,14 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
   - NVIDIA hardware parity and named 1024x1024 benchmark, confirming the default `twiddle_source=gpu-shader` path without inheriting the AMD device quirk.
   - Fast-forward integration to `main` and the `m2-wave-core` tag after all release gates are green.
 
+## M3 progress
+
+- **Fourier conventions**: [ADR 0006](adr/0006-fourier-optics-and-sampling-diagnostics.md) defines the ideal front/back focal-plane transform, 4-f magnification and amplitude scaling, centred sampling, and diagnostic thresholds.
+- **Ideal Fourier lens**: A backend-neutral transform returns a physically sampled Fourier-plane `ComplexField2D`; an independent direct DFT validates every complex sample on a rectangular grid.
+- **4-f numerical foundation**: Two transforms reproduce periodic-grid inversion, `M=-f2/f1`, `f1/f2` complex-amplitude magnitude, and integrated-intensity conservation. Large axial phase is range-reduced before centred-index phase to prevent spatially varying cancellation.
+- **Sampling diagnostics foundation**: Reports physical extent, Nyquist angles, requested-band aliasing, periodic wrap-around, required padding factor, aperture/support boundary clearance, and sampled evanescent bins. Caller support claims are checked against every non-zero sample.
+- **Local gate**: Windows Clang warnings-as-errors build passes with 211/211 headless tests, including eight new M3 cases.
+
 ## Known limitations (M1/M2)
 
 - **Paraxial approximation**: Thin-lens solver, Fresnel TF, and Fraunhofer propagators assume small angles and paraxial conditions.
@@ -68,7 +78,7 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 ## Next five tasks
 
 1. Run and record GPU parity plus `wave/asm_1024_square_gpu_recompute` on the target NVIDIA card.
-2. Commit the integrated M2 implementation and documentation after final diff review.
-3. Fast-forward `main` after NVIDIA hardware evidence is green and rerun the four Windows/Ubuntu gates on `main`.
-4. Tag the verified commit as `m2-wave-core` only after the post-merge gates remain green.
-5. Start M3 Fourier-optics and sampling-debugger implementation from the tagged M2 baseline.
+2. Add 4-f orchestration and Fourier-plane circular low-pass, high-pass, and band-pass filters.
+3. Add a PSF/MTF pipeline with an independent circular-pupil diffraction oracle and an explicit coherent/incoherent convention.
+4. Connect sampling diagnostics to the Sampling Debugger UI and arbitrary-plane probe workflow.
+5. Pass the M3 Windows/Linux warnings-as-errors, UI smoke, documentation, and named performance gates.
