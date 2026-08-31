@@ -3,6 +3,7 @@
 #include <complex>
 #include <cstddef>
 #include <string>
+#include <utility>
 
 #include "core/field/ComplexField2D.hpp"
 #include "core/field/FieldObservables.hpp"
@@ -63,10 +64,13 @@ struct WaveDetectorConfig final {
     std::size_t gridResolution = 128; // Grid width and height (power of 2)
     double gridPhysicalSpanMetres = 4.0e-3; // 4.0 mm window width/height
     double refractiveIndex = 1.0;
+
+    bool operator==(const WaveDetectorConfig&) const = default;
 };
 
 struct WaveDetectorResult final {
     field::ComplexField2D field;
+    WaveDetectorConfig sourceConfig;
     double peakIntensity = 0.0;
     double integratedIntensity = 0.0;
     std::size_t propagatingBins = 0;
@@ -78,8 +82,11 @@ struct WaveDetectorResult final {
     double gridPitchMetres = 0.0;
     std::string diagnosticSummary;
 
-    explicit WaveDetectorResult(field::ComplexField2D outputField)
-        : field(std::move(outputField)) {}
+    WaveDetectorResult(
+        field::ComplexField2D outputField,
+        WaveDetectorConfig config)
+        : field(std::move(outputField))
+        , sourceConfig(std::move(config)) {}
 };
 
 /**

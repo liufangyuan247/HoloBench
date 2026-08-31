@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "app/lessons/LearnSession.hpp"
+#include "compute/fft/CpuFftBackend.hpp"
 
 namespace lessons = holobench::app::lessons;
 
@@ -16,6 +17,15 @@ void completeReflectionPrerequisite(
     for (const auto& step : catalog.lesson("reflection_refraction").steps) {
         lessons::completeLessonStep(
             catalog, progress, "reflection_refraction", step.id);
+    }
+}
+
+void completeLesson(
+    const lessons::LessonCatalog& catalog,
+    lessons::LessonProgress& progress,
+    std::string_view lessonId) {
+    for (const auto& step : catalog.lesson(lessonId).steps) {
+        lessons::completeLessonStep(catalog, progress, lessonId, step.id);
     }
 }
 
@@ -118,6 +128,55 @@ TEST_CASE("loading progress that locks the active lesson ends only the session")
     CHECK(lessons::lessonStatus(
         session.catalog(), session.progress(), "thin_lens")
         == lessons::LessonStatus::Locked);
+}
+
+TEST_CASE("real virtual workflow requires a focal crossing and correct classification") {
+    lessons::LearnSession session;
+    lessons::LessonProgress progress;
+    completeLesson(session.catalog(), progress, "reflection_refraction");
+    completeLesson(session.catalog(), progress, "thin_lens");
+    session.replaceProgress(progress);
+    session.beginLesson("real_virtual_images");
+    session.confirmTemplateLoaded();
+
+    auto scene = lessons::makeRealVirtualLessonTemplate();
+    session.observeOpticalBenchScene(scene);
+    CHECK(lessons::nextLessonStepIndex(
+        session.catalog(), session.progress(), "real_virtual_images") == 1U);
+    scene.source.positionMetres.z = scene.lens.planeZMetres
+        - 0.75 * scene.lens.focalLengthMetres;
+    session.observeOpticalBenchScene(scene);
+    CHECK(lessons::nextLessonStepIndex(
+        session.catalog(), session.progress(), "real_virtual_images") == 2U);
+    CHECK_FALSE(session.confirmRealVirtualClassification(
+        holobench::optics::scene::ImageNature::Real));
+    CHECK(session.confirmRealVirtualClassification(
+        holobench::optics::scene::ImageNature::Virtual));
+}
+
+TEST_CASE("diffraction workflow observes applied shared-wave broadening") {
+    lessons::LearnSession session;
+    lessons::LessonProgress progress;
+    completeReflectionPrerequisite(session.catalog(), progress);
+    session.replaceProgress(progress);
+    session.beginLesson("diffraction");
+    session.confirmTemplateLoaded();
+
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto templateConfig = lessons::makeDiffractionLessonTemplate();
+    const auto baselineResult = holobench::app::wave::simulateDetectorField(
+        templateConfig, fft);
+    session.observeWaveDetector(templateConfig, baselineResult);
+    CHECK_FALSE(session.confirmDiffractionObservation());
+
+    auto narrowedConfig = templateConfig;
+    narrowedConfig.rectangularHalfWidthMetres *= 0.5;
+    const auto narrowedResult = holobench::app::wave::simulateDetectorField(
+        narrowedConfig, fft);
+    session.observeWaveDetector(narrowedConfig, narrowedResult);
+    CHECK(lessons::nextLessonStepIndex(
+        session.catalog(), session.progress(), "diffraction") == 2U);
+    CHECK(session.confirmDiffractionObservation());
 }
 
 } // TEST_SUITE("LearnSession")

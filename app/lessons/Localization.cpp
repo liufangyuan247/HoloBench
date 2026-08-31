@@ -87,7 +87,7 @@ std::string_view lessonLocaleCode(LessonLocale locale) noexcept {
 
 LocalizationCatalog makeDefaultLessonLocalization() {
     std::vector<LocalizedMessage> messages;
-    messages.reserve(80U);
+    messages.reserve(128U);
     addCourse(messages, "reflection_refraction",
         "Reflection / Refraction",
         "Change incidence angle and refractive index, then relate the outgoing rays to reflection and Snell's laws.",
@@ -153,6 +153,36 @@ LocalizationCatalog makeDefaultLessonLocalization() {
         "The displayed target comes from 1/f = 1/u + 1/v using the shared Lab solver.",
         "找到像平面", "把屏幕移动到预测实像平面 1 毫米以内。",
         "显示的目标位置来自共用实验室求解器中的 1/f = 1/u + 1/v。");
+    addStep(messages, "real_virtual_images", "form_real_image",
+        "Inspect a real image", "Load the converging-lens scene and identify the real image behind the lens.",
+        "A real image is where the transmitted rays physically converge; the screen can intercept it.",
+        "观察实像", "载入会聚透镜场景，并识别透镜后方的实像。",
+        "实像位于透射光线实际会聚的位置，可以被屏幕承接。");
+    addStep(messages, "real_virtual_images", "cross_focal_plane",
+        "Cross the focal plane", "In Inspector, reduce Object Distance u below the positive focal length f.",
+        "The shared thin-lens solver changes from positive image distance to a virtual image on the object side.",
+        "跨过焦平面", "在检查器中把物距 u 减小到正焦距 f 以下。",
+        "共用薄透镜求解器会从正像距切换到物方虚像。");
+    addStep(messages, "real_virtual_images", "classify_image",
+        "Classify the image", "Use the ray direction and signed image distance to classify the current image.",
+        "Dashed backward extensions are a visualization of where divergent rays appear to originate, not physical reverse propagation.",
+        "判断像的类型", "根据光线方向和带符号像距判断当前像的类型。",
+        "虚线反向延长线表示发散光线看似来自何处，并不是实际的反向传播。");
+    addStep(messages, "diffraction", "select_aperture",
+        "Load a slit aperture", "Load the centred rectangular-aperture wave experiment and inspect its detector pattern.",
+        "The detector uses the shared scalar, monochromatic, coherent angular-spectrum solver with periodic FFT boundaries.",
+        "载入狭缝孔径", "载入居中的矩形孔径波动实验，并观察探测器图样。",
+        "探测器使用共用的标量、单色、相干角谱求解器，并采用周期 FFT 边界。");
+    addStep(messages, "diffraction", "change_width",
+        "Narrow the aperture", "In Wave Detector, reduce Rectangular Half width by at least 25%, then Apply & Recompute.",
+        "A narrower aperture admits less transverse extent and spreads the propagated pattern more strongly.",
+        "缩窄孔径", "在波动探测器中把矩形半宽至少减小 25%，然后点击应用并重新计算。",
+        "更窄的孔径限制了横向范围，使传播图样扩展得更明显。");
+    addStep(messages, "diffraction", "compare_pattern",
+        "Compare the pattern", "Confirm after the measured horizontal half-maximum width grows by at least 10%.",
+        "This finite sampled result is evidence from the propagated field, not a claim of an exact Fraunhofer limit; sampling and window warnings still apply.",
+        "比较图样", "当测得的水平方向半高全宽至少增大 10% 后确认。",
+        "这是有限采样传播场给出的证据，并不宣称处于精确夫琅禾费极限；采样和窗口警告仍然有效。");
     return LocalizationCatalog(std::move(messages));
 }
 

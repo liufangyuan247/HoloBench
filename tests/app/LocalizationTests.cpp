@@ -30,7 +30,11 @@ TEST_CASE("default localization covers catalog identity in English and Chinese")
 TEST_CASE("implemented workflows localize every step and fall back to English") {
     const auto catalog = lessons::makeDefaultLessonCatalog();
     const auto localization = lessons::makeDefaultLessonLocalization();
-    for (const auto lessonId : {"reflection_refraction", "thin_lens"}) {
+    for (const auto lessonId : {
+             "reflection_refraction",
+             "thin_lens",
+             "real_virtual_images",
+             "diffraction"}) {
         for (const auto& step : catalog.lesson(lessonId).steps) {
             CHECK(localization.contains(
                 lessons::LessonLocale::SimplifiedChinese, step.titleKey));

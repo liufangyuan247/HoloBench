@@ -186,6 +186,19 @@ void drawViewportHud(
     return "Unknown";
 }
 
+[[nodiscard]] const char* imageNatureName(
+    optics::scene::ImageNature nature) noexcept {
+    switch (nature) {
+    case optics::scene::ImageNature::Real:
+        return "Real";
+    case optics::scene::ImageNature::Virtual:
+        return "Virtual";
+    case optics::scene::ImageNature::AtInfinity:
+        return "At infinity";
+    }
+    return "Unknown";
+}
+
 [[nodiscard]] math::Vec3d rotateAroundAxis(
     math::Vec3d value,
     math::Vec3d unitAxis,
@@ -1245,6 +1258,7 @@ void Application::drawWaveDetectorPanel() {
     }
     if (ImGui::Button("Apply & Recompute")) {
         detectorUiState_.apply();
+        detectorResult_.reset();
         detectorStatusMessage_ = "Detector recompute queued";
         detectorErrorMessage_.clear();
     }
@@ -2992,10 +3006,39 @@ void Application::drawLearnPanel() {
                         }
                         selectedTarget_ = GizmoTarget::Screen;
                         camera_.setPresetView(render::CameraPresetView::Perspective);
+                    } else if (definition.id == "real_virtual_images") {
+                        const auto lessonTemplate
+                            = lessons::makeRealVirtualLessonTemplate();
+                        if (!applyScene(lessonTemplate, tracerOptions_)) {
+                            learnSession_.endLesson();
+                            throw std::runtime_error(
+                                errorMessage_.empty()
+                                    ? "application rejected the real/virtual template"
+                                    : errorMessage_);
+                        }
+                        lessonImageClassification_
+                            = optics::scene::ImageNature::Real;
+                        camera_.setPresetView(
+                            render::CameraPresetView::Perspective);
+                    } else if (definition.id == "diffraction") {
+                        const auto lessonTemplate
+                            = lessons::makeDiffractionLessonTemplate();
+                        detectorUiState_.setDraftConfig(lessonTemplate);
+                        detectorUiState_.apply();
+                        detectorUiState_.setViewMode(
+                            field::FieldViewMode::DecibelIntensity);
+                        detectorResult_.reset();
+                        detectorErrorMessage_.clear();
+                        detectorStatusMessage_
+                            = "Diffraction lesson recompute queued";
                     }
                     learnSession_.confirmTemplateLoaded();
                     lessonErrorMessage_.clear();
                     lessonStatusMessage_ = "Started " + definition.id;
+                    if (definition.id == "diffraction") {
+                        ImGui::SetWindowFocus(
+                            docking::DockLayoutConfig::kWaveDetectorWindowName);
+                    }
                 } catch (const std::exception& ex) {
                     lessonErrorMessage_ = "Lesson start failed: "
                         + std::string(ex.what());
@@ -3009,8 +3052,13 @@ void Application::drawLearnPanel() {
             }
         } else {
             try {
-                if (definition.id == "thin_lens") {
+                if (definition.id == "thin_lens"
+                    || definition.id == "real_virtual_images") {
                     learnSession_.observeOpticalBenchScene(scene_);
+                } else if (definition.id == "diffraction"
+                    && detectorResult_) {
+                    learnSession_.observeWaveDetector(
+                        detectorUiState_.appliedConfig(), *detectorResult_);
                 }
             } catch (const std::exception& ex) {
                 lessonErrorMessage_ = "Lesson observation failed: "
@@ -3121,6 +3169,92 @@ void Application::drawLearnPanel() {
                         "Use the orange 3D gizmo or Inspector Screen Z. "
                         "Tolerance: +/-1.0 mm.");
                 }
+            } else if (definition.id == "real_virtual_images") {
+                ImGui::SeparatorText("Shared Lab observation");
+                if (learnSession_.realVirtualObservation().has_value()) {
+                    const auto& observation
+                        = learnSession_.realVirtualObservation().value();
+                    ImGui::Text(
+                        "Object distance u: %.3f mm | focal length f: %.3f mm",
+                        observation.prediction.objectDistanceMetres * 1000.0,
+                        scene_.lens.focalLengthMetres * 1000.0);
+                    ImGui::Text(
+                        "Shared solver classification: %s | signed image distance: %+.3f mm",
+                        imageNatureName(observation.prediction.nature),
+                        observation.prediction.imageDistanceMetres * 1000.0);
+                    ImGui::TextDisabled(
+                        "Use Inspector > Point Source > Object Distance u. "
+                        "Move u below positive f to cross the focal plane.");
+
+                    constexpr std::array<const char*, 3> imageNatureNames {
+                        "Real", "Virtual", "At infinity"};
+                    int classificationIndex = static_cast<int>(
+                        lessonImageClassification_);
+                    if (ImGui::Combo(
+                            "My classification",
+                            &classificationIndex,
+                            imageNatureNames.data(),
+                            static_cast<int>(imageNatureNames.size()))) {
+                        lessonImageClassification_
+                            = static_cast<optics::scene::ImageNature>(
+                                classificationIndex);
+                    }
+                    const bool readyToClassify = completedSteps == 2U
+                        && observation.crossedFocalPlane;
+                    ImGui::BeginDisabled(!readyToClassify);
+                    if (ImGui::Button("Confirm image classification")) {
+                        if (learnSession_.confirmRealVirtualClassification(
+                                lessonImageClassification_)) {
+                            lessonStatusMessage_
+                                = "Real / Virtual Images completed";
+                            lessonErrorMessage_.clear();
+                        } else {
+                            lessonErrorMessage_
+                                = "Use the ray direction and signed image distance to classify the image.";
+                        }
+                    }
+                    ImGui::EndDisabled();
+                }
+            } else if (definition.id == "diffraction") {
+                ImGui::SeparatorText("Shared Wave Detector observation");
+                if (detectorUiState_.isDirty()) {
+                    ImGui::TextColored(
+                        ImVec4(0.98F, 0.73F, 0.20F, 1.0F),
+                        "Wave Detector draft is pending Apply & Recompute.");
+                }
+                if (learnSession_.diffractionObservation().has_value()) {
+                    const auto& observation
+                        = learnSession_.diffractionObservation().value();
+                    ImGui::Text(
+                        "Applied aperture full width: %.3f mm",
+                        observation.apertureFullWidthMetres * 1000.0);
+                    ImGui::Text(
+                        "Measured horizontal half-maximum width: %.3f mm",
+                        observation.horizontalHalfMaximumWidthMetres * 1000.0);
+                    ImGui::TextDisabled(
+                        "Edit Wave Detector > Aperture > Half width, then Apply. "
+                        "The metric is measured from the propagated field.");
+                    const bool readyToConfirm = completedSteps == 2U
+                        && observation.patternBroadened;
+                    ImGui::BeginDisabled(!readyToConfirm);
+                    if (ImGui::Button("Confirm diffraction broadening")) {
+                        if (learnSession_.confirmDiffractionObservation()) {
+                            lessonStatusMessage_ = "Diffraction completed";
+                            lessonErrorMessage_.clear();
+                        } else {
+                            lessonErrorMessage_
+                                = "Narrow the aperture by at least 25% and require at least 10% measured broadening.";
+                        }
+                    }
+                    ImGui::EndDisabled();
+                } else if (!detectorErrorMessage_.empty()) {
+                    ImGui::TextColored(
+                        ImVec4(1.0F, 0.35F, 0.30F, 1.0F),
+                        "Wave Detector: %s", detectorErrorMessage_.c_str());
+                } else {
+                    ImGui::TextDisabled(
+                        "Waiting for the shared Wave Detector result.");
+                }
             }
 
             if (lessons::lessonStatus(
@@ -3144,6 +3278,29 @@ void Application::drawLearnPanel() {
                                     ? "application rejected the thin-lens template"
                                     : errorMessage_);
                         }
+                    } else if (definition.id == "real_virtual_images") {
+                        const auto lessonTemplate
+                            = lessons::makeRealVirtualLessonTemplate();
+                        if (!applyScene(lessonTemplate, tracerOptions_)) {
+                            learnSession_.endLesson();
+                            throw std::runtime_error(
+                                errorMessage_.empty()
+                                    ? "application rejected the real/virtual template"
+                                    : errorMessage_);
+                        }
+                        lessonImageClassification_
+                            = optics::scene::ImageNature::Real;
+                    } else if (definition.id == "diffraction") {
+                        const auto lessonTemplate
+                            = lessons::makeDiffractionLessonTemplate();
+                        detectorUiState_.setDraftConfig(lessonTemplate);
+                        detectorUiState_.apply();
+                        detectorUiState_.setViewMode(
+                            field::FieldViewMode::DecibelIntensity);
+                        detectorResult_.reset();
+                        detectorErrorMessage_.clear();
+                        detectorStatusMessage_
+                            = "Diffraction lesson recompute queued";
                     }
                     learnSession_.confirmTemplateLoaded();
                     lessonErrorMessage_.clear();

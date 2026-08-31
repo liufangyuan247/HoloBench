@@ -33,6 +33,14 @@ public:
         thinLensObservation() const noexcept {
         return thinLensObservation_;
     }
+    [[nodiscard]] const std::optional<RealVirtualLessonObservation>&
+        realVirtualObservation() const noexcept {
+        return realVirtualObservation_;
+    }
+    [[nodiscard]] const std::optional<DiffractionLessonObservation>&
+        diffractionObservation() const noexcept {
+        return diffractionObservation_;
+    }
 
     void replaceProgress(LessonProgress progress);
     void beginLesson(std::string_view lessonId);
@@ -41,6 +49,12 @@ public:
     void setReflectionConfig(ReflectionRefractionLessonConfig config);
     [[nodiscard]] bool confirmReflectionObservation();
     void observeOpticalBenchScene(const optics::scene::OpticalBenchScene& scene);
+    [[nodiscard]] bool confirmRealVirtualClassification(
+        optics::scene::ImageNature classification);
+    void observeWaveDetector(
+        const wave::WaveDetectorConfig& appliedConfig,
+        const wave::WaveDetectorResult& result);
+    [[nodiscard]] bool confirmDiffractionObservation();
     void resetActiveLesson();
 
 private:
@@ -50,7 +64,11 @@ private:
     ReflectionRefractionLessonConfig reflectionConfig_;
     ReflectionRefractionLessonResult reflectionResult_;
     std::optional<ThinLensLessonObservation> thinLensObservation_;
+    std::optional<RealVirtualLessonObservation> realVirtualObservation_;
+    std::optional<DiffractionLessonObservation> diffractionObservation_;
     double thinLensTemplateScreenZMetres_ = 0.0;
+    double diffractionTemplateHalfWidthMetres_ = 0.0;
+    std::optional<double> diffractionBaselineHalfMaximumWidthMetres_;
     bool reflectionIncidenceChanged_ = false;
 };
 

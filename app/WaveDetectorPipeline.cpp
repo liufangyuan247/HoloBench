@@ -255,7 +255,7 @@ WaveDetectorResult simulateDetectorField(
             config.propagationDistanceMetres);
     }
 
-    WaveDetectorResult result(std::move(field));
+    WaveDetectorResult result(std::move(field), config);
     result.peakIntensity = peakIntensity;
     result.integratedIntensity = integratedIntensity;
     result.propagatingBins = propagatingBins;

@@ -20,7 +20,10 @@ namespace {
 } // namespace
 
 bool hasInteractiveLessonWorkflow(std::string_view lessonId) noexcept {
-    return lessonId == "reflection_refraction" || lessonId == "thin_lens";
+    return lessonId == "reflection_refraction"
+        || lessonId == "thin_lens"
+        || lessonId == "real_virtual_images"
+        || lessonId == "diffraction";
 }
 
 LearnSession::LearnSession()
@@ -49,25 +52,41 @@ void LearnSession::beginLesson(std::string_view lessonId) {
     ReflectionRefractionLessonConfig nextReflectionConfig;
     ReflectionRefractionLessonResult nextReflectionResult = reflectionResult_;
     double nextThinLensTemplateScreenZMetres = thinLensTemplateScreenZMetres_;
+    double nextDiffractionTemplateHalfWidthMetres
+        = diffractionTemplateHalfWidthMetres_;
     if (nextActiveLessonId == "reflection_refraction") {
         nextReflectionResult = evaluateReflectionRefractionLesson(nextReflectionConfig);
-    } else {
+    } else if (nextActiveLessonId == "thin_lens") {
         const auto lessonTemplate = makeThinLensLessonTemplate();
         nextThinLensTemplateScreenZMetres = lessonTemplate.screen.planeZMetres;
+    } else if (nextActiveLessonId == "real_virtual_images") {
+        static_cast<void>(makeRealVirtualLessonTemplate());
+    } else {
+        const auto lessonTemplate = makeDiffractionLessonTemplate();
+        nextDiffractionTemplateHalfWidthMetres
+            = lessonTemplate.rectangularHalfWidthMetres;
     }
 
     static_assert(std::is_nothrow_move_assignable_v<std::string>);
     activeLessonId_ = std::move(nextActiveLessonId);
     thinLensObservation_.reset();
+    realVirtualObservation_.reset();
+    diffractionObservation_.reset();
+    diffractionBaselineHalfMaximumWidthMetres_.reset();
     reflectionConfig_ = nextReflectionConfig;
     reflectionResult_ = nextReflectionResult;
     thinLensTemplateScreenZMetres_ = nextThinLensTemplateScreenZMetres;
+    diffractionTemplateHalfWidthMetres_
+        = nextDiffractionTemplateHalfWidthMetres;
     reflectionIncidenceChanged_ = false;
 }
 
 void LearnSession::endLesson() noexcept {
     activeLessonId_.clear();
     thinLensObservation_.reset();
+    realVirtualObservation_.reset();
+    diffractionObservation_.reset();
+    diffractionBaselineHalfMaximumWidthMetres_.reset();
     reflectionIncidenceChanged_ = false;
 }
 
@@ -122,6 +141,17 @@ bool LearnSession::confirmReflectionObservation() {
 
 void LearnSession::observeOpticalBenchScene(
     const optics::scene::OpticalBenchScene& scene) {
+    if (activeLessonId_ == "real_virtual_images") {
+        auto observation = evaluateRealVirtualLessonObservation(scene);
+        if (observation.crossedFocalPlane
+            && isProgressStep(catalog_, progress_, activeLessonId_, 1U)) {
+            completeLessonStep(
+                catalog_, progress_, activeLessonId_,
+                catalog_.lesson(activeLessonId_).steps[1].id);
+        }
+        realVirtualObservation_ = observation;
+        return;
+    }
     if (activeLessonId_ != "thin_lens") {
         return;
     }
@@ -143,6 +173,68 @@ void LearnSession::observeOpticalBenchScene(
     static_assert(std::is_nothrow_move_assignable_v<LessonProgress>);
     progress_ = std::move(nextProgress);
     thinLensObservation_ = observation;
+}
+
+bool LearnSession::confirmRealVirtualClassification(
+    optics::scene::ImageNature classification) {
+    if (activeLessonId_ != "real_virtual_images") {
+        throw std::invalid_argument(
+            "image classification requires the active real/virtual lesson");
+    }
+    if (!realVirtualObservation_.has_value()
+        || !realVirtualObservation_->crossedFocalPlane
+        || classification != realVirtualObservation_->prediction.nature
+        || !isProgressStep(catalog_, progress_, activeLessonId_, 2U)) {
+        return false;
+    }
+    completeLessonStep(
+        catalog_, progress_, activeLessonId_,
+        catalog_.lesson(activeLessonId_).steps[2].id);
+    return true;
+}
+
+void LearnSession::observeWaveDetector(
+    const wave::WaveDetectorConfig& appliedConfig,
+    const wave::WaveDetectorResult& result) {
+    if (activeLessonId_ != "diffraction") {
+        return;
+    }
+    const auto observation = evaluateDiffractionLessonObservation(
+        appliedConfig,
+        result,
+        diffractionTemplateHalfWidthMetres_,
+        diffractionBaselineHalfMaximumWidthMetres_);
+    const bool captureBaseline
+        = !diffractionBaselineHalfMaximumWidthMetres_.has_value()
+        && appliedConfig.rectangularHalfWidthMetres
+            == diffractionTemplateHalfWidthMetres_;
+    if (observation.apertureNarrowed
+        && isProgressStep(catalog_, progress_, activeLessonId_, 1U)) {
+        completeLessonStep(
+            catalog_, progress_, activeLessonId_,
+            catalog_.lesson(activeLessonId_).steps[1].id);
+    }
+    if (captureBaseline) {
+        diffractionBaselineHalfMaximumWidthMetres_
+            = observation.horizontalHalfMaximumWidthMetres;
+    }
+    diffractionObservation_ = observation;
+}
+
+bool LearnSession::confirmDiffractionObservation() {
+    if (activeLessonId_ != "diffraction") {
+        throw std::invalid_argument(
+            "diffraction confirmation requires the active lesson");
+    }
+    if (!diffractionObservation_.has_value()
+        || !diffractionObservation_->patternBroadened
+        || !isProgressStep(catalog_, progress_, activeLessonId_, 2U)) {
+        return false;
+    }
+    completeLessonStep(
+        catalog_, progress_, activeLessonId_,
+        catalog_.lesson(activeLessonId_).steps[2].id);
+    return true;
 }
 
 void LearnSession::resetActiveLesson() {

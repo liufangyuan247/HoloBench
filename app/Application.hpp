@@ -361,6 +361,8 @@ private:
     std::string lessonErrorMessage_;
     std::string lessonStatusMessage_;
     std::string selectedLessonId_ = "reflection_refraction";
+    optics::scene::ImageNature lessonImageClassification_
+        = optics::scene::ImageNature::Real;
     bool realLensDirty_ = true;
     std::size_t selectedRealLensSurface_ = 0;
 

@@ -123,13 +123,14 @@ Product Alpha)** is active development. For the current repository state and roa
   identities, prerequisite locking, ordered steps, visible objectives, review/
   reset controls, and a progress file kept separate from physics projects.
 - **First shared-physics workflows**: Reflection / Refraction calls the existing
-  mirror and dielectric-interface tracers, while Thin Lens loads the normal
-  optical-bench scene and observes the existing paraxial image prediction as
-  the learner moves the screen. Neither lesson owns a duplicate physics model.
+  mirror and dielectric-interface tracers; Thin Lens and Real / Virtual Images
+  observe the normal optical-bench scene and shared paraxial solver; Diffraction
+  measures broadening from the existing Wave Detector propagation result. No
+  lesson owns a duplicate physics model.
 - **Localization architecture**: English and `zh-Hans` resources resolve from
-  stable message keys with English fallback. The first two workflows have full
+  stable message keys with English fallback. The first four workflows have full
   step text; packaged CJK font coverage remains work in progress.
-- **Current scope**: Lessons 3-10 are visible for prerequisite planning but
+- **Current scope**: Lessons 5-10 are visible for prerequisite planning but
   cannot be started until their guided workflows and ordinary project
   templates are implemented and validated.
 
@@ -151,7 +152,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (368 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (372 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev

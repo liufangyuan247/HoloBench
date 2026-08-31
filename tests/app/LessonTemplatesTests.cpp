@@ -5,6 +5,7 @@
 #include <stdexcept>
 
 #include "app/lessons/LessonTemplates.hpp"
+#include "compute/fft/CpuFftBackend.hpp"
 #include "core/project/ProjectDocument.hpp"
 #include "optics/scene/SceneProjectAdapter.hpp"
 
@@ -74,6 +75,61 @@ TEST_CASE("thin lens setup is an ordinary versioned Lab scene") {
     CHECK(document.formatVersion == holobench::project::kCurrentFormatVersion);
     CHECK(holobench::optics::scene::projectDocumentToScene(document)
         == lessonTemplate);
+}
+
+TEST_CASE("real virtual template crosses the focal plane through the shared solver") {
+    auto scene = lessons::makeRealVirtualLessonTemplate();
+    const auto document = holobench::optics::scene::sceneToProjectDocument(scene);
+    CHECK(document.formatVersion == holobench::project::kCurrentFormatVersion);
+    CHECK(holobench::optics::scene::projectDocumentToScene(document) == scene);
+    const auto initial = lessons::evaluateRealVirtualLessonObservation(scene);
+    CHECK(initial.prediction.nature
+        == holobench::optics::scene::ImageNature::Real);
+    CHECK_FALSE(initial.crossedFocalPlane);
+
+    scene.source.positionMetres.z = scene.lens.planeZMetres
+        - 0.75 * scene.lens.focalLengthMetres;
+    const auto crossed = lessons::evaluateRealVirtualLessonObservation(scene);
+    CHECK(crossed.prediction.nature
+        == holobench::optics::scene::ImageNature::Virtual);
+    CHECK(crossed.crossedFocalPlane);
+}
+
+TEST_CASE("narrower shared wave aperture produces a broader diffraction result") {
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto templateConfig = lessons::makeDiffractionLessonTemplate();
+    const auto baselineResult = holobench::app::wave::simulateDetectorField(
+        templateConfig, fft);
+    const auto baseline = lessons::evaluateDiffractionLessonObservation(
+        templateConfig,
+        baselineResult,
+        templateConfig.rectangularHalfWidthMetres);
+    CHECK_FALSE(baseline.apertureNarrowed);
+    CHECK_FALSE(baseline.patternBroadened);
+    auto mismatchedConfig = templateConfig;
+    mismatchedConfig.rectangularHalfWidthMetres *= 0.5;
+    CHECK_THROWS_AS(
+        static_cast<void>(lessons::evaluateDiffractionLessonObservation(
+            mismatchedConfig,
+            baselineResult,
+            templateConfig.rectangularHalfWidthMetres)),
+        std::invalid_argument);
+
+    auto narrowedConfig = templateConfig;
+    narrowedConfig.rectangularHalfWidthMetres *= 0.5;
+    const auto narrowedResult = holobench::app::wave::simulateDetectorField(
+        narrowedConfig, fft);
+    const auto narrowed = lessons::evaluateDiffractionLessonObservation(
+        narrowedConfig,
+        narrowedResult,
+        templateConfig.rectangularHalfWidthMetres,
+        baseline.horizontalHalfMaximumWidthMetres);
+    CAPTURE(baseline.horizontalHalfMaximumWidthMetres);
+    CAPTURE(narrowed.horizontalHalfMaximumWidthMetres);
+    CHECK(narrowed.apertureNarrowed);
+    CHECK(narrowed.patternBroadened);
+    CHECK(narrowed.horizontalHalfMaximumWidthMetres
+        > baseline.horizontalHalfMaximumWidthMetres);
 }
 
 } // TEST_SUITE("LessonTemplates")

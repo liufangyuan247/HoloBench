@@ -1,5 +1,8 @@
 #pragma once
 
+#include <optional>
+
+#include "app/WaveDetectorPipeline.hpp"
 #include "optics/ray/GeometricElements.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
 
@@ -36,5 +39,28 @@ struct ThinLensLessonObservation final {
 [[nodiscard]] ThinLensLessonObservation evaluateThinLensLessonObservation(
     const optics::scene::OpticalBenchScene& scene,
     double templateScreenZMetres);
+
+struct RealVirtualLessonObservation final {
+    optics::scene::ThinLensImagePrediction prediction;
+    bool crossedFocalPlane = false;
+};
+
+[[nodiscard]] optics::scene::OpticalBenchScene makeRealVirtualLessonTemplate();
+[[nodiscard]] RealVirtualLessonObservation evaluateRealVirtualLessonObservation(
+    const optics::scene::OpticalBenchScene& scene);
+
+struct DiffractionLessonObservation final {
+    double apertureFullWidthMetres = 0.0;
+    double horizontalHalfMaximumWidthMetres = 0.0;
+    bool apertureNarrowed = false;
+    bool patternBroadened = false;
+};
+
+[[nodiscard]] wave::WaveDetectorConfig makeDiffractionLessonTemplate();
+[[nodiscard]] DiffractionLessonObservation evaluateDiffractionLessonObservation(
+    const wave::WaveDetectorConfig& appliedConfig,
+    const wave::WaveDetectorResult& result,
+    double templateHalfWidthMetres,
+    std::optional<double> baselineHalfMaximumWidthMetres = std::nullopt);
 
 } // namespace holobench::app::lessons
