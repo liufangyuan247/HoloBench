@@ -101,11 +101,13 @@
   recomputable rays/results; it does not model Fresnel power, polarization,
   roughness, absorption, dispersion, or multilayer coatings.
 - The current “Optical Bench” is a fixed point-source/lens/aperture/screen
-  reference scene. Mirrors and interfaces exist as isolated validated
-  primitives, while wave, SLM, and holography are separate fixed parameter
-  panels. There is not yet a unified component library, arbitrary 6-DoF
-  placement, geometric branch/merge graph, freely placed Screen/Probe/Plate,
-  or one complete bench project. M7 explicitly owns that product correction.
+  reference scene. The headless M7 foundation now provides one strict unified
+  project, twelve typed component kinds, arbitrary rigid transforms, scene
+  revision/staleness, and the initial splitter branch contract, but it is not
+  yet connected to the viewport. Spatial next-hit routing, complete
+  branch/merge tracing, freely manipulated Screen/Probe/Plate observations,
+  and local wave-plane adapters remain open; therefore the product is not yet
+  a usable free-form bench.
 - Undo/redo currently covers lesson-relevant optical-bench, Wave Detector,
   Sampling Debugger, and SLM inputs. Real Lens, Holography Lab, and the planned
   dynamic bench scene are not yet included. There is no autosave, crash

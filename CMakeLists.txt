@@ -88,6 +88,8 @@ add_library(holobench_optics STATIC
     optics/ray/SequentialLens.cpp
     optics/ray/ThinLens.cpp
     optics/scene/GeometricComponents.cpp
+    optics/scene/BenchInteraction.cpp
+    optics/scene/BenchScene.cpp
     optics/scene/NumericalAperture.cpp
     optics/scene/OpticalBenchScene.cpp
     optics/scene/SceneProjectAdapter.cpp
@@ -105,6 +107,7 @@ holobench_set_warnings(holobench_optics)
 # solver-independent optical models with numerical backends without making
 # either lower-level library depend on the other implementation layer.
 add_library(holobench_app_logic STATIC
+    app/BenchProject.cpp
     app/LessonEditHistory.cpp
     app/HolographyLabPipeline.cpp
     app/HolographyProject.cpp
@@ -370,6 +373,8 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/compute/PlaneProbeTests.cpp
         tests/compute/SamplingDiagnosticsTests.cpp
         tests/analytic/BenchTracerTests.cpp
+        tests/analytic/BenchInteractionTests.cpp
+        tests/analytic/BenchSceneTests.cpp
         tests/analytic/ChromaticAnalysisTests.cpp
         tests/analytic/PhaseOnlyHologramTests.cpp
         tests/analytic/ThinHologramTests.cpp
@@ -400,6 +405,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/validation/OptilandCrossValidationTests.cpp
         tests/validation/WavepropCrossValidationTests.cpp
         tests/app/WaveDetectorUiStateTests.cpp
+        tests/app/BenchProjectTests.cpp
         tests/app/SlmInterferenceUiStateTests.cpp
         tests/app/HolographyUiStateTests.cpp
         tests/app/HolographyProjectTests.cpp

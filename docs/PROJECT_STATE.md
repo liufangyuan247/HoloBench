@@ -28,6 +28,44 @@ exposure generation, and bounded reconstruction simulation. The former guided
 panel workflows are retained only as regression/reference assets until they are
 rebuilt on the shared bench.
 
+## M7 implementation progress
+
+- **Dynamic scene foundation (headless)**: `BenchScene` is now the first shared
+  scene truth source for the new product path. It owns a dynamic component
+  vector with stable IDs, arbitrary right-handed rigid transforms, monotonic
+  scene revision, add/replace/remove/duplicate commands, and revision-based
+  stale-observation detection. The legacy fixed-axis scene remains separate and
+  is not being expanded into the final bench.
+- **Typed component library contract**: all twelve required M7 kinds have
+  dedicated parameter types and validated defaults: laser (including RGB
+  spectral channels), object/wavefront source, mirror, reciprocal
+  splitter/combiner, ideal lens, real-lens assembly, aperture, spatial filter,
+  SLM, screen/detector, field probe, and H1/H2-role holographic plate. Kind and
+  parameter mismatches, invalid transforms/IDs, non-finite dimensions, invalid
+  raster sizes, and energy-creating splitter coefficients fail explicitly.
+- **Unified persistence foundation**: strict format-v1 `optical_bench` JSON now
+  stores project identity/provenance, complete typed components, rigid bases,
+  and scene revision. Unknown/missing fields and duplicate IDs are rejected;
+  canonical ID ordering makes save-load-save byte stable. Recomputable rays and
+  fields are deliberately absent.
+- **Beam/branch contract**: `BeamState`, branch provenance, optical
+  interactions, trace segments/terminations, observation revision, and bounded
+  hop/branch/minimum-power controls are explicit. The first reciprocal splitter
+  interaction conserves configured power, preserves wavelength/coherence
+  identity, advances optical path, and constructs a direction-consistent local
+  frame. Different wavelengths cannot cross-interfere.
+- **Current verification**: Windows Clang 21 `core-ci` warnings-as-errors build
+  passes with 421/421 deterministic cases; the complete development build and
+  application link pass with 423/423 cases including the packaged-font and
+  hardware OpenGL tests. The hidden application smoke exits 0 with no reported
+  GL errors on AMD Radeon Pro 5300M. Nine new M7 cases cover all twelve
+  schemas, invalid IDs/transforms/physics, scene mutation/revision/staleness,
+  RGB and arbitrary-transform canonical persistence, strict parser rejection,
+  splitter power/spectral identity, wavelength/coherence separation, and trace
+  budget validation. Viewport editing, generic rendering, full spatial
+  next-hit tracing, and local wave-plane adapters remain open, so M7.1 and M7
+  are not yet accepted.
+
 ## Completed
 
 - **M0 Engineering Foundation**:
@@ -188,8 +226,16 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Lock the unified dynamic bench document, component variant, rigid-transform, beam-state, interaction, branch-provenance, and observation contracts.
-2. Implement the M7 component library and viewport editing for RGB lasers, mirrors, splitters/combiners, lenses, apertures, screens/probes, SLMs, and holographic plates.
-3. Implement deterministic spatial next-hit tracing, branch power/path/coherence accounting, loop termination, and stale scene-revision diagnostics.
-4. Deliver M8 transmission, reflection/Denisyuk, and RGB full-colour recording/reconstruction as ordinary bench presets with independent numerical oracles.
-5. Compile a versioned M9 CHIMERA recipe into an editable bench, then simulate hogel/angular data, RGB exposure events, and bounded reconstruction.
+1. Implement deterministic spatial next-hit tracing for laser, mirror,
+   splitter/combiner, lens, aperture, and screen with branch budgets and
+   termination evidence.
+2. Connect the twelve typed kinds to the 3D component library, generic
+   rendering, selection, translation/rotation, duplicate, delete, and exact
+   Inspector editing over the same `BenchScene` commands.
+3. Connect object/SLM/probe/plate local 2D field planes and the existing wave
+   solvers, then commit editable transmission/reflection/RGB layout fixtures.
+4. Deliver M8 transmission, reflection/Denisyuk, and RGB full-colour
+   recording/reconstruction from actual plate-arriving branches with
+   independent numerical oracles.
+5. Compile a versioned M9 CHIMERA recipe into an editable bench, then simulate
+   hogel/angular data, RGB exposure events, and bounded reconstruction.
