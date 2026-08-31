@@ -458,6 +458,8 @@ LessonEditState Application::captureLessonEditState() const {
         .waveProjectName = waveProjectName_,
         .slmInterferenceDraft = slmInterferenceUiState_.draftConfig(),
         .slmCalibrationSource = slmInterferenceUiState_.draftCalibrationSource(),
+        .slmProjectProvenance = slmProjectProvenance_,
+        .slmProjectName = slmProjectName_,
     };
 }
 
@@ -474,6 +476,7 @@ bool Application::restoreLessonEditState(const LessonEditState& state) {
             state.slmInterferenceDraft);
         project::validateProjectProvenance(state.sceneProvenance);
         project::validateProjectProvenance(state.waveProjectProvenance);
+        project::validateProjectProvenance(state.slmProjectProvenance);
         if (!applySceneProject(
                 state.scene, state.tracerOptions, state.sceneProvenance)) {
             throw std::runtime_error(
@@ -485,6 +488,8 @@ bool Application::restoreLessonEditState(const LessonEditState& state) {
         waveProjectName_ = state.waveProjectName;
         slmInterferenceUiState_.replaceDraftProject(
             state.slmInterferenceDraft, state.slmCalibrationSource);
+        slmProjectProvenance_ = state.slmProjectProvenance;
+        slmProjectName_ = state.slmProjectName;
         restoringLessonEdit_ = false;
 
         detectorStatusMessage_
@@ -737,6 +742,8 @@ bool Application::initialize(const RunOptions& options) {
             lessonTemplateRoot(), "lesson_spatial_filtering"));
         static_cast<void>(lessons::loadWaveWorkbenchLessonTemplate(
             lessonTemplateRoot(), "lesson_na_psf"));
+        static_cast<void>(lessons::loadSlmLessonTemplate(
+            lessonTemplateRoot(), "lesson_coherence_interference"));
     } catch (const std::exception& ex) {
         SDL_Log("Packaged lesson template validation failed: %s", ex.what());
         shutdown();
@@ -1073,6 +1080,8 @@ void Application::loadSlmExperimentProject() {
         slmInterferenceUiState_.replaceDraftProject(
             std::move(document.config),
             std::move(document.calibrationProvenance));
+        slmProjectProvenance_ = std::move(document.provenance);
+        slmProjectName_ = std::move(document.name);
         recordLessonEdit();
         slmInterferenceErrorMessage_.clear();
         slmInterferenceStatusMessage_ = "Loaded SLM experiment project from "
@@ -1091,6 +1100,8 @@ void Application::saveSlmExperimentProject() {
             throw std::invalid_argument("SLM experiment project path cannot be empty");
         }
         slmproject::SlmInterferenceProjectDocument document;
+        document.name = slmProjectName_;
+        document.provenance = slmProjectProvenance_;
         document.config = slmInterferenceUiState_.draftConfig();
         document.calibrationProvenance
             = slmInterferenceUiState_.draftCalibrationSource();
@@ -2265,6 +2276,16 @@ void Application::drawSlmInterferencePanel() {
         "Laser -> pixelated SLM -> ideal Fourier lens -> angular probe + reference beam");
 
     if (ImGui::CollapsingHeader("Experiment project", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (slmProjectProvenance_.originKind
+            == project::ProjectOriginKind::LessonTemplate) {
+            ImGui::Text(
+                "Origin: lesson template %s v%d",
+                slmProjectProvenance_.sourceId.c_str(),
+                slmProjectProvenance_.sourceVersion);
+        } else {
+            ImGui::TextDisabled("Origin: user project");
+        }
+        ImGui::Text("Project: %s", slmProjectName_.c_str());
         ImGui::InputText(
             "Experiment JSON path",
             slmProjectPathBuffer_,
@@ -2277,7 +2298,7 @@ void Application::drawSlmInterferencePanel() {
             saveSlmExperimentProject();
         }
         ImGui::TextDisabled(
-            "Separate versioned M5 document; optical-bench v1 migration and v2 provenance remain independent.");
+            "Format v2 with provenance; v1 migrates as a user project. Load remains draft-only.");
     }
 
     if (ImGui::CollapsingHeader("Measured response LUT", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -3216,8 +3237,12 @@ void Application::loadLessonTemplate(std::string_view lessonId) {
         return;
     }
     if (lessonId == "coherence_interference") {
-        const auto lessonTemplate = lessons::makeCoherenceLessonTemplate();
-        slmInterferenceUiState_.setDraftConfig(lessonTemplate);
+        const auto lessonTemplate = lessons::loadSlmLessonTemplate(
+            lessonTemplateRoot(), "lesson_coherence_interference");
+        slmInterferenceUiState_.replaceDraftProject(
+            lessonTemplate.config, lessonTemplate.calibrationProvenance);
+        slmProjectProvenance_ = lessonTemplate.provenance;
+        slmProjectName_ = lessonTemplate.name;
         slmInterferenceUiState_.apply();
         slmInterferenceUiState_.setDisplayPlane(slmui::DisplayPlane::Interference);
         slmInterferenceResult_.reset();
@@ -4710,13 +4735,17 @@ int Application::run(const RunOptions& options) {
     if (glSmokeMode_) {
         try {
             slmproject::SlmInterferenceProjectDocument document;
+            document.name = slmProjectName_;
+            document.provenance = slmProjectProvenance_;
             document.config = slmInterferenceUiState_.appliedConfig();
             document.calibrationProvenance
                 = slmInterferenceUiState_.appliedCalibrationSource();
             const auto restored = slmproject::deserializeSlmInterferenceProjectJson(
                 slmproject::serializeSlmInterferenceProjectJson(document));
             if (!slmui::sameExperimentPhysicsConfig(document.config, restored.config)
-                || document.calibrationProvenance != restored.calibrationProvenance) {
+                || document.calibrationProvenance != restored.calibrationProvenance
+                || document.provenance != restored.provenance
+                || document.name != restored.name) {
                 SDL_Log("OpenGL smoke check failed: SLM project semantic round trip changed state");
                 rawGlError = true;
             }

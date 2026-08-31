@@ -25,6 +25,8 @@ struct LessonEditState final {
     std::string waveProjectName;
     slmexperiment::SlmInterferenceExperimentConfig slmInterferenceDraft;
     std::string slmCalibrationSource;
+    project::ProjectProvenance slmProjectProvenance;
+    std::string slmProjectName;
 };
 
 [[nodiscard]] bool sameLessonEditState(

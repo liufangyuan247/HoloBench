@@ -34,7 +34,9 @@ bool sameLessonEditState(
         && lhs.waveProjectName == rhs.waveProjectName
         && slmui::sameExperimentPhysicsConfig(
             lhs.slmInterferenceDraft, rhs.slmInterferenceDraft)
-        && lhs.slmCalibrationSource == rhs.slmCalibrationSource;
+        && lhs.slmCalibrationSource == rhs.slmCalibrationSource
+        && lhs.slmProjectProvenance == rhs.slmProjectProvenance
+        && lhs.slmProjectName == rhs.slmProjectName;
 }
 
 LessonEditHistory::LessonEditHistory(std::size_t capacity)

@@ -88,6 +88,11 @@
   `wave_sampling_workbench` document. Loading is deliberately draft-only;
   propagation and sampling refresh remain explicit operations, and numerical
   results are not persisted.
+- SLM & Interference Experiment files now use strict format v2 provenance;
+  format-v1 files migrate to user provenance and Save writes canonical v2.
+  Loading remains draft-only, computed interference results are not persisted,
+  and only the Coherence / Interference lesson currently has a packaged SLM
+  template.
 - Undo/redo currently covers lesson-relevant optical-bench, Wave Detector,
   Sampling Debugger, and SLM inputs. Real Lens and Holography Lab editing are
   not yet included. There is no autosave, crash recovery, release-complete CJK

@@ -24,6 +24,10 @@ namespace {
         .waveProjectName = "Lesson Template: Diffraction",
         .slmInterferenceDraft = lessons::makeCoherenceLessonTemplate(),
         .slmCalibrationSource = "No measured LUT loaded",
+        .slmProjectProvenance
+            = holobench::project::makeLessonTemplateProvenance(
+                "lesson_coherence_interference"),
+        .slmProjectName = "Lesson Template: Coherence and Interference",
     };
 }
 

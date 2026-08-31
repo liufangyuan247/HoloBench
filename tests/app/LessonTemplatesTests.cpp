@@ -10,6 +10,8 @@
 #include "app/lessons/LessonTemplates.hpp"
 #include "app/lessons/LessonTemplateRepository.hpp"
 #include "app/WaveWorkbenchProject.hpp"
+#include "app/SlmInterferenceProject.hpp"
+#include "app/SlmInterferenceUiState.hpp"
 #include "compute/fft/CpuFftBackend.hpp"
 #include "core/project/ProjectDocument.hpp"
 #include "optics/scene/SceneProjectAdapter.hpp"
@@ -82,6 +84,27 @@ TEST_CASE("packaged wave-workbench templates match factories and canonical bytes
     CHECK_THROWS_AS(
         static_cast<void>(lessons::loadWaveWorkbenchLessonTemplate(
             root, "lesson_coherence_interference")),
+        std::invalid_argument);
+}
+
+TEST_CASE("packaged SLM template matches the coherence factory and canonical bytes") {
+    const std::filesystem::path root(HOLOBENCH_LESSON_TEMPLATE_DIR);
+    const auto loaded = lessons::loadSlmLessonTemplate(
+        root, "lesson_coherence_interference");
+
+    CHECK(holobench::app::slmui::sameExperimentPhysicsConfig(
+        loaded.config, lessons::makeCoherenceLessonTemplate()));
+    CHECK(loaded.provenance
+        == holobench::project::makeLessonTemplateProvenance(
+            "lesson_coherence_interference",
+            lessons::kLessonTemplateVersion));
+    CHECK(loaded.calibrationProvenance == "No measured LUT loaded");
+    CHECK(holobench::app::slmproject::serializeSlmInterferenceProjectJson(
+              loaded)
+        == readBytes(root / "lesson_coherence_interference.slm.json"));
+    CHECK_THROWS_AS(
+        static_cast<void>(lessons::loadSlmLessonTemplate(
+            root, "lesson_volume_holograms")),
         std::invalid_argument);
 }
 

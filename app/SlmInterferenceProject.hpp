@@ -5,14 +5,17 @@
 #include <string_view>
 
 #include "app/SlmInterferencePipeline.hpp"
+#include "core/project/ProjectProvenance.hpp"
 
 namespace holobench::app::slmproject {
 
-inline constexpr int kSlmExperimentFormatVersion = 1;
+inline constexpr int kLegacySlmExperimentFormatVersion = 1;
+inline constexpr int kSlmExperimentFormatVersion = 2;
 
 struct SlmInterferenceProjectDocument final {
     int formatVersion = kSlmExperimentFormatVersion;
     std::string name = "SLM & Interference Experiment";
+    project::ProjectProvenance provenance;
     slmexperiment::SlmInterferenceExperimentConfig config;
     std::string calibrationProvenance = "No measured LUT loaded";
 };

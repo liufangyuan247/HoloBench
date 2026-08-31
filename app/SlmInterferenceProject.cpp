@@ -48,6 +48,40 @@ void requireKeys(
     return result;
 }
 
+[[nodiscard]] Json provenanceJson(
+    const project::ProjectProvenance& provenance) {
+    project::validateProjectProvenance(provenance);
+    return {
+        {"origin", project::projectOriginKindName(provenance.originKind)},
+        {"source_id", provenance.sourceId},
+        {"source_version", provenance.sourceVersion},
+    };
+}
+
+[[nodiscard]] project::ProjectProvenance parseProvenance(const Json& json) {
+    requireKeys(
+        json, {"origin", "source_id", "source_version"}, "project provenance");
+    if (!json.at("origin").is_string()
+        || !json.at("source_id").is_string()
+        || !json.at("source_version").is_number_integer()) {
+        throw std::invalid_argument("project provenance fields have invalid types");
+    }
+    const auto version = json.at("source_version").get<std::int64_t>();
+    if (version < std::numeric_limits<int>::min()
+        || version > std::numeric_limits<int>::max()) {
+        throw std::invalid_argument(
+            "project provenance version is outside int range");
+    }
+    project::ProjectProvenance result {
+        .originKind = project::projectOriginKindFromName(
+            json.at("origin").get<std::string>()),
+        .sourceId = json.at("source_id").get<std::string>(),
+        .sourceVersion = static_cast<int>(version),
+    };
+    project::validateProjectProvenance(result);
+    return result;
+}
+
 [[nodiscard]] std::size_t sizeValue(const Json& value, const char* context) {
     if (!value.is_number_integer()) {
         throw std::invalid_argument(std::string(context) + " must be an integer");
@@ -417,12 +451,14 @@ std::string serializeSlmInterferenceProjectJson(
     if (document.name.empty()) {
         throw std::invalid_argument("SLM experiment project name cannot be empty");
     }
+    project::validateProjectProvenance(document.provenance);
     const Json json = {
         {"calibration_provenance", document.calibrationProvenance},
         {"experiment", configToJson(document.config)},
         {"format_version", document.formatVersion},
         {"model", "slm_interference_experiment"},
         {"name", document.name},
+        {"provenance", provenanceJson(document.provenance)},
     };
     return json.dump(2) + "\n";
 }
@@ -431,11 +467,23 @@ SlmInterferenceProjectDocument deserializeSlmInterferenceProjectJson(
     std::string_view jsonText) {
     try {
         const Json json = Json::parse(jsonText);
-        requireKeys(json, {
-            "calibration_provenance", "experiment", "format_version", "model", "name",
-        }, "SLM experiment project");
-        if (!json.at("format_version").is_number_integer()
-            || json.at("format_version").get<int>() != kSlmExperimentFormatVersion) {
+        if (!json.is_object() || !json.contains("format_version")
+            || !json.at("format_version").is_number_integer()) {
+            throw std::invalid_argument(
+                "SLM experiment project requires an integer format version");
+        }
+        const int parsedVersion = json.at("format_version").get<int>();
+        if (parsedVersion == kLegacySlmExperimentFormatVersion) {
+            requireKeys(json, {
+                "calibration_provenance", "experiment", "format_version",
+                "model", "name",
+            }, "legacy SLM experiment project");
+        } else if (parsedVersion == kSlmExperimentFormatVersion) {
+            requireKeys(json, {
+                "calibration_provenance", "experiment", "format_version",
+                "model", "name", "provenance",
+            }, "SLM experiment project");
+        } else {
             throw std::invalid_argument("unsupported SLM experiment project format version");
         }
         if (!json.at("model").is_string()
@@ -451,6 +499,9 @@ SlmInterferenceProjectDocument deserializeSlmInterferenceProjectJson(
         return {
             .formatVersion = kSlmExperimentFormatVersion,
             .name = json.at("name").get<std::string>(),
+            .provenance = parsedVersion == kLegacySlmExperimentFormatVersion
+                ? project::ProjectProvenance {}
+                : parseProvenance(json.at("provenance")),
             .config = parseConfig(json.at("experiment")),
             .calibrationProvenance = json.at("calibration_provenance").get<std::string>(),
         };

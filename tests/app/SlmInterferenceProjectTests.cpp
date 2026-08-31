@@ -9,8 +9,11 @@
 #include <utility>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "app/SlmInterferenceProject.hpp"
 #include "app/SlmInterferenceUiState.hpp"
+#include "core/project/ProjectProvenance.hpp"
 
 namespace slmexperiment = holobench::app::slmexperiment;
 namespace slmproject = holobench::app::slmproject;
@@ -50,6 +53,8 @@ TEST_SUITE("SlmInterferenceProject") {
 TEST_CASE("default experiment JSON round trip is semantic and byte stable") {
     slmproject::SlmInterferenceProjectDocument expected;
     expected.name = "Three-colour teaching lab";
+    expected.provenance = holobench::project::makeLessonTemplateProvenance(
+        "lesson_coherence_interference", 2);
     expected.config = slmexperiment::makeDefaultSlmInterferenceExperimentConfig();
 
     const std::string first = slmproject::serializeSlmInterferenceProjectJson(expected);
@@ -58,6 +63,7 @@ TEST_CASE("default experiment JSON round trip is semantic and byte stable") {
 
     CHECK(second == first);
     CHECK(restored.name == expected.name);
+    CHECK(restored.provenance == expected.provenance);
     CHECK(restored.calibrationProvenance == expected.calibrationProvenance);
     CHECK(slmui::sameExperimentPhysicsConfig(restored.config, expected.config));
 }
@@ -92,6 +98,7 @@ TEST_CASE("calibrated response finite coherence and provenance survive file roun
 
 TEST_CASE("experiment project rejects unknown keys enums versions and invalid physics") {
     const auto valid = slmproject::serializeSlmInterferenceProjectJson({
+        .provenance = {},
         .config = slmexperiment::makeDefaultSlmInterferenceExperimentConfig(),
     });
     auto unknown = valid;
@@ -101,12 +108,25 @@ TEST_CASE("experiment project rejects unknown keys enums versions and invalid ph
         std::invalid_argument);
 
     auto badVersion = valid;
-    const auto versionPosition = badVersion.find("\"format_version\": 1");
+    const auto versionPosition = badVersion.find("\"format_version\": 2");
     REQUIRE(versionPosition != std::string::npos);
-    badVersion.replace(versionPosition, std::string("\"format_version\": 1").size(),
-        "\"format_version\": 2");
+    badVersion.replace(versionPosition, std::string("\"format_version\": 2").size(),
+        "\"format_version\": 3");
     CHECK_THROWS_AS(
         static_cast<void>(slmproject::deserializeSlmInterferenceProjectJson(badVersion)),
+        std::invalid_argument);
+
+    auto corruptProvenance = valid;
+    const auto sourcePosition
+        = corruptProvenance.find("\"source_id\": \"\"");
+    REQUIRE(sourcePosition != std::string::npos);
+    corruptProvenance.replace(
+        sourcePosition,
+        std::string("\"source_id\": \"\"").size(),
+        "\"source_id\": \"false_claim\"");
+    CHECK_THROWS_AS(
+        static_cast<void>(slmproject::deserializeSlmInterferenceProjectJson(
+            corruptProvenance)),
         std::invalid_argument);
 
     auto badMode = valid;
@@ -123,8 +143,32 @@ TEST_CASE("experiment project rejects unknown keys enums versions and invalid ph
     auto invalid = slmexperiment::makeDefaultSlmInterferenceExperimentConfig();
     invalid.referenceBeam.directionCosineX = 1.0;
     CHECK_THROWS_AS(
-        static_cast<void>(slmproject::serializeSlmInterferenceProjectJson({.config = invalid})),
+        static_cast<void>(slmproject::serializeSlmInterferenceProjectJson({
+            .provenance = {},
+            .config = invalid,
+        })),
         std::invalid_argument);
+}
+
+TEST_CASE("legacy format one migrates to format two user provenance") {
+    auto legacy = nlohmann::json::parse(
+        slmproject::serializeSlmInterferenceProjectJson({
+            .provenance = {},
+            .config = slmexperiment::makeDefaultSlmInterferenceExperimentConfig(),
+        }));
+    legacy["format_version"] = slmproject::kLegacySlmExperimentFormatVersion;
+    legacy.erase("provenance");
+
+    const auto restored = slmproject::deserializeSlmInterferenceProjectJson(
+        legacy.dump());
+
+    CHECK(restored.formatVersion == slmproject::kSlmExperimentFormatVersion);
+    CHECK(restored.provenance == holobench::project::ProjectProvenance {});
+    const auto canonical = nlohmann::json::parse(
+        slmproject::serializeSlmInterferenceProjectJson(restored));
+    CHECK(canonical.at("format_version")
+        == slmproject::kSlmExperimentFormatVersion);
+    CHECK(canonical.contains("provenance"));
 }
 
 TEST_CASE("loaded project remains draft-only until explicit Apply") {

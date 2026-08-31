@@ -4,6 +4,7 @@
 #include <string_view>
 
 #include "app/WaveWorkbenchProject.hpp"
+#include "app/SlmInterferenceProject.hpp"
 #include "optics/scene/SceneProjectAdapter.hpp"
 
 namespace holobench::app::lessons {
@@ -17,6 +18,11 @@ loadOpticalBenchLessonTemplate(
 
 [[nodiscard]] waveproject::WaveWorkbenchProjectDocument
 loadWaveWorkbenchLessonTemplate(
+    const std::filesystem::path& templateRoot,
+    std::string_view projectTemplateId);
+
+[[nodiscard]] slmproject::SlmInterferenceProjectDocument
+loadSlmLessonTemplate(
     const std::filesystem::path& templateRoot,
     std::string_view projectTemplateId);
 

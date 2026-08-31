@@ -359,6 +359,8 @@ private:
     std::string waveProjectName_ = "Wave & Sampling Workbench";
     reallens::RealLensWorkbenchConfig realLensConfig_;
     slmui::SlmInterferenceUiState slmInterferenceUiState_;
+    project::ProjectProvenance slmProjectProvenance_;
+    std::string slmProjectName_ = "SLM & Interference Experiment";
     holographyui::HolographyUiState holographyUiState_;
     lessons::LearnSession learnSession_;
     lessons::LocalizationCatalog lessonLocalization_;
