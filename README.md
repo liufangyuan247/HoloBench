@@ -2,9 +2,9 @@
 
 HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator, and a long-term R&D tool for CHIMERA-like holographic printing.
 
-**Milestone status**: **M0–M5** are complete through the validated SLM,
-coherence, and interference workflow. **M6 (Holography Core)** is active
-development. For the current repository state and roadmap, see
+**Milestone status**: **M0-M6** are complete through the validated thin,
+phase-only, RGB H1/H2, and volume/Kogelnik holography workflow. **M7 (Teaching
+Product Alpha)** is active development. For the current repository state and roadmap, see
 [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and
 [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
 
@@ -64,7 +64,7 @@ development. For the current repository state and roadmap, see
   ideal/LUT/LCD full refresh records p95 **188.482 ms** with Clang and
   **278.183 ms** with MSVC on the reference i7-9750H, below the 350 ms budget.
 
-## M6 Feature Set (in progress)
+## M6 Feature Set (complete)
 
 - **Thin-hologram reconstruction foundation**: M6 records fully coherent
   object/reference interference into an explicit bounded amplitude response,

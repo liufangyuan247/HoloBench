@@ -52,3 +52,8 @@ Conventions are fixed by
 [ADR 0010](../adr/0010-volume-hologram-and-kogelnik-conventions.md).
 
 Completion tag: `m6-holography`.
+
+Release evidence: GitHub Actions run
+[33378162951](https://github.com/liufangyuan247/HoloBench/actions/runs/33378162951)
+passes all four build/test jobs and both Windows/Linux executions of the named
+M6 CPU performance gate at `eea50c6`.
