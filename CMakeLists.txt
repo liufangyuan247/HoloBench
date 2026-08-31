@@ -123,6 +123,16 @@ target_link_libraries(holobench_m3_benchmark PRIVATE
 )
 holobench_set_warnings(holobench_m3_benchmark)
 
+add_executable(holobench_m4_benchmark
+    benchmarks/RealLensWorkbenchBenchmark.cpp
+)
+target_include_directories(holobench_m4_benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(holobench_m4_benchmark PRIVATE
+    HoloBench::AppLogic
+    HoloBench::Optics
+)
+holobench_set_warnings(holobench_m4_benchmark)
+
 set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
@@ -281,6 +291,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/WaveSourceTests.cpp
         tests/project/ProjectDocumentTests.cpp
         tests/project/SceneProjectAdapterTests.cpp
+        tests/validation/OptilandCrossValidationTests.cpp
         tests/validation/WavepropCrossValidationTests.cpp
         tests/app/WaveDetectorUiStateTests.cpp
         render/Camera.cpp
@@ -295,6 +306,15 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
     )
     target_compile_definitions(holobench_tests PRIVATE
         HOLOBENCH_WAVEPROP_GOLDEN_DIR="${HOLOBENCH_WAVEPROP_GOLDEN_DIR}"
+    )
+    set(HOLOBENCH_OPTILAND_VALIDATION_DIR "${CMAKE_CURRENT_BINARY_DIR}/validation/optiland")
+    file(COPY
+        "${CMAKE_CURRENT_SOURCE_DIR}/validation/optiland/prescriptions"
+        "${CMAKE_CURRENT_SOURCE_DIR}/validation/optiland/goldens"
+        DESTINATION "${HOLOBENCH_OPTILAND_VALIDATION_DIR}"
+    )
+    target_compile_definitions(holobench_tests PRIVATE
+        HOLOBENCH_OPTILAND_VALIDATION_DIR="${HOLOBENCH_OPTILAND_VALIDATION_DIR}"
     )
     holobench_set_warnings(holobench_tests)
 

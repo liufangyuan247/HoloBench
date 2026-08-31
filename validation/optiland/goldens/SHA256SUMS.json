@@ -1,0 +1,20 @@
+{
+  "files": {
+    "generate_goldens.py": "36a1acda6fd5dc9349f8d13d7183d30a41a7e99cccac18f9cc99178b8dc3f01c",
+    "goldens/cemented_achromatic_doublet.json": "9bb8ada091ac3f36756552c4e58cf131db2a2d4e5e51ea1e88ba3d74307fa4af",
+    "goldens/conic_singlet.json": "0c897a4302943d8d97d4284dc3c35c576a3897ac465d6ef720b2bd2cfc8e5cbf",
+    "goldens/even_asphere_singlet.json": "73ea9b2288cc9990c971d82953d47261735740ca5f3409cd934798930364a670",
+    "goldens/plano_convex_singlet.json": "47d84dfbed667ada9db09fb89981b47f067e6aa3ce26eb71435c1576bb2cfc91",
+    "goldens/positive_meniscus.json": "19e05655809c81c6b8e0f2e367906f7540c65bbe9a3dbb6c4aecaaf2e6c858f1",
+    "prescriptions/cemented_achromatic_doublet.json": "2b134577b70833024ac3469799310e9edd8c7ab32d7b9407ea387a02e8479e1d",
+    "prescriptions/conic_singlet.json": "6e000e74f84822a01d882aa781e8e04b9ae0581f07dce16d91f46672b5ac3659",
+    "prescriptions/even_asphere_singlet.json": "62ea64f8d42a95c5d8d7e6f61a80273177a736831ea95e45ed27e4cb935a003a",
+    "prescriptions/plano_convex_singlet.json": "a36dccf1d4fefae562c5abf878c4eb2e8f433013de50a331d8655daebd094cc6",
+    "prescriptions/positive_meniscus.json": "c3a9439af9c1aa8ea735e463e2d0321e30cc67f48ab4205704fa63507b1f7cc5",
+    "requirements-validation.txt": "f844438c7b8bcf9a9338431ba0649718801037ad4927e9697876528fffafe1cb"
+  },
+  "format_version": 1,
+  "generator": "Optiland real-lens external validation",
+  "optiland_source_commit": "019413c2d8a2a367b7f6f7e8c422c8f76d6eb5ad",
+  "optiland_version": "0.6.2"
+}

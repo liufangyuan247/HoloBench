@@ -6,7 +6,7 @@ Last updated: 2026-08-31
 
 **M3 — Fourier Optics & Sampling Debugger: complete**
 
-Active development: **M4 — Real Lens Engineering Model**
+Active development: **M4 — Real Lens Engineering Model release integration**
 
 Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 
@@ -90,7 +90,9 @@ Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 - **Prescription persistence**: [Versioned JSON and normalized CSV](LENS_PRESCRIPTION_FORMAT.md) preserve complete material, surface, asphere, and rigid-pose state. CSV supports quoted editable text plus explicit Sellmeier/asphere child rows. Both formats validate the complete prescription after import and provide deterministic, lossless reserialization and file APIs.
 - **Interactive Real Lens Workbench**: A dedicated dockable editor imports/exports JSON or CSV; edits fields, pupil sampling, material coefficients, surface curvature/conic/aspheres/aperture, material transitions, decenter, and rigid tilt; and uses explicit dirty/refresh semantics. The analysis view renders wavelength-coloured XZ sequential rays, real surface profiles, image plane, physical XY spots, per-field statistics, rejected counts, and longitudinal chromatic focus with limitations kept visible.
 - **Workbench orchestration**: A headless pipeline deterministically generates 729 rays for the default three-field Fraunhofer F/d/C example, preserves total power, runs sequential trace/spot/chromatic analysis, and emits render-neutral polylines. Sampling and total-ray safety limits fail explicitly rather than allocating unbounded work.
-- **Local toolchain gate**: Windows Clang 21 warnings-as-errors core and application builds pass with 265/265 headless tests. MSVC 19.44 `/W4 /WX` passes 265/265 and separately builds the complete SDL/OpenGL/ImGui application. Hidden OpenGL smoke passes for both Clang and MSVC builds on the available AMD device and now requires drawable Real Lens Workbench output.
+- **Pinned external validation**: Optiland 0.6.2 at source commit `019413c2d8a2a367b7f6f7e8c422c8f76d6eb5ad` independently traces five committed plano-convex, positive-meniscus, cemented-achromat, conic, and even-asphere prescriptions. Hashed, byte-reproducible goldens cover 135 F/d/C rays, every surface hit and outgoing direction, cumulative optical path, image-plane spots, wavelength best focus, and longitudinal focal shift. The generator verifies SI/mm radius, aperture, and asphere conversions and remains validation-only.
+- **M4 named performance gate**: `ray/real_lens_default_729_refresh` performs the complete three-field, three-wavelength workbench refresh, including spot, chromatic, and polyline outputs. On Intel Core i7-9750H with the Windows Clang 21.1.8 Release build, 5 warmups and 30 samples record p50 **6.422 ms**, p95 **6.594 ms**, and max **6.641 ms**, meeting the p95 < 50 ms budget. MSVC independently records p95 **10.857 ms** against the same budget.
+- **Local toolchain gate**: Windows Clang 21 warnings-as-errors core and application builds pass with 270/270 headless tests. MSVC 19.44 `/W4 /WX` passes 270/270 and builds the complete SDL/OpenGL/ImGui application and all benchmark targets. Ubuntu/WSL GCC 15.2 warnings-as-errors passes 270/270 and builds the complete application. Hidden OpenGL smoke passes for both Clang and MSVC builds on the available AMD device and requires drawable Real Lens Workbench output.
 
 ## Known limitations (M1/M2)
 
@@ -102,8 +104,8 @@ Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 
 ## Next five tasks
 
-1. Build the pinned Optiland/prysm generator and commit hashed golden prescriptions.
-2. Validate at least five benchmark lenses against independent surface-hit/focal/spot/chromatic results.
-3. Add a named Real Lens Workbench refresh performance budget and benchmark executable.
-4. Run Ubuntu warnings-as-errors and application compilation gates.
-5. Run final smoke/release CI and publish the `m4-real-lens` tag.
+1. Run the final four-job Windows/Ubuntu release CI on the M4 integration commit.
+2. Publish the `m4-real-lens` completion tag after the remote gate passes.
+3. Start M5 with an ADR fixing SLM pixel, phase, fill-factor, coherence, and interference conventions.
+4. Implement the deterministic CPU complex-field modulation/coherent-combination reference.
+5. Add analytic two-beam interference and sampled-SLM validation before GPU acceleration.

@@ -1,0 +1,170 @@
+{
+  "format": "holobench-lens-prescription",
+  "format_version": 1,
+  "id": "cemented_achromatic_doublet",
+  "materials": [
+    {
+      "dispersion": {
+        "refractive_index": 1.0,
+        "type": "constant"
+      },
+      "display_name": "Vacuum",
+      "id": "vacuum",
+      "wavelength_domain_m": {
+        "maximum": 1.0,
+        "minimum": 1e-12
+      }
+    },
+    {
+      "dispersion": {
+        "terms": [
+          {
+            "b": 1.03961212,
+            "c_m2": 6.00069867e-15
+          },
+          {
+            "b": 0.231792344,
+            "c_m2": 2.00179144e-14
+          },
+          {
+            "b": 1.01046945,
+            "c_m2": 1.03560653e-10
+          }
+        ],
+        "type": "sellmeier_si"
+      },
+      "display_name": "SCHOTT N-BK7",
+      "id": "schott_n_bk7",
+      "wavelength_domain_m": {
+        "maximum": 2.5e-06,
+        "minimum": 3e-07
+      }
+    },
+    {
+      "dispersion": {
+        "terms": [
+          {
+            "b": 1.34533359,
+            "c_m2": 9.97743871e-15
+          },
+          {
+            "b": 0.209073176,
+            "c_m2": 4.70450767e-14
+          },
+          {
+            "b": 0.937357162,
+            "c_m2": 1.11886764e-10
+          }
+        ],
+        "type": "sellmeier_si"
+      },
+      "display_name": "SCHOTT F2",
+      "id": "schott_f2",
+      "wavelength_domain_m": {
+        "maximum": 2.5e-06,
+        "minimum": 3.34e-07
+      }
+    }
+  ],
+  "surfaces": [
+    {
+      "geometry": {
+        "clear_semi_diameter_m": 0.008,
+        "conic_constant": 0.0,
+        "curvature_per_m": 20.0,
+        "even_asphere_terms": []
+      },
+      "id": "crown_front",
+      "local_to_world": {
+        "local_x_axis_in_world": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "local_y_axis_in_world": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "local_z_axis_in_world": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "translation_m": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "material_after_id": "schott_n_bk7",
+      "material_before_id": "vacuum"
+    },
+    {
+      "geometry": {
+        "clear_semi_diameter_m": 0.008,
+        "conic_constant": 0.0,
+        "curvature_per_m": -28.0,
+        "even_asphere_terms": []
+      },
+      "id": "cemented_interface",
+      "local_to_world": {
+        "local_x_axis_in_world": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "local_y_axis_in_world": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "local_z_axis_in_world": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "translation_m": [
+          0.0,
+          0.0,
+          0.004
+        ]
+      },
+      "material_after_id": "schott_f2",
+      "material_before_id": "schott_n_bk7"
+    },
+    {
+      "geometry": {
+        "clear_semi_diameter_m": 0.008,
+        "conic_constant": 0.0,
+        "curvature_per_m": -10.0,
+        "even_asphere_terms": []
+      },
+      "id": "flint_rear",
+      "local_to_world": {
+        "local_x_axis_in_world": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "local_y_axis_in_world": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "local_z_axis_in_world": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "translation_m": [
+          0.0,
+          0.0,
+          0.006
+        ]
+      },
+      "material_after_id": "vacuum",
+      "material_before_id": "schott_f2"
+    }
+  ]
+}

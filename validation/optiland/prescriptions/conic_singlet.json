@@ -1,0 +1,112 @@
+{
+  "format": "holobench-lens-prescription",
+  "format_version": 1,
+  "id": "conic_singlet",
+  "materials": [
+    {
+      "dispersion": {
+        "refractive_index": 1.0,
+        "type": "constant"
+      },
+      "display_name": "Vacuum",
+      "id": "vacuum",
+      "wavelength_domain_m": {
+        "maximum": 1.0,
+        "minimum": 1e-12
+      }
+    },
+    {
+      "dispersion": {
+        "terms": [
+          {
+            "b": 1.03961212,
+            "c_m2": 6.00069867e-15
+          },
+          {
+            "b": 0.231792344,
+            "c_m2": 2.00179144e-14
+          },
+          {
+            "b": 1.01046945,
+            "c_m2": 1.03560653e-10
+          }
+        ],
+        "type": "sellmeier_si"
+      },
+      "display_name": "SCHOTT N-BK7",
+      "id": "schott_n_bk7",
+      "wavelength_domain_m": {
+        "maximum": 2.5e-06,
+        "minimum": 3e-07
+      }
+    }
+  ],
+  "surfaces": [
+    {
+      "geometry": {
+        "clear_semi_diameter_m": 0.008,
+        "conic_constant": -0.65,
+        "curvature_per_m": 22.0,
+        "even_asphere_terms": []
+      },
+      "id": "front_conic",
+      "local_to_world": {
+        "local_x_axis_in_world": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "local_y_axis_in_world": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "local_z_axis_in_world": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "translation_m": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "material_after_id": "schott_n_bk7",
+      "material_before_id": "vacuum"
+    },
+    {
+      "geometry": {
+        "clear_semi_diameter_m": 0.008,
+        "conic_constant": 0.0,
+        "curvature_per_m": -16.0,
+        "even_asphere_terms": []
+      },
+      "id": "rear_sphere",
+      "local_to_world": {
+        "local_x_axis_in_world": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "local_y_axis_in_world": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "local_z_axis_in_world": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "translation_m": [
+          0.0,
+          0.0,
+          0.005
+        ]
+      },
+      "material_after_id": "vacuum",
+      "material_before_id": "schott_n_bk7"
+    }
+  ]
+}

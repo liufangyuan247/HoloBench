@@ -40,6 +40,7 @@ Performance claims are accepted only when they identify hardware, build type, sc
 - `wave/asm_1024_square_gpu_recompute` — Validated on AMD Radeon Pro 5300M (M2)
 - `fourier/sampling_debugger_256_square_cpu_refresh` — Validated on Intel Core i7-9750H (M3)
 - `fourier/four_f_1024_square_gpu_recompute` — Validated on AMD Radeon Pro 5300M (M3)
+- `ray/real_lens_default_729_refresh` — Validated on Intel Core i7-9750H (M4)
 - `wave/asm_2048_square_single_step` — Target for M2 Angular Spectrum Method
 - `project/load_reference_scene` — Target for scene load latency
 
@@ -88,3 +89,19 @@ NVIDIA results must be appended with renderer/driver identity and `twiddle_sourc
 | Max recompute | **249.959 ms** | Informational | Recorded |
 
 The Fourier-lens implementation precomputes separable centred X/Y phase factors. This preserves the same numerical-domain checks and direct-DFT oracle tolerances while avoiding per-pixel trigonometric recomputation. NVIDIA evidence remains additive: it must identify renderer/driver, confirm `twiddle_source=gpu-shader`, and satisfy the same named workload budget without changing defaults for other devices.
+
+## M4 Verified Real-Lens Benchmark
+
+### Benchmark Profile: `ray/real_lens_default_729_refresh`
+
+- **Hardware Profile**: Intel Core i7-9750H (6 cores / 12 logical processors), Windows 10 10.0.19045, Clang 21.1.8 Release build.
+- **Workload**: Default N-BK7 biconvex prescription, three fields, Fraunhofer F/d/C spectrum, 81 pupil samples per field, and 729 total rays. One refresh generates the ray bundle, performs sequential tracing, physical image-plane spot grouping, on-axis wavelength best-focus/longitudinal-colour analysis, and all render-neutral trace polylines.
+- **Execution Parameters**: Deterministic CPU double-precision reference, 5 warmups and 30 measured refreshes. The editor uses explicit dirty/apply semantics rather than recomputing every frame.
+
+| Metric | Result | Target Budget | Status |
+|---|---|---|---|
+| p50 refresh | **6.422 ms** | Informational | Recorded |
+| p95 refresh | **6.594 ms** | **< 50 ms** | Met |
+| Max refresh | **6.641 ms** | Informational | Recorded |
+
+MSVC 19.44 `/O2` independently records p50 **9.935 ms**, p95 **10.857 ms**, and max **11.022 ms**, meeting the same platform-neutral budget. This is a CPU benchmark and contains no GPU vendor/model dispatch or device-specific performance cap.

@@ -2,7 +2,7 @@
 
 HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator, and a long-term R&D tool for CHIMERA-like holographic printing.
 
-**Milestone status**: **M0–M3** are complete through Fourier optics and the Sampling Debugger. **M4 (Real Lens Engineering Model)** has an integrated local editor/analysis workflow; independent five-lens and release gates remain. For the current repository state and roadmap, see [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
+**Milestone status**: **M0–M3** are complete through Fourier optics and the Sampling Debugger. **M4 (Real Lens Engineering Model)** is locally release-qualified; the final remote CI run and milestone tag remain. For the current repository state and roadmap, see [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
 
 ## M1 Features
 
@@ -27,11 +27,13 @@ HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator
 - **Fourier Optics**: Ideal Fourier lenses, 4-f relays, coherent spatial filters, sampled Airy PSF, and explicitly incoherent MTF.
 - **Sampling Debugger**: Angular-spectrum classification, Nyquist/padding/wrap warnings, arbitrary-plane probes, and four-plane 4-f visualization.
 
-## M4 Features in Progress
+## M4 Feature Set
 
 - **Engineering prescription tracer**: Plane, sphere, conic, and even-asphere surfaces; rigid decenter/tilt; SI Cauchy/Sellmeier materials; sequential wavelength-aware refraction, clipping, TIR, and optical path evidence.
 - **Spot and chromatic analysis**: Physical image-plane samples grouped by field and wavelength, rejected-ray evidence, RMS/geometric radii, best axial focus, and longitudinal colour shift.
 - **Real Lens Workbench**: Versioned JSON/CSV import/export, interactive surface/material/field editing, wavelength-coloured XZ ray/surface visualization, XY spot plot, per-field statistics, and explicit limitations.
+- **Independent engineering validation**: Five committed plano-convex, meniscus, achromat, conic, and even-asphere prescriptions compare every surface hit, outgoing direction, optical path, spot coordinate, best focus, and longitudinal colour shift with pinned Optiland 0.6.2 data and hashes.
+- **Named performance gate**: The complete default 729-ray workbench refresh records p50 **6.422 ms**, p95 **6.594 ms**, and max **6.641 ms** on the reference Intel Core i7-9750H, meeting the p95 < 50 ms budget.
 
 ## Physical Assumptions & Limitations (M1)
 
@@ -51,7 +53,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (265 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (270 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -59,7 +61,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 265/265 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 270/270 tests passing):
 
 ```powershell
 cmake --preset core-ci

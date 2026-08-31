@@ -8,7 +8,7 @@
 | Geometric optics (M1) | Validated | 92/92 deterministic tests across `dev` and `core-ci` presets (`ThinLensTests.cpp`, `SnellTests.cpp`, `GeometricElementsTests.cpp`, `NumericalApertureTests.cpp`, `BenchTracerTests.cpp`) | Interactive ray tracing |
 | Wave optics (M2 CPU/GPU & detector) | Validated | 203 deterministic CPU/application cases; OpenGL executable 7/7 cases and 720/720 assertions; analytic oracles and three external full-field `waveprop 0.0.12` cross-validation cases | CPU reference, interactive GPU propagation, detector UI |
 | Fourier optics and Sampling Debugger (M3) | Validated | 229/229 deterministic cases; 4-f direct-DFT/inversion/filter/Airy oracles; 8/8 GPU cases and 1121/1121 assertions; seven-texture OpenGL smoke; named CPU debugger and GPU 4-f budgets pass; four-job release CI passes | Interactive 4-f filtering and sampling diagnostics |
-| Real-lens engineering (M4) | Integrated local validation | Real surfaces, SI dispersion, rigid poses, sequential assemblies, wavelength/field/combined spot statistics, longitudinal chromatic focus, versioned JSON/CSV exchange, and interactive editor/plots; independent roots/normals/catalog lines plus analytic focal fits, pipeline, malformed-input, and smoke coverage; 265/265 tests on Clang/MSVC | Interactive engineering workflow locally enabled; external five-lens and release gates pending |
+| Real-lens engineering (M4) | Locally release-qualified | Real surfaces, SI dispersion, rigid poses, sequential assemblies, wavelength/field/combined spot statistics, longitudinal chromatic focus, versioned JSON/CSV exchange, interactive editor/plots, and five pinned Optiland 0.6.2 benchmark prescriptions; 270/270 on Clang, MSVC, and GCC; named 729-ray budget and local smoke pass | Final remote release CI pending |
 | Holography (M6) | Not implemented | None | Prohibited |
 
 ## M1 Validation Breakdown
@@ -80,13 +80,16 @@
 
 ## Build and CI Execution Status
 
-- **M4 Local Foundation Gate**:
-  - Windows Clang 21.1.8: warnings-as-errors core/application builds pass; all 265 deterministic headless cases pass.
-  - Windows MSVC 19.44: `/W4 /WX` headless build passes all 265 deterministic cases; a separate strict configuration builds the complete SDL/OpenGL/ImGui application.
+- **M4 Local Release Gate**:
+  - Windows Clang 21.1.8: warnings-as-errors core/application and M4 benchmark builds pass; all 270 deterministic headless cases pass.
+  - Windows MSVC 19.44: `/W4 /WX` headless build passes all 270 deterministic cases; a separate strict configuration builds the complete SDL/OpenGL/ImGui application and benchmark targets.
+  - Ubuntu/WSL GCC 15.2: warnings-as-errors core passes all 270 deterministic cases and the complete SDL/OpenGL/ImGui application compiles.
   - M4 spot and chromatic cases retain rejected-ray evidence, verify spectral power conservation, recover an exact synthetic axial focus, distinguish bounded/collimated/insufficient fits, and demonstrate the expected blue-before-red N-BK7 longitudinal focus ordering.
   - Prescription JSON/CSV cases preserve all supported dispersion/surface/pose data, quoted CSV text, and byte-stable reserialization; version drift, unknown schema fields, malformed quoting, term-count/index errors, non-finite values, and invalid geometry fail explicitly.
   - Field-tagged spot cases verify independent field, wavelength, and field/wavelength grouping while retaining field and wavelength identity for rejected rays; the legacy untagged API maps explicitly to the `default` field.
   - Real Lens Workbench pipeline cases verify the default 729-ray three-field F/d/C workload, total input power, group counts, off-axis centroids, blue-before-red focus, drawable polylines, repeated-refresh determinism, and bounded sampling/configuration rejection.
+  - Five pinned Optiland 0.6.2 cases compare 135 explicit F/d/C rays across plano-convex, positive-meniscus, cemented-achromat, conic, and even-asphere prescriptions. The 4,813 cross-validation assertions cover full surface hits, directions, optical path, spots, best focus, and chromatic focal shift; committed hashes reproduce byte-for-byte.
+  - `ray/real_lens_default_729_refresh` on Intel Core i7-9750H, Clang 21.1.8 Release, 5 warmups and 30 samples: p50 **6.422 ms**, p95 **6.594 ms**, max **6.641 ms**; p95 < 50 ms target met. MSVC p95 is **10.857 ms**.
   - Hidden OpenGL smoke passes with exit 0 for both Clang and MSVC application builds on AMD Radeon Pro 5300M; the smoke gate now requires non-empty real-lens spot and ray visualization data in addition to the existing detector/debugger textures.
 - **M3 Local Cross-platform Gate**:
   - Windows Clang 21.1.8: warnings-as-errors core/application and benchmark targets compile; 229/229 deterministic headless cases pass.

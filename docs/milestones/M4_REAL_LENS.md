@@ -26,7 +26,7 @@ against an independent optical-design implementation.
   round-trip and malformed-input tests.
 - [x] Interactive prescription editor, surface/ray visualization, spot diagram,
   and validation/limitation displays.
-- [ ] Pinned Optiland/prysm validation bridge and committed, hashed golden data;
+- [x] Pinned Optiland validation bridge and committed, hashed golden data;
   no Python runtime dependency.
 
 ## Numerical gate
@@ -39,11 +39,13 @@ against an independent optical-design implementation.
   clipping, absorption, and TIR.
 - [x] Cauchy and Sellmeier indices match independent hand-calculated and catalog
   reference values across the declared wavelength domain.
-- [ ] At least five benchmark lenses cover focal position, full surface hit
+- [x] At least five benchmark lenses cover focal position, full surface hit
   coordinates, spot diagram, and chromatic focal shift against pinned external
   references at documented tolerances.
-- [ ] Windows and Ubuntu warnings-as-errors builds, deterministic tests, named
-  performance budgets, application smoke, and final release CI all pass.
+- [x] Windows Clang/MSVC and Ubuntu GCC warnings-as-errors builds, 270
+  deterministic tests, the named 729-ray performance budget, and local
+  application smoke pass.
+- [ ] Final four-job Windows/Ubuntu release CI passes on the integration commit.
 
 ## Product gate
 

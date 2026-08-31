@@ -1,0 +1,2218 @@
+{
+  "analysis": {
+    "best_focus_by_wavelength": [
+      {
+        "plane_z_m": 0.07704615085720293,
+        "ray_count": 9,
+        "rms_radius_m": 3.381016370613938e-07,
+        "vacuum_wavelength_m": 4.861327e-07
+      },
+      {
+        "plane_z_m": 0.07731852619645478,
+        "ray_count": 9,
+        "rms_radius_m": 3.591551717744975e-07,
+        "vacuum_wavelength_m": 5.875618e-07
+      },
+      {
+        "plane_z_m": 0.07747287039564517,
+        "ray_count": 9,
+        "rms_radius_m": 3.6686202599349583e-07,
+        "vacuum_wavelength_m": 6.562725e-07
+      }
+    ],
+    "focus_bounds_m": [
+      0.007,
+      0.5
+    ],
+    "image_plane_z_m": 0.07731852619645478,
+    "longitudinal_focal_shift_m": 0.0004267195384422412,
+    "spot_samples": [
+      {
+        "source_ray_index": 0,
+        "vacuum_wavelength_m": 4.861327e-07,
+        "x_m": 0.0,
+        "y_m": 0.0
+      },
+      {
+        "source_ray_index": 1,
+        "vacuum_wavelength_m": 4.861327e-07,
+        "x_m": -1.1677806370499755e-05,
+        "y_m": 0.0
+      },
+      {
+        "source_ray_index": 2,
+        "vacuum_wavelength_m": 4.861327e-07,
+        "x_m": 1.1677806370499755e-05,
+        "y_m": 0.0
+      },
+      {
+        "source_ray_index": 3,
+        "vacuum_wavelength_m": 4.861327e-07,
+        "x_m": 0.0,
+        "y_m": -9.000171323860807e-06
+      },
+      {
+        "source_ray_index": 4,
+        "vacuum_wavelength_m": 4.861327e-07,
+        "x_m": 0.0,
+        "y_m": 9.000171323860807e-06
+      },
+      {
+        "source_ray_index": 5,
+        "vacuum_wavelength_m": 4.861327e-07,
+        "x_m": -7.200137059088212e-06,
+        "y_m": -5.400102794316918e-06
+      },
+      {
+        "source_ray_index": 6,
+        "vacuum_wavelength_m": 4.861327e-07,
+        "x_m": 7.200137059088212e-06,
+        "y_m": -5.400102794316918e-06
+      },
+      {
+        "source_ray_index": 7,
+        "vacuum_wavelength_m": 4.861327e-07,
+        "x_m": -7.200137059088212e-06,
+        "y_m": 5.400102794316918e-06
+      },
+      {
+        "source_ray_index": 8,
+        "vacuum_wavelength_m": 4.861327e-07,
+        "x_m": 7.200137059088212e-06,
+        "y_m": 5.400102794316918e-06
+      },
+      {
+        "source_ray_index": 9,
+        "vacuum_wavelength_m": 5.875618e-07,
+        "x_m": 0.0,
+        "y_m": 0.0
+      },
+      {
+        "source_ray_index": 10,
+        "vacuum_wavelength_m": 5.875618e-07,
+        "x_m": -6.261684704095966e-07,
+        "y_m": 0.0
+      },
+      {
+        "source_ray_index": 11,
+        "vacuum_wavelength_m": 5.875618e-07,
+        "x_m": 6.261684704095966e-07,
+        "y_m": 0.0
+      },
+      {
+        "source_ray_index": 12,
+        "vacuum_wavelength_m": 5.875618e-07,
+        "x_m": 0.0,
+        "y_m": 2.505853248031993e-07
+      },
+      {
+        "source_ray_index": 13,
+        "vacuum_wavelength_m": 5.875618e-07,
+        "x_m": 0.0,
+        "y_m": -2.505853248031993e-07
+      },
+      {
+        "source_ray_index": 14,
+        "vacuum_wavelength_m": 5.875618e-07,
+        "x_m": 2.0046825984312323e-07,
+        "y_m": 1.5035119488174611e-07
+      },
+      {
+        "source_ray_index": 15,
+        "vacuum_wavelength_m": 5.875618e-07,
+        "x_m": -2.0046825984312323e-07,
+        "y_m": 1.5035119488174611e-07
+      },
+      {
+        "source_ray_index": 16,
+        "vacuum_wavelength_m": 5.875618e-07,
+        "x_m": 2.0046825984312323e-07,
+        "y_m": -1.5035119488174611e-07
+      },
+      {
+        "source_ray_index": 17,
+        "vacuum_wavelength_m": 5.875618e-07,
+        "x_m": -2.0046825984312323e-07,
+        "y_m": -1.5035119488174611e-07
+      },
+      {
+        "source_ray_index": 18,
+        "vacuum_wavelength_m": 6.562725e-07,
+        "x_m": 0.0,
+        "y_m": 0.0
+      },
+      {
+        "source_ray_index": 19,
+        "vacuum_wavelength_m": 6.562725e-07,
+        "x_m": 5.606695378001288e-06,
+        "y_m": 0.0
+      },
+      {
+        "source_ray_index": 20,
+        "vacuum_wavelength_m": 6.562725e-07,
+        "x_m": -5.606695378001288e-06,
+        "y_m": 0.0
+      },
+      {
+        "source_ray_index": 21,
+        "vacuum_wavelength_m": 6.562725e-07,
+        "x_m": 0.0,
+        "y_m": 5.45873678860654e-06
+      },
+      {
+        "source_ray_index": 22,
+        "vacuum_wavelength_m": 6.562725e-07,
+        "x_m": 0.0,
+        "y_m": -5.45873678860654e-06
+      },
+      {
+        "source_ray_index": 23,
+        "vacuum_wavelength_m": 6.562725e-07,
+        "x_m": 4.366989430885752e-06,
+        "y_m": 3.2752420731638806e-06
+      },
+      {
+        "source_ray_index": 24,
+        "vacuum_wavelength_m": 6.562725e-07,
+        "x_m": -4.366989430885752e-06,
+        "y_m": 3.2752420731638806e-06
+      },
+      {
+        "source_ray_index": 25,
+        "vacuum_wavelength_m": 6.562725e-07,
+        "x_m": 4.366989430885752e-06,
+        "y_m": -3.2752420731638806e-06
+      },
+      {
+        "source_ray_index": 26,
+        "vacuum_wavelength_m": 6.562725e-07,
+        "x_m": -4.366989430885752e-06,
+        "y_m": -3.2752420731638806e-06
+      }
+    ]
+  },
+  "coordinate_convention": {
+    "aperture_scalar": "full diameter in mm",
+    "asphere_conversion": "A_n_optiland_mm = A_n_SI * 10^(3-3n)",
+    "radius_mm": "1000 / curvature_per_m",
+    "surface_vertices": "first physical surface z=0; later z from prior thickness",
+    "world": "right-handed; nominal propagation +Z"
+  },
+  "description": "Cemented SCHOTT N-BK7/F2 achromatic doublet",
+  "format": "holobench-optiland-real-lens-golden",
+  "format_version": 1,
+  "generator": {
+    "length_unit": "mm",
+    "numpy_version": "2.5.2",
+    "package": "optiland",
+    "package_version": "0.6.2",
+    "reported_module_version": "0.6.1",
+    "source_commit": "019413c2d8a2a367b7f6f7e8c422c8f76d6eb5ad",
+    "source_tag": "v0.6.2",
+    "wavelength_unit": "um"
+  },
+  "input_rays": [
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_0",
+      "origin_m": [
+        0.0,
+        0.0,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_1",
+      "origin_m": [
+        0.003,
+        0.0,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_2",
+      "origin_m": [
+        -0.003,
+        0.0,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_3",
+      "origin_m": [
+        0.0,
+        0.0025,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_4",
+      "origin_m": [
+        0.0,
+        -0.0025,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_5",
+      "origin_m": [
+        0.002,
+        0.0015,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_6",
+      "origin_m": [
+        -0.002,
+        0.0015,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_7",
+      "origin_m": [
+        0.002,
+        -0.0015,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_8",
+      "origin_m": [
+        -0.002,
+        -0.0015,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_0",
+      "origin_m": [
+        0.0,
+        0.0,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_1",
+      "origin_m": [
+        0.003,
+        0.0,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_2",
+      "origin_m": [
+        -0.003,
+        0.0,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_3",
+      "origin_m": [
+        0.0,
+        0.0025,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_4",
+      "origin_m": [
+        0.0,
+        -0.0025,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_5",
+      "origin_m": [
+        0.002,
+        0.0015,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_6",
+      "origin_m": [
+        -0.002,
+        0.0015,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_7",
+      "origin_m": [
+        0.002,
+        -0.0015,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_8",
+      "origin_m": [
+        -0.002,
+        -0.0015,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_0",
+      "origin_m": [
+        0.0,
+        0.0,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_1",
+      "origin_m": [
+        0.003,
+        0.0,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_2",
+      "origin_m": [
+        -0.003,
+        0.0,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_3",
+      "origin_m": [
+        0.0,
+        0.0025,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_4",
+      "origin_m": [
+        0.0,
+        -0.0025,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_5",
+      "origin_m": [
+        0.002,
+        0.0015,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_6",
+      "origin_m": [
+        -0.002,
+        0.0015,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_7",
+      "origin_m": [
+        0.002,
+        -0.0015,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "direction": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_8",
+      "origin_m": [
+        -0.002,
+        -0.0015,
+        -0.02
+      ],
+      "power": 1.0,
+      "vacuum_wavelength_m": 6.562725e-07
+    }
+  ],
+  "name": "cemented_achromatic_doublet",
+  "prescription_file": "prescriptions/cemented_achromatic_doublet.json",
+  "traced_rays": [
+    {
+      "cumulative_optical_path_m": 0.029353668072490045,
+      "direction": [
+        0.0,
+        0.0,
+        0.9999999999999996
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_0",
+      "origin_m": [
+        0.0,
+        0.0,
+        0.006
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.02,
+          "outgoing_direction": [
+            0.0,
+            0.0,
+            0.9999999999999999
+          ],
+          "point_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.026089505158924914,
+          "outgoing_direction": [
+            0.0,
+            0.0,
+            0.9999999999999998
+          ],
+          "point_m": [
+            0.0,
+            0.0,
+            0.004
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029353668072490045,
+          "outgoing_direction": [
+            0.0,
+            0.0,
+            0.9999999999999996
+          ],
+          "point_m": [
+            0.0,
+            0.0,
+            0.006
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029252959691648133,
+      "direction": [
+        -0.04067609099445112,
+        0.0,
+        0.999172385337691
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_1",
+      "origin_m": [
+        0.002893388325953783,
+        0.0,
+        0.005958132755645423
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.02009008114612888,
+          "outgoing_direction": [
+            -0.02061231883069354,
+            0.0,
+            0.9997875435873473
+          ],
+          "point_m": [
+            0.003,
+            0.0,
+            9.008114612887752e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025861412699708656,
+          "outgoing_direction": [
+            -0.01370050345107076,
+            0.0,
+            0.9999061436980909
+          ],
+          "point_m": [
+            0.002921858658163265,
+            0.0,
+            0.00388027771980277
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029252959691648133,
+          "outgoing_direction": [
+            -0.04067609099445112,
+            0.0,
+            0.999172385337691
+          ],
+          "point_m": [
+            0.002893388325953783,
+            0.0,
+            0.005958132755645423
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029252959691648133,
+      "direction": [
+        0.04067609099445112,
+        0.0,
+        0.999172385337691
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_2",
+      "origin_m": [
+        -0.002893388325953783,
+        0.0,
+        0.005958132755645423
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.02009008114612888,
+          "outgoing_direction": [
+            0.02061231883069354,
+            0.0,
+            0.9997875435873473
+          ],
+          "point_m": [
+            -0.003,
+            0.0,
+            9.008114612887752e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025861412699708656,
+          "outgoing_direction": [
+            0.01370050345107076,
+            0.0,
+            0.9999061436980909
+          ],
+          "point_m": [
+            -0.002921858658163265,
+            0.0,
+            0.00388027771980277
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029252959691648133,
+          "outgoing_direction": [
+            0.04067609099445112,
+            0.0,
+            0.999172385337691
+          ],
+          "point_m": [
+            -0.002893388325953783,
+            0.0,
+            0.005958132755645423
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029283774108588758,
+      "direction": [
+        0.0,
+        -0.03388985134660847,
+        0.9994255740052413
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_3",
+      "origin_m": [
+        0.0,
+        0.0024103484223060314,
+        0.005970946881997106
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            0.0,
+            -0.017170714269633097,
+            0.9998525724182895
+          ],
+          "point_m": [
+            0.0,
+            0.0025,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025931307170579884,
+          "outgoing_direction": [
+            0.0,
+            -0.011420247854232846,
+            0.9999347868430962
+          ],
+          "point_m": [
+            0.0,
+            0.0024338068123245407,
+            0.0039169756790738445
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029283774108588758,
+          "outgoing_direction": [
+            0.0,
+            -0.03388985134660847,
+            0.9994255740052413
+          ],
+          "point_m": [
+            0.0,
+            0.0024103484223060314,
+            0.005970946881997106
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029283774108588758,
+      "direction": [
+        0.0,
+        0.03388985134660847,
+        0.9994255740052413
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_4",
+      "origin_m": [
+        0.0,
+        -0.0024103484223060314,
+        0.005970946881997106
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            0.0,
+            0.017170714269633097,
+            0.9998525724182895
+          ],
+          "point_m": [
+            0.0,
+            -0.0025,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025931307170579884,
+          "outgoing_direction": [
+            0.0,
+            0.011420247854232846,
+            0.9999347868430962
+          ],
+          "point_m": [
+            0.0,
+            -0.0024338068123245407,
+            0.0039169756790738445
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029283774108588758,
+          "outgoing_direction": [
+            0.0,
+            0.03388985134660847,
+            0.9994255740052413
+          ],
+          "point_m": [
+            0.0,
+            -0.0024103484223060314,
+            0.005970946881997106
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029283774108588758,
+      "direction": [
+        -0.02711188107728677,
+        -0.020333910807965084,
+        0.9994255740052413
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_5",
+      "origin_m": [
+        0.001928278737844825,
+        0.0014462090533836184,
+        0.005970946881997106
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            -0.013736571415706472,
+            -0.010302428561779858,
+            0.9998525724182895
+          ],
+          "point_m": [
+            0.002,
+            0.0015,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025931307170579884,
+          "outgoing_direction": [
+            -0.009136198283386278,
+            -0.00685214871253971,
+            0.9999347868430962
+          ],
+          "point_m": [
+            0.0019470454498596325,
+            0.0014602840873947243,
+            0.0039169756790738445
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029283774108588758,
+          "outgoing_direction": [
+            -0.02711188107728677,
+            -0.020333910807965084,
+            0.9994255740052413
+          ],
+          "point_m": [
+            0.001928278737844825,
+            0.0014462090533836184,
+            0.005970946881997106
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029283774108588758,
+      "direction": [
+        0.02711188107728677,
+        -0.020333910807965084,
+        0.9994255740052413
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_6",
+      "origin_m": [
+        -0.001928278737844825,
+        0.0014462090533836184,
+        0.005970946881997106
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            0.013736571415706472,
+            -0.010302428561779858,
+            0.9998525724182895
+          ],
+          "point_m": [
+            -0.002,
+            0.0015,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025931307170579884,
+          "outgoing_direction": [
+            0.009136198283386278,
+            -0.00685214871253971,
+            0.9999347868430962
+          ],
+          "point_m": [
+            -0.0019470454498596325,
+            0.0014602840873947243,
+            0.0039169756790738445
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029283774108588758,
+          "outgoing_direction": [
+            0.02711188107728677,
+            -0.020333910807965084,
+            0.9994255740052413
+          ],
+          "point_m": [
+            -0.001928278737844825,
+            0.0014462090533836184,
+            0.005970946881997106
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029283774108588758,
+      "direction": [
+        -0.02711188107728677,
+        0.020333910807965084,
+        0.9994255740052413
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_7",
+      "origin_m": [
+        0.001928278737844825,
+        -0.0014462090533836184,
+        0.005970946881997106
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            -0.013736571415706472,
+            0.010302428561779858,
+            0.9998525724182895
+          ],
+          "point_m": [
+            0.002,
+            -0.0015,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025931307170579884,
+          "outgoing_direction": [
+            -0.009136198283386278,
+            0.00685214871253971,
+            0.9999347868430962
+          ],
+          "point_m": [
+            0.0019470454498596325,
+            -0.0014602840873947243,
+            0.0039169756790738445
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029283774108588758,
+          "outgoing_direction": [
+            -0.02711188107728677,
+            0.020333910807965084,
+            0.9994255740052413
+          ],
+          "point_m": [
+            0.001928278737844825,
+            -0.0014462090533836184,
+            0.005970946881997106
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029283774108588758,
+      "direction": [
+        0.02711188107728677,
+        0.020333910807965084,
+        0.9994255740052413
+      ],
+      "id": "lambda_4.8613270000e-07_pupil_8",
+      "origin_m": [
+        -0.001928278737844825,
+        -0.0014462090533836184,
+        0.005970946881997106
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            0.013736571415706472,
+            0.010302428561779858,
+            0.9998525724182895
+          ],
+          "point_m": [
+            -0.002,
+            -0.0015,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025931307170579884,
+          "outgoing_direction": [
+            0.009136198283386278,
+            0.00685214871253971,
+            0.9999347868430962
+          ],
+          "point_m": [
+            -0.0019470454498596325,
+            -0.0014602840873947243,
+            0.0039169756790738445
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029283774108588758,
+          "outgoing_direction": [
+            0.02711188107728677,
+            0.020333910807965084,
+            0.9994255740052413
+          ],
+          "point_m": [
+            -0.001928278737844825,
+            -0.0014462090533836184,
+            0.005970946881997106
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 4.861327e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.02930728041249489,
+      "direction": [
+        0.0,
+        0.0,
+        1.0000000000000002
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_0",
+      "origin_m": [
+        0.0,
+        0.0,
+        0.006
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.02,
+          "outgoing_direction": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "point_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.026067200138002355,
+          "outgoing_direction": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "point_m": [
+            0.0,
+            0.0,
+            0.004
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.02930728041249489,
+          "outgoing_direction": [
+            0.0,
+            0.0,
+            1.0000000000000002
+          ],
+          "point_m": [
+            0.0,
+            0.0,
+            0.006
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.02920679135703544,
+      "direction": [
+        -0.04052283565012641,
+        0.0,
+        0.9991786125567703
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_1",
+      "origin_m": [
+        0.002893476610098194,
+        0.0,
+        0.005958130200133369
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.02009008114612888,
+          "outgoing_direction": [
+            -0.020467344629363775,
+            0.0,
+            0.9997905219613871
+          ],
+          "point_m": [
+            0.003,
+            0.0,
+            9.008114612887752e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.02584018737995866,
+          "outgoing_direction": [
+            -0.013922724899277913,
+            0.0,
+            0.9999030741683811
+          ],
+          "point_m": [
+            0.0029224094124035297,
+            0.0,
+            0.003880232505630228
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.02920679135703544,
+          "outgoing_direction": [
+            -0.04052283565012641,
+            0.0,
+            0.9991786125567703
+          ],
+          "point_m": [
+            0.002893476610098194,
+            0.0,
+            0.005958130200133369
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.02920679135703544,
+      "direction": [
+        0.04052283565012641,
+        0.0,
+        0.9991786125567703
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_2",
+      "origin_m": [
+        -0.002893476610098194,
+        0.0,
+        0.005958130200133369
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.02009008114612888,
+          "outgoing_direction": [
+            0.020467344629363775,
+            0.0,
+            0.9997905219613871
+          ],
+          "point_m": [
+            -0.003,
+            0.0,
+            9.008114612887752e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.02584018737995866,
+          "outgoing_direction": [
+            0.013922724899277913,
+            0.0,
+            0.9999030741683811
+          ],
+          "point_m": [
+            -0.0029224094124035297,
+            0.0,
+            0.003880232505630228
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.02920679135703544,
+          "outgoing_direction": [
+            0.04052283565012641,
+            0.0,
+            0.9991786125567703
+          ],
+          "point_m": [
+            -0.002893476610098194,
+            0.0,
+            0.005958130200133369
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029237538375567657,
+      "direction": [
+        0.0,
+        -0.03376162567417198,
+        0.9994299138167906
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_3",
+      "origin_m": [
+        0.0,
+        0.0024104349341167366,
+        0.005970944796117585
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            0.0,
+            -0.017049923444449472,
+            0.9998546394904304
+          ],
+          "point_m": [
+            0.0,
+            0.0025,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025909750264941907,
+          "outgoing_direction": [
+            0.0,
+            -0.011604961042676401,
+            0.9999326601722729
+          ],
+          "point_m": [
+            0.0,
+            0.002434273140648914,
+            0.003916943823275123
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029237538375567657,
+          "outgoing_direction": [
+            0.0,
+            -0.03376162567417198,
+            0.9994299138167906
+          ],
+          "point_m": [
+            0.0,
+            0.0024104349341167366,
+            0.005970944796117585
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029237538375567657,
+      "direction": [
+        0.0,
+        0.03376162567417198,
+        0.9994299138167906
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_4",
+      "origin_m": [
+        0.0,
+        -0.0024104349341167366,
+        0.005970944796117585
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            0.0,
+            0.017049923444449472,
+            0.9998546394904304
+          ],
+          "point_m": [
+            0.0,
+            -0.0025,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025909750264941907,
+          "outgoing_direction": [
+            0.0,
+            0.011604961042676401,
+            0.9999326601722729
+          ],
+          "point_m": [
+            0.0,
+            -0.002434273140648914,
+            0.003916943823275123
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029237538375567657,
+          "outgoing_direction": [
+            0.0,
+            0.03376162567417198,
+            0.9994299138167906
+          ],
+          "point_m": [
+            0.0,
+            -0.0024104349341167366,
+            0.005970944796117585
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029237538375567657,
+      "direction": [
+        -0.027009300539337575,
+        -0.020256975404503188,
+        0.9994299138167906
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_5",
+      "origin_m": [
+        0.001928347947293389,
+        0.0014462609604700418,
+        0.005970944796117586
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            -0.013639938755559574,
+            -0.010229954066669683,
+            0.9998546394904304
+          ],
+          "point_m": [
+            0.002,
+            0.0015,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025909750264941907,
+          "outgoing_direction": [
+            -0.009283968834141114,
+            -0.006962976625605841,
+            0.9999326601722729
+          ],
+          "point_m": [
+            0.001947418512519131,
+            0.0014605638843893482,
+            0.003916943823275123
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029237538375567657,
+          "outgoing_direction": [
+            -0.027009300539337575,
+            -0.020256975404503188,
+            0.9994299138167906
+          ],
+          "point_m": [
+            0.001928347947293389,
+            0.0014462609604700418,
+            0.005970944796117586
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029237538375567657,
+      "direction": [
+        0.027009300539337575,
+        -0.020256975404503188,
+        0.9994299138167906
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_6",
+      "origin_m": [
+        -0.001928347947293389,
+        0.0014462609604700418,
+        0.005970944796117586
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            0.013639938755559574,
+            -0.010229954066669683,
+            0.9998546394904304
+          ],
+          "point_m": [
+            -0.002,
+            0.0015,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025909750264941907,
+          "outgoing_direction": [
+            0.009283968834141114,
+            -0.006962976625605841,
+            0.9999326601722729
+          ],
+          "point_m": [
+            -0.001947418512519131,
+            0.0014605638843893482,
+            0.003916943823275123
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029237538375567657,
+          "outgoing_direction": [
+            0.027009300539337575,
+            -0.020256975404503188,
+            0.9994299138167906
+          ],
+          "point_m": [
+            -0.001928347947293389,
+            0.0014462609604700418,
+            0.005970944796117586
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029237538375567657,
+      "direction": [
+        -0.027009300539337575,
+        0.020256975404503188,
+        0.9994299138167906
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_7",
+      "origin_m": [
+        0.001928347947293389,
+        -0.0014462609604700418,
+        0.005970944796117586
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            -0.013639938755559574,
+            0.010229954066669683,
+            0.9998546394904304
+          ],
+          "point_m": [
+            0.002,
+            -0.0015,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025909750264941907,
+          "outgoing_direction": [
+            -0.009283968834141114,
+            0.006962976625605841,
+            0.9999326601722729
+          ],
+          "point_m": [
+            0.001947418512519131,
+            -0.0014605638843893482,
+            0.003916943823275123
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029237538375567657,
+          "outgoing_direction": [
+            -0.027009300539337575,
+            0.020256975404503188,
+            0.9994299138167906
+          ],
+          "point_m": [
+            0.001928347947293389,
+            -0.0014462609604700418,
+            0.005970944796117586
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029237538375567657,
+      "direction": [
+        0.027009300539337575,
+        0.020256975404503188,
+        0.9994299138167906
+      ],
+      "id": "lambda_5.8756180000e-07_pupil_8",
+      "origin_m": [
+        -0.001928347947293389,
+        -0.0014462609604700418,
+        0.005970944796117586
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            0.013639938755559574,
+            0.010229954066669683,
+            0.9998546394904304
+          ],
+          "point_m": [
+            -0.002,
+            -0.0015,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025909750264941907,
+          "outgoing_direction": [
+            0.009283968834141114,
+            0.006962976625605841,
+            0.9999326601722729
+          ],
+          "point_m": [
+            -0.001947418512519131,
+            -0.0014605638843893482,
+            0.003916943823275123
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029237538375567657,
+          "outgoing_direction": [
+            0.027009300539337575,
+            0.020256975404503188,
+            0.9994299138167906
+          ],
+          "point_m": [
+            -0.001928347947293389,
+            -0.0014462609604700418,
+            0.005970944796117586
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 5.875618e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029287352772197774,
+      "direction": [
+        0.0,
+        0.0,
+        0.9999999999999996
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_0",
+      "origin_m": [
+        0.0,
+        0.0,
+        0.006
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.02,
+          "outgoing_direction": [
+            0.0,
+            0.0,
+            0.9999999999999999
+          ],
+          "point_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.0260572893890455,
+          "outgoing_direction": [
+            0.0,
+            0.0,
+            0.9999999999999998
+          ],
+          "point_m": [
+            0.0,
+            0.0,
+            0.004
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029287352772197774,
+          "outgoing_direction": [
+            0.0,
+            0.0,
+            0.9999999999999996
+          ],
+          "point_m": [
+            0.0,
+            0.0,
+            0.006
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029186984921388798,
+      "direction": [
+        -0.04043683191343962,
+        0.0,
+        0.9991820968296048
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_1",
+      "origin_m": [
+        0.002893557191748443,
+        0.0,
+        0.00595812786751301
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.02009008114612888,
+          "outgoing_direction": [
+            -0.02040258550300318,
+            0.0,
+            0.999791845588267
+          ],
+          "point_m": [
+            0.003,
+            0.0,
+            9.008114612887752e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.02583075640810124,
+          "outgoing_direction": [
+            -0.014002195977084624,
+            0.0,
+            0.9999019644484252
+          ],
+          "point_m": [
+            0.0029226554253199894,
+            0.0,
+            0.003880212306426423
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029186984921388798,
+          "outgoing_direction": [
+            -0.04043683191343962,
+            0.0,
+            0.9991820968296048
+          ],
+          "point_m": [
+            0.002893557191748443,
+            0.0,
+            0.00595812786751301
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.029186984921388798,
+      "direction": [
+        0.04043683191343962,
+        0.0,
+        0.9991820968296048
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_2",
+      "origin_m": [
+        -0.002893557191748443,
+        0.0,
+        0.00595812786751301
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.02009008114612888,
+          "outgoing_direction": [
+            0.02040258550300318,
+            0.0,
+            0.999791845588267
+          ],
+          "point_m": [
+            -0.003,
+            0.0,
+            9.008114612887752e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.02583075640810124,
+          "outgoing_direction": [
+            0.014002195977084624,
+            0.0,
+            0.9999019644484252
+          ],
+          "point_m": [
+            -0.0029226554253199894,
+            0.0,
+            0.003880212306426423
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.029186984921388798,
+          "outgoing_direction": [
+            0.04043683191343962,
+            0.0,
+            0.9991820968296048
+          ],
+          "point_m": [
+            -0.002893557191748443,
+            0.0,
+            0.00595812786751301
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.02921769472841518,
+      "direction": [
+        0.0,
+        -0.033689766624894354,
+        0.9994323386927
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_3",
+      "origin_m": [
+        0.0,
+        0.0024105074153714626,
+        0.0059709430484700355
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            0.0,
+            -0.01699596699451518,
+            0.9998555581212325
+          ],
+          "point_m": [
+            0.0,
+            0.0025,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025900171949524306,
+          "outgoing_direction": [
+            0.0,
+            -0.011671001815769536,
+            0.9999318915389268
+          ],
+          "point_m": [
+            0.0,
+            0.0024344814429885344,
+            0.003916929591754257
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.02921769472841518,
+          "outgoing_direction": [
+            0.0,
+            -0.033689766624894354,
+            0.9994323386927
+          ],
+          "point_m": [
+            0.0,
+            0.0024105074153714626,
+            0.0059709430484700355
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.02921769472841518,
+      "direction": [
+        0.0,
+        0.033689766624894354,
+        0.9994323386927
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_4",
+      "origin_m": [
+        0.0,
+        -0.0024105074153714626,
+        0.0059709430484700355
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            0.0,
+            0.01699596699451518,
+            0.9998555581212325
+          ],
+          "point_m": [
+            0.0,
+            -0.0025,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025900171949524306,
+          "outgoing_direction": [
+            0.0,
+            0.011671001815769536,
+            0.9999318915389268
+          ],
+          "point_m": [
+            0.0,
+            -0.0024344814429885344,
+            0.003916929591754257
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.02921769472841518,
+          "outgoing_direction": [
+            0.0,
+            0.033689766624894354,
+            0.9994323386927
+          ],
+          "point_m": [
+            0.0,
+            -0.0024105074153714626,
+            0.0059709430484700355
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.02921769472841518,
+      "direction": [
+        -0.02695181329991548,
+        -0.020213859974936618,
+        0.9994323386927
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_5",
+      "origin_m": [
+        0.00192840593229717,
+        0.0014463044492228777,
+        0.0059709430484700355
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            -0.013596773595612146,
+            -0.010197580196709112,
+            0.9998555581212325
+          ],
+          "point_m": [
+            0.002,
+            0.0015,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025900171949524306,
+          "outgoing_direction": [
+            -0.009336801452615631,
+            -0.007002601089461727,
+            0.9999318915389268
+          ],
+          "point_m": [
+            0.0019475851543908273,
+            0.0014606888657931205,
+            0.003916929591754257
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.02921769472841518,
+          "outgoing_direction": [
+            -0.02695181329991548,
+            -0.020213859974936618,
+            0.9994323386927
+          ],
+          "point_m": [
+            0.00192840593229717,
+            0.0014463044492228777,
+            0.0059709430484700355
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.02921769472841518,
+      "direction": [
+        0.02695181329991548,
+        -0.020213859974936618,
+        0.9994323386927
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_6",
+      "origin_m": [
+        -0.00192840593229717,
+        0.0014463044492228777,
+        0.0059709430484700355
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            0.013596773595612146,
+            -0.010197580196709112,
+            0.9998555581212325
+          ],
+          "point_m": [
+            -0.002,
+            0.0015,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025900171949524306,
+          "outgoing_direction": [
+            0.009336801452615631,
+            -0.007002601089461727,
+            0.9999318915389268
+          ],
+          "point_m": [
+            -0.0019475851543908273,
+            0.0014606888657931205,
+            0.003916929591754257
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.02921769472841518,
+          "outgoing_direction": [
+            0.02695181329991548,
+            -0.020213859974936618,
+            0.9994323386927
+          ],
+          "point_m": [
+            -0.00192840593229717,
+            0.0014463044492228777,
+            0.0059709430484700355
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.02921769472841518,
+      "direction": [
+        -0.02695181329991548,
+        0.020213859974936618,
+        0.9994323386927
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_7",
+      "origin_m": [
+        0.00192840593229717,
+        -0.0014463044492228777,
+        0.0059709430484700355
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            -0.013596773595612146,
+            0.010197580196709112,
+            0.9998555581212325
+          ],
+          "point_m": [
+            0.002,
+            -0.0015,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025900171949524306,
+          "outgoing_direction": [
+            -0.009336801452615631,
+            0.007002601089461727,
+            0.9999318915389268
+          ],
+          "point_m": [
+            0.0019475851543908273,
+            -0.0014606888657931205,
+            0.003916929591754257
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.02921769472841518,
+          "outgoing_direction": [
+            -0.02695181329991548,
+            0.020213859974936618,
+            0.9994323386927
+          ],
+          "point_m": [
+            0.00192840593229717,
+            -0.0014463044492228777,
+            0.0059709430484700355
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 6.562725e-07
+    },
+    {
+      "cumulative_optical_path_m": 0.02921769472841518,
+      "direction": [
+        0.02695181329991548,
+        0.020213859974936618,
+        0.9994323386927
+      ],
+      "id": "lambda_6.5627250000e-07_pupil_8",
+      "origin_m": [
+        -0.00192840593229717,
+        -0.0014463044492228777,
+        0.0059709430484700355
+      ],
+      "surface_records": [
+        {
+          "cumulative_optical_path_m": 0.020062539111404553,
+          "outgoing_direction": [
+            0.013596773595612146,
+            0.010197580196709112,
+            0.9998555581212325
+          ],
+          "point_m": [
+            -0.002,
+            -0.0015,
+            6.253911140455415e-05
+          ],
+          "surface_id": "crown_front"
+        },
+        {
+          "cumulative_optical_path_m": 0.025900171949524306,
+          "outgoing_direction": [
+            0.009336801452615631,
+            0.007002601089461727,
+            0.9999318915389268
+          ],
+          "point_m": [
+            -0.0019475851543908273,
+            -0.0014606888657931205,
+            0.003916929591754257
+          ],
+          "surface_id": "cemented_interface"
+        },
+        {
+          "cumulative_optical_path_m": 0.02921769472841518,
+          "outgoing_direction": [
+            0.02695181329991548,
+            0.020213859974936618,
+            0.9994323386927
+          ],
+          "point_m": [
+            -0.00192840593229717,
+            -0.0014463044492228777,
+            0.0059709430484700355
+          ],
+          "surface_id": "flint_rear"
+        }
+      ],
+      "vacuum_wavelength_m": 6.562725e-07
+    }
+  ]
+}
