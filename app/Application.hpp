@@ -16,6 +16,7 @@
 #include "app/WaveWorkbenchProject.hpp"
 #include "app/BenchEditHistory.hpp"
 #include "app/BenchProject.hpp"
+#include "app/ChimeraRecipe.hpp"
 #include "app/LessonEditHistory.hpp"
 #include "app/HolographyLabPipeline.hpp"
 #include "app/HolographyUiState.hpp"
@@ -398,6 +399,9 @@ private:
     void loadBenchProjectFromPath();
     void saveBenchProjectToPath();
     void autosaveBenchProjectAfterEdit();
+    void buildChimeraBench(
+        const chimera::ChimeraRecipe& recipe,
+        std::string sourceLabel);
     void recomputeRecordingRecipe(
         const optics::holography::PlateIncidentFieldSet& fields,
         const HologramRecordingRecipe& recipe);
@@ -437,6 +441,7 @@ private:
     float sandboxVolumeShrinkagePercent_ = 0.0F;
     float sandboxVolumeReplayWavelengthNanometres_ = 532.0F;
     float sandboxVolumeReplayAngleDegrees_ = 0.0F;
+    std::vector<chimera::ConstraintReportEntry> chimeraConstraintReport_;
 
     GizmoTarget selectedTarget_ = GizmoTarget::None;
     GizmoTarget draggedTarget_ = GizmoTarget::None;
@@ -557,6 +562,7 @@ private:
     std::string statusMessage_;
     char projectPathBuffer_[512] = "holobench_scene.json";
     char benchProjectPathBuffer_[512] = "holobench_bench.json";
+    char chimeraRecipePathBuffer_[512] = "chimera_recipe.json";
     char reflectionProjectPathBuffer_[512] = "reflection_workbench.json";
     char realLensPathBuffer_[512] = "holobench_lens.json";
     char slmCalibrationPathBuffer_[512] = "slm_response.json";

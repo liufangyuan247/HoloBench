@@ -8,9 +8,9 @@ Last updated: 2026-09-01
 
 Operational product foundation: **[M7 - Free-form 3D Optical Bench Sandbox](milestones/M7_OPTICAL_BENCH_SANDBOX.md)**
 
-Active development: **[M8 - Transmission, reflection, and RGB holography sandbox](milestones/M8_HOLOGRAPHY_SANDBOX.md)**
+Accepted product physics: **[M8 - Transmission, reflection, and RGB holography sandbox](milestones/M8_HOLOGRAPHY_SANDBOX.md)**
 
-Next: **[M9 - automated CHIMERA construction and reconstruction](milestones/M9_CHIMERA_AUTOMATION.md)**
+Active development: **[M9 - automated CHIMERA construction and reconstruction](milestones/M9_CHIMERA_AUTOMATION.md)**
 
 Distribution/store milestones have been removed from the active roadmap.
 
@@ -139,9 +139,10 @@ rebuilt on the shared bench.
   Stable component/source ordering makes results independent of insertion
   order; hop, branch, minimum-power, escape, clipping, absorption, and invalid
   interaction endings are explicit.
-- **Current verification**: Windows Clang 21 `core-ci` warnings-as-errors build
-  passes with 502/502 deterministic cases; the complete development build and
-  application link pass with 504/504 cases including the packaged-font and
+- **M7/M8 acceptance verification**: Windows Clang 21 `core-ci`
+  warnings-as-errors build passes with 505/505 deterministic cases; the
+  complete development build and application link pass with 507/507 cases
+  including the packaged-font and
   hardware OpenGL tests. The development and warnings-as-errors application
   smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Eighty-four
   M7/M8 cases cover the typed scene, mutation/history/persistence, arbitrary-pose
@@ -149,10 +150,10 @@ rebuilt on the shared bench.
   thin/reflection/RGB replay, persisted recipes, beam-following fields through
   aligned powered optics and ideal folds, projected tilted masks, bounded
   decentered observation, non-grazing rotated observation planes, and placed
-  SLM command/provenance behavior. The resolved real-lens wave adapter, vector/high-NA
-  physics, named M8 performance scenes, and remote cross-compiler validation
-  remain open, so M7/M8 are not yet accepted despite the operational sandbox
-  workflows.
+  SLM command/provenance behavior. Named M8 performance scenes and remote
+  Windows/Linux cross-compiler validation pass. The unresolved real-lens wave
+  adapter and vector/high-NA physics remain explicit scope limits rather than
+  hidden claims; M7/M8 are accepted in their documented scalar domains.
 
 ## Completed
 
@@ -396,8 +397,47 @@ completion because it is primarily driven through fixed parameter panels:
   volume/RGB/local-wave-path/recipe/SLM/recovery increments; `core-ci` passes
   505/505, `app-ci` compiles
   warnings-as-errors, and the hidden OpenGL smoke exits successfully on AMD
-  Radeon Pro 5300M. Remote cross-compiler CI remains required before the M8
-  slice is closed.
+  Radeon Pro 5300M. The accepted remote cross-compiler evidence is recorded
+  below.
+
+- **M8 acceptance**: GitHub Actions runs
+  [33449248058](https://github.com/liufangyuan247/HoloBench/actions/runs/33449248058)
+  and
+  [33450034341](https://github.com/liufangyuan247/HoloBench/actions/runs/33450034341)
+  pass Windows/Ubuntu core and complete application-compile jobs with the named
+  M8 performance gates and atomic recovery cases. M8 is accepted; M9 is active.
+
+## M9 CHIMERA automation state
+
+- **Versioned construction recipe**: Strict format-v1 `ChimeraRecipe` persists
+  hogel pitch/count, target FOV, ordered RGB sources, SLM, relay/stop,
+  folded-reference, plate/material, and exposure sampling. Canonical bytes
+  round-trip deterministically; unknown schema/version and invalid physical or
+  colour identity reject.
+- **Recipe-to-bench compiler**: Compiler v1 creates one ordinary editable
+  `BenchProject` with 23 placed components: three object source/SLM/relay/stop
+  arms, three laser/fold-mirror/splitter reference arms, one volume plate, and
+  one reflection-side Probe. Stable generated IDs and a provenance table retain
+  recipe/compiler/role/channel identity. The application can build the
+  canonical recipe or load a recipe JSON and then edit/save the result through
+  the normal Bench surface.
+- **Real M8 hand-off**: The generated document contains three independent
+  volume recording recipes selected by stable component path, wavelength, and
+  coherence. Tests trace all six plate branches, resolve each RGB reflection
+  pair, record it with the M8 volume model, and reconstruct a bounded local ROI
+  at the generated Probe.
+- **Constraint report**: Horizontal/vertical FOV, relay stop/NA, full-hogel
+  carrier Nyquist, scalar/paraxial range, and material-model boundaries are
+  reported as feasible, warning, or unsupported. The canonical 1 mm hogel uses
+  a 1024x1024 full-window sampling request; impossible FOV/stop designs remain
+  inspectable but cannot report feasibility. See
+  [ADR 0016](adr/0016-chimera-recipe-to-bench.md).
+- **Current M9 validation**: Windows Clang warnings-as-errors core/application
+  builds pass; `core-ci` passes 510/510 and `dev` passes 512/512 including GPU
+  and font executables. Hidden OpenGL smoke renders and semantically
+  round-trips the generated 23-component bench, finds its six plate branches,
+  and exits with no GL errors on AMD Radeon Pro 5300M. Remote MSVC/GCC evidence
+  remains required before accepting C9.1.
 
 ## Known limitations (M1/M2)
 
@@ -409,9 +449,12 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Complete remote cross-compiler/application validation for the named M8
-   transmission, reflection, and RGB performance scenes.
-2. Compile a versioned M9 CHIMERA recipe into an editable bench.
-3. Simulate its hogel/angular data and SLM/RGB exposure events.
-4. Add bounded CHIMERA reconstruction and deterministic parameter sweeps.
-5. Add resumable CHIMERA batch execution and cross-platform acceptance gates.
+1. Define hashed hogel/angular-image data and map its samples to placed SLM
+   commands with analytic Fourier-lens validation.
+2. Generate deterministic stage/SLM/RGB exposure events that invoke the three
+   compiled M8 recording recipes.
+3. Add single- and bounded multi-hogel reconstruction with view/cross-talk
+   evidence.
+4. Add deterministic parameter sweeps and best-candidate constraint evidence.
+5. Add resumable batch execution, corrupt-artifact rejection, named budgets,
+   and cross-platform M9 acceptance gates.

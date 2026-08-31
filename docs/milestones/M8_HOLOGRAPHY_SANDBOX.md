@@ -97,7 +97,7 @@ stale until recomputation.
 
 ## Delivery slices
 
-Current implementation status (2026-09-01): M8.1 is implemented; M8.2 has an
+Accepted 2026-09-01. M8.1 is implemented; M8.2 has an
 end-to-end placed thin-transmission record/replay path; M8.3 records the full
 placed reflection grating vector and evaluates wavelength/angle/material Bragg
 selectivity, then reconstructs a Bragg-weighted sampled field on the physical
@@ -113,14 +113,14 @@ mirror/splitter folds, aligned powered lenses, projected tilted zero-thickness
 masks, and an oblique plate tangent adapter with exact plane-wave carrier
 validation. Placed SLMs persist and apply editable ideal amplitude/phase
 uniform, wrapped-ramp, or checkerboard commands with bit-depth and explicit
-manual/automation provenance. Performance closure remains pending;
+manual/automation provenance. Named performance and Windows/Linux CI closure
+pass;
 unsupported powered/vector/high-NA
 geometry stays explicit.
 
 The local M8 performance gate now runs the real placed transmission,
 reflection, and RGB 256x256 record/replay paths, with p95 budgets of
-750/500/2000 ms respectively. Windows/Linux CI integration is present;
-cross-compiler evidence remains before M8.5 acceptance. Unified primary and
+750/500/2000 ms respectively. Windows/Linux cross-compiler CI passes. Unified primary and
 `.autosave` bench files now use flushed atomic replacement and tested fallback
 for corrupt primary/autosave cases.
 
@@ -192,7 +192,7 @@ failure and never substitutes another branch.
   any relevant component edit.
 - [x] The three examples are ordinary unified bench projects, not special
   hard-coded UI workflows.
-- [ ] Numerical oracles, project compatibility, performance budgets, OpenGL
+- [x] Numerical oracles, project compatibility, performance budgets, OpenGL
   smoke, and Windows/Linux CI pass.
 
 Completion tag: `m8-holography-sandbox`.

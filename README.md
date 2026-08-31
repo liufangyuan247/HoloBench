@@ -12,9 +12,9 @@ recording derives the grating from the actual opposite-side plate branches and
 reconstructs a Bragg-weighted sampled field on a placed reflection-side
 Screen/Probe. The RGB preset records and replays three independent spectral
 channels and combines only their display intensities. **M8
-(transmission/reflection/RGB holography sandbox)** is the current product
-milestone, followed directly by **M9 (automated CHIMERA construction
-and reconstruction)**. Distribution/store integration is outside the active
+(transmission/reflection/RGB holography sandbox)** is accepted. **M9
+(automated CHIMERA construction and reconstruction)** is now the active
+product milestone. Distribution/store integration is outside the active
 roadmap. For the current repository state and roadmap, see
 [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and
 [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
@@ -43,6 +43,14 @@ source-to-plate branch selectors, sampling, response, and material parameters;
 large complex fields remain disposable results. After load, the plate
 Inspector reports whether each recipe still resolves uniquely and can
 recompute it without silently selecting another path.
+
+M9 now has a strict versioned CHIMERA recipe and deterministic recipe-to-bench
+compiler. The canonical recipe creates a normal 23-component RGB reflection
+printer layout with placed SLM/relay/stop object arms, folded mirror/splitter
+reference arms, one volume plate, one reconstruction Probe, and three ordinary
+M8 recording recipes. The Lab can build the canonical layout or load a recipe
+JSON, displays explicit FOV/NA/sampling/material constraints, and leaves every
+generated component editable through the same Bench UI and save format.
 
 ## M1 Features
 

@@ -728,6 +728,25 @@ void Application::autosaveBenchProjectAfterEdit() {
     }
 }
 
+void Application::buildChimeraBench(
+    const chimera::ChimeraRecipe& recipe,
+    std::string sourceLabel) {
+    try {
+        auto compiled = chimera::compileChimeraRecipe(recipe);
+        const bool feasible = compiled.feasible();
+        chimeraConstraintReport_ = compiled.constraints;
+        selectedBenchComponentId_ = "chimera-plate";
+        const std::string status = "Compiled " + std::move(sourceLabel)
+            + " to an editable CHIMERA-like bench"
+            + (feasible ? "" : " with unsupported constraints");
+        static_cast<void>(applyDynamicBenchProject(
+            std::move(compiled.project), status));
+    } catch (const std::exception& error) {
+        errorMessage_ = error.what();
+        statusMessage_.clear();
+    }
+}
+
 void Application::recomputeRecordingRecipe(
     const optics::holography::PlateIncidentFieldSet& fields,
     const HologramRecordingRecipe& recipe) {
@@ -4719,6 +4738,55 @@ void Application::drawSandboxInspector() {
             makeRgbHolographyPreset(),
             "Loaded editable RGB full-colour holography bench"));
     }
+    if (ImGui::Button("Canonical CHIMERA-like Bench")) {
+        buildChimeraBench(
+            chimera::makeCanonicalChimeraRecipe(), "canonical recipe");
+    }
+    ImGui::InputText(
+        "CHIMERA Recipe JSON",
+        chimeraRecipePathBuffer_,
+        sizeof(chimeraRecipePathBuffer_));
+    if (ImGui::Button("Build CHIMERA Recipe")) {
+        try {
+            buildChimeraBench(
+                chimera::loadChimeraRecipe(chimeraRecipePathBuffer_),
+                std::string(chimeraRecipePathBuffer_));
+        } catch (const std::exception& error) {
+            errorMessage_ = error.what();
+            statusMessage_.clear();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Save Canonical Recipe")) {
+        try {
+            chimera::saveChimeraRecipe(
+                chimera::makeCanonicalChimeraRecipe(),
+                chimeraRecipePathBuffer_);
+            errorMessage_.clear();
+            statusMessage_ = "Saved canonical CHIMERA recipe: "
+                + std::string(chimeraRecipePathBuffer_);
+        } catch (const std::exception& error) {
+            errorMessage_ = error.what();
+            statusMessage_.clear();
+        }
+    }
+    if (!chimeraConstraintReport_.empty()) {
+        ImGui::SeparatorText("CHIMERA Constraint Report");
+        for (const auto& entry : chimeraConstraintReport_) {
+            const char* severity = "FEASIBLE";
+            if (entry.severity == chimera::ConstraintSeverity::Warning) {
+                severity = "WARNING";
+            } else if (entry.severity
+                == chimera::ConstraintSeverity::Unsupported) {
+                severity = "UNSUPPORTED";
+            }
+            ImGui::TextWrapped(
+                "[%s] %s: %s",
+                severity,
+                entry.code.c_str(),
+                entry.message.c_str());
+        }
+    }
 
     ImGui::SeparatorText("Bench Components");
     ImGui::BeginChild("##sandbox_component_list", ImVec2(0.0F, 150.0F), ImGuiChildFlags_Borders);
@@ -7583,6 +7651,37 @@ int Application::run(const RunOptions& options) {
             }
         } catch (const std::exception& ex) {
             SDL_Log("OpenGL smoke check failed: dynamic sandbox: %s", ex.what());
+            rawGlError = true;
+        }
+    }
+    if (glSmokeMode_) {
+        try {
+            const auto compiled = chimera::compileChimeraRecipe(
+                chimera::makeCanonicalChimeraRecipe());
+            const auto trace = optics::ray::traceDynamicBench(
+                compiled.project.scene, benchTraceBudget_);
+            const auto fields = optics::holography::collectPlateIncidentFields(
+                compiled.project.scene, trace, "chimera-plate");
+            const std::string bytes = serializeBenchProject(compiled.project);
+            if (!compiled.feasible()
+                || compiled.generatedComponents.size() != 23U
+                || fields.branches.size() != 6U
+                || !renderer_
+                || !renderer_->updateDynamicScene(
+                    compiled.project.scene, trace, "chimera-plate")
+                || renderer_->sceneVertexCount() <= 0
+                || serializeBenchProject(parseBenchProject(bytes)) != bytes) {
+                throw std::runtime_error(
+                    "canonical recipe did not produce renderable ordinary bench evidence");
+            }
+            if (glGetError() != GL_NO_ERROR) {
+                throw std::runtime_error(
+                    "canonical recipe renderer produced an OpenGL error");
+            }
+        } catch (const std::exception& ex) {
+            SDL_Log(
+                "OpenGL smoke check failed: CHIMERA recipe-to-bench: %s",
+                ex.what());
             rawGlError = true;
         }
     }

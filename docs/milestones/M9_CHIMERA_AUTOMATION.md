@@ -8,6 +8,13 @@ holographic printer. The first release is a virtual printer and reconstruction
 simulator, not a claim to reproduce proprietary CHIMERA optics or calibrated
 hardware.
 
+Current implementation status (2026-09-01): C9.1 format-v1 recipe parsing,
+validation, deterministic recipe-to-bench compiler, stable generated-component
+provenance, constraint report, three independent M8 reflection recording
+recipes, and Lab build controls are implemented. The canonical output is a
+23-component ordinary editable bench. Hogel/angular datasets, exposure events,
+bounded multi-hogel reconstruction, sweeps, and resumable batches remain open.
+
 ## User-visible outcome
 
 A user provides a printing specification—scene/views, hogel pitch and count,
