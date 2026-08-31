@@ -47,6 +47,12 @@ rebuilt on the shared bench.
   The OpenGL smoke now requires all kinds, a current non-empty trace graph,
   canonical bench persistence, drawable vertices, and actual red, green, and
   blue framebuffer evidence.
+- **Scene-wide edit history**: the dynamic bench has an independent bounded
+  undo/redo timeline covering complete project identity and every component.
+  Add, delete, duplicate, presets, loads, Inspector changes, and coalesced
+  viewport drags participate in that timeline. Restoring a snapshot assigns a
+  fresh monotonic scene revision so cached detector or plate observations can
+  never become current merely because an old revision number reappeared.
 
 - **Dynamic scene foundation (headless)**: `BenchScene` is now the first shared
   scene truth source for the new product path. It owns a dynamic component
@@ -83,8 +89,8 @@ rebuilt on the shared bench.
   makes results independent of insertion order; hop, branch, minimum-power,
   escape, clipping, and absorption endings are explicit.
 - **Current verification**: Windows Clang 21 `core-ci` warnings-as-errors build
-  passes with 432/432 deterministic cases; the complete development build and
-  application link pass with 434/434 cases including the packaged-font and
+  passes with 438/438 deterministic cases; the complete development build and
+  application link pass with 440/440 cases including the packaged-font and
   hardware OpenGL tests. The development and warnings-as-errors application
   smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Twenty M7
   cases cover all twelve
@@ -93,9 +99,10 @@ rebuilt on the shared bench.
   splitter power/spectral identity, wavelength/coherence separation, and trace
   budget validation, plus arbitrary-pose mirror/lens paths, split-screen power,
   aperture clipping, insertion-order determinism, RGB detector identity,
-  bounded mirror loops, and rigid local-rotation stability. Multi-ray beam
-  envelopes, scene-wide undo/redo, richer detector observation surfaces,
-  remaining component interactions, and local wave-plane adapters remain open,
+  bounded mirror loops, rigid local-rotation stability, complete bench history,
+  branch clearing, bounded eviction, and revision-safe restore. Multi-ray beam
+  envelopes, richer detector observation surfaces, remaining component
+  interactions, and local wave-plane adapters remain open,
   so M7 is not yet accepted even though the interactive M7.1 path is present.
 
 ## Completed

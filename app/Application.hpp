@@ -14,6 +14,7 @@
 
 #include "app/WaveDetectorUiState.hpp"
 #include "app/WaveWorkbenchProject.hpp"
+#include "app/BenchEditHistory.hpp"
 #include "app/BenchProject.hpp"
 #include "app/LessonEditHistory.hpp"
 #include "app/HolographyLabPipeline.hpp"
@@ -376,7 +377,16 @@ private:
         const optics::ray::BenchTracerOptions& candidateOptions);
     bool applyBenchScene(
         optics::scene::BenchScene candidateScene,
-        std::string statusMessage);
+        std::string statusMessage,
+        bool recordHistory = true);
+    bool applyDynamicBenchProject(
+        BenchProject candidateProject,
+        std::string statusMessage,
+        bool recordHistory = true);
+    void recordBenchEdit();
+    void undoBenchEdit();
+    void redoBenchEdit();
+    [[nodiscard]] bool restoreBenchEditState(const BenchProject& state);
     bool showSandboxViewport();
     bool showLegacyViewport();
     void drawSandboxInspector();
@@ -498,6 +508,8 @@ private:
     optics::ray::BenchTracerOptions tracerOptions_;
 
     BenchProject benchProject_;
+    BenchEditHistory benchEditHistory_;
+    bool benchEditHistoryReady_ = false;
     optics::scene::BenchTraceGraph benchTraceGraph_;
     optics::scene::TraceBudget benchTraceBudget_;
 

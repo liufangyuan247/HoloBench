@@ -112,8 +112,9 @@
   SLM, Probe, or Plate field interactions. Complete coherent branch merging,
   detector field views, and local wave-plane adapters remain open, so this is a
   functional layout sandbox rather than a completed holography experiment.
-- Undo/redo currently covers lesson-relevant legacy optical-bench, Wave
-  Detector, Sampling Debugger, and SLM inputs. Real Lens, Holography Lab, and
-  the dynamic bench scene are not yet included. There is no autosave, crash
-  recovery, or complete accessibility layer.
+- The dynamic bench has its own bounded scene-wide undo/redo timeline. The
+  separate legacy history still covers lesson-relevant fixed optical-bench,
+  Wave Detector, Sampling Debugger, and SLM inputs, but not Real Lens or the
+  fixed Holography Lab. There is no autosave, crash recovery, or complete
+  accessibility layer.
 - Hardware control and digital-twin calibration are long-term roadmap modules.

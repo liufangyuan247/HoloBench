@@ -539,20 +539,42 @@ bool Application::applyScene(
 
 bool Application::applyBenchScene(
     optics::scene::BenchScene candidateScene,
-    std::string newStatusMessage) {
+    std::string newStatusMessage,
+    bool recordHistory) {
+    BenchProject candidateProject = benchProject_;
+    candidateProject.scene = std::move(candidateScene);
+    return applyDynamicBenchProject(
+        std::move(candidateProject), std::move(newStatusMessage), recordHistory);
+}
+
+bool Application::applyDynamicBenchProject(
+    BenchProject candidateProject,
+    std::string newStatusMessage,
+    bool recordHistory) {
     try {
-        const std::string selection = candidateScene.find(selectedBenchComponentId_) != nullptr
+        validateBenchProject(candidateProject);
+        if (benchEditHistoryReady_
+            && candidateProject.scene.revision() <= benchProject_.scene.revision()
+            && !sameBenchEditState(candidateProject, benchProject_)) {
+            candidateProject = rebaseBenchEditStateRevision(
+                candidateProject, benchProject_.scene.revision());
+        }
+        const std::string selection
+            = candidateProject.scene.find(selectedBenchComponentId_) != nullptr
             ? selectedBenchComponentId_ : std::string {};
         const auto traceGraph = optics::ray::traceDynamicBench(
-            candidateScene, benchTraceBudget_);
+            candidateProject.scene, benchTraceBudget_);
         if (!renderer_ || !renderer_->updateDynamicScene(
-                candidateScene, traceGraph, selection)) {
+                candidateProject.scene, traceGraph, selection)) {
             throw std::runtime_error("renderer rejected dynamic bench geometry");
         }
-        benchProject_.scene = std::move(candidateScene);
+        benchProject_ = std::move(candidateProject);
         benchTraceGraph_ = traceGraph;
         selectedBenchComponentId_ = selection;
         viewportMode_ = ViewportMode::Sandbox;
+        if (recordHistory && benchEditHistoryReady_) {
+            static_cast<void>(benchEditHistory_.record(benchProject_));
+        }
         errorMessage_.clear();
         statusMessage_ = std::move(newStatusMessage);
         return true;
@@ -599,19 +621,57 @@ void Application::loadBenchProjectFromPath() {
     try {
         BenchProject loaded = loadBenchProject(benchProjectPathBuffer_);
         const std::string loadedName = loaded.name;
-        if (!applyBenchScene(std::move(loaded.scene),
-                "Loaded optical bench: " + loadedName)) {
-            return;
-        }
-        benchProject_.formatVersion = loaded.formatVersion;
-        benchProject_.projectId = std::move(loaded.projectId);
-        benchProject_.name = std::move(loaded.name);
-        benchProject_.provenance = std::move(loaded.provenance);
         selectedBenchComponentId_.clear();
-        static_cast<void>(showSandboxViewport());
+        static_cast<void>(applyDynamicBenchProject(
+            std::move(loaded), "Loaded optical bench: " + loadedName));
     } catch (const std::exception& error) {
         errorMessage_ = error.what();
         statusMessage_.clear();
+    }
+}
+
+void Application::recordBenchEdit() {
+    if (!benchEditHistoryReady_) {
+        return;
+    }
+    try {
+        static_cast<void>(benchEditHistory_.record(benchProject_));
+    } catch (const std::exception& error) {
+        errorMessage_ = error.what();
+        statusMessage_.clear();
+    }
+}
+
+bool Application::restoreBenchEditState(const BenchProject& state) {
+    try {
+        auto restored = rebaseBenchEditStateRevision(
+            state, benchProject_.scene.revision());
+        return applyDynamicBenchProject(
+            std::move(restored), "Restored optical bench edit", false);
+    } catch (const std::exception& error) {
+        errorMessage_ = error.what();
+        statusMessage_.clear();
+        return false;
+    }
+}
+
+void Application::undoBenchEdit() {
+    if (!benchEditHistoryReady_ || !benchEditHistory_.canUndo()) {
+        return;
+    }
+    const BenchProject state = benchEditHistory_.undo();
+    if (!restoreBenchEditState(state)) {
+        static_cast<void>(benchEditHistory_.redo());
+    }
+}
+
+void Application::redoBenchEdit() {
+    if (!benchEditHistoryReady_ || !benchEditHistory_.canRedo()) {
+        return;
+    }
+    const BenchProject state = benchEditHistory_.redo();
+    if (!restoreBenchEditState(state)) {
+        static_cast<void>(benchEditHistory_.undo());
     }
 }
 
@@ -996,6 +1056,8 @@ bool Application::initialize(const RunOptions& options) {
         shutdown();
         return false;
     }
+    benchEditHistory_.reset(benchProject_);
+    benchEditHistoryReady_ = true;
     refreshRealLensWorkbench();
     lessonEditHistory_.reset(captureLessonEditState());
     lessonEditHistoryReady_ = true;
@@ -1059,6 +1121,7 @@ void Application::shutdown() noexcept {
     isPanning_ = false;
     sandboxGizmoDragging_ = false;
     sandboxGizmoChanged_ = false;
+    benchEditHistoryReady_ = false;
     isGizmoDragging_ = false;
     draggedTarget_ = GizmoTarget::None;
     selectedTarget_ = GizmoTarget::None;
@@ -4390,6 +4453,23 @@ void Application::drawSandboxInspector() {
         static_cast<void>(showLegacyViewport());
     }
 
+    ImGui::SeparatorText("Scene History");
+    ImGui::BeginDisabled(!benchEditHistoryReady_ || !benchEditHistory_.canUndo());
+    if (ImGui::Button("Undo Bench (Ctrl+Z)")) {
+        undoBenchEdit();
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!benchEditHistoryReady_ || !benchEditHistory_.canRedo());
+    if (ImGui::Button("Redo Bench (Ctrl+Y)")) {
+        redoBenchEdit();
+    }
+    ImGui::EndDisabled();
+    ImGui::TextDisabled(
+        "%zu undo / %zu redo; restored scenes receive a fresh revision",
+        benchEditHistoryReady_ ? benchEditHistory_.undoDepth() : 0U,
+        benchEditHistoryReady_ ? benchEditHistory_.redoDepth() : 0U);
+
     ImGui::SeparatorText("Component Library");
     const auto& kinds = bench::requiredBenchComponentKinds();
     sandboxLibraryKindIndex_ = std::clamp(
@@ -4434,22 +4514,19 @@ void Application::drawSandboxInspector() {
     }
     ImGui::SameLine();
     if (ImGui::Button("Empty Bench")) {
+        BenchProject empty;
+        empty.projectId = "untitled-bench";
+        empty.name = "Untitled Optical Bench";
         selectedBenchComponentId_.clear();
-        if (applyBenchScene({}, "Created an empty optical bench")) {
-            benchProject_.projectId = "untitled-bench";
-            benchProject_.name = "Untitled Optical Bench";
-            benchProject_.provenance = {};
-        }
+        static_cast<void>(applyDynamicBenchProject(
+            std::move(empty), "Created an empty optical bench"));
     }
     ImGui::SameLine();
     if (ImGui::Button("RGB Branch Preset")) {
         BenchProject preset = makeDefaultSandboxProject();
         selectedBenchComponentId_.clear();
-        if (applyBenchScene(std::move(preset.scene), "Loaded RGB branch preset")) {
-            benchProject_.projectId = std::move(preset.projectId);
-            benchProject_.name = std::move(preset.name);
-            benchProject_.provenance = std::move(preset.provenance);
-        }
+        static_cast<void>(applyDynamicBenchProject(
+            std::move(preset), "Loaded RGB branch preset"));
     }
 
     ImGui::SeparatorText("Bench Components");
@@ -4842,16 +4919,27 @@ void Application::drawWorkspace() {
     }
 
     const ImGuiIO& io = ImGui::GetIO();
-    if (viewportMode_ == ViewportMode::LegacyReference
-        && !io.WantTextInput && io.KeyCtrl) {
+    if (!io.WantTextInput && io.KeyCtrl) {
         if (ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
             if (io.KeyShift) {
-                redoLessonEdit();
+                if (viewportMode_ == ViewportMode::Sandbox) {
+                    redoBenchEdit();
+                } else {
+                    redoLessonEdit();
+                }
             } else {
-                undoLessonEdit();
+                if (viewportMode_ == ViewportMode::Sandbox) {
+                    undoBenchEdit();
+                } else {
+                    undoLessonEdit();
+                }
             }
         } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
-            redoLessonEdit();
+            if (viewportMode_ == ViewportMode::Sandbox) {
+                redoBenchEdit();
+            } else {
+                redoLessonEdit();
+            }
         }
     }
 
@@ -4928,11 +5016,14 @@ void Application::drawWorkspace() {
                         restored.transform = sandboxDragInitialTransform_;
                         candidate.replace(restored.id, restored);
                         static_cast<void>(applyBenchScene(
-                            std::move(candidate), "Cancelled sandbox gizmo edit"));
+                            std::move(candidate), "Cancelled sandbox gizmo edit", false));
                     }
                     sandboxGizmoDragging_ = false;
                     sandboxGizmoChanged_ = false;
                 } else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                    if (sandboxGizmoChanged_) {
+                        recordBenchEdit();
+                    }
                     sandboxGizmoDragging_ = false;
                     sandboxGizmoChanged_ = false;
                 } else if (const auto* component = benchProject_.scene.find(selectedBenchComponentId_)) {
@@ -4966,7 +5057,8 @@ void Application::drawWorkspace() {
                         std::move(candidate),
                         sandboxGizmoMode_ == SandboxGizmoMode::Translate
                             ? "Moved component in viewport"
-                            : "Rotated component in viewport")
+                            : "Rotated component in viewport",
+                        false)
                         || sandboxGizmoChanged_;
                 }
             }
@@ -5294,7 +5386,7 @@ void Application::drawWorkspace() {
     drawSandboxInspector();
     ImGui::SeparatorText("Legacy Reference Workbenches");
 
-    ImGui::SeparatorText("Edit History");
+    ImGui::SeparatorText("Legacy Edit History");
     ImGui::BeginDisabled(!lessonEditHistory_.canUndo());
     if (ImGui::Button("Undo (Ctrl+Z)")) {
         undoLessonEdit();
