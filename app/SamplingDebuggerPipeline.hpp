@@ -4,6 +4,7 @@
 #include <optional>
 #include <vector>
 
+#include "compute/fourier/FourFSystem.hpp"
 #include "compute/fourier/PsfMtf.hpp"
 #include "compute/sampling/AngularSpectrumAnalysis.hpp"
 #include "compute/sampling/PlaneProbe.hpp"
@@ -37,6 +38,13 @@ struct SamplingDebuggerConfig final {
     std::size_t mtfSampleCount = 129U;
     double mtfMaximumCutoffMultiple = 1.2;
     double spectrumFloorDecibels = -60.0;
+    double fourFFirstFocalLengthMetres = 0.050;
+    double fourFSecondFocalLengthMetres = 0.050;
+    compute::fourier::CircularFilterKind fourFFilterKind =
+        compute::fourier::CircularFilterKind::PassAll;
+    double fourFFilterInnerRadiusMetres = 0.25e-3;
+    double fourFFilterOuterRadiusMetres = 0.50e-3;
+    double fourFDisplayFloorDecibels = -60.0;
 };
 
 struct SamplingDebuggerResult final {
@@ -47,6 +55,11 @@ struct SamplingDebuggerResult final {
     field::ScalarField2D normalizedPsf;
     std::vector<compute::fourier::RadialMtfSample> incoherentMtf;
     field::RgbaImage angularSpectrumImage;
+    compute::fourier::FourFResult fourF;
+    field::RgbaImage objectPlaneImage;
+    field::RgbaImage fourierPlaneBeforeFilterImage;
+    field::RgbaImage fourierPlaneAfterFilterImage;
+    field::RgbaImage imagePlaneImage;
 };
 
 [[nodiscard]] field::RgbaImage renderAngularSpectrumClassification(

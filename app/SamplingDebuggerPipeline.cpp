@@ -10,6 +10,7 @@
 
 #include "compute/fft/IFftBackend.hpp"
 #include "core/field/ComplexField2D.hpp"
+#include "core/field/FieldObservables.hpp"
 
 namespace holobench::app::samplingdebug {
 namespace {
@@ -17,6 +18,43 @@ namespace {
 [[nodiscard]] std::uint8_t toByte(double value) noexcept {
     const double clamped = std::clamp(value, 0.0, 255.0);
     return static_cast<std::uint8_t>(std::round(clamped));
+}
+
+[[nodiscard]] compute::fourier::CircularFourierFilter makeFourFFilter(
+    const SamplingDebuggerConfig& config) {
+    switch (config.fourFFilterKind) {
+    case compute::fourier::CircularFilterKind::PassAll:
+        return compute::fourier::CircularFourierFilter::passAll();
+    case compute::fourier::CircularFilterKind::LowPass:
+        return compute::fourier::CircularFourierFilter::lowPass(
+            config.fourFFilterOuterRadiusMetres);
+    case compute::fourier::CircularFilterKind::HighPass:
+        return compute::fourier::CircularFourierFilter::highPass(
+            config.fourFFilterInnerRadiusMetres);
+    case compute::fourier::CircularFilterKind::BandPass:
+        return compute::fourier::CircularFourierFilter::bandPass(
+            config.fourFFilterInnerRadiusMetres,
+            config.fourFFilterOuterRadiusMetres);
+    }
+    throw std::invalid_argument("Unsupported 4-f circular filter kind");
+}
+
+[[nodiscard]] field::RgbaImage renderPeakNormalizedLogIntensity(
+    const field::ComplexField2D& value,
+    double floorDecibels) {
+    if (!std::isfinite(floorDecibels) || floorDecibels >= 0.0) {
+        throw std::invalid_argument("4-f display floor must be finite and negative");
+    }
+    const auto intensity = field::computeIntensity(value);
+    double peak = 0.0;
+    for (const double sample : intensity.samples()) {
+        peak = std::max(peak, sample);
+    }
+    field::FieldVisualizationOptions options;
+    options.floorDecibels = floorDecibels;
+    options.maxDecibels = 0.0;
+    options.decibelReferenceIntensity = peak > 0.0 ? peak : 1.0;
+    return field::renderDecibelIntensity(value, options);
 }
 
 } // namespace
@@ -117,6 +155,20 @@ SamplingDebuggerResult analyzeSamplingDebugger(
         config.mtfSampleCount, maximumMtfFrequency);
     auto spectrumImage = renderAngularSpectrumClassification(
         angularSpectrum, config.spectrumFloorDecibels);
+    compute::fourier::FourFSystem fourFSystem(fftBackend);
+    auto fourF = fourFSystem.run(
+        selectedPlane,
+        config.fourFFirstFocalLengthMetres,
+        config.fourFSecondFocalLengthMetres,
+        makeFourFFilter(config));
+    auto objectPlaneImage = renderPeakNormalizedLogIntensity(
+        selectedPlane, config.fourFDisplayFloorDecibels);
+    auto fourierPlaneBeforeFilterImage = renderPeakNormalizedLogIntensity(
+        fourF.fourierPlaneBeforeFilter, config.fourFDisplayFloorDecibels);
+    auto fourierPlaneAfterFilterImage = renderPeakNormalizedLogIntensity(
+        fourF.fourierPlaneAfterFilter, config.fourFDisplayFloorDecibels);
+    auto imagePlaneImage = renderPeakNormalizedLogIntensity(
+        fourF.imagePlane, config.fourFDisplayFloorDecibels);
     const auto pupilDiagnostics = pupil.diagnostics();
     return {
         sampling,
@@ -125,7 +177,12 @@ SamplingDebuggerResult analyzeSamplingDebugger(
         pupilDiagnostics,
         std::move(psf),
         std::move(mtf),
-        std::move(spectrumImage)};
+        std::move(spectrumImage),
+        std::move(fourF),
+        std::move(objectPlaneImage),
+        std::move(fourierPlaneBeforeFilterImage),
+        std::move(fourierPlaneAfterFilterImage),
+        std::move(imagePlaneImage)};
 }
 
 } // namespace holobench::app::samplingdebug

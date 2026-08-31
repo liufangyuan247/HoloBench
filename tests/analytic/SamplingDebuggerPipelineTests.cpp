@@ -55,12 +55,56 @@ TEST_CASE("debugger aggregates sampling spectrum probe PSF and incoherent MTF") 
     CHECK(result.incoherentMtf.back().normalizedIncoherentMtf == 0.0);
     CHECK(result.angularSpectrumImage.width() == selectedPlane.width());
     CHECK(result.angularSpectrumImage.height() == selectedPlane.height());
+    CHECK(result.fourF.filterDiagnostics.kind
+        == holobench::compute::fourier::CircularFilterKind::PassAll);
+    CHECK(result.fourF.filterDiagnostics.integratedIntensityTransmission
+        == doctest::Approx(1.0).epsilon(2e-15));
+    CHECK(result.objectPlaneImage.width() == selectedPlane.width());
+    CHECK(result.fourierPlaneBeforeFilterImage.width() == selectedPlane.width());
+    CHECK(result.fourierPlaneAfterFilterImage.width() == selectedPlane.width());
+    CHECK(result.imagePlaneImage.width() == selectedPlane.width());
 
     const auto propagatingColor = result.angularSpectrumImage.pixel(4U, 4U);
     const auto evanescentColor = result.angularSpectrumImage.pixel(0U, 4U);
     CHECK(propagatingColor != field::RgbaColor {8U, 8U, 12U, 255U});
     CHECK(evanescentColor.r > evanescentColor.g);
     CHECK(evanescentColor.b > evanescentColor.g);
+}
+
+TEST_CASE("debugger circular low-pass control removes the known Nyquist harmonic") {
+    field::ComplexField2D selectedPlane(8U, 8U, 0.25, 0.25, 1.0);
+    for (std::size_t y = 0; y < selectedPlane.height(); ++y) {
+        for (std::size_t x = 0; x < selectedPlane.width(); ++x) {
+            const double alternating = (x % 2U) == 0U ? 1.0 : -1.0;
+            selectedPlane.at(x, y) = {1.0 + 0.5 * alternating, 0.0};
+        }
+    }
+    samplingdebug::SamplingDebuggerConfig config;
+    config.probeXIndex = 4U;
+    config.probeYIndex = 4U;
+    config.psfFocalLengthMetres = 2.0;
+    config.psfPupilRadiusMetres = 0.05;
+    config.psfGridResolution = 17U;
+    config.mtfSampleCount = 9U;
+    config.fourFFirstFocalLengthMetres = 0.05;
+    config.fourFSecondFocalLengthMetres = 0.05;
+    config.fourFFilterKind = holobench::compute::fourier::CircularFilterKind::LowPass;
+    config.fourFFilterOuterRadiusMetres = 0.0125;
+    fft::CpuFftBackend backend;
+    const auto result = samplingdebug::analyzeSamplingDebugger(
+        selectedPlane, config, backend);
+
+    CHECK(result.fourF.filterDiagnostics.kind
+        == holobench::compute::fourier::CircularFilterKind::LowPass);
+    CHECK(result.fourF.filterDiagnostics.integratedIntensityTransmission
+        == doctest::Approx(0.8).epsilon(2e-14));
+    double minimumAmplitude = std::numeric_limits<double>::infinity();
+    double maximumAmplitude = 0.0;
+    for (const auto& sample : result.fourF.imagePlane.samples()) {
+        minimumAmplitude = std::min(minimumAmplitude, std::abs(sample));
+        maximumAmplitude = std::max(maximumAmplitude, std::abs(sample));
+    }
+    CHECK((maximumAmplitude - minimumAmplitude) / (maximumAmplitude + minimumAmplitude) < 2e-12);
 }
 
 TEST_CASE("angular-spectrum renderer uses deterministic background and validates its floor") {

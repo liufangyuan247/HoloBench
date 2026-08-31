@@ -164,6 +164,10 @@ Application::Application()
     , detectorFftBackend_(std::make_unique<compute::fft::CpuFftBackend>())
     , detectorTexture_(std::make_unique<render::gl::Texture2D>())
     , samplingSpectrumTexture_(std::make_unique<render::gl::Texture2D>())
+    , fourFObjectTexture_(std::make_unique<render::gl::Texture2D>())
+    , fourFBeforeFilterTexture_(std::make_unique<render::gl::Texture2D>())
+    , fourFAfterFilterTexture_(std::make_unique<render::gl::Texture2D>())
+    , fourFImageTexture_(std::make_unique<render::gl::Texture2D>())
     , scene_(optics::scene::createDefaultRealImageScene())
     , naResult_(optics::scene::computeObjectSideNumericalAperture(scene_)) {
     tracerOptions_.rayCount = 64;
@@ -385,6 +389,18 @@ void Application::shutdown() noexcept {
     if (samplingSpectrumTexture_) {
         samplingSpectrumTexture_->destroy();
     }
+    if (fourFObjectTexture_) {
+        fourFObjectTexture_->destroy();
+    }
+    if (fourFBeforeFilterTexture_) {
+        fourFBeforeFilterTexture_->destroy();
+    }
+    if (fourFAfterFilterTexture_) {
+        fourFAfterFilterTexture_->destroy();
+    }
+    if (fourFImageTexture_) {
+        fourFImageTexture_->destroy();
+    }
     detectorResult_.reset();
     samplingDebuggerResult_.reset();
     if (imguiGlInitialized_) {
@@ -451,6 +467,18 @@ void Application::updateWaveDetector() {
             if (samplingSpectrumTexture_) {
                 samplingSpectrumTexture_->destroy();
             }
+            if (fourFObjectTexture_) {
+                fourFObjectTexture_->destroy();
+            }
+            if (fourFBeforeFilterTexture_) {
+                fourFBeforeFilterTexture_->destroy();
+            }
+            if (fourFAfterFilterTexture_) {
+                fourFAfterFilterTexture_->destroy();
+            }
+            if (fourFImageTexture_) {
+                fourFImageTexture_->destroy();
+            }
             hasDetectorProbe_ = false;
             detectorProbeLocked_ = false;
         }
@@ -507,6 +535,14 @@ void Application::refreshSamplingDebugger() {
             || !samplingSpectrumTexture_->uploadImage(result.angularSpectrumImage)) {
             throw std::runtime_error("OpenGL rejected the angular-spectrum texture upload");
         }
+        if (!fourFObjectTexture_ || !fourFObjectTexture_->uploadImage(result.objectPlaneImage)
+            || !fourFBeforeFilterTexture_
+            || !fourFBeforeFilterTexture_->uploadImage(result.fourierPlaneBeforeFilterImage)
+            || !fourFAfterFilterTexture_
+            || !fourFAfterFilterTexture_->uploadImage(result.fourierPlaneAfterFilterImage)
+            || !fourFImageTexture_ || !fourFImageTexture_->uploadImage(result.imagePlaneImage)) {
+            throw std::runtime_error("OpenGL rejected a 4-f plane texture upload");
+        }
         samplingDebuggerResult_ = std::make_unique<samplingdebug::SamplingDebuggerResult>(
             std::move(result));
         samplingDebuggerErrorMessage_.clear();
@@ -518,6 +554,18 @@ void Application::refreshSamplingDebugger() {
         samplingDebuggerResult_.reset();
         if (samplingSpectrumTexture_) {
             samplingSpectrumTexture_->destroy();
+        }
+        if (fourFObjectTexture_) {
+            fourFObjectTexture_->destroy();
+        }
+        if (fourFBeforeFilterTexture_) {
+            fourFBeforeFilterTexture_->destroy();
+        }
+        if (fourFAfterFilterTexture_) {
+            fourFAfterFilterTexture_->destroy();
+        }
+        if (fourFImageTexture_) {
+            fourFImageTexture_->destroy();
         }
     }
 }
@@ -749,11 +797,61 @@ void Application::drawSamplingDebuggerPanel() {
     double probeDistanceMillimetres = samplingDebuggerConfig_.propagationDistanceMetres * 1e3;
     double focalLengthMillimetres = samplingDebuggerConfig_.psfFocalLengthMetres * 1e3;
     double pupilRadiusMillimetres = samplingDebuggerConfig_.psfPupilRadiusMetres * 1e3;
+    double fourFFirstFocalLengthMillimetres =
+        samplingDebuggerConfig_.fourFFirstFocalLengthMetres * 1e3;
+    double fourFSecondFocalLengthMillimetres =
+        samplingDebuggerConfig_.fourFSecondFocalLengthMetres * 1e3;
+    double fourFFilterInnerRadiusMillimetres =
+        samplingDebuggerConfig_.fourFFilterInnerRadiusMetres * 1e3;
+    double fourFFilterOuterRadiusMillimetres =
+        samplingDebuggerConfig_.fourFFilterOuterRadiusMetres * 1e3;
     ImGui::InputDouble("Requested half-angle X", &angleXDegrees, 0.1, 1.0, "%.4g deg");
     ImGui::InputDouble("Requested half-angle Y", &angleYDegrees, 0.1, 1.0, "%.4g deg");
     ImGui::InputDouble("Probe offset z", &probeDistanceMillimetres, 0.1, 1.0, "%.6g mm");
     ImGui::InputDouble("PSF lens focal length", &focalLengthMillimetres, 0.1, 1.0, "%.6g mm");
     ImGui::InputDouble("Circular pupil radius", &pupilRadiusMillimetres, 0.01, 0.1, "%.6g mm");
+    ImGui::SeparatorText("4-f spatial filter");
+    ImGui::InputDouble(
+        "First lens focal length f1",
+        &fourFFirstFocalLengthMillimetres,
+        0.1,
+        1.0,
+        "%.6g mm");
+    ImGui::InputDouble(
+        "Second lens focal length f2",
+        &fourFSecondFocalLengthMillimetres,
+        0.1,
+        1.0,
+        "%.6g mm");
+    constexpr const char* kFourFFilterNames =
+        "Pass all\0Low pass\0High pass\0Band pass\0";
+    int fourFFilterIndex = static_cast<int>(samplingDebuggerConfig_.fourFFilterKind);
+    if (ImGui::Combo("Circular filter", &fourFFilterIndex, kFourFFilterNames)) {
+        samplingDebuggerConfig_.fourFFilterKind =
+            static_cast<compute::fourier::CircularFilterKind>(fourFFilterIndex);
+    }
+    if (samplingDebuggerConfig_.fourFFilterKind
+        == compute::fourier::CircularFilterKind::HighPass
+        || samplingDebuggerConfig_.fourFFilterKind
+            == compute::fourier::CircularFilterKind::BandPass) {
+        ImGui::InputDouble(
+            "Inner radius",
+            &fourFFilterInnerRadiusMillimetres,
+            0.01,
+            0.1,
+            "%.6g mm");
+    }
+    if (samplingDebuggerConfig_.fourFFilterKind
+        == compute::fourier::CircularFilterKind::LowPass
+        || samplingDebuggerConfig_.fourFFilterKind
+            == compute::fourier::CircularFilterKind::BandPass) {
+        ImGui::InputDouble(
+            "Outer radius",
+            &fourFFilterOuterRadiusMillimetres,
+            0.01,
+            0.1,
+            "%.6g mm");
+    }
     samplingDebuggerConfig_.requestedHalfAngleXRadians = angleXDegrees
         * std::numbers::pi / 180.0;
     samplingDebuggerConfig_.requestedHalfAngleYRadians = angleYDegrees
@@ -761,6 +859,14 @@ void Application::drawSamplingDebuggerPanel() {
     samplingDebuggerConfig_.propagationDistanceMetres = probeDistanceMillimetres * 1e-3;
     samplingDebuggerConfig_.psfFocalLengthMetres = focalLengthMillimetres * 1e-3;
     samplingDebuggerConfig_.psfPupilRadiusMetres = pupilRadiusMillimetres * 1e-3;
+    samplingDebuggerConfig_.fourFFirstFocalLengthMetres =
+        fourFFirstFocalLengthMillimetres * 1e-3;
+    samplingDebuggerConfig_.fourFSecondFocalLengthMetres =
+        fourFSecondFocalLengthMillimetres * 1e-3;
+    samplingDebuggerConfig_.fourFFilterInnerRadiusMetres =
+        fourFFilterInnerRadiusMillimetres * 1e-3;
+    samplingDebuggerConfig_.fourFFilterOuterRadiusMetres =
+        fourFFilterOuterRadiusMillimetres * 1e-3;
     if (ImGui::Button("Refresh Sampling Debugger")) {
         refreshSamplingDebugger();
     }
@@ -863,6 +969,54 @@ void Application::drawSamplingDebuggerPanel() {
     }
     if (!mtfProfile.empty()) {
         ImGui::PlotLines("Incoherent MTF", mtfProfile.data(), static_cast<int>(mtfProfile.size()), 0, nullptr, 0.0F, 1.0F, ImVec2(0.0F, 80.0F));
+    }
+
+    ImGui::SeparatorText("4-f coherent relay");
+    const auto& filterDiagnostics = result.fourF.filterDiagnostics;
+    const double magnification = -result.fourF.secondTransformDiagnostics.focalLengthMetres
+        / result.fourF.firstTransformDiagnostics.focalLengthMetres;
+    ImGui::Text(
+        "Magnification M=-f2/f1: %.7g | image pitch: %.7g x %.7g um",
+        magnification,
+        result.fourF.imagePlane.pitchXMetres() * 1e6,
+        result.fourF.imagePlane.pitchYMetres() * 1e6);
+    ImGui::Text(
+        "Filter geometry: %zu / %zu samples transmitted, %zu blocked",
+        filterDiagnostics.transmittedSampleCount,
+        filterDiagnostics.totalSampleCount,
+        filterDiagnostics.blockedSampleCount);
+    ImGui::Text(
+        "Integrated-intensity transmission: %.9g%%",
+        100.0 * filterDiagnostics.integratedIntensityTransmission);
+    ImGui::TextDisabled(
+        "Each log-intensity plane is peak-normalized independently for shape inspection; use the transmission diagnostic for power.");
+
+    const auto drawFourFPlane = [](const char* label, const render::gl::Texture2D* texture) {
+        ImGui::TextUnformatted(label);
+        if (texture == nullptr || !texture->isValid()) {
+            ImGui::TextDisabled("Texture unavailable");
+            return;
+        }
+        const float availableWidth = ImGui::GetContentRegionAvail().x;
+        const float imageWidth = std::max(1.0F, std::min(availableWidth, 320.0F));
+        const float aspect = static_cast<float>(texture->height())
+            / static_cast<float>(texture->width());
+        ImGui::Image(
+            toImTextureID(texture->handle()),
+            ImVec2(imageWidth, imageWidth * aspect),
+            ImVec2(0.0F, 1.0F),
+            ImVec2(1.0F, 0.0F));
+    };
+    if (ImGui::BeginTable("four_f_planes", 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableNextColumn();
+        drawFourFPlane("Object plane", fourFObjectTexture_.get());
+        ImGui::TableNextColumn();
+        drawFourFPlane("Fourier plane before filter", fourFBeforeFilterTexture_.get());
+        ImGui::TableNextColumn();
+        drawFourFPlane("Fourier plane after filter", fourFAfterFilterTexture_.get());
+        ImGui::TableNextColumn();
+        drawFourFPlane("Image plane", fourFImageTexture_.get());
+        ImGui::EndTable();
     }
     ImGui::End();
 }
@@ -1675,6 +1829,14 @@ int Application::run(const RunOptions& options) {
     }
     if (glSmokeMode_ && (!samplingSpectrumTexture_ || !samplingSpectrumTexture_->isValid())) {
         SDL_Log("OpenGL smoke check failed: angular-spectrum texture was never uploaded");
+        rawGlError = true;
+    }
+    if (glSmokeMode_
+        && (!fourFObjectTexture_ || !fourFObjectTexture_->isValid()
+            || !fourFBeforeFilterTexture_ || !fourFBeforeFilterTexture_->isValid()
+            || !fourFAfterFilterTexture_ || !fourFAfterFilterTexture_->isValid()
+            || !fourFImageTexture_ || !fourFImageTexture_->isValid())) {
+        SDL_Log("OpenGL smoke check failed: one or more 4-f plane textures were never uploaded");
         rawGlError = true;
     }
 

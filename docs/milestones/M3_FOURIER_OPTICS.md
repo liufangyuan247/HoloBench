@@ -11,8 +11,9 @@ numerically false.
 
 - [x] Ideal front-focal-plane to back-focal-plane Fourier-lens transform with
   physical SI output sampling.
-- [x] 4-f compute orchestration with circular Fourier-plane low-pass,
-  high-pass, and band-pass filters; interactive UI controls remain pending.
+- [x] 4-f compute orchestration with interactive circular Fourier-plane
+  pass-all, low-pass, high-pass, and band-pass controls plus object,
+  unfiltered Fourier, filtered Fourier, and image-plane views.
 - [x] Angular-spectrum visualizer UI with propagating/evanescent identification,
   centred physical-frequency data, and independent spectral-energy fractions.
 - [x] Circular-pupil coherent amplitude/intensity PSF and explicitly
@@ -20,8 +21,13 @@ numerically false.
 - [x] Sampling diagnostics data model for aliasing, angular bandwidth,
   wrap-around, required padding, support-to-boundary clearance, and evanescent
   sampled bins.
-- [x] Sampling Debugger UI and arbitrary-plane probe workflow with explicit
-  refresh semantics and OpenGL texture smoke validation.
+- [x] Sampling Debugger UI, arbitrary-plane probe, and coherent 4-f filtering
+  workflows with explicit refresh semantics and OpenGL texture smoke validation.
+
+The four 4-f images use independent peak-normalized log-intensity scaling so
+their spatial structure remains visible. They are not a power comparison; the
+UI separately reports the hard-mask sample geometry and the integrated
+Fourier-plane intensity transmission.
 
 ## Numerical gate
 

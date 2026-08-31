@@ -69,8 +69,9 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 - **Angular spectrum and plane probes**: A centred, physical-frequency angular-spectrum map exposes complex coefficients, propagating/evanescent classification, longitudinal/decay frequency, and independent spectral-energy fractions. Fixed-grid probes evaluate arbitrary positive/negative ASM distances while preserving the exact source field at `z=0`.
 - **Sampling Debugger orchestration**: A headless application pipeline aggregates sampling warnings, a deterministic propagating/evanescent spectrum image, arbitrary-plane probes, sampled Airy PSF, and explicitly incoherent MTF without placing physics in ImGui code.
 - **Interactive Sampling Debugger**: A dedicated dockable window exposes requested-angle and relative-z controls, Nyquist/padding/wrap warnings, colour-classified angular spectrum and energy fractions, fixed-grid complex probes at the source and arbitrary positive/negative z, radial Airy PSF, and explicitly labelled incoherent MTF. Refresh is explicit rather than per-frame.
+- **Interactive 4-f filtering**: The Sampling Debugger exposes independent `f1`/`f2` controls and pass-all, circular low-pass, high-pass, and band-pass filters in physical Fourier-plane units. A 2x2 view shows the object, Fourier plane before filtering, Fourier plane after filtering, and inverted image plane. Each log image is peak-normalized independently for shape inspection, while geometric sample counts and integrated-intensity transmission remain explicit diagnostics.
 - **Sampling diagnostics foundation**: Reports physical extent, Nyquist angles, requested-band aliasing, periodic wrap-around, required padding factor, aperture/support boundary clearance, and sampled evanescent bins. Caller support claims are checked against every non-zero sample.
-- **Local gate**: Windows Clang warnings-as-errors core and application builds pass with 228/228 headless tests, including twenty-five new M3 cases. Three-frame OpenGL smoke exits 0 on AMD Radeon Pro 5300M and now requires both detector and angular-spectrum textures to upload successfully.
+- **Local gate**: Windows Clang warnings-as-errors core and application builds pass with 229/229 headless tests, including twenty-six new M3 cases. Three-frame OpenGL smoke exits 0 on AMD Radeon Pro 5300M and requires the detector, angular spectrum, and all four 4-f plane textures to upload successfully with no reported OpenGL errors.
 
 ## Known limitations (M1/M2)
 
@@ -83,7 +84,7 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 ## Next five tasks
 
 1. Run and record GPU parity plus `wave/asm_1024_square_gpu_recompute` on the target NVIDIA card.
-2. Add the interactive 4-f object/Fourier/filtered/image workflow and circular low/high/band-pass controls.
-3. Define and pass named M3 CPU/GPU performance budgets without applying device-wide caps.
-4. Pass the M3 Windows/Linux warnings-as-errors and UI smoke gates.
-5. Complete M3 documentation, release-integration review, and tag only after every gate is green.
+2. Define and pass named M3 CPU/GPU performance budgets without applying device-wide caps.
+3. Pass the M3 Windows MSVC and Linux GCC warnings-as-errors gates.
+4. Complete the M3 teaching-workflow acceptance review and remote UI smoke evidence.
+5. Complete M3 release-integration review and tag only after every gate is green.

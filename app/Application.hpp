@@ -299,6 +299,10 @@ private:
     std::unique_ptr<compute::fft::CpuFftBackend> detectorFftBackend_;
     std::unique_ptr<render::gl::Texture2D> detectorTexture_;
     std::unique_ptr<render::gl::Texture2D> samplingSpectrumTexture_;
+    std::unique_ptr<render::gl::Texture2D> fourFObjectTexture_;
+    std::unique_ptr<render::gl::Texture2D> fourFBeforeFilterTexture_;
+    std::unique_ptr<render::gl::Texture2D> fourFAfterFilterTexture_;
+    std::unique_ptr<render::gl::Texture2D> fourFImageTexture_;
     std::unique_ptr<wave::WaveDetectorResult> detectorResult_;
     std::unique_ptr<samplingdebug::SamplingDebuggerResult> samplingDebuggerResult_;
     waveui::WaveDetectorUiState detectorUiState_;
