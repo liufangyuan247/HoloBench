@@ -51,6 +51,7 @@ holobench_set_warnings(holobench_core)
 
 add_library(holobench_compute STATIC
     compute/fft/CpuFftBackend.cpp
+    compute/fourier/FourFSystem.cpp
     compute/fourier/FourierOptics.cpp
     compute/propagation/AngularSpectrumPropagator.cpp
     compute/propagation/FraunhoferPropagator.cpp
@@ -231,6 +232,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/compute/CpuFftBackendTests.cpp
         tests/compute/FraunhoferPropagatorTests.cpp
         tests/compute/FresnelPropagatorTests.cpp
+        tests/compute/FourFSystemTests.cpp
         tests/compute/FourierOpticsTests.cpp
         tests/compute/SamplingDiagnosticsTests.cpp
         tests/analytic/BenchTracerTests.cpp

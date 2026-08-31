@@ -42,6 +42,14 @@ Applying two such transforms gives an ideal 4-f relay. With focal lengths
 the transverse integrated intensity. Absolute global carrier phase is not an
 intensity or imaging observable but remains deterministic.
 
+The Fourier-plane spatial filter is an ideal, hard-edged scalar amplitude mask
+whose radius is measured in physical metres from the optical axis. Low-pass
+samples satisfy `r <= r_outer`, high-pass samples satisfy `r >= r_inner`, and
+band-pass samples satisfy `r_inner <= r <= r_outer`; samples exactly on a mask
+boundary are transmitted. The orchestration retains the unfiltered Fourier
+plane, filtered Fourier plane, and image plane independently, and reports the
+geometric sample counts and transverse integrated-intensity transmission.
+
 This is a monochromatic, coherent, scalar, paraxial, ideal-lens model. It does
 not claim aberrations, finite lens clear aperture, polarization, vector high-NA
 behaviour, or automatic padding.
@@ -83,6 +91,10 @@ silently pad, resample, suppress evanescent bins, or change solver behaviour.
   rectangular Fourier-plane transform.
 - Two transforms check 4-f inversion, magnification, amplitude scaling, and
   integrated-intensity conservation.
+- Independent discrete harmonics verify pass-all, circular low-pass,
+  high-pass, and band-pass selection. Closing the low-pass radius below the
+  known harmonic removes its image-plane amplitude contrast while preserving
+  the DC component.
 - The teaching example `lambda=532 nm`, `1024x1024`, `dx=4 um` reproduces a
   Nyquist half-angle of approximately `3.813 deg` and flags a requested
   `12 deg` field.

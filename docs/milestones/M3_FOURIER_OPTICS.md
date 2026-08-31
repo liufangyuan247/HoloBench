@@ -11,7 +11,8 @@ numerically false.
 
 - [x] Ideal front-focal-plane to back-focal-plane Fourier-lens transform with
   physical SI output sampling.
-- [ ] 4-f orchestration with interactive Fourier-plane spatial filters.
+- [x] 4-f compute orchestration with circular Fourier-plane low-pass,
+  high-pass, and band-pass filters; interactive UI controls remain pending.
 - [ ] Angular-spectrum visualizer with propagating/evanescent identification.
 - [ ] PSF and MTF computation with independent diffraction oracles.
 - [x] Sampling diagnostics data model for aliasing, angular bandwidth,
@@ -28,6 +29,9 @@ numerically false.
   integrated-intensity conservation within `5e-12` relative tolerance.
 - [x] The documented 532 nm / 4 um teaching grid reproduces the analytic
   Nyquist angle and independently exercises every first-stage sampling warning.
+- [x] Closing a circular low-pass radius below a known discrete harmonic
+  removes its image-plane contrast; high-pass and band-pass masks independently
+  select the expected DC/harmonic bins.
 - [ ] A circular Fourier-plane stop produces the independently predicted Airy
   PSF and cutoff MTF.
 - [ ] Windows/Linux warnings-as-errors, GPU parity where applicable, UI smoke,
