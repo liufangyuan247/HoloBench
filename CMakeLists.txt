@@ -73,13 +73,29 @@ add_library(holobench_optics STATIC
     optics/scene/SceneProjectAdapter.cpp
     optics/wave/FieldElements.cpp
     optics/wave/FieldSources.cpp
-    optics/wave/WaveDetectorPipeline.cpp
 )
 add_library(HoloBench::Optics ALIAS holobench_optics)
 target_include_directories(holobench_optics PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(holobench_optics PUBLIC HoloBench::Core HoloBench::Compute)
+target_link_libraries(holobench_optics PUBLIC HoloBench::Core)
 target_compile_features(holobench_optics PUBLIC cxx_std_20)
 holobench_set_warnings(holobench_optics)
+
+# Headless application-use-case orchestration. This layer composes the
+# solver-independent optical models with numerical backends without making
+# either lower-level library depend on the other implementation layer.
+add_library(holobench_app_logic STATIC
+    app/WaveDetectorPipeline.cpp
+    app/WaveDetectorUiState.cpp
+)
+add_library(HoloBench::AppLogic ALIAS holobench_app_logic)
+target_include_directories(holobench_app_logic PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(holobench_app_logic PUBLIC
+    HoloBench::Core
+    HoloBench::Compute
+    HoloBench::Optics
+)
+target_compile_features(holobench_app_logic PUBLIC cxx_std_20)
+holobench_set_warnings(holobench_app_logic)
 
 set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
@@ -144,7 +160,6 @@ if(HOLOBENCH_BUILD_APP)
     add_executable(holobench_app
         app/main.cpp
         app/Application.cpp
-        app/WaveDetectorUiState.cpp
         render/Camera.cpp
         render/gl/Shader.cpp
         render/gl/Framebuffer.cpp
@@ -156,6 +171,8 @@ if(HOLOBENCH_BUILD_APP)
     target_include_directories(holobench_app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(holobench_app PRIVATE
         HoloBench::Core
+        HoloBench::AppLogic
+        HoloBench::Compute
         HoloBench::Optics
         holobench_imgui
         holobench_glad
@@ -197,13 +214,12 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/project/ProjectDocumentTests.cpp
         tests/project/SceneProjectAdapterTests.cpp
         tests/validation/WavepropCrossValidationTests.cpp
-        app/WaveDetectorUiState.cpp
         tests/app/WaveDetectorUiStateTests.cpp
         render/Camera.cpp
         tests/render/CameraTests.cpp
         tests/render/GizmoTests.cpp
     )
-    target_link_libraries(holobench_tests PRIVATE HoloBench::Core HoloBench::Compute HoloBench::Optics doctest::doctest glm::glm)
+    target_link_libraries(holobench_tests PRIVATE HoloBench::Core HoloBench::AppLogic HoloBench::Compute HoloBench::Optics doctest::doctest glm::glm)
     set(HOLOBENCH_WAVEPROP_GOLDEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/validation/waveprop/goldens")
     file(COPY
         "${CMAKE_CURRENT_SOURCE_DIR}/validation/waveprop/goldens/"

@@ -3,7 +3,7 @@
 #include <cstddef>
 
 #include "core/field/FieldVisualization.hpp"
-#include "optics/wave/WaveDetectorPipeline.hpp"
+#include "app/WaveDetectorPipeline.hpp"
 
 namespace holobench::app::waveui {
 
@@ -18,8 +18,8 @@ struct DetectorPixel final {
 };
 
 [[nodiscard]] bool samePhysicsConfig(
-    const optics::wave::WaveDetectorConfig& lhs,
-    const optics::wave::WaveDetectorConfig& rhs) noexcept;
+    const wave::WaveDetectorConfig& lhs,
+    const wave::WaveDetectorConfig& rhs) noexcept;
 
 [[nodiscard]] DetectorImageLayout fitDetectorImage(
     float availableWidth,
@@ -42,12 +42,12 @@ class WaveDetectorUiState final {
 public:
     WaveDetectorUiState() = default;
 
-    [[nodiscard]] const optics::wave::WaveDetectorConfig& draftConfig() const noexcept { return draftConfig_; }
-    [[nodiscard]] const optics::wave::WaveDetectorConfig& appliedConfig() const noexcept { return appliedConfig_; }
+    [[nodiscard]] const wave::WaveDetectorConfig& draftConfig() const noexcept { return draftConfig_; }
+    [[nodiscard]] const wave::WaveDetectorConfig& appliedConfig() const noexcept { return appliedConfig_; }
     [[nodiscard]] field::FieldViewMode viewMode() const noexcept { return viewMode_; }
     [[nodiscard]] bool isDirty() const noexcept { return !samePhysicsConfig(draftConfig_, appliedConfig_); }
 
-    void setDraftConfig(const optics::wave::WaveDetectorConfig& config) noexcept;
+    void setDraftConfig(const wave::WaveDetectorConfig& config) noexcept;
     void apply() noexcept;
     void requestRecompute() noexcept;
     void propagationSucceeded() noexcept;
@@ -57,8 +57,8 @@ public:
     [[nodiscard]] bool consumeVisualizationRequest() noexcept;
 
 private:
-    optics::wave::WaveDetectorConfig draftConfig_;
-    optics::wave::WaveDetectorConfig appliedConfig_;
+    wave::WaveDetectorConfig draftConfig_;
+    wave::WaveDetectorConfig appliedConfig_;
     field::FieldViewMode viewMode_ = field::FieldViewMode::DecibelIntensity;
     bool propagationRequested_ = true;
     bool visualizationRequested_ = false;

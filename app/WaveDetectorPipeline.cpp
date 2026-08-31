@@ -1,4 +1,4 @@
-#include "optics/wave/WaveDetectorPipeline.hpp"
+#include "app/WaveDetectorPipeline.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -11,8 +11,21 @@
 #include "optics/wave/FieldElements.hpp"
 #include "optics/wave/FieldSources.hpp"
 
-namespace holobench::optics::wave {
+namespace holobench::app::wave {
 namespace {
+
+using optics::wave::CircularApertureParameters;
+using optics::wave::DoubleSlitParameters;
+using optics::wave::GaussianBeamParameters;
+using optics::wave::PlaneWaveParameters;
+using optics::wave::RectangularApertureParameters;
+using optics::wave::ThinLensPhaseParameters;
+using optics::wave::applyCircularAperture;
+using optics::wave::applyDoubleSlit;
+using optics::wave::applyIdealThinLensPhase;
+using optics::wave::applyRectangularAperture;
+using optics::wave::fillFundamentalGaussianBeam;
+using optics::wave::fillPlaneWave;
 
 [[nodiscard]] constexpr bool isPowerOfTwo(std::size_t n) noexcept {
     return n >= 2 && (n & (n - 1)) == 0;
@@ -256,4 +269,4 @@ WaveDetectorResult simulateDetectorField(
     return result;
 }
 
-} // namespace holobench::optics::wave
+} // namespace holobench::app::wave

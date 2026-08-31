@@ -29,7 +29,7 @@ namespace holobench::compute::fft {
 class CpuFftBackend;
 }
 
-namespace holobench::optics::wave {
+namespace holobench::app::wave {
 struct WaveDetectorResult;
 }
 
@@ -294,7 +294,7 @@ private:
     std::unique_ptr<render::OpticalBenchRenderer> renderer_;
     std::unique_ptr<compute::fft::CpuFftBackend> detectorFftBackend_;
     std::unique_ptr<render::gl::Texture2D> detectorTexture_;
-    std::unique_ptr<optics::wave::WaveDetectorResult> detectorResult_;
+    std::unique_ptr<wave::WaveDetectorResult> detectorResult_;
     waveui::WaveDetectorUiState detectorUiState_;
     waveui::DetectorPixel detectorProbe_;
     bool hasDetectorProbe_ = false;

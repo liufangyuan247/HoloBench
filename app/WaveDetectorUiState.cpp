@@ -8,8 +8,8 @@
 namespace holobench::app::waveui {
 
 bool samePhysicsConfig(
-    const optics::wave::WaveDetectorConfig& lhs,
-    const optics::wave::WaveDetectorConfig& rhs) noexcept {
+    const wave::WaveDetectorConfig& lhs,
+    const wave::WaveDetectorConfig& rhs) noexcept {
     return lhs.sourceKind == rhs.sourceKind
         && lhs.wavelengthMetres == rhs.wavelengthMetres
         && lhs.sourceAmplitude == rhs.sourceAmplitude
@@ -86,7 +86,7 @@ bool mapDisplayPointToDetectorPixel(
     return true;
 }
 
-void WaveDetectorUiState::setDraftConfig(const optics::wave::WaveDetectorConfig& config) noexcept {
+void WaveDetectorUiState::setDraftConfig(const wave::WaveDetectorConfig& config) noexcept {
     draftConfig_ = config;
 }
 

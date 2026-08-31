@@ -3,16 +3,17 @@
 ## Dependency direction
 
 ```text
-app -> render -> optics -> compute interfaces
-  |        |        |
-  +--------+------> core
+app -> render -> optics -> core
+  |
+  +-> app logic -> optics  -> core
+               +-> compute -> core
 ```
 
-`core` must not depend on SDL, OpenGL, ImGui, CUDA, or product UI. `optics` may use core math/units but must not use renderer state. `render` consumes optical results without defining them. `app` wires systems together.
+`core` must not depend on SDL, OpenGL, ImGui, CUDA, or product UI. `optics` owns solver-independent physical models and does not depend on concrete numerical propagation implementations. `compute` owns those numerical backends. The headless `HoloBench::AppLogic` target composes both layers into product use cases such as the detector pipeline without acquiring an SDL, ImGui, or OpenGL dependency. `render` consumes optical results without defining them, and the executable `app` wires lifecycle, UI, rendering, and application logic together.
 
 ## Runtime layers
 
-- **Application:** process lifetime, windows, input, settings, project commands.
+- **Application:** process lifetime, windows, input, settings, project commands, and headless cross-layer use-case orchestration.
 - **Editor UI:** inspectors, lessons, probes, validation and limitation displays.
 - **Visualization:** 3D meshes, rays, fields, gizmos and result textures.
 - **Optical scene/model:** components, transforms, materials and solver-facing representations.

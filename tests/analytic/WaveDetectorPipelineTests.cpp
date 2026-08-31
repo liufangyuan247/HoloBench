@@ -6,9 +6,9 @@
 
 #include "compute/fft/CpuFftBackend.hpp"
 #include "core/field/FieldVisualization.hpp"
-#include "optics/wave/WaveDetectorPipeline.hpp"
+#include "app/WaveDetectorPipeline.hpp"
 
-using namespace holobench::optics::wave;
+using namespace holobench::app::wave;
 using namespace holobench::field;
 
 TEST_SUITE("WaveDetectorPipeline") {

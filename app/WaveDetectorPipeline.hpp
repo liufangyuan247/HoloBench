@@ -11,7 +11,7 @@ namespace holobench::compute::fft {
 class IFftBackend;
 }
 
-namespace holobench::optics::wave {
+namespace holobench::app::wave {
 
 enum class WaveSourceKind {
     PlaneWave,
@@ -99,4 +99,4 @@ struct WaveDetectorResult final {
     const WaveDetectorConfig& config,
     compute::fft::IFftBackend& fftBackend);
 
-} // namespace holobench::optics::wave
+} // namespace holobench::app::wave

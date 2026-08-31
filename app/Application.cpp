@@ -422,10 +422,10 @@ void Application::updateWaveDetector() {
             if (!detectorFftBackend_) {
                 throw std::runtime_error("CPU FFT backend is unavailable");
             }
-            auto result = optics::wave::simulateDetectorField(
+            auto result = wave::simulateDetectorField(
                 detectorUiState_.appliedConfig(),
                 *detectorFftBackend_);
-            detectorResult_ = std::make_unique<optics::wave::WaveDetectorResult>(std::move(result));
+            detectorResult_ = std::make_unique<wave::WaveDetectorResult>(std::move(result));
             detectorUiState_.propagationSucceeded();
             detectorErrorMessage_.clear();
             detectorStatusMessage_ = "Detector field recomputed on the deterministic CPU reference backend";
@@ -485,16 +485,16 @@ void Application::drawWaveDetectorPanel() {
     };
 
     if (ImGui::CollapsingHeader("Wave Source", ImGuiTreeNodeFlags_DefaultOpen)) {
-        int sourceKind = (draft.sourceKind == optics::wave::WaveSourceKind::PlaneWave) ? 0 : 1;
+        int sourceKind = (draft.sourceKind == wave::WaveSourceKind::PlaneWave) ? 0 : 1;
         constexpr std::array<const char*, 2> sourceNames {"Plane wave", "Gaussian beam"};
         if (ImGui::Combo("Source model", &sourceKind, sourceNames.data(), static_cast<int>(sourceNames.size()))) {
             draft.sourceKind = sourceKind == 0
-                ? optics::wave::WaveSourceKind::PlaneWave
-                : optics::wave::WaveSourceKind::GaussianBeam;
+                ? wave::WaveSourceKind::PlaneWave
+                : wave::WaveSourceKind::GaussianBeam;
             physicsEdited = true;
         }
         inputNanometres("Vacuum wavelength", draft.wavelengthMetres);
-        if (draft.sourceKind == optics::wave::WaveSourceKind::GaussianBeam) {
+        if (draft.sourceKind == wave::WaveSourceKind::GaussianBeam) {
             inputMillimetres("Waist radius w0", draft.gaussianWaistRadiusMetres);
             ImGui::TextDisabled("Scalar, coherent fundamental Gaussian at its waist plane.");
         } else {
@@ -512,26 +512,26 @@ void Application::drawWaveDetectorPanel() {
         int apertureKind = static_cast<int>(draft.apertureKind);
         constexpr std::array<const char*, 4> apertureNames {"None", "Circular", "Rectangular", "Double slit"};
         if (ImGui::Combo("Aperture model", &apertureKind, apertureNames.data(), static_cast<int>(apertureNames.size()))) {
-            draft.apertureKind = static_cast<optics::wave::WaveApertureKind>(apertureKind);
+            draft.apertureKind = static_cast<wave::WaveApertureKind>(apertureKind);
             physicsEdited = true;
         }
         switch (draft.apertureKind) {
-        case optics::wave::WaveApertureKind::None:
+        case wave::WaveApertureKind::None:
             break;
-        case optics::wave::WaveApertureKind::Circular:
+        case wave::WaveApertureKind::Circular:
             inputMillimetres("Radius", draft.circularApertureRadiusMetres);
             break;
-        case optics::wave::WaveApertureKind::Rectangular:
+        case wave::WaveApertureKind::Rectangular:
             inputMillimetres("Half width", draft.rectangularHalfWidthMetres);
             inputMillimetres("Half height", draft.rectangularHalfHeightMetres);
             break;
-        case optics::wave::WaveApertureKind::DoubleSlit:
+        case wave::WaveApertureKind::DoubleSlit:
             inputMillimetres("Slit width", draft.doubleSlitWidthMetres);
             inputMillimetres("Slit height", draft.doubleSlitHeightMetres);
             inputMillimetres("Centre separation", draft.doubleSlitSeparationMetres);
             break;
         }
-        if (draft.apertureKind != optics::wave::WaveApertureKind::None) {
+        if (draft.apertureKind != wave::WaveApertureKind::None) {
             inputMillimetres("Centre X", draft.apertureCenterXMetres);
             inputMillimetres("Centre Y", draft.apertureCenterYMetres);
         }
@@ -550,12 +550,12 @@ void Application::drawWaveDetectorPanel() {
     }
 
     if (ImGui::CollapsingHeader("Propagation & Detector Grid", ImGuiTreeNodeFlags_DefaultOpen)) {
-        int propagator = draft.propagator == optics::wave::WavePropagatorKind::AngularSpectrum ? 0 : 1;
+        int propagator = draft.propagator == wave::WavePropagatorKind::AngularSpectrum ? 0 : 1;
         constexpr std::array<const char*, 2> propagatorNames {"Angular spectrum (ASM)", "Fresnel transfer function"};
         if (ImGui::Combo("Propagation method", &propagator, propagatorNames.data(), static_cast<int>(propagatorNames.size()))) {
             draft.propagator = propagator == 0
-                ? optics::wave::WavePropagatorKind::AngularSpectrum
-                : optics::wave::WavePropagatorKind::FresnelTransferFunction;
+                ? wave::WavePropagatorKind::AngularSpectrum
+                : wave::WavePropagatorKind::FresnelTransferFunction;
             physicsEdited = true;
         }
         inputMillimetres("Distance z", draft.propagationDistanceMetres, 0.1);
