@@ -26,6 +26,7 @@ bool sameLessonEditState(
     const LessonEditState& lhs,
     const LessonEditState& rhs) noexcept {
     return lhs.scene == rhs.scene
+        && lhs.sceneProvenance == rhs.sceneProvenance
         && sameTracerOptions(lhs.tracerOptions, rhs.tracerOptions)
         && lhs.waveDetectorDraft == rhs.waveDetectorDraft
         && lhs.samplingDebugger == rhs.samplingDebugger

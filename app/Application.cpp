@@ -30,6 +30,7 @@
 #include "app/HolographyProject.hpp"
 #include "app/SlmInterferenceProject.hpp"
 #include "app/lessons/LessonProgress.hpp"
+#include "app/lessons/LessonTemplateRepository.hpp"
 #include "optics/ray/BenchTracer.hpp"
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
@@ -197,6 +198,13 @@ void drawViewportHud(
         return "At infinity";
     }
     return "Unknown";
+}
+
+[[nodiscard]] std::filesystem::path lessonTemplateRoot() {
+    const char* basePath = SDL_GetBasePath();
+    return std::filesystem::path(
+        basePath != nullptr && basePath[0] != '\0' ? basePath : ".")
+        / "lesson_templates";
 }
 
 [[nodiscard]] math::Vec3d rotateAroundAxis(
@@ -442,6 +450,7 @@ bool Application::applyScene(
 LessonEditState Application::captureLessonEditState() const {
     return {
         .scene = scene_,
+        .sceneProvenance = sceneProjectProvenance_,
         .tracerOptions = tracerOptions_,
         .waveDetectorDraft = detectorUiState_.draftConfig(),
         .samplingDebugger = samplingDebuggerConfig_,
@@ -461,7 +470,9 @@ bool Application::restoreLessonEditState(const LessonEditState& state) {
     try {
         slmexperiment::validateSlmInterferenceExperimentConfig(
             state.slmInterferenceDraft);
-        if (!applyScene(state.scene, state.tracerOptions)) {
+        project::validateProjectProvenance(state.sceneProvenance);
+        if (!applySceneProject(
+                state.scene, state.tracerOptions, state.sceneProvenance)) {
             throw std::runtime_error(
                 errorMessage_.empty() ? "scene restoration failed" : errorMessage_);
         }
@@ -485,6 +496,26 @@ bool Application::restoreLessonEditState(const LessonEditState& state) {
         statusMessage_.clear();
         return false;
     }
+}
+
+bool Application::applySceneProject(
+    const optics::scene::OpticalBenchScene& candidateScene,
+    const optics::ray::BenchTracerOptions& candidateOptions,
+    const project::ProjectProvenance& provenance) {
+    try {
+        project::validateProjectProvenance(provenance);
+    } catch (const std::exception& ex) {
+        errorMessage_ = ex.what();
+        statusMessage_.clear();
+        return false;
+    }
+    const auto previousProvenance = sceneProjectProvenance_;
+    sceneProjectProvenance_ = provenance;
+    if (applyScene(candidateScene, candidateOptions)) {
+        return true;
+    }
+    sceneProjectProvenance_ = previousProvenance;
+    return false;
 }
 
 void Application::undoLessonEdit() {
@@ -524,7 +555,10 @@ void Application::saveSceneToPath(const char* pathStr) {
     const std::filesystem::path path(pathString.substr(first, last - first + 1));
 
     try {
-        optics::scene::saveScene(scene_, path);
+        optics::scene::saveSceneProject({
+            .scene = scene_,
+            .provenance = sceneProjectProvenance_,
+        }, path);
         statusMessage_ = "Saved scene to " + path.string();
         errorMessage_.clear();
     } catch (const std::exception& ex) {
@@ -550,8 +584,9 @@ void Application::loadSceneFromPath(const char* pathStr) {
     const std::filesystem::path path(pathString.substr(first, last - first + 1));
 
     try {
-        const auto loaded = optics::scene::loadScene(path);
-        if (applyScene(loaded, tracerOptions_)) {
+        const auto loaded = optics::scene::loadSceneProject(path);
+        if (applySceneProject(
+                loaded.scene, tracerOptions_, loaded.provenance)) {
             statusMessage_ = "Loaded scene from " + path.string() + " (" + std::to_string(raySegments_.size()) + " segments)";
         }
     } catch (const std::exception& ex) {
@@ -680,6 +715,17 @@ bool Application::initialize(const RunOptions& options) {
     imguiGlInitialized_ = imguiSdlInitialized_ && ImGui_ImplOpenGL3_Init("#version 460 core");
     if (!imguiGlInitialized_) {
         SDL_Log("Dear ImGui backend initialization failed");
+        shutdown();
+        return false;
+    }
+
+    try {
+        static_cast<void>(lessons::loadOpticalBenchLessonTemplate(
+            lessonTemplateRoot(), "lesson_thin_lens"));
+        static_cast<void>(lessons::loadOpticalBenchLessonTemplate(
+            lessonTemplateRoot(), "lesson_real_virtual_images"));
+    } catch (const std::exception& ex) {
+        SDL_Log("Packaged lesson template validation failed: %s", ex.what());
         shutdown();
         return false;
     }
@@ -2144,7 +2190,7 @@ void Application::drawSlmInterferencePanel() {
             saveSlmExperimentProject();
         }
         ImGui::TextDisabled(
-            "Separate versioned M5 document; legacy optical-bench scene JSON remains format v1 and unchanged.");
+            "Separate versioned M5 document; optical-bench v1 migration and v2 provenance remain independent.");
     }
 
     if (ImGui::CollapsingHeader("Measured response LUT", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -3004,8 +3050,12 @@ void Application::drawHolographyPanel() {
 
 void Application::loadLessonTemplate(std::string_view lessonId) {
     if (lessonId == "thin_lens") {
-        const auto lessonTemplate = lessons::makeThinLensLessonTemplate();
-        if (!applyScene(lessonTemplate, tracerOptions_)) {
+        const auto lessonTemplate = lessons::loadOpticalBenchLessonTemplate(
+            lessonTemplateRoot(), "lesson_thin_lens");
+        if (!applySceneProject(
+                lessonTemplate.scene,
+                tracerOptions_,
+                lessonTemplate.provenance)) {
             throw std::runtime_error(
                 errorMessage_.empty()
                     ? "application rejected the thin-lens template"
@@ -3016,8 +3066,12 @@ void Application::loadLessonTemplate(std::string_view lessonId) {
         return;
     }
     if (lessonId == "real_virtual_images") {
-        const auto lessonTemplate = lessons::makeRealVirtualLessonTemplate();
-        if (!applyScene(lessonTemplate, tracerOptions_)) {
+        const auto lessonTemplate = lessons::loadOpticalBenchLessonTemplate(
+            lessonTemplateRoot(), "lesson_real_virtual_images");
+        if (!applySceneProject(
+                lessonTemplate.scene,
+                tracerOptions_,
+                lessonTemplate.provenance)) {
             throw std::runtime_error(
                 errorMessage_.empty()
                     ? "application rejected the real/virtual template"
@@ -4040,15 +4094,18 @@ void Application::drawWorkspace() {
 
     if (ImGui::CollapsingHeader("Presets", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::Button("Real Image")) {
-            applyScene(optics::scene::createDefaultRealImageScene(), tracerOptions_);
+            applySceneProject(
+                optics::scene::createDefaultRealImageScene(), tracerOptions_, {});
         }
         ImGui::SameLine();
         if (ImGui::Button("Virtual Image")) {
-            applyScene(optics::scene::createDefaultVirtualImageScene(), tracerOptions_);
+            applySceneProject(
+                optics::scene::createDefaultVirtualImageScene(), tracerOptions_, {});
         }
         ImGui::SameLine();
         if (ImGui::Button("Collimated")) {
-            applyScene(optics::scene::createDefaultInfinityScene(), tracerOptions_);
+            applySceneProject(
+                optics::scene::createDefaultInfinityScene(), tracerOptions_, {});
         }
     }
 
@@ -4308,6 +4365,15 @@ void Application::drawWorkspace() {
     }
 
     if (ImGui::CollapsingHeader("Project File", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (sceneProjectProvenance_.originKind
+            == project::ProjectOriginKind::LessonTemplate) {
+            ImGui::Text(
+                "Origin: lesson template %s v%d",
+                sceneProjectProvenance_.sourceId.c_str(),
+                sceneProjectProvenance_.sourceVersion);
+        } else {
+            ImGui::TextDisabled("Origin: user project");
+        }
         ImGui::InputText("Path", projectPathBuffer_, sizeof(projectPathBuffer_));
         if (ImGui::Button("Save Scene")) {
             saveSceneToPath(projectPathBuffer_);

@@ -58,8 +58,8 @@ Product Alpha)** is active development. For the current repository state and roa
   angular intensity, and selected-pixel PSF without recomputing per frame;
   measured LUT import/export keeps calibration provenance visible.
 - **Versioned experiment projects**: Strict, byte-stable M5 JSON preserves the
-  complete draft experiment, embedded measured response, and provenance while
-  leaving legacy optical-bench scene format v1 unchanged.
+  complete draft experiment, embedded measured response, and calibration
+  provenance independently from the optical-bench project schema.
 - **Named CPU performance gate**: The fixed 128-square, three-wavelength,
   ideal/LUT/LCD full refresh records p95 **188.482 ms** with Clang and
   **278.183 ms** with MSVC on the reference i7-9750H, below the 350 ms budget.
@@ -137,6 +137,11 @@ Product Alpha)** is active development. For the current repository state and roa
   plus calibration provenance. Undo/redo restores editable inputs through the
   normal validation paths, leaves numerical Apply/Refresh explicit, and never
   stores or mutates lesson progress.
+- **Ordinary packaged templates (in progress)**: Thin Lens and Real / Virtual
+  Images now load packaged optical-bench format-v2 project files through the
+  normal Lab loader. Stable template ID/version provenance survives Lab edits,
+  undo/redo, Save As, and reload; legacy format-v1 scenes migrate to v2 as user
+  projects. Wave/SLM templates remain the next part of this gate.
 - **Current scope**: The two advanced Holography lessons remain visible but
   cannot be started until their guided workflows and ordinary project
   templates are implemented and validated.

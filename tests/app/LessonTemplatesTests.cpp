@@ -6,6 +6,7 @@
 #include <stdexcept>
 
 #include "app/lessons/LessonTemplates.hpp"
+#include "app/lessons/LessonTemplateRepository.hpp"
 #include "compute/fft/CpuFftBackend.hpp"
 #include "core/project/ProjectDocument.hpp"
 #include "optics/scene/SceneProjectAdapter.hpp"
@@ -13,6 +14,25 @@
 namespace lessons = holobench::app::lessons;
 
 TEST_SUITE("LessonTemplates") {
+
+TEST_CASE("packaged optical-bench templates match factories and provenance") {
+    const std::filesystem::path root(HOLOBENCH_LESSON_TEMPLATE_DIR);
+    const auto thin = lessons::loadOpticalBenchLessonTemplate(
+        root, "lesson_thin_lens");
+    const auto realVirtual = lessons::loadOpticalBenchLessonTemplate(
+        root, "lesson_real_virtual_images");
+    CHECK(thin.scene == lessons::makeThinLensLessonTemplate());
+    CHECK(realVirtual.scene == lessons::makeRealVirtualLessonTemplate());
+    CHECK(thin.provenance == holobench::project::makeLessonTemplateProvenance(
+        "lesson_thin_lens", lessons::kLessonTemplateVersion));
+    CHECK(realVirtual.provenance
+        == holobench::project::makeLessonTemplateProvenance(
+            "lesson_real_virtual_images", lessons::kLessonTemplateVersion));
+    CHECK_THROWS_AS(
+        static_cast<void>(lessons::loadOpticalBenchLessonTemplate(
+            root, "lesson_diffraction")),
+        std::invalid_argument);
+}
 
 TEST_CASE("reflection lesson reuses ray solvers and matches independent angle laws") {
     const lessons::ReflectionRefractionLessonConfig config {

@@ -1,0 +1,62 @@
+{
+  "components": [
+    {
+      "id": "source_point",
+      "parameters": {
+        "power_w": 1.0,
+        "wavelength_m": 5.32e-7
+      },
+      "position_m": [
+        0.0,
+        0.0,
+        -0.15
+      ],
+      "type": "point_source"
+    },
+    {
+      "id": "lens_thin",
+      "parameters": {
+        "clear_aperture_radius_m": 0.025,
+        "focal_length_m": 0.05
+      },
+      "position_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "type": "thin_lens"
+    },
+    {
+      "id": "aperture_stop",
+      "parameters": {
+        "radius_m": 0.025
+      },
+      "position_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "type": "circular_aperture"
+    },
+    {
+      "id": "screen_target",
+      "parameters": {
+        "height_m": 0.06,
+        "width_m": 0.06
+      },
+      "position_m": [
+        0.0,
+        0.0,
+        0.105
+      ],
+      "type": "screen"
+    }
+  ],
+  "format_version": 2,
+  "name": "Lesson Template: Thin Lens",
+  "provenance": {
+    "origin": "lesson_template",
+    "source_id": "lesson_thin_lens",
+    "source_version": 1
+  }
+}

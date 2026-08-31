@@ -13,6 +13,8 @@ namespace {
 [[nodiscard]] app::LessonEditState makeState() {
     return {
         .scene = lessons::makeThinLensLessonTemplate(),
+        .sceneProvenance = holobench::project::makeLessonTemplateProvenance(
+            "lesson_thin_lens"),
         .tracerOptions = {},
         .waveDetectorDraft = lessons::makeDiffractionLessonTemplate(),
         .samplingDebugger = lessons::makeFourierLessonTemplate().samplingDebugger,

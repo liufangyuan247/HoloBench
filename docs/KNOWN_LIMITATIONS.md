@@ -79,7 +79,11 @@
 ## Architecture & data
 
 - The current GPU propagation backend covers fused ASM-style spectral transfer; arbitrary non-power-of-two FFTs, automatic padding, and CUDA-specific acceleration are not implemented.
-- The legacy optical-bench scene document remains format v1 and intentionally minimal. Real-lens prescriptions use separate versioned JSON/CSV exchange and are not embedded in that scene document; the separate holography document is format v2 with a narrowly scoped v1 migration.
+- The optical-bench scene document is format v2 with source provenance and a
+  strict v1-to-v2 user-project migration. It remains intentionally minimal.
+  Real-lens prescriptions use separate versioned JSON/CSV exchange and are not
+  embedded in that scene document; the separate holography document is format
+  v2 with its own narrowly scoped v1 migration.
 - Undo/redo currently covers lesson-relevant optical-bench, Wave Detector,
   Sampling Debugger, and SLM inputs. Real Lens and Holography Lab editing are
   not yet included. There is no autosave, crash recovery, release-complete CJK

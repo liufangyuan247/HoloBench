@@ -5,9 +5,12 @@
 #include <string>
 #include <vector>
 
+#include "core/project/ProjectProvenance.hpp"
+
 namespace holobench::project {
 
-inline constexpr int kCurrentFormatVersion = 1;
+inline constexpr int kLegacyFormatVersion = 1;
+inline constexpr int kCurrentFormatVersion = 2;
 
 struct ComponentRecord final {
     std::string id;
@@ -21,6 +24,7 @@ struct ComponentRecord final {
 struct ProjectDocument final {
     int formatVersion = kCurrentFormatVersion;
     std::string name = "Untitled";
+    ProjectProvenance provenance;
     std::vector<ComponentRecord> components;
 
     bool operator==(const ProjectDocument&) const = default;

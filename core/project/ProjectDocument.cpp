@@ -2,7 +2,9 @@
 
 #include <cmath>
 #include <fstream>
+#include <initializer_list>
 #include <stdexcept>
+#include <string_view>
 #include <unordered_set>
 
 #include <nlohmann/json.hpp>
@@ -11,6 +13,51 @@ namespace holobench::project {
 namespace {
 
 using Json = nlohmann::json;
+
+void requireKeys(
+    const Json& object,
+    std::initializer_list<std::string_view> expected,
+    const char* context) {
+    if (!object.is_object()) {
+        throw std::runtime_error(std::string(context) + " must be a JSON object");
+    }
+    if (object.size() != expected.size()) {
+        throw std::runtime_error(std::string(context) + " has missing or unknown keys");
+    }
+    for (const auto key : expected) {
+        if (!object.contains(key)) {
+            throw std::runtime_error(std::string(context) + " has missing or unknown keys");
+        }
+    }
+}
+
+Json provenanceToJson(const ProjectProvenance& provenance) {
+    validateProjectProvenance(provenance);
+    return {
+        {"origin", projectOriginKindName(provenance.originKind)},
+        {"source_id", provenance.sourceId},
+        {"source_version", provenance.sourceVersion},
+    };
+}
+
+ProjectProvenance provenanceFromJson(const Json& json) {
+    requireKeys(
+        json, {"origin", "source_id", "source_version"}, "project provenance");
+    if (!json.at("origin").is_string()
+        || !json.at("source_id").is_string()
+        || !json.at("source_version").is_number_integer()) {
+        throw std::runtime_error(
+            "project provenance fields have invalid types");
+    }
+    ProjectProvenance result {
+        .originKind = projectOriginKindFromName(
+            json.at("origin").get<std::string>()),
+        .sourceId = json.at("source_id").get<std::string>(),
+        .sourceVersion = json.at("source_version").get<int>(),
+    };
+    validateProjectProvenance(result);
+    return result;
+}
 
 Json toJson(const ComponentRecord& component) {
     if (component.id.empty()) {
@@ -110,6 +157,11 @@ ComponentRecord componentFromJson(const Json& json) {
 } // namespace
 
 void save(const ProjectDocument& project, const std::filesystem::path& path) {
+    if (project.formatVersion != kCurrentFormatVersion) {
+        throw std::runtime_error("cannot save unsupported project format version: "
+            + std::to_string(project.formatVersion));
+    }
+    validateProjectProvenance(project.provenance);
     std::unordered_set<std::string> seenIds;
     Json components = Json::array();
     for (const auto& component : project.components) {
@@ -126,6 +178,7 @@ void save(const ProjectDocument& project, const std::filesystem::path& path) {
         {"components", std::move(components)},
         {"format_version", project.formatVersion},
         {"name", project.name},
+        {"provenance", provenanceToJson(project.provenance)},
     };
 
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
@@ -152,15 +205,29 @@ ProjectDocument load(const std::filesystem::path& path) {
         if (!document.contains("format_version") || !document.at("format_version").is_number_integer()) {
             throw std::runtime_error("project missing format_version");
         }
-        ProjectDocument project;
-        project.formatVersion = document.at("format_version").get<int>();
-        if (project.formatVersion != kCurrentFormatVersion) {
-            throw std::runtime_error("unsupported project format version: " + std::to_string(project.formatVersion));
+        const int parsedVersion = document.at("format_version").get<int>();
+        if (parsedVersion != kLegacyFormatVersion
+            && parsedVersion != kCurrentFormatVersion) {
+            throw std::runtime_error("unsupported project format version: "
+                + std::to_string(parsedVersion));
         }
+        if (parsedVersion == kLegacyFormatVersion) {
+            requireKeys(document, {"components", "format_version", "name"},
+                "legacy project document");
+        } else {
+            requireKeys(document,
+                {"components", "format_version", "name", "provenance"},
+                "project document");
+        }
+        ProjectDocument project;
+        project.formatVersion = kCurrentFormatVersion;
         if (!document.contains("name") || !document.at("name").is_string()) {
             throw std::runtime_error("project missing or invalid name");
         }
         project.name = document.at("name").get<std::string>();
+        project.provenance = parsedVersion == kLegacyFormatVersion
+            ? ProjectProvenance {}
+            : provenanceFromJson(document.at("provenance"));
 
         if (!document.contains("components") || !document.at("components").is_array()) {
             throw std::runtime_error("project missing or invalid components array");
@@ -176,6 +243,8 @@ ProjectDocument load(const std::filesystem::path& path) {
         }
         return project;
     } catch (const Json::exception& error) {
+        throw std::runtime_error("invalid project '" + path.string() + "': " + error.what());
+    } catch (const std::invalid_argument& error) {
         throw std::runtime_error("invalid project '" + path.string() + "': " + error.what());
     }
 }

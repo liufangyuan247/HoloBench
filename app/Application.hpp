@@ -304,6 +304,10 @@ private:
     void undoLessonEdit();
     void redoLessonEdit();
     [[nodiscard]] bool restoreLessonEditState(const LessonEditState& state);
+    bool applySceneProject(
+        const optics::scene::OpticalBenchScene& candidateScene,
+        const optics::ray::BenchTracerOptions& candidateOptions,
+        const project::ProjectProvenance& provenance);
     bool applyScene(
         const optics::scene::OpticalBenchScene& candidateScene,
         const optics::ray::BenchTracerOptions& candidateOptions);
@@ -387,6 +391,7 @@ private:
     std::size_t selectedRealLensSurface_ = 0;
 
     optics::scene::OpticalBenchScene scene_;
+    project::ProjectProvenance sceneProjectProvenance_;
     optics::scene::ThinLensImagePrediction prediction_;
     optics::scene::NumericalApertureResult naResult_;
     std::vector<optics::ray::RaySegment> raySegments_;

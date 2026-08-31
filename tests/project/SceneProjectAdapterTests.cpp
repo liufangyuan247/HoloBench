@@ -156,6 +156,50 @@ TEST_CASE("adapter scene file save/load roundtrip preserves exact state and byte
     CHECK(firstBytes == secondBytes);
 }
 
+TEST_CASE("scene project preserves lesson-template provenance") {
+    const AdapterTempFile firstFile("holobench-scene-provenance-1-");
+    const AdapterTempFile secondFile("holobench-scene-provenance-2-");
+    const scene::OpticalBenchProject expected {
+        .scene = scene::createDefaultRealImageScene(),
+        .provenance = project::makeLessonTemplateProvenance(
+            "lesson_thin_lens", 4),
+    };
+    scene::saveSceneProject(expected, firstFile.path());
+    const auto restored = scene::loadSceneProject(firstFile.path());
+    scene::saveSceneProject(restored, secondFile.path());
+    CHECK(restored.scene == expected.scene);
+    CHECK(restored.provenance == expected.provenance);
+    std::ifstream firstInput(firstFile.path(), std::ios::binary);
+    std::ifstream secondInput(secondFile.path(), std::ios::binary);
+    const std::string firstBytes {
+        std::istreambuf_iterator<char>(firstInput),
+        std::istreambuf_iterator<char>()};
+    const std::string secondBytes {
+        std::istreambuf_iterator<char>(secondInput),
+        std::istreambuf_iterator<char>()};
+    CHECK(firstBytes == secondBytes);
+}
+
+TEST_CASE("legacy format one scene migrates through the normal scene loader") {
+    const AdapterTempFile file("holobench-adapter-legacy-");
+    {
+        std::ofstream output(file.path());
+        output << R"({
+  "components": [
+    {"id":"point_source","parameters":{"power_w":1.0,"wavelength_m":5.32e-7},"position_m":[0.0,0.0,-0.15],"type":"point_source"},
+    {"id":"thin_lens","parameters":{"clear_aperture_radius_m":0.025,"focal_length_m":0.05},"position_m":[0.0,0.0,0.0],"type":"thin_lens"},
+    {"id":"aperture","parameters":{"radius_m":0.025},"position_m":[0.0,0.0,0.0],"type":"circular_aperture"},
+    {"id":"screen","parameters":{"height_m":0.06,"width_m":0.06},"position_m":[0.0,0.0,0.075],"type":"screen"}
+  ],
+  "format_version": 1,
+  "name": "Legacy Optical Bench"
+})";
+    }
+    const auto loaded = scene::loadScene(file.path());
+    CHECK(loaded.name == "Legacy Optical Bench");
+    CHECK(scene::isSceneValid(loaded));
+}
+
 TEST_CASE("adapter rejects document with wrong component count") {
     const auto doc = scene::sceneToProjectDocument(scene::createDefaultRealImageScene());
 

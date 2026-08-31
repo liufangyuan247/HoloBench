@@ -7,6 +7,7 @@
 #include "app/SamplingDebuggerPipeline.hpp"
 #include "app/SlmInterferencePipeline.hpp"
 #include "app/WaveDetectorPipeline.hpp"
+#include "core/project/ProjectProvenance.hpp"
 #include "optics/ray/BenchTracer.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
 
@@ -16,6 +17,7 @@ namespace holobench::app {
 // display choices, and lesson progress deliberately have separate lifecycles.
 struct LessonEditState final {
     optics::scene::OpticalBenchScene scene;
+    project::ProjectProvenance sceneProvenance;
     optics::ray::BenchTracerOptions tracerOptions;
     wave::WaveDetectorConfig waveDetectorDraft;
     samplingdebug::SamplingDebuggerConfig samplingDebugger;

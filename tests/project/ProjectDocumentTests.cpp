@@ -38,6 +38,8 @@ private:
 TEST_CASE("project JSON round trip is lossless with scalar parameters") {
     project::ProjectDocument expected;
     expected.name = "M1 round trip";
+    expected.provenance = project::makeLessonTemplateProvenance(
+        "lesson_thin_lens", 3);
     project::ComponentRecord comp;
     comp.id = "lens-1";
     comp.type = "thin_lens";
@@ -83,7 +85,8 @@ TEST_CASE("legacy project JSON without parameters loads successfully with empty 
     }
 
     const auto loaded = project::load(file.path());
-    CHECK(loaded.formatVersion == 1);
+    CHECK(loaded.formatVersion == project::kCurrentFormatVersion);
+    CHECK(loaded.provenance == project::ProjectProvenance {});
     CHECK(loaded.name == "M0 legacy project");
     REQUIRE(loaded.components.size() == 1);
     CHECK(loaded.components[0].id == "lens-1");
@@ -97,13 +100,60 @@ TEST_CASE("legacy project JSON without parameters loads successfully with empty 
 TEST_CASE("unsupported project versions fail explicitly") {
     const TemporaryFile file("holobench-version-");
 
-    project::ProjectDocument future;
-    future.formatVersion = project::kCurrentFormatVersion + 1;
-    project::save(future, file.path());
+    {
+        std::ofstream output(file.path());
+        output << R"({"components":[],"format_version":3,"name":"future","provenance":{"origin":"user","source_id":"","source_version":0}})";
+    }
 
     CHECK_THROWS_WITH_AS(static_cast<void>(project::load(file.path())),
-        "unsupported project format version: 2",
+        "unsupported project format version: 3",
         std::runtime_error);
+}
+
+TEST_CASE("project provenance validates stable template identity") {
+    const auto provenance = project::makeLessonTemplateProvenance(
+        "lesson_fourier_plane", 2);
+    CHECK(provenance.originKind == project::ProjectOriginKind::LessonTemplate);
+    CHECK(provenance.sourceId == "lesson_fourier_plane");
+    CHECK(provenance.sourceVersion == 2);
+    CHECK(project::projectOriginKindFromName("lesson_template")
+        == project::ProjectOriginKind::LessonTemplate);
+    CHECK(project::projectOriginKindName(project::ProjectOriginKind::User)
+        == "user");
+    CHECK_THROWS_AS(
+        static_cast<void>(
+            project::makeLessonTemplateProvenance("Bad ID", 1)),
+        std::invalid_argument);
+    CHECK_THROWS_AS(
+        static_cast<void>(
+            project::makeLessonTemplateProvenance("lesson_bad", 0)),
+        std::invalid_argument);
+    CHECK_THROWS_AS(
+        project::validateProjectProvenance({
+            .originKind = project::ProjectOriginKind::User,
+            .sourceId = "lesson_bad",
+            .sourceVersion = 1,
+        }),
+        std::invalid_argument);
+}
+
+TEST_CASE("version two rejects missing unknown and corrupt provenance") {
+    const TemporaryFile file("holobench-provenance-");
+    {
+        std::ofstream output(file.path());
+        output << R"({"components":[],"format_version":2,"name":"missing"})";
+    }
+    CHECK_THROWS_AS(static_cast<void>(project::load(file.path())), std::runtime_error);
+    {
+        std::ofstream output(file.path());
+        output << R"({"components":[],"format_version":2,"name":"bad","provenance":{"origin":"lesson_template","source_id":"Bad ID","source_version":1}})";
+    }
+    CHECK_THROWS_AS(static_cast<void>(project::load(file.path())), std::runtime_error);
+    {
+        std::ofstream output(file.path());
+        output << R"({"components":[],"format_version":2,"name":"extra","provenance":{"origin":"user","source_id":"","source_version":0},"unknown":1})";
+    }
+    CHECK_THROWS_AS(static_cast<void>(project::load(file.path())), std::runtime_error);
 }
 
 TEST_CASE("malformed project JSON fails instead of producing partial state") {

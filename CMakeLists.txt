@@ -43,6 +43,7 @@ add_library(holobench_core STATIC
     core/field/ScalarField2D.cpp
     core/math/RigidTransform.cpp
     core/project/ProjectDocument.cpp
+    core/project/ProjectProvenance.cpp
 )
 add_library(HoloBench::Core ALIAS holobench_core)
 target_include_directories(holobench_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -113,6 +114,7 @@ add_library(holobench_app_logic STATIC
     app/lessons/LessonCatalog.cpp
     app/lessons/LessonProgress.cpp
     app/lessons/LessonTemplates.cpp
+    app/lessons/LessonTemplateRepository.cpp
     app/lessons/Localization.cpp
     app/RealLensWorkbenchPipeline.cpp
     app/SamplingDebuggerPipeline.cpp
@@ -259,6 +261,12 @@ if(HOLOBENCH_BUILD_APP)
         render/gl/GlDebug.cpp
     )
     set_target_properties(holobench_app PROPERTIES OUTPUT_NAME HoloBench)
+    add_custom_command(TARGET holobench_app POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/lesson_templates"
+            "$<TARGET_FILE_DIR:holobench_app>/lesson_templates"
+        VERBATIM
+    )
     target_include_directories(holobench_app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(holobench_app PRIVATE
         HoloBench::Core
@@ -365,7 +373,14 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         "${CMAKE_CURRENT_SOURCE_DIR}/validation/waveprop/goldens/"
         DESTINATION "${HOLOBENCH_WAVEPROP_GOLDEN_DIR}"
     )
+    set(HOLOBENCH_LESSON_TEMPLATE_DIR
+        "${CMAKE_CURRENT_BINARY_DIR}/lesson_templates")
+    file(COPY
+        "${CMAKE_CURRENT_SOURCE_DIR}/lesson_templates/"
+        DESTINATION "${HOLOBENCH_LESSON_TEMPLATE_DIR}"
+    )
     target_compile_definitions(holobench_tests PRIVATE
+        HOLOBENCH_LESSON_TEMPLATE_DIR="${HOLOBENCH_LESSON_TEMPLATE_DIR}"
         HOLOBENCH_WAVEPROP_GOLDEN_DIR="${HOLOBENCH_WAVEPROP_GOLDEN_DIR}"
     )
     set(HOLOBENCH_OPTILAND_VALIDATION_DIR "${CMAKE_CURRENT_BINARY_DIR}/validation/optiland")

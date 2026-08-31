@@ -184,13 +184,27 @@ OpticalBenchScene projectDocumentToScene(const project::ProjectDocument& documen
 }
 
 void saveScene(const OpticalBenchScene& scene, const std::filesystem::path& path) {
-    const auto document = sceneToProjectDocument(scene);
-    project::save(document, path);
+    saveSceneProject({.scene = scene, .provenance = {}}, path);
 }
 
 OpticalBenchScene loadScene(const std::filesystem::path& path) {
+    return loadSceneProject(path).scene;
+}
+
+void saveSceneProject(
+    const OpticalBenchProject& sceneProject,
+    const std::filesystem::path& path) {
+    auto document = sceneToProjectDocument(sceneProject.scene);
+    document.provenance = sceneProject.provenance;
+    project::save(document, path);
+}
+
+OpticalBenchProject loadSceneProject(const std::filesystem::path& path) {
     const auto document = project::load(path);
-    return projectDocumentToScene(document);
+    return {
+        .scene = projectDocumentToScene(document),
+        .provenance = document.provenance,
+    };
 }
 
 } // namespace holobench::optics::scene
