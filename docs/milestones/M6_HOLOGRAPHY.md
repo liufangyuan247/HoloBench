@@ -13,7 +13,9 @@ clearly separate first volume-hologram model.
 - [x] Ordinary and conjugate replay-wave foundation without hidden order selection.
 - [x] Propagated ordinary virtual/conjugate real reconstruction, full-replay
   comparison, explicit linear-order decomposition, and complex-field metrics.
-- [ ] Phase-only encoding and reconstruction-quality metrics.
+- [x] Wavelength-specific phase-only encoding, circular quantization, invalid-
+  target masking, ideal replay, and phase-error diagnostics.
+- [ ] Propagated phase-only reconstruction-quality metrics.
 - [ ] RGB recording/replay basics with wavelength identity preserved.
 - [ ] H1 record -> conjugate replay -> real image -> H2 record/replay pipeline.
 - [ ] Transplane placement controls and image-plane traversal diagnostics.

@@ -67,6 +67,27 @@ photopolymer, or a complete radiometric exposure model.
   The conjugate-bearing order under conjugated reference replay is propagated by
   `+d` to inspect the real image. Both signed distances are explicit API state.
 
+### Ideal phase-only encoding
+
+- The first phase-only path models a wavelength-specific commanded phase, not
+  a fixed optical-path-difference plate or calibrated material thickness.
+- A target complex transmission contributes its phase plus an explicit offset.
+  The result is wrapped into the unique interval `[0, 2 pi)`. Bit depth zero is
+  continuous; otherwise the phase is rounded to the nearest of `2^bitDepth`
+  circular codes, including correct wrap across the top boundary.
+- Target samples at or below a caller-supplied relative-intensity threshold
+  have no meaningful phase. They receive the wrapped offset for deterministic
+  storage and an explicit invalid mask entry; they are never silently treated
+  as validated target phase.
+- Diagnostics report valid, invalid, and actually changed-by-quantization
+  sample counts, target-amplitude range, and RMS/maximum circular phase error.
+- Ideal replay multiplies compatible illumination by a unit-modulus phase
+  transmission, so illumination intensity is preserved pointwise and target
+  amplitude information is intentionally lost. Replay wavelength, refractive
+  index, dimensions, and pitch must match the design field. RGB uses separate
+  wavelength-specific encoded channels rather than pretending this command is
+  achromatic.
+
 ## Validation
 
 - Constant complex fields validate the exposure and response coefficient.
@@ -84,6 +105,9 @@ photopolymer, or a complete radiometric exposure model.
   the recording-plane field without using a forward/backward cancellation.
 - Clamp boundaries, conjugation involution, grid mismatches, non-finite inputs,
   invalid response bounds, and corrupt stored masks fail deterministically.
+- Phase-only cases independently cover continuous wrapping, nearest circular
+  quantization and boundary wrap, invalid target-phase masking, pointwise
+  intensity conservation, phase application, and incompatible/corrupt state.
 
 ## Explicit limitations
 
@@ -94,4 +118,5 @@ photopolymer, or a complete radiometric exposure model.
   model/Kogelnik path. It must never be represented as this thin mask while
   being labelled physically complete.
 - Diffraction-order spatial separation, RGB workflows, H1-to-H2 orchestration,
-  phase-only encoding, and calibrated exposure are subsequent M6 increments.
+  propagated phase-only image-quality analysis, and calibrated exposure are
+  subsequent M6 increments.

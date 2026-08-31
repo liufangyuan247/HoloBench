@@ -2,7 +2,11 @@
 
 HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator, and a long-term R&D tool for CHIMERA-like holographic printing.
 
-**Milestone status**: **M0–M4** are complete through the validated Real Lens Engineering Model. **M5 (SLM, coherence, and interference)** is active development. For the current repository state and roadmap, see [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
+**Milestone status**: **M0–M5** are complete through the validated SLM,
+coherence, and interference workflow. **M6 (Holography Core)** is active
+development. For the current repository state and roadmap, see
+[docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and
+[HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
 
 ## M1 Features
 
@@ -35,7 +39,7 @@ HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator
 - **Independent engineering validation**: Five committed plano-convex, meniscus, achromat, conic, and even-asphere prescriptions compare every surface hit, outgoing direction, optical path, spot coordinate, best focus, and longitudinal colour shift with pinned Optiland 0.6.2 data and hashes.
 - **Named performance gate**: The complete default 729-ray workbench refresh records p50 **6.422 ms**, p95 **6.594 ms**, and max **6.641 ms** on the reference Intel Core i7-9750H, meeting the p95 < 50 ms budget.
 
-## M5 Feature Set (in progress)
+## M5 Feature Set
 
 - **SLM CPU reference**: Ideal amplitude/phase modulation plus a finite pixel
   grid with physical pitch, independent X/Y fill factor, opaque dead space,
@@ -60,6 +64,12 @@ HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator
   object/reference interference into an explicit bounded amplitude response,
   preserves the physical full replay, and separately exposes ordinary virtual
   and conjugate real-image orders with complex-field quality metrics.
+- **Phase-only hologram foundation**: Wavelength-specific commanded phase is
+  wrapped and optionally quantized on a circular code space, with explicit
+  invalid-target masks and RMS/maximum circular phase-error diagnostics. Ideal
+  replay applies unit-modulus transmission, preserves illumination intensity,
+  and rejects wavelength, medium, or grid mismatches rather than pretending a
+  commanded phase pattern is achromatic.
 - **Named CPU performance gate**: The fixed 128-square, three-wavelength,
   ideal/LUT/LCD full refresh records p95 **188.482 ms** with Clang and
   **278.183 ms** with MSVC on the reference i7-9750H, below the 350 ms budget.
@@ -82,7 +92,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (313 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (318 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -90,7 +100,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 313/313 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 318/318 tests passing):
 
 ```powershell
 cmake --preset core-ci
