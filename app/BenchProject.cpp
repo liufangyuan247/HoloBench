@@ -149,6 +149,56 @@ scene::ApertureShape apertureShapeFromName(std::string_view name) {
     throw std::runtime_error("unsupported aperture shape: " + std::string(name));
 }
 
+std::string_view slmModulationModeName(
+    scene::SlmModulationMode mode) noexcept {
+    switch (mode) {
+    case scene::SlmModulationMode::Amplitude: return "amplitude";
+    case scene::SlmModulationMode::Phase: return "phase";
+    }
+    return "unknown";
+}
+
+scene::SlmModulationMode slmModulationModeFromName(std::string_view name) {
+    if (name == "amplitude") return scene::SlmModulationMode::Amplitude;
+    if (name == "phase") return scene::SlmModulationMode::Phase;
+    throw std::runtime_error(
+        "unsupported SLM modulation mode: " + std::string(name));
+}
+
+std::string_view slmCommandPatternName(
+    scene::SlmCommandPattern pattern) noexcept {
+    switch (pattern) {
+    case scene::SlmCommandPattern::Uniform: return "uniform";
+    case scene::SlmCommandPattern::LinearRamp: return "linear_ramp";
+    case scene::SlmCommandPattern::Checkerboard: return "checkerboard";
+    }
+    return "unknown";
+}
+
+scene::SlmCommandPattern slmCommandPatternFromName(std::string_view name) {
+    if (name == "uniform") return scene::SlmCommandPattern::Uniform;
+    if (name == "linear_ramp") return scene::SlmCommandPattern::LinearRamp;
+    if (name == "checkerboard") return scene::SlmCommandPattern::Checkerboard;
+    throw std::runtime_error(
+        "unsupported SLM command pattern: " + std::string(name));
+}
+
+std::string_view slmCommandOriginName(
+    scene::SlmCommandOrigin origin) noexcept {
+    switch (origin) {
+    case scene::SlmCommandOrigin::Manual: return "manual";
+    case scene::SlmCommandOrigin::Automation: return "automation";
+    }
+    return "unknown";
+}
+
+scene::SlmCommandOrigin slmCommandOriginFromName(std::string_view name) {
+    if (name == "manual") return scene::SlmCommandOrigin::Manual;
+    if (name == "automation") return scene::SlmCommandOrigin::Automation;
+    throw std::runtime_error(
+        "unsupported SLM command origin: " + std::string(name));
+}
+
 std::string_view plateRoleName(scene::HolographicPlateRole role) noexcept {
     switch (role) {
     case scene::HolographicPlateRole::H1: return "h1";
@@ -209,8 +259,27 @@ Json parametersToJson(const scene::BenchComponent& component) {
     }
     case scene::BenchComponentKind::SpatialLightModulator: {
         const auto& value = std::get<scene::SpatialLightModulatorParameters>(component.parameters);
-        return {{"fill_factor", value.fillFactor}, {"height_m", value.heightMetres},
-            {"pixel_height", value.pixelHeight}, {"pixel_width", value.pixelWidth}, {"width_m", value.widthMetres}};
+        return {
+            {"bit_depth", value.bitDepth},
+            {"checkerboard_cell_height_pixels",
+                value.checkerboardCellHeightPixels},
+            {"checkerboard_cell_width_pixels",
+                value.checkerboardCellWidthPixels},
+            {"command_id", value.commandId},
+            {"command_origin", slmCommandOriginName(value.commandOrigin)},
+            {"command_pattern", slmCommandPatternName(value.commandPattern)},
+            {"fill_factor", value.fillFactor},
+            {"height_m", value.heightMetres},
+            {"horizontal_cycles", value.horizontalCycles},
+            {"modulation_mode", slmModulationModeName(value.modulationMode)},
+            {"phase_range_rad", value.phaseRangeRadians},
+            {"pixel_height", value.pixelHeight},
+            {"pixel_width", value.pixelWidth},
+            {"primary_command", value.primaryCommand},
+            {"secondary_command", value.secondaryCommand},
+            {"vertical_cycles", value.verticalCycles},
+            {"width_m", value.widthMetres},
+        };
     }
     case scene::BenchComponentKind::ScreenDetector: {
         const auto& value = std::get<scene::ScreenDetectorParameters>(component.parameters);
@@ -231,7 +300,10 @@ Json parametersToJson(const scene::BenchComponent& component) {
     throw std::runtime_error("unsupported bench component kind");
 }
 
-scene::BenchComponentParameters parametersFromJson(scene::BenchComponentKind kind, const Json& value) {
+scene::BenchComponentParameters parametersFromJson(
+    scene::BenchComponentKind kind,
+    const Json& value,
+    int formatVersion) {
     switch (kind) {
     case scene::BenchComponentKind::LaserSource: {
         requireKeys(value, {"beam_radius_m", "channels", "profile"}, "laser parameters");
@@ -291,15 +363,72 @@ scene::BenchComponentParameters parametersFromJson(scene::BenchComponentKind kin
             .pinholeDiameterMetres = finiteNumber(value.at("pinhole_diameter_m"), "spatial-filter pinhole_diameter_m"),
             .clearApertureDiameterMetres = finiteNumber(value.at("clear_aperture_diameter_m"), "spatial-filter clear aperture_m"),
         };
-    case scene::BenchComponentKind::SpatialLightModulator:
-        requireKeys(value, {"fill_factor", "height_m", "pixel_height", "pixel_width", "width_m"}, "SLM parameters");
+    case scene::BenchComponentKind::SpatialLightModulator: {
+        if (formatVersion < kBenchProjectFormatVersion) {
+            requireKeys(value,
+                {"fill_factor", "height_m", "pixel_height", "pixel_width",
+                    "width_m"},
+                "legacy SLM parameters");
+            scene::SpatialLightModulatorParameters migrated;
+            migrated.widthMetres = finiteNumber(
+                value.at("width_m"), "SLM width_m");
+            migrated.heightMetres = finiteNumber(
+                value.at("height_m"), "SLM height_m");
+            migrated.pixelWidth = rasterSize(
+                value.at("pixel_width"), "SLM pixel_width");
+            migrated.pixelHeight = rasterSize(
+                value.at("pixel_height"), "SLM pixel_height");
+            migrated.fillFactor = finiteNumber(
+                value.at("fill_factor"), "SLM fill_factor");
+            return migrated;
+        }
+        requireKeys(value,
+            {"bit_depth", "checkerboard_cell_height_pixels",
+                "checkerboard_cell_width_pixels", "command_id",
+                "command_origin", "command_pattern", "fill_factor",
+                "height_m", "horizontal_cycles", "modulation_mode",
+                "phase_range_rad", "pixel_height", "pixel_width",
+                "primary_command", "secondary_command", "vertical_cycles",
+                "width_m"},
+            "SLM parameters");
+        const std::size_t bitDepth = rasterSize(
+            value.at("bit_depth"), "SLM bit_depth");
+        if (bitDepth > std::numeric_limits<unsigned int>::max()) {
+            throw std::runtime_error("SLM bit_depth exceeds unsigned range");
+        }
         return scene::SpatialLightModulatorParameters {
             .widthMetres = finiteNumber(value.at("width_m"), "SLM width_m"),
             .heightMetres = finiteNumber(value.at("height_m"), "SLM height_m"),
             .pixelWidth = rasterSize(value.at("pixel_width"), "SLM pixel_width"),
             .pixelHeight = rasterSize(value.at("pixel_height"), "SLM pixel_height"),
             .fillFactor = finiteNumber(value.at("fill_factor"), "SLM fill_factor"),
+            .modulationMode = slmModulationModeFromName(requiredString(
+                value.at("modulation_mode"), "SLM modulation_mode")),
+            .commandPattern = slmCommandPatternFromName(requiredString(
+                value.at("command_pattern"), "SLM command_pattern")),
+            .commandOrigin = slmCommandOriginFromName(requiredString(
+                value.at("command_origin"), "SLM command_origin")),
+            .commandId = requiredString(
+                value.at("command_id"), "SLM command_id"),
+            .primaryCommand = finiteNumber(
+                value.at("primary_command"), "SLM primary_command"),
+            .secondaryCommand = finiteNumber(
+                value.at("secondary_command"), "SLM secondary_command"),
+            .horizontalCycles = finiteNumber(
+                value.at("horizontal_cycles"), "SLM horizontal_cycles"),
+            .verticalCycles = finiteNumber(
+                value.at("vertical_cycles"), "SLM vertical_cycles"),
+            .checkerboardCellWidthPixels = rasterSize(
+                value.at("checkerboard_cell_width_pixels"),
+                "SLM checkerboard_cell_width_pixels"),
+            .checkerboardCellHeightPixels = rasterSize(
+                value.at("checkerboard_cell_height_pixels"),
+                "SLM checkerboard_cell_height_pixels"),
+            .bitDepth = static_cast<unsigned int>(bitDepth),
+            .phaseRangeRadians = finiteNumber(
+                value.at("phase_range_rad"), "SLM phase_range_rad"),
         };
+    }
     case scene::BenchComponentKind::ScreenDetector:
         requireKeys(value, {"height_m", "sample_height", "sample_width", "width_m"}, "screen parameters");
         return scene::ScreenDetectorParameters {
@@ -338,14 +467,17 @@ Json componentToJson(const scene::BenchComponent& component) {
     };
 }
 
-scene::BenchComponent componentFromJson(const Json& value) {
+scene::BenchComponent componentFromJson(
+    const Json& value,
+    int formatVersion) {
     requireKeys(value, {"id", "kind", "parameters", "transform"}, "bench component");
     const auto kind = scene::benchComponentKindFromName(requiredString(value.at("kind"), "component kind"));
     scene::BenchComponent result {
         .id = requiredString(value.at("id"), "component id"),
         .kind = kind,
         .transform = transformFromJson(value.at("transform")),
-        .parameters = parametersFromJson(kind, value.at("parameters")),
+        .parameters = parametersFromJson(
+            kind, value.at("parameters"), formatVersion),
     };
     scene::validateBenchComponent(result);
     return result;
@@ -828,6 +960,7 @@ BenchProject parseBenchProject(std::string_view jsonText) {
         }
         const int formatVersion = root.at("format_version").get<int>();
         if (formatVersion != kBenchProjectFormatVersion
+            && formatVersion != kRecipeBenchProjectFormatVersion
             && formatVersion != kLegacyBenchProjectFormatVersion) {
             throw std::runtime_error("unsupported bench project format version: " + std::to_string(formatVersion));
         }
@@ -860,10 +993,10 @@ BenchProject parseBenchProject(std::string_view jsonText) {
         }
         std::vector<scene::BenchComponent> components;
         for (const auto& component : root.at("components")) {
-            components.push_back(componentFromJson(component));
+            components.push_back(componentFromJson(component, formatVersion));
         }
         std::vector<HologramRecordingRecipe> recipes;
-        if (formatVersion == kBenchProjectFormatVersion) {
+        if (formatVersion >= kRecipeBenchProjectFormatVersion) {
             for (const auto& recipe : root.at("recording_recipes")) {
                 recipes.push_back(recordingRecipeFromJson(recipe));
             }

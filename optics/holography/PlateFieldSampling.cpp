@@ -275,7 +275,13 @@ math::Vec3d projectedLocalPoint(
         component.transform, point + propagationDirection * distance);
 }
 
-bool isInsideSlmActivePixel(
+struct SlmPixelLocation final {
+    bool active = false;
+    std::size_t column = 0;
+    std::size_t row = 0;
+};
+
+SlmPixelLocation locateSlmPixel(
     const scene::SpatialLightModulatorParameters& parameters,
     double localXMetres,
     double localYMetres) {
@@ -288,12 +294,35 @@ bool isInsideSlmActivePixel(
     if (gridX < 0.0 || gridY < 0.0
         || gridX >= static_cast<double>(parameters.pixelWidth)
         || gridY >= static_cast<double>(parameters.pixelHeight)) {
-        return false;
+        return {};
     }
+    const auto column = static_cast<std::size_t>(std::floor(gridX));
+    const auto row = static_cast<std::size_t>(std::floor(gridY));
     const double pixelX = gridX - std::floor(gridX) - 0.5;
     const double pixelY = gridY - std::floor(gridY) - 0.5;
-    return std::abs(pixelX) < 0.5 * parameters.fillFactor
-        && std::abs(pixelY) < 0.5 * parameters.fillFactor;
+    return {
+        .active = std::abs(pixelX) < 0.5 * parameters.fillFactor
+            && std::abs(pixelY) < 0.5 * parameters.fillFactor,
+        .column = column,
+        .row = row,
+    };
+}
+
+std::string_view slmPatternName(scene::SlmCommandPattern pattern) noexcept {
+    switch (pattern) {
+    case scene::SlmCommandPattern::Uniform: return "uniform";
+    case scene::SlmCommandPattern::LinearRamp: return "linear ramp";
+    case scene::SlmCommandPattern::Checkerboard: return "checkerboard";
+    }
+    return "unknown";
+}
+
+std::string_view slmOriginName(scene::SlmCommandOrigin origin) noexcept {
+    switch (origin) {
+    case scene::SlmCommandOrigin::Manual: return "manual";
+    case scene::SlmCommandOrigin::Automation: return "automation";
+    }
+    return "unknown";
 }
 
 void applyProjectedElement(
@@ -329,6 +358,7 @@ void applyProjectedElement(
                 transformed.yCoordinateMetres(y));
             bool transmitted = true;
             double phase = 0.0;
+            double amplitudeTransmission = 1.0;
             switch (component.kind) {
             case scene::BenchComponentKind::PlanarMirror: {
                 const auto& p = std::get<scene::PlanarMirrorParameters>(
@@ -373,24 +403,36 @@ void applyProjectedElement(
                     <= 0.5 * p.pinholeDiameterMetres;
                 break;
             }
-            case scene::BenchComponentKind::SpatialLightModulator:
-                transmitted = isInsideSlmActivePixel(
-                    std::get<scene::SpatialLightModulatorParameters>(
-                        component.parameters),
-                    local.x,
-                    local.y);
+            case scene::BenchComponentKind::SpatialLightModulator: {
+                const auto& p
+                    = std::get<scene::SpatialLightModulatorParameters>(
+                        component.parameters);
+                const auto location = locateSlmPixel(p, local.x, local.y);
+                transmitted = location.active;
+                if (transmitted) {
+                    const double command = scene::evaluateSlmNormalizedCommand(
+                        p, location.column, location.row);
+                    if (p.modulationMode
+                        == scene::SlmModulationMode::Amplitude) {
+                        amplitudeTransmission = command;
+                    } else {
+                        phase = command * p.phaseRangeRadians;
+                    }
+                }
                 break;
+            }
             default:
                 break;
             }
             if (!transmitted) {
                 transformed.at(x, y) = {0.0, 0.0};
-            } else if (phase != 0.0) {
+            } else {
                 if (!std::isfinite(phase)) {
                     throw std::overflow_error(
                         "projected thin-element phase is not representable");
                 }
-                transformed.at(x, y) *= finitePhasor(phase);
+                transformed.at(x, y) *= amplitudeTransmission
+                    * finitePhasor(phase);
             }
         }
     }
@@ -403,7 +445,21 @@ void applyProjectedElement(
         == scene::BenchComponentKind::SpatialLightModulator) {
         diagnostics.warnings.push_back(
             component.id
-            + ": active-pixel bounds and dead space are applied with a uniform zero-phase command");
+            + ": applied "
+            + std::string(slmPatternName(std::get<
+                scene::SpatialLightModulatorParameters>(
+                    component.parameters).commandPattern))
+            + " command "
+            + std::get<scene::SpatialLightModulatorParameters>(
+                component.parameters).commandId
+            + " from "
+            + std::string(slmOriginName(std::get<
+                scene::SpatialLightModulatorParameters>(
+                    component.parameters).commandOrigin))
+            + " provenance");
+        diagnostics.appliedSlmCommandIds.push_back(
+            std::get<scene::SpatialLightModulatorParameters>(
+                component.parameters).commandId);
     }
     diagnostics.appliedWaveComponentIds.push_back(component.id);
 }

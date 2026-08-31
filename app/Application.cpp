@@ -4918,6 +4918,93 @@ void Application::drawSandboxInspector() {
                     changed |= ImGui::DragFloat2("SLM size (mm)", sizeMm, 0.1F, 0.001F, 5000.0F);
                     changed |= ImGui::InputInt2("SLM pixels", pixels);
                     changed |= ImGui::SliderFloat("SLM fill factor", &fill, 0.001F, 1.0F);
+                    int modulationMode = value.modulationMode
+                            == bench::SlmModulationMode::Amplitude
+                        ? 0
+                        : 1;
+                    constexpr std::array<const char*, 2> modulationNames {
+                        "Amplitude", "Phase"};
+                    changed |= ImGui::Combo(
+                        "SLM modulation",
+                        &modulationMode,
+                        modulationNames.data(),
+                        static_cast<int>(modulationNames.size()));
+                    value.modulationMode = modulationMode == 0
+                        ? bench::SlmModulationMode::Amplitude
+                        : bench::SlmModulationMode::Phase;
+                    int commandPattern = static_cast<int>(value.commandPattern);
+                    constexpr std::array<const char*, 3> patternNames {
+                        "Uniform", "Linear ramp", "Checkerboard"};
+                    changed |= ImGui::Combo(
+                        "Command pattern",
+                        &commandPattern,
+                        patternNames.data(),
+                        static_cast<int>(patternNames.size()));
+                    value.commandPattern
+                        = static_cast<bench::SlmCommandPattern>(commandPattern);
+                    float primary = static_cast<float>(value.primaryCommand);
+                    changed |= ImGui::SliderFloat(
+                        value.commandPattern == bench::SlmCommandPattern::LinearRamp
+                            ? "Ramp offset command"
+                            : "Primary command",
+                        &primary,
+                        0.0F,
+                        1.0F);
+                    value.primaryCommand = primary;
+                    if (value.commandPattern
+                        == bench::SlmCommandPattern::LinearRamp) {
+                        changed |= ImGui::InputDouble(
+                            "Horizontal cycles",
+                            &value.horizontalCycles,
+                            0.25,
+                            1.0,
+                            "%.8g");
+                        changed |= ImGui::InputDouble(
+                            "Vertical cycles",
+                            &value.verticalCycles,
+                            0.25,
+                            1.0,
+                            "%.8g");
+                    } else if (value.commandPattern
+                        == bench::SlmCommandPattern::Checkerboard) {
+                        float secondary
+                            = static_cast<float>(value.secondaryCommand);
+                        changed |= ImGui::SliderFloat(
+                            "Secondary command", &secondary, 0.0F, 1.0F);
+                        value.secondaryCommand = secondary;
+                        int cells[2] {
+                            static_cast<int>(
+                                value.checkerboardCellWidthPixels),
+                            static_cast<int>(
+                                value.checkerboardCellHeightPixels),
+                        };
+                        changed |= ImGui::InputInt2(
+                            "Checker cell pixels", cells);
+                        value.checkerboardCellWidthPixels
+                            = static_cast<std::size_t>(std::max(cells[0], 0));
+                        value.checkerboardCellHeightPixels
+                            = static_cast<std::size_t>(std::max(cells[1], 0));
+                    }
+                    int bitDepth = static_cast<int>(value.bitDepth);
+                    changed |= ImGui::InputInt(
+                        "Command bit depth (0 = continuous)", &bitDepth);
+                    value.bitDepth = static_cast<unsigned int>(
+                        std::max(bitDepth, 0));
+                    if (value.modulationMode
+                        == bench::SlmModulationMode::Phase) {
+                        changed |= ImGui::InputDouble(
+                            "Phase range (rad)",
+                            &value.phaseRangeRadians,
+                            0.1,
+                            1.0,
+                            "%.8g");
+                    }
+                    ImGui::TextDisabled(
+                        "Command %s | origin: %s",
+                        value.commandId.c_str(),
+                        value.commandOrigin == bench::SlmCommandOrigin::Manual
+                            ? "manual"
+                            : "automation");
                     value.widthMetres = static_cast<double>(sizeMm[0]) * 1e-3;
                     value.heightMetres = static_cast<double>(sizeMm[1]) * 1e-3;
                     value.pixelWidth = static_cast<std::size_t>(std::max(pixels[0], 0));
@@ -6073,6 +6160,12 @@ void Application::drawSandboxInspector() {
                                     ImGui::BulletText(
                                         "Applied local field transform: %s",
                                         componentId.c_str());
+                                }
+                                for (const auto& commandId
+                                     : path.appliedSlmCommandIds) {
+                                    ImGui::BulletText(
+                                        "Applied SLM command: %s",
+                                        commandId.c_str());
                                 }
                                 for (const auto& warning : path.warnings) {
                                     ImGui::TextColored(

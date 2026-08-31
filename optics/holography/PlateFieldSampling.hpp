@@ -50,6 +50,7 @@ struct PlateFieldSamplingDiagnostics final {
     bool usedPlateTangentProjection = false;
     std::vector<std::string> appliedWaveComponentIds;
     std::vector<std::string> foldedWaveComponentIds;
+    std::vector<std::string> appliedSlmCommandIds;
     std::vector<std::string> warnings;
 };
 

@@ -65,6 +65,49 @@ TEST_CASE("dynamic bench rejects invalid IDs transforms parameter mismatches and
     slmParameters.fillFactor = std::numeric_limits<double>::quiet_NaN();
     slm.parameters = slmParameters;
     CHECK_THROWS_AS(scene::validateBenchComponent(slm), std::invalid_argument);
+
+    slmParameters = {};
+    slmParameters.primaryCommand = 1.1;
+    slm.parameters = slmParameters;
+    CHECK_THROWS_AS(scene::validateBenchComponent(slm), std::invalid_argument);
+}
+
+TEST_CASE("placed SLM procedural commands are deterministic quantized and bounded") {
+    scene::SpatialLightModulatorParameters parameters;
+    parameters.pixelWidth = 4U;
+    parameters.pixelHeight = 4U;
+    parameters.bitDepth = 0U;
+    parameters.commandPattern = scene::SlmCommandPattern::LinearRamp;
+    parameters.primaryCommand = 0.125;
+    parameters.horizontalCycles = 1.0;
+    parameters.verticalCycles = -0.5;
+
+    CHECK(scene::evaluateSlmNormalizedCommand(parameters, 0U, 0U)
+        == doctest::Approx(0.1875));
+    CHECK(scene::evaluateSlmNormalizedCommand(parameters, 3U, 3U)
+        == doctest::Approx(0.5625));
+
+    parameters.horizontalCycles = std::numeric_limits<double>::max();
+    parameters.verticalCycles = std::numeric_limits<double>::max();
+    CHECK_THROWS_AS(
+        static_cast<void>(
+            scene::evaluateSlmNormalizedCommand(parameters, 3U, 3U)),
+        std::overflow_error);
+
+    parameters.commandPattern = scene::SlmCommandPattern::Checkerboard;
+    parameters.primaryCommand = 0.2;
+    parameters.secondaryCommand = 0.8;
+    parameters.checkerboardCellWidthPixels = 2U;
+    parameters.checkerboardCellHeightPixels = 1U;
+    parameters.bitDepth = 2U;
+    CHECK(scene::evaluateSlmNormalizedCommand(parameters, 0U, 0U)
+        == doctest::Approx(1.0 / 3.0));
+    CHECK(scene::evaluateSlmNormalizedCommand(parameters, 0U, 1U)
+        == doctest::Approx(2.0 / 3.0));
+    CHECK_THROWS_AS(
+        static_cast<void>(
+            scene::evaluateSlmNormalizedCommand(parameters, 4U, 0U)),
+        std::out_of_range);
 }
 
 TEST_CASE("scene commands preserve stable IDs advance revision and invalidate observations") {

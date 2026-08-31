@@ -13,7 +13,9 @@ changes.
 
 ## Decision
 
-- Unified `BenchProject` format v2 stores versioned hologram recording recipes.
+- Unified `BenchProject` format v2 introduced versioned hologram recording
+  recipes. Current format v3 retains them unchanged while adding placed SLM
+  command provenance under ADR 0014.
 - Each spectral channel selects its object and reference paths by the complete
   stable component path, vacuum wavelength, and coherence ID. A recipe resolves
   only when each selector matches exactly one current role-tagged plate branch.
@@ -26,8 +28,8 @@ changes.
   textures, and transient trace branch IDs are never serialized as authoritative
   recording state.
 - Recipe parsing is strict and byte-stable. Legacy format-v1 benches migrate to
-  format v2 with no recipes. Recipes are part of the normal bench undo/redo
-  state.
+  the current format with no recipes; format-v2 recipes migrate unchanged to
+  v3. Recipes are part of the normal bench undo/redo state.
 - The plate Inspector reports whether a saved recipe resolves against the
   current trace graph and recomputes only through the public M8 recording paths.
   Missing or ambiguous selectors fail visibly; no nearest or convenient branch

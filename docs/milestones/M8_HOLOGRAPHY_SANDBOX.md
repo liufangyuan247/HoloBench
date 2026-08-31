@@ -106,12 +106,14 @@ observation now uses shifted, 2x zero-padded ASM, while non-grazing rotated
 observers use padded rotated-spectrum interpolation with rejected-band
 diagnostics. M8.4 has an editable RGB layout and
 strict per-wavelength pairing, three-channel batch recording/replay, and
-display-only uncalibrated intensity composition. Unified format-v2 recording
-recipes now persist and recompute thin, RGB, and volume experiments. Routed
+display-only uncalibrated intensity composition. Unified format-v3 projects
+retain and recompute versioned thin, RGB, and volume recording recipes. Routed
 recording paths now propagate a 2x-padded beam-following field through ideal
 mirror/splitter folds, aligned powered lenses, projected tilted zero-thickness
 masks, and an oblique plate tangent adapter with exact plane-wave carrier
-validation. Editable SLM commands and performance closure remain pending;
+validation. Placed SLMs persist and apply editable ideal amplitude/phase
+uniform, wrapped-ramp, or checkerboard commands with bit-depth and explicit
+manual/automation provenance. Performance closure remains pending;
 unsupported powered/vector/high-NA
 geometry stays explicit.
 

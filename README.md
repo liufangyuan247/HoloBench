@@ -31,6 +31,12 @@ Screen/Probe planes and non-grazing rotated observation planes through explicit
 2x-padded shifted or rotated angular-spectrum propagation with rejected-band
 and interpolation diagnostics.
 
+Placed SLMs now carry an editable, persisted amplitude/phase command with
+uniform, wrapped linear-ramp, or checkerboard patterns, declared bit depth and
+phase range, plus a stable manual/automation provenance ID. The command is
+evaluated in the SLM's actual projected pixel coordinates and therefore changes
+the complex field used by transmission, reflection, and RGB recording.
+
 Recording a placed thin, reflection-volume, or RGB hologram now writes a
 versioned recipe into the ordinary bench project. The recipe keeps stable
 source-to-plate branch selectors, sampling, response, and material parameters;
@@ -186,7 +192,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (501 deterministic CPU/application cases,
+Standard dev build and test suite (504 deterministic CPU/application cases,
 including the OpenGL GPU test executable):
 
 ```powershell
@@ -195,7 +201,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 499/499 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 502/502 tests passing):
 
 ```powershell
 cmake --preset core-ci

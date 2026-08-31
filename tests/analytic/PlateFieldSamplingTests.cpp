@@ -507,11 +507,52 @@ TEST_CASE("coaxial placed SLM applies finite active pixels and dead space") {
     REQUIRE(sampled.diagnostics.appliedLocalWavePath);
     CHECK(sampled.diagnostics.appliedWaveComponentIds
         == std::vector<std::string> {"slm"});
+    CHECK(sampled.diagnostics.appliedSlmCommandIds
+        == std::vector<std::string> {"manual-command"});
     const double expectedPower = 0.4
         * (0.008 * 0.008 * 0.25)
         / (std::numbers::pi * 0.005 * 0.005);
     CHECK(sampled.diagnostics.integratedPowerWatts
         == doctest::Approx(expectedPower).epsilon(0.08));
+}
+
+TEST_CASE("placed SLM checkerboard amplitude command changes recorded field power") {
+    auto device = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::SpatialLightModulator, "commanded-slm");
+    auto parameters = std::get<scene::SpatialLightModulatorParameters>(
+        device.parameters);
+    parameters.widthMetres = 0.008;
+    parameters.heightMetres = 0.008;
+    parameters.pixelWidth = 8U;
+    parameters.pixelHeight = 8U;
+    parameters.fillFactor = 1.0;
+    parameters.modulationMode = scene::SlmModulationMode::Amplitude;
+    parameters.commandPattern = scene::SlmCommandPattern::Checkerboard;
+    parameters.commandOrigin = scene::SlmCommandOrigin::Automation;
+    parameters.commandId = "hogel-checker-command";
+    parameters.primaryCommand = 0.0;
+    parameters.secondaryCommand = 1.0;
+    parameters.bitDepth = 0U;
+    device.parameters = parameters;
+    const auto bench = coaxialElementBench(
+        std::move(device), 532e-9, 0.005);
+    const auto fields = incidentFields(bench);
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto sampled = holography::samplePlateIncidentField(
+        bench,
+        fields,
+        fields.branches.front().beam.provenance.branchId,
+        coaxialSampling(256U),
+        fft);
+
+    REQUIRE(sampled.diagnostics.appliedLocalWavePath);
+    CHECK(sampled.diagnostics.appliedSlmCommandIds
+        == std::vector<std::string> {"hogel-checker-command"});
+    const double expectedPower = 0.4
+        * (0.008 * 0.008 * 0.5)
+        / (std::numbers::pi * 0.005 * 0.005);
+    CHECK(sampled.diagnostics.integratedPowerWatts
+        == doctest::Approx(expectedPower).epsilon(0.10));
 }
 
 TEST_CASE("tilted zero-thickness aperture projects into the beam-following field") {

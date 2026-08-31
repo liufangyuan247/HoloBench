@@ -82,7 +82,7 @@ Following ADR 0003:
 
 ## Project format
 
-Project JSON carries an explicit integer `format_version`. Loading an unknown version fails rather than silently misinterpreting physical data. Canonical persisted length values use keys suffixed with `_m` and SI metres. Optical-bench format v2 adds validated user/lesson-template provenance; v1 migrates to v2 with user provenance. The format-v1 Reflection & Refraction Workbench stores the incidence angle and both refractive indices, while the separate format-v1 Wave & Sampling Workbench persists the complete Wave Detector and Sampling Debugger drafts together. The independent SLM & Interference Experiment schema is format v2; its format-v1 files migrate strictly to v2 user provenance. All workbenches share the provenance contract, and packaged lesson templates are ordinary project documents that use the same Lab load/save surface (ADR 0011).
+Project JSON carries an explicit integer `format_version`. Loading an unknown version fails rather than silently misinterpreting physical data. Canonical persisted length values use keys suffixed with `_m` and SI metres. Unified optical-bench format v3 adds placed SLM command recipes and provenance; v1/v2 migrate to explicit manual zero-phase defaults while v2 recording recipes remain intact. The format-v1 Reflection & Refraction Workbench stores the incidence angle and both refractive indices, while the separate format-v1 Wave & Sampling Workbench persists the complete Wave Detector and Sampling Debugger drafts together. The independent SLM & Interference Experiment schema is format v2; its format-v1 files migrate strictly to v2 user provenance. All workbenches share the provenance contract, and packaged lesson templates are ordinary project documents that use the same Lab load/save surface (ADR 0011, ADR 0014).
 
 Those schemas remain compatibility inputs. M7 introduces one unified dynamic
 bench document for typed components, rigid transforms, physical parameters,
@@ -102,3 +102,5 @@ The following wave and Fourier-optics architecture decisions are locked:
 - Beam-following placed local fields, ideal fold-frame transport, projected
   zero-thickness elements, and explicit powered/vector fallback boundaries
   (ADR 0012).
+- Placed SLM procedural commands, quantization, project-format migration, and
+  manual/automation provenance (ADR 0014).

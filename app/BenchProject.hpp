@@ -13,7 +13,8 @@
 namespace holobench::app {
 
 inline constexpr int kLegacyBenchProjectFormatVersion = 1;
-inline constexpr int kBenchProjectFormatVersion = 2;
+inline constexpr int kRecipeBenchProjectFormatVersion = 2;
+inline constexpr int kBenchProjectFormatVersion = 3;
 inline constexpr int kHologramRecordingRecipeVersion = 1;
 
 enum class HologramRecordingModel {

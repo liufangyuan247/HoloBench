@@ -81,8 +81,9 @@
 ## Architecture & data
 
 - The current GPU propagation backend covers fused ASM-style spectral transfer; arbitrary non-power-of-two FFTs, automatic padding, and CUDA-specific acceleration are not implemented.
-- The optical-bench scene document is format v2 with source provenance and a
-  strict v1-to-v2 user-project migration. It remains intentionally minimal.
+- The unified optical-bench document is format v3 with source provenance,
+  recording recipes, and placed SLM command recipes. Strict v1/v2 migrations
+  preserve v2 recordings and add explicit manual zero-phase SLM defaults.
   Real-lens prescriptions use separate versioned JSON/CSV exchange and are not
   embedded in that scene document; the separate holography document is format
   v3 with narrowly scoped v1/v2 migrations.
@@ -121,7 +122,10 @@
   footprint; and an oblique plate restores the resolved centre carrier.
   Tilted powered lenses, non-ideal direction changes, real prescriptions,
   thickness, vector/polarization, and high-NA longitudinal effects remain
-  explicit. The placed SLM command is currently uniform zero phase.
+  explicit. Placed SLMs apply persisted ideal amplitude/phase commands using
+  uniform, wrapped linear-ramp, or checkerboard recipes with bit-depth
+  quantization and manual/automation provenance. Arbitrary image/hogel raster
+  artifacts and calibrated complex-response attachment remain M9 work.
 - Plate candidates currently infer object branches from an Object/Wavefront
   Source and reference branches from a Laser Source. They classify same-side
   transmission versus opposite-side reflection geometry and reject

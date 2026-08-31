@@ -122,6 +122,36 @@ void validateParameters(const SpatialLightModulatorParameters& value) {
     if (!std::isfinite(value.fillFactor) || value.fillFactor <= 0.0 || value.fillFactor > 1.0) {
         throw std::invalid_argument("SLM fill factor must be in (0, 1]");
     }
+    if (!isStableBenchId(value.commandId)) {
+        throw std::invalid_argument("SLM command ID is invalid");
+    }
+    const auto requireNormalizedCommand = [](double command, const char* name) {
+        if (!std::isfinite(command) || command < 0.0 || command > 1.0) {
+            throw std::invalid_argument(
+                std::string("SLM ") + name + " must be finite and in [0, 1]");
+        }
+    };
+    requireNormalizedCommand(value.primaryCommand, "primary command");
+    requireNormalizedCommand(value.secondaryCommand, "secondary command");
+    if (!std::isfinite(value.horizontalCycles)
+        || !std::isfinite(value.verticalCycles)) {
+        throw std::invalid_argument("SLM ramp cycles must be finite");
+    }
+    requireRasterSize(
+        value.checkerboardCellWidthPixels,
+        "SLM checkerboard cell width");
+    requireRasterSize(
+        value.checkerboardCellHeightPixels,
+        "SLM checkerboard cell height");
+    if (value.bitDepth > 52U) {
+        throw std::invalid_argument(
+            "SLM bit depth exceeds double-precision command resolution");
+    }
+    if (!std::isfinite(value.phaseRangeRadians)
+        || value.phaseRangeRadians < 0.0) {
+        throw std::invalid_argument(
+            "SLM phase range must be finite and non-negative");
+    }
 }
 
 void validateParameters(const ScreenDetectorParameters& value) {
@@ -293,6 +323,52 @@ BenchComponent makeDefaultBenchComponent(BenchComponentKind kind, std::string id
     }
     validateBenchComponent(result);
     return result;
+}
+
+double evaluateSlmNormalizedCommand(
+    const SpatialLightModulatorParameters& parameters,
+    std::size_t column,
+    std::size_t row) {
+    validateParameters(parameters);
+    if (column >= parameters.pixelWidth || row >= parameters.pixelHeight) {
+        throw std::out_of_range("SLM command pixel is outside its raster");
+    }
+    double command = parameters.primaryCommand;
+    switch (parameters.commandPattern) {
+    case SlmCommandPattern::Uniform:
+        break;
+    case SlmCommandPattern::LinearRamp: {
+        const double x = (static_cast<double>(column) + 0.5)
+            / static_cast<double>(parameters.pixelWidth);
+        const double y = (static_cast<double>(row) + 0.5)
+            / static_cast<double>(parameters.pixelHeight);
+        const double unwrapped = parameters.primaryCommand
+            + parameters.horizontalCycles * x
+            + parameters.verticalCycles * y;
+        if (!std::isfinite(unwrapped)) {
+            throw std::overflow_error(
+                "SLM linear-ramp command is not representable");
+        }
+        command = unwrapped - std::floor(unwrapped);
+        break;
+    }
+    case SlmCommandPattern::Checkerboard: {
+        const std::size_t cellX
+            = column / parameters.checkerboardCellWidthPixels;
+        const std::size_t cellY
+            = row / parameters.checkerboardCellHeightPixels;
+        command = (cellX + cellY) % 2U == 0U
+            ? parameters.primaryCommand
+            : parameters.secondaryCommand;
+        break;
+    }
+    }
+    if (parameters.bitDepth != 0U) {
+        const double maximumCode = std::ldexp(
+            1.0, static_cast<int>(parameters.bitDepth)) - 1.0;
+        command = std::round(command * maximumCode) / maximumCode;
+    }
+    return command;
 }
 
 BenchScene::BenchScene(std::vector<BenchComponent> components, SceneRevision revision)

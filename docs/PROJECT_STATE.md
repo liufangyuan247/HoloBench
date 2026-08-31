@@ -140,16 +140,16 @@ rebuilt on the shared bench.
   order; hop, branch, minimum-power, escape, clipping, absorption, and invalid
   interaction endings are explicit.
 - **Current verification**: Windows Clang 21 `core-ci` warnings-as-errors build
-  passes with 499/499 deterministic cases; the complete development build and
-  application link pass with 501/501 cases including the packaged-font and
+  passes with 502/502 deterministic cases; the complete development build and
+  application link pass with 504/504 cases including the packaged-font and
   hardware OpenGL tests. The development and warnings-as-errors application
-  smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Eighty-one
+  smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Eighty-four
   M7/M8 cases cover the typed scene, mutation/history/persistence, arbitrary-pose
   branching routes, wavelength/coherence separation, plate-local recording,
   thin/reflection/RGB replay, persisted recipes, beam-following fields through
   aligned powered optics and ideal folds, projected tilted masks, bounded
-  decentered observation, and non-grazing rotated observation planes. Editable
-  SLM command provenance, the resolved real-lens wave adapter, vector/high-NA
+  decentered observation, non-grazing rotated observation planes, and placed
+  SLM command/provenance behavior. The resolved real-lens wave adapter, vector/high-NA
   physics, named M8 performance scenes, and remote cross-compiler validation
   remain open, so M7/M8 are not yet accepted despite the operational sandbox
   workflows.
@@ -362,20 +362,25 @@ completion because it is primarily driven through fixed parameter panels:
   propagated intensities with explicit display gains/gamma and is labelled as
   an uncalibrated visualization; no cross-wavelength complex-field addition is
   possible.
-- **Persisted recording recipes**: Unified bench format v2 stores versioned
+- **Persisted recording recipes and SLM commands**: Unified bench format v3 stores versioned
   thin, RGB, and volume recording recipes with stable component-path,
   wavelength, and coherence selectors plus sampling, response, and material
   parameters. It does not serialize sampled complex fields or exposure caches.
   The plate Inspector reports exact current resolution, refuses ambiguous or
   missing branches, and can recompute a saved recipe. Recipes participate in
   save/load and scene-wide undo/redo; legacy v1 benches migrate with an empty
-  recipe list. See [ADR 0013](adr/0013-recording-recipe-persistence.md).
+  recipe list. Placed SLMs now persist ideal amplitude/phase modulation,
+  uniform/ramp/checkerboard commands, bit depth, phase range, and stable
+  manual/automation command provenance; v1/v2 SLMs migrate to an explicit
+  manual zero-phase default. See
+  [ADR 0013](adr/0013-recording-recipe-persistence.md) and
+  [ADR 0014](adr/0014-placed-slm-command-provenance.md).
 - **Revision provenance**: Plate incident evidence, thin recordings, thin
   replays, volume recordings, and volume replays carry the exact scene
   revision and visibly become stale after a bench edit.
-- **Current local validation**: Windows Clang development build passes 501/501
+- **Current local validation**: Windows Clang development build passes 504/504
   deterministic CPU, application, font, and OpenGL GPU cases after the placed
-  volume/RGB/local-wave-path/recipe increments; `core-ci` passes 499/499, `app-ci` compiles
+  volume/RGB/local-wave-path/recipe/SLM increments; `core-ci` passes 502/502, `app-ci` compiles
   warnings-as-errors, and the hidden OpenGL smoke exits successfully on AMD
   Radeon Pro 5300M. Remote cross-compiler CI remains required before the M8
   slice is closed.
@@ -390,11 +395,9 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Add editable SLM command/pattern provenance so placed SLMs can carry more
-   than the current explicit uniform zero-phase command.
-2. Add named M8 performance scenes and complete cross-compiler/application
+1. Add named M8 performance scenes and complete cross-compiler/application
    validation for transmission, reflection, and RGB workflows.
-3. Add corruption-safe autosave/recovery around unified bench documents.
-4. Compile a versioned M9 CHIMERA recipe into an editable bench.
-5. Simulate its hogel/angular data, SLM/RGB exposure events, and bounded
-   reconstruction.
+2. Add corruption-safe autosave/recovery around unified bench documents.
+3. Compile a versioned M9 CHIMERA recipe into an editable bench.
+4. Simulate its hogel/angular data and SLM/RGB exposure events.
+5. Add bounded CHIMERA reconstruction and deterministic parameter sweeps.

@@ -115,15 +115,51 @@ struct SpatialFilterParameters final {
     bool operator==(const SpatialFilterParameters&) const = default;
 };
 
+enum class SlmModulationMode {
+    Amplitude,
+    Phase,
+};
+
+enum class SlmCommandPattern {
+    Uniform,
+    LinearRamp,
+    Checkerboard,
+};
+
+enum class SlmCommandOrigin {
+    Manual,
+    Automation,
+};
+
 struct SpatialLightModulatorParameters final {
     double widthMetres = 0.01536;
     double heightMetres = 0.00864;
     std::size_t pixelWidth = 1920;
     std::size_t pixelHeight = 1080;
     double fillFactor = 0.93;
+    SlmModulationMode modulationMode = SlmModulationMode::Phase;
+    SlmCommandPattern commandPattern = SlmCommandPattern::Uniform;
+    SlmCommandOrigin commandOrigin = SlmCommandOrigin::Manual;
+    std::string commandId = "manual-command";
+    double primaryCommand = 0.0;
+    double secondaryCommand = 1.0;
+    double horizontalCycles = 0.0;
+    double verticalCycles = 0.0;
+    std::size_t checkerboardCellWidthPixels = 1;
+    std::size_t checkerboardCellHeightPixels = 1;
+    unsigned int bitDepth = 8;
+    double phaseRangeRadians = 6.283185307179586476925286766559;
 
     bool operator==(const SpatialLightModulatorParameters&) const = default;
 };
+
+// Evaluates the persisted procedural command at one physical SLM pixel and
+// applies the declared command bit-depth quantization. The result is normalized
+// to [0, 1].
+[[nodiscard]] double evaluateSlmNormalizedCommand(
+    const SpatialLightModulatorParameters& parameters,
+    std::size_t column,
+    std::size_t row);
 
 struct ScreenDetectorParameters final {
     double widthMetres = 0.1;

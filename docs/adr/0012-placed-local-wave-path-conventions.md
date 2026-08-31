@@ -24,8 +24,8 @@ outside the architecture and would be computationally wasteful.
   - ideal thin-lens clear aperture and quadratic phase;
   - circular/elliptical or rectangular aperture transmission;
   - the declared spatial-filter pinhole as a hard scalar mask; and
-  - finite SLM bounds, pixel pitch, and opaque dead space with the currently
-    declared uniform zero-phase command.
+  - finite SLM bounds, pixel pitch, opaque dead space, and the persisted ideal
+    amplitude/phase command defined by ADR 0014.
 - Zero-thickness masks may be tilted relative to the centre ray. Each
   beam-normal field sample is intersected with the physical component plane and
   the transfer is evaluated in component-local coordinates. This is exact for

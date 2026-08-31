@@ -36,6 +36,19 @@ TEST_CASE("unified bench project round trips every kind arbitrary transforms and
                 {.wavelengthMetres = 450e-9, .powerWatts = 0.6, .coherenceId = "rgb-blue"},
             };
             component.parameters = parameters;
+        } else if (kind
+            == scene::BenchComponentKind::SpatialLightModulator) {
+            auto parameters
+                = std::get<scene::SpatialLightModulatorParameters>(
+                    component.parameters);
+            parameters.commandPattern = scene::SlmCommandPattern::LinearRamp;
+            parameters.commandOrigin = scene::SlmCommandOrigin::Automation;
+            parameters.commandId = "rgb-hogel-42";
+            parameters.primaryCommand = 0.25;
+            parameters.horizontalCycles = 7.0;
+            parameters.verticalCycles = -3.0;
+            parameters.bitDepth = 10U;
+            component.parameters = parameters;
         }
         project.scene.add(std::move(component));
         ++index;
@@ -54,6 +67,39 @@ TEST_CASE("unified bench project round trips every kind arbitrary transforms and
     REQUIRE(channels.size() == 3);
     CHECK(channels[0].coherenceId == "rgb-red");
     CHECK(laser->transform.localZAxisInWorld.x == doctest::Approx(std::sin(angle)));
+
+    const auto* slm = loaded.scene.find("component-12");
+    REQUIRE(slm != nullptr);
+    const auto& slmParameters
+        = std::get<scene::SpatialLightModulatorParameters>(slm->parameters);
+    CHECK(slmParameters.commandId == "rgb-hogel-42");
+    CHECK(slmParameters.commandOrigin == scene::SlmCommandOrigin::Automation);
+    CHECK(slmParameters.horizontalCycles == doctest::Approx(7.0));
+}
+
+TEST_CASE("format two bench SLM migrates to explicit manual zero-phase command") {
+    app::BenchProject project;
+    project.scene.add(scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::SpatialLightModulator, "legacy-slm"));
+    auto json = nlohmann::json::parse(app::serializeBenchProject(project));
+    json["format_version"] = app::kRecipeBenchProjectFormatVersion;
+    auto& parameters = json["components"][0]["parameters"];
+    const nlohmann::json legacy {
+        {"fill_factor", parameters.at("fill_factor")},
+        {"height_m", parameters.at("height_m")},
+        {"pixel_height", parameters.at("pixel_height")},
+        {"pixel_width", parameters.at("pixel_width")},
+        {"width_m", parameters.at("width_m")},
+    };
+    parameters = legacy;
+
+    const auto migrated = app::parseBenchProject(json.dump());
+    CHECK(migrated.formatVersion == app::kBenchProjectFormatVersion);
+    const auto& restored = std::get<scene::SpatialLightModulatorParameters>(
+        migrated.scene.find("legacy-slm")->parameters);
+    CHECK(restored.commandOrigin == scene::SlmCommandOrigin::Manual);
+    CHECK(restored.commandPattern == scene::SlmCommandPattern::Uniform);
+    CHECK(restored.primaryCommand == doctest::Approx(0.0));
 }
 
 TEST_CASE("bench project parser rejects unknown keys duplicate IDs and invalid physical parameters") {
