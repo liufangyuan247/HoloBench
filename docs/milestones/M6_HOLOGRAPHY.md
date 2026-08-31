@@ -1,0 +1,42 @@
+# M6 — Holography Core
+
+## Goal
+
+Build a physically explicit thin-hologram record/replay workflow, then extend it
+to conjugate real-image reconstruction, RGB teaching, H1-to-H2 transfer, and a
+clearly separate first volume-hologram model.
+
+## Deliverables
+
+- [x] Fully coherent object/reference thin-amplitude recording CPU reference.
+- [x] Explicit linear exposure-to-field-amplitude response with clamp diagnostics.
+- [x] Ordinary and conjugate replay-wave foundation without hidden order selection.
+- [ ] Propagated virtual/real reconstruction with image-plane diagnostics.
+- [ ] Phase-only encoding and reconstruction-quality metrics.
+- [ ] RGB recording/replay basics with wavelength identity preserved.
+- [ ] H1 record -> conjugate replay -> real image -> H2 record/replay pipeline.
+- [ ] Transplane placement controls and image-plane traversal diagnostics.
+- [ ] Dockable apply-gated Holography Lab and strict project persistence.
+- [ ] Separate volume-hologram data model and first Kogelnik coupled-wave path.
+- [ ] Named CPU performance profile and cross-platform compiler/CI gates.
+
+## Numerical gate
+
+- [x] Independent analytic carrier-fringe oracle with non-zero phase offset.
+- [x] Independent pointwise record/replay algebra and conjugation tests.
+- [x] Clamp, grid, finite-domain, corruption, and compatibility rejection tests.
+- [ ] Independent propagated real/virtual reconstruction oracle.
+- [ ] H1/H2 placement and RGB wavelength-scaling oracles.
+- [ ] Thin/volume boundary and Kogelnik limiting-case oracles.
+
+## Product gate
+
+A user can complete `Object -> H1 Record -> Conjugate Replay -> Real Image -> H2
+Record -> H2 Replay` in one project, move H2 through the real-image plane, and
+see which image/order is being observed. Thin, scalar, coherent, paraxial,
+sampling, and material limitations remain visible.
+
+Conventions are fixed by
+[ADR 0009](../adr/0009-thin-hologram-recording-and-replay-conventions.md).
+
+Completion tag: `m6-holography`.

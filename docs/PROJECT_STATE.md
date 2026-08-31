@@ -109,6 +109,12 @@ Previous: **M4 — Real Lens Engineering Model: complete**
 - **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 301/301 deterministic cases. Complete Clang/MSVC applications build, and hidden-window OpenGL smoke produces the SLM texture plus a semantic project round trip. Gates cover ideal/calibrated/LCD responses; interpolation and strict JSON; fill-factor/bit-depth boundaries; fringe/coherence conventions; angular mapping; apply gating; provenance; project compatibility; exception safety; and determinism.
 - **Release CI**: GitHub Actions run [33362709724](https://github.com/liufangyuan247/HoloBench/actions/runs/33362709724) passes all four final M5 integration jobs at `3f29775`: Windows and Ubuntu core build/tests plus Windows and Ubuntu application compilation with warnings as errors.
 
+## M6 progress
+
+- **Thin-hologram convention**: [ADR 0009](adr/0009-thin-hologram-recording-and-replay-conventions.md) fixes coherent relative exposure `|O+R|^2`, bounded linear exposure-to-field-amplitude response, pointwise thin-mask replay, conjugate wavefront replay, and the separation from future volume/Bragg physics.
+- **CPU reference foundation**: Thin amplitude recording reports exposure/transmission ranges and both clamp counts. Replay preserves all zero, object, and conjugate terms, permits a different replay wavelength on the same transverse plate grid, and rejects non-finite, corrupt, or incompatible state.
+- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 307/307 deterministic cases; complete Clang/MSVC applications build. Six new cases cover constant-field exposure, a non-zero-phase analytic carrier fringe, positive/negative response slopes and clamps, direct replay algebra at a changed wavelength, conjugation involution, and strict invalid-state rejection.
+
 ## Known limitations (M1/M2)
 
 - **Paraxial approximation**: Thin-lens solver, Fresnel TF, and Fraunhofer propagators assume small angles and paraxial conditions.
@@ -119,8 +125,8 @@ Previous: **M4 — Real Lens Engineering Model: complete**
 
 ## Next five tasks
 
-1. Fix M6 hologram synthesis/reconstruction conventions and independent oracles.
-2. Add CPU-reference hologram synthesis and reconstruction kernels.
-3. Add phase-only encoding and reconstruction-quality diagnostics.
+1. Add propagated ordinary/conjugate reconstruction and image-plane oracles.
+2. Add phase-only encoding and reconstruction-quality diagnostics.
+3. Build H1-to-H2, transplane, and RGB CPU-reference orchestration.
 4. Build the apply-gated Holography teaching workflow and persistence.
 5. Consider GPU acceleration only after the CPU/product model is stable; retain runtime capability dispatch and the default path on untested devices.
