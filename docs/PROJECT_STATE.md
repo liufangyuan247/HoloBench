@@ -103,9 +103,10 @@ Previous: **M3 — Fourier Optics & Sampling Debugger: complete**
 - **Angular experiment**: A deterministic headless `Laser -> SLM -> ideal Fourier lens -> Angular Probe` pipeline emits multi-wavelength angular distributions, normalized single-pixel angular PSFs, geometric and sampled pixel-centre predictions, measured angular-spectrum centroids, and SLM/reference-beam interference.
 - **Measured response and LCD path**: A versioned scalar complex-response LUT interpolates field-amplitude transmission and explicitly unwrapped phase across command and wavelength, rejects extrapolation, and round-trips byte-stable JSON. The headless experiment dispatches ideal, calibrated, or explicitly limited LCD Jones-retarder/polarizer/RGB-filter teaching responses without changing the pixel raster reference.
 - **Interactive teaching lab**: A dockable apply-gated SLM lab edits sampling, ideal/calibrated/LCD response, reference tilt, and scalar coherence without continuous FFT work. It visualizes SLM/reference interference, angular intensity, and selected-pixel PSF, imports/exports strict LUT JSON, and keeps draft/applied calibration provenance visible.
+- **Experiment persistence**: A separate format-v1 `slm_interference_experiment` document stores the complete M5 draft, embedded calibrated response, and provenance with strict keys and byte-stable serialization. Loading remains apply-gated. The existing optical-bench scene document stays at format v1, so legacy scene files and adapters are not reinterpreted.
 - **Named M5 performance gate**: `wave/slm_interference_128_square_3w_3response_cpu_refresh` fixes a 128x128 field, three wavelengths, 16x16 SLM, and ideal/calibrated/LCD full refresh. On Intel Core i7-9750H, Clang/MSVC/GCC p95 values are **188.482/278.183/175.544 ms**, all below the platform-neutral 350 ms budget with identical checksum `809.806743551`. This CPU benchmark has no GPU vendor/model dispatch.
 - **Independent waveprop validation**: A pinned waveprop 0.0.12 case rasterizes an 8x16 selected-pixel SLM with physical pitch, active cell, and dead space, then evaluates Fraunhofer diffraction. The complete mask agrees sample-for-sample and the full normalized angular intensity agrees below `1e-12`; metadata makes waveprop's command-axis and raster-origin conversion explicit. Regeneration is byte-for-byte stable.
-- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 297/297 deterministic cases; complete Clang/MSVC applications build, and hidden-window OpenGL smoke produces the SLM lab texture alongside all earlier views. Analytic gates cover ideal, calibrated-LUT, and LCD responses; interpolation and strict JSON; fill-factor/bit-depth boundaries; fringe/coherence conventions; angular mapping; apply gating; provenance; exception safety; and determinism. GitHub Actions run [33361552234](https://github.com/liufangyuan247/HoloBench/actions/runs/33361552234) passes all four UI-integration jobs at `8391b3b`.
+- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 301/301 deterministic cases. Complete Clang/MSVC applications build, and hidden-window OpenGL smoke produces the SLM texture plus a semantic project round trip. Gates cover ideal/calibrated/LCD responses; interpolation and strict JSON; fill-factor/bit-depth boundaries; fringe/coherence conventions; angular mapping; apply gating; provenance; project compatibility; exception safety; and determinism. GitHub Actions run [33361552234](https://github.com/liufangyuan247/HoloBench/actions/runs/33361552234) is the last pushed four-job UI baseline at `8391b3b`.
 
 ## Known limitations (M1/M2)
 
@@ -117,8 +118,8 @@ Previous: **M3 — Fourier Optics & Sampling Debugger: complete**
 
 ## Next five tasks
 
-1. Extend project persistence for the M5 experiment without breaking legacy scene files.
-2. Add deterministic application smoke assertions for saved/restored M5 state.
-3. Run the final M5 CI matrix and close documentation/release evidence.
-4. Tag the accepted M5 release and advance project state to M6 holography.
+1. Run the final M5 CI matrix and close documentation/release evidence.
+2. Tag the accepted M5 release and advance project state to M6 holography.
+3. Begin M6 hologram synthesis/reconstruction conventions and independent oracles.
+4. Add CPU-reference hologram synthesis and reconstruction kernels.
 5. Consider GPU acceleration only after the CPU/product model is stable; retain runtime capability dispatch and the default path on untested devices.

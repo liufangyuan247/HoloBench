@@ -89,6 +89,9 @@ struct SlmInterferenceExperimentResult final {
 
 [[nodiscard]] SlmInterferenceExperimentConfig makeDefaultSlmInterferenceExperimentConfig();
 
+void validateSlmInterferenceExperimentConfig(
+    const SlmInterferenceExperimentConfig& config);
+
 [[nodiscard]] SlmInterferenceExperimentResult runSlmInterferenceExperiment(
     const SlmInterferenceExperimentConfig& config,
     compute::fft::IFftBackend& fftBackend);

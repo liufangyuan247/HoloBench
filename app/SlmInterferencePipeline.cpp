@@ -38,11 +38,21 @@ namespace {
     return config.normalizedPixelCommands;
 }
 
-void validateConfig(
-    const SlmInterferenceExperimentConfig& config,
-    const compute::fft::IFftBackend& fftBackend) {
-    if (!fftBackend.supportsDimensions(config.fieldWidth, config.fieldHeight)) {
-        throw std::invalid_argument("FFT backend does not support SLM experiment field dimensions");
+void validateConfig(const SlmInterferenceExperimentConfig& config) {
+    if (config.fieldWidth == 0U || config.fieldHeight == 0U
+        || config.fieldWidth > std::numeric_limits<std::size_t>::max() / config.fieldHeight) {
+        throw std::invalid_argument("SLM experiment field dimensions must be finite and nonzero");
+    }
+    if (!std::isfinite(config.fieldPitchXMetres) || config.fieldPitchXMetres <= 0.0
+        || !std::isfinite(config.fieldPitchYMetres) || config.fieldPitchYMetres <= 0.0) {
+        throw std::invalid_argument("SLM experiment field pitches must be positive and finite");
+    }
+    if (!std::isfinite(config.refractiveIndex) || config.refractiveIndex <= 0.0) {
+        throw std::invalid_argument("SLM experiment refractive index must be positive and finite");
+    }
+    if (!std::isfinite(config.laserAmplitude.real())
+        || !std::isfinite(config.laserAmplitude.imag())) {
+        throw std::invalid_argument("SLM experiment laser amplitude must be finite");
     }
     if (config.vacuumWavelengthsMetres.empty()) {
         throw std::invalid_argument("SLM experiment needs at least one wavelength");
@@ -63,6 +73,44 @@ void validateConfig(
     if (config.deviceResponseModel == SlmDeviceResponseModel::CalibratedLut
         && !config.calibratedResponse.has_value()) {
         throw std::invalid_argument("calibrated SLM experiment needs a response LUT");
+    }
+    optics::slm::validatePixelatedSlmParameters(config.slm);
+    const auto pixelCount = checkedPixelCount(config.slm);
+    if (!config.normalizedPixelCommands.empty()
+        && config.normalizedPixelCommands.size() != pixelCount) {
+        throw std::invalid_argument("SLM experiment command count does not match pixel grid");
+    }
+    for (const double command : config.normalizedPixelCommands) {
+        if (!std::isfinite(command) || command < 0.0 || command > 1.0) {
+            throw std::invalid_argument("SLM experiment commands must be finite and in [0, 1]");
+        }
+    }
+    const double referenceTransverse = std::hypot(
+        config.referenceBeam.directionCosineX,
+        config.referenceBeam.directionCosineY);
+    if (!std::isfinite(config.referenceBeam.amplitude.real())
+        || !std::isfinite(config.referenceBeam.amplitude.imag())
+        || !std::isfinite(referenceTransverse) || referenceTransverse >= 1.0
+        || !std::isfinite(config.referenceBeam.phaseAtOriginRadians)
+        || !std::isfinite(config.referenceBeam.planeZMetres)) {
+        throw std::invalid_argument("SLM experiment reference beam must be finite and forward propagating");
+    }
+    static_cast<void>(optics::wave::mutualDegreeOfCoherence(config.mutualCoherence));
+    if (config.deviceResponseModel == SlmDeviceResponseModel::CalibratedLut) {
+        for (const double wavelength : config.vacuumWavelengthsMetres) {
+            static_cast<void>(config.calibratedResponse->evaluate(wavelength, 0.0));
+            static_cast<void>(config.calibratedResponse->evaluate(wavelength, 1.0));
+        }
+    }
+    if (config.deviceResponseModel == SlmDeviceResponseModel::LcdTeaching) {
+        optics::slm::validateLcdTeachingParameters(config.lcdTeaching);
+        for (const double wavelength : config.vacuumWavelengthsMetres) {
+            static_cast<void>(optics::slm::evaluateLcdTeachingTransfer(
+                config.lcdTeaching,
+                optics::slm::LcdColorChannel::Green,
+                wavelength,
+                0.5));
+        }
     }
 }
 
@@ -249,11 +297,19 @@ SlmInterferenceExperimentConfig makeDefaultSlmInterferenceExperimentConfig() {
     return config;
 }
 
+void validateSlmInterferenceExperimentConfig(
+    const SlmInterferenceExperimentConfig& config) {
+    validateConfig(config);
+}
+
 SlmInterferenceExperimentResult runSlmInterferenceExperiment(
     const SlmInterferenceExperimentConfig& config,
     compute::fft::IFftBackend& fftBackend) {
     const auto pixelCount = checkedPixelCount(config.slm);
-    validateConfig(config, fftBackend);
+    validateConfig(config);
+    if (!fftBackend.supportsDimensions(config.fieldWidth, config.fieldHeight)) {
+        throw std::invalid_argument("FFT backend does not support SLM experiment field dimensions");
+    }
     const auto commands = commandsFor(config, pixelCount);
     std::vector<double> selectedCommands(pixelCount, 0.0);
     selectedCommands[config.selectedPixelRow * config.slm.pixelColumns

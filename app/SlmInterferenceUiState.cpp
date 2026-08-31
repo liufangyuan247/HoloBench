@@ -134,6 +134,17 @@ void SlmInterferenceUiState::setDraftConfig(
     draftConfig_ = config;
 }
 
+void SlmInterferenceUiState::replaceDraftProject(
+    slmexperiment::SlmInterferenceExperimentConfig config,
+    std::string calibrationSource) {
+    slmexperiment::validateSlmInterferenceExperimentConfig(config);
+    draftConfig_ = std::move(config);
+    draftCalibrationSource_ = calibrationSource.empty()
+        ? "No measured LUT loaded"
+        : std::move(calibrationSource);
+    displayedWavelengthIndex_ = 0;
+}
+
 void SlmInterferenceUiState::setCalibration(
     optics::slm::CalibratedSlmResponse response,
     std::string source) {

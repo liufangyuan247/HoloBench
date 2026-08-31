@@ -74,6 +74,19 @@ convert other conventions explicitly but may not silently change these rules.
   does not propagate orthogonal components, and excludes director tilt,
   viewing-angle response, depolarization, absorption anisotropy, and crosstalk.
 
+### Experiment persistence
+
+- M5 uses a separate format-version-1 `slm_interference_experiment` JSON
+  document. It stores the complete experiment configuration, an optional
+  embedded `scalar_complex_response_lut`, and the calibration provenance string.
+- The experiment schema rejects missing and unknown keys, unsupported enum
+  names, non-finite values, and semantically invalid physics. Positive infinity
+  coherence length is encoded as JSON `null`; all finite physical values remain
+  SI doubles. Serialization is deterministic and byte-stable.
+- Loading a document replaces draft state only. Physics is not recomputed until
+  the user presses Apply. The legacy optical-bench scene document remains format
+  version 1 and is neither upgraded nor reinterpreted by the M5 loader.
+
 ### Coherent combination and interference
 
 - Fully coherent fields combine by complex addition on identical grids,

@@ -27,6 +27,7 @@
 #include "core/field/FieldVisualization.hpp"
 #include "optics/io/LensPrescriptionIO.hpp"
 #include "optics/slm/SlmResponseIO.hpp"
+#include "app/SlmInterferenceProject.hpp"
 #include "optics/ray/BenchTracer.hpp"
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
@@ -788,6 +789,47 @@ void Application::saveSlmCalibration() {
         slmInterferenceStatusMessage_ = "Exported measured LUT to " + path.string();
     } catch (const std::exception& ex) {
         slmInterferenceErrorMessage_ = "SLM calibration export failed: " + std::string(ex.what());
+        slmInterferenceStatusMessage_.clear();
+    }
+}
+
+void Application::loadSlmExperimentProject() {
+    try {
+        const std::filesystem::path path(slmProjectPathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument("SLM experiment project path cannot be empty");
+        }
+        auto document = slmproject::loadSlmInterferenceProject(path);
+        slmInterferenceUiState_.replaceDraftProject(
+            std::move(document.config),
+            std::move(document.calibrationProvenance));
+        slmInterferenceErrorMessage_.clear();
+        slmInterferenceStatusMessage_ = "Loaded SLM experiment project from "
+            + path.string() + "; press Apply to recompute";
+    } catch (const std::exception& ex) {
+        slmInterferenceErrorMessage_ = "SLM experiment project load failed: "
+            + std::string(ex.what());
+        slmInterferenceStatusMessage_.clear();
+    }
+}
+
+void Application::saveSlmExperimentProject() {
+    try {
+        const std::filesystem::path path(slmProjectPathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument("SLM experiment project path cannot be empty");
+        }
+        slmproject::SlmInterferenceProjectDocument document;
+        document.config = slmInterferenceUiState_.draftConfig();
+        document.calibrationProvenance
+            = slmInterferenceUiState_.draftCalibrationSource();
+        slmproject::saveSlmInterferenceProject(path, document);
+        slmInterferenceErrorMessage_.clear();
+        slmInterferenceStatusMessage_ = "Saved draft SLM experiment project to "
+            + path.string();
+    } catch (const std::exception& ex) {
+        slmInterferenceErrorMessage_ = "SLM experiment project save failed: "
+            + std::string(ex.what());
         slmInterferenceStatusMessage_.clear();
     }
 }
@@ -1830,6 +1872,22 @@ void Application::drawSlmInterferencePanel() {
     ImGui::Begin(docking::DockLayoutConfig::kSlmInterferenceWindowName);
     ImGui::TextDisabled(
         "Laser -> pixelated SLM -> ideal Fourier lens -> angular probe + reference beam");
+
+    if (ImGui::CollapsingHeader("Experiment project", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::InputText(
+            "Experiment JSON path",
+            slmProjectPathBuffer_,
+            sizeof(slmProjectPathBuffer_));
+        if (ImGui::Button("Load experiment")) {
+            loadSlmExperimentProject();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Save draft experiment")) {
+            saveSlmExperimentProject();
+        }
+        ImGui::TextDisabled(
+            "Separate versioned M5 document; legacy optical-bench scene JSON remains format v1 and unchanged.");
+    }
 
     if (ImGui::CollapsingHeader("Measured response LUT", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::InputText(
@@ -3050,6 +3108,24 @@ int Application::run(const RunOptions& options) {
             || !slmInterferenceErrorMessage_.empty())) {
         SDL_Log("OpenGL smoke check failed: SLM Interference Lab did not produce drawable analysis");
         rawGlError = true;
+    }
+    if (glSmokeMode_) {
+        try {
+            slmproject::SlmInterferenceProjectDocument document;
+            document.config = slmInterferenceUiState_.appliedConfig();
+            document.calibrationProvenance
+                = slmInterferenceUiState_.appliedCalibrationSource();
+            const auto restored = slmproject::deserializeSlmInterferenceProjectJson(
+                slmproject::serializeSlmInterferenceProjectJson(document));
+            if (!slmui::sameExperimentPhysicsConfig(document.config, restored.config)
+                || document.calibrationProvenance != restored.calibrationProvenance) {
+                SDL_Log("OpenGL smoke check failed: SLM project semantic round trip changed state");
+                rawGlError = true;
+            }
+        } catch (const std::exception& ex) {
+            SDL_Log("OpenGL smoke check failed: SLM project round trip: %s", ex.what());
+            rawGlError = true;
+        }
     }
 
     shutdown();

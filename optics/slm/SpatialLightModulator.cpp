@@ -239,6 +239,11 @@ struct PixelLocation final {
 
 } // namespace
 
+void validatePixelatedSlmParameters(const PixelatedSlmParameters& parameters) {
+    static_cast<void>(checkedPixelCount(parameters));
+    validateParameters(parameters);
+}
+
 SlmApplicationDiagnostics applyIdealAmplitudeSlm(
     field::ComplexField2D& field,
     std::span<const double> amplitudeCommands) {

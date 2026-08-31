@@ -39,6 +39,8 @@ struct SlmApplicationDiagnostics final {
     std::size_t quantizedSampleCount = 0;
 };
 
+void validatePixelatedSlmParameters(const PixelatedSlmParameters& parameters);
+
 // Commands are row-major and match the field samples exactly. Amplitude
 // commands are real field-amplitude transmission values in [0, 1].
 SlmApplicationDiagnostics applyIdealAmplitudeSlm(

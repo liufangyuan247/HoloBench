@@ -59,7 +59,7 @@ void validatePoint(const SlmResponsePoint& point) {
     };
 }
 
-void validateLcdParameters(const LcdTeachingParameters& parameters) {
+void validateLcdParametersImpl(const LcdTeachingParameters& parameters) {
     requireFinite(parameters.inputPolarizerAngleRadians, "LCD input polarizer angle must be finite");
     requireFinite(parameters.analyzerAngleRadians, "LCD analyzer angle must be finite");
     requireFinite(parameters.liquidCrystalFastAxisAngleRadians, "LCD fast-axis angle must be finite");
@@ -131,6 +131,10 @@ void validateLcdParameters(const LcdTeachingParameters& parameters) {
 }
 
 } // namespace
+
+void validateLcdTeachingParameters(const LcdTeachingParameters& parameters) {
+    validateLcdParametersImpl(parameters);
+}
 
 std::complex<double> EvaluatedSlmResponse::complexTransfer() const {
     if (!std::isfinite(amplitudeTransmission)
@@ -238,7 +242,7 @@ std::complex<double> evaluateLcdTeachingTransfer(
     LcdColorChannel channel,
     double vacuumWavelengthMetres,
     double normalizedCommand) {
-    validateLcdParameters(parameters);
+    validateLcdTeachingParameters(parameters);
     requireFinite(vacuumWavelengthMetres, "LCD wavelength must be finite");
     requireFinite(normalizedCommand, "LCD command must be finite");
     if (vacuumWavelengthMetres <= 0.0) {

@@ -42,6 +42,9 @@ public:
     }
 
     void setDraftConfig(const slmexperiment::SlmInterferenceExperimentConfig& config);
+    void replaceDraftProject(
+        slmexperiment::SlmInterferenceExperimentConfig config,
+        std::string calibrationSource);
     void setCalibration(
         optics::slm::CalibratedSlmResponse response,
         std::string source);

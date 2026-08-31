@@ -21,6 +21,8 @@ model.
 - [x] SLM coordinate-to-angle, angular PSF, and multi-wavelength mapping results.
 - [x] Dockable apply-gated teaching workflow, fringe/angular/PSF visualization,
   and measured-LUT import/export with visible provenance.
+- [x] Strict versioned experiment persistence with embedded calibration,
+  provenance, byte-stable round trip, and unchanged legacy scene format v1.
 - [x] Named three-response CPU performance profile and cross-platform compiler
   gate. GPU acceleration is not part of the M5 correctness path and is not
   emulated with device-specific dispatch.
@@ -32,7 +34,7 @@ model.
 - [x] Equal-amplitude visibility, analytic crossing-angle fringe period, phase
   translation, and 1/e coherence-envelope tests.
 - [x] Independent SLM diffraction and angular mapping oracle on committed data.
-- [ ] Complete warnings-as-errors builds on Windows Clang/MSVC and Ubuntu GCC.
+- [x] Complete warnings-as-errors builds on Windows Clang/MSVC and Ubuntu GCC.
 
 ## Product gate
 

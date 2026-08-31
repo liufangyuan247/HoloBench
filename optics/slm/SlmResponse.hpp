@@ -79,6 +79,8 @@ struct LcdTeachingParameters final {
     std::vector<LcdSpectralTransmission> spectralTransmission;
 };
 
+void validateLcdTeachingParameters(const LcdTeachingParameters& parameters);
+
 [[nodiscard]] LcdColorChannel lcdColorChannelAt(
     std::size_t row,
     std::size_t column,

@@ -281,6 +281,8 @@ private:
     void saveRealLensPrescription(bool csv);
     void loadSlmCalibration();
     void saveSlmCalibration();
+    void loadSlmExperimentProject();
+    void saveSlmExperimentProject();
     bool applyScene(
         const optics::scene::OpticalBenchScene& candidateScene,
         const optics::ray::BenchTracerOptions& candidateOptions);
@@ -350,6 +352,7 @@ private:
     char projectPathBuffer_[512] = "holobench_scene.json";
     char realLensPathBuffer_[512] = "holobench_lens.json";
     char slmCalibrationPathBuffer_[512] = "slm_response.json";
+    char slmProjectPathBuffer_[512] = "slm_experiment.json";
 
     bool isBenchmark_ = false;
     int vsyncInterval_ = 1;
