@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -281,6 +282,7 @@ private:
     void drawSlmInterferencePanel();
     void drawHolographyPanel();
     void drawLearnPanel();
+    void loadLessonTemplate(std::string_view lessonId);
     void updateWaveDetector();
     void updateSlmInterference();
     void updateHolography();
@@ -363,6 +365,14 @@ private:
     std::string selectedLessonId_ = "reflection_refraction";
     optics::scene::ImageNature lessonImageClassification_
         = optics::scene::ImageNature::Real;
+    lessons::FourierPlaneIdentification lessonFourierPlaneIdentification_
+        = lessons::FourierPlaneIdentification::ObjectPlane;
+    lessons::SpatialFilteringEffect lessonSpatialFilteringEffect_
+        = lessons::SpatialFilteringEffect::Sharper;
+    lessons::PsfWidthChange lessonPsfWidthChange_
+        = lessons::PsfWidthChange::Wider;
+    lessons::FringeVisibilityChange lessonFringeVisibilityChange_
+        = lessons::FringeVisibilityChange::Higher;
     bool realLensDirty_ = true;
     std::size_t selectedRealLensSurface_ = 0;
 

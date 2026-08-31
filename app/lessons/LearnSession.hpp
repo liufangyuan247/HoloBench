@@ -41,6 +41,22 @@ public:
         diffractionObservation() const noexcept {
         return diffractionObservation_;
     }
+    [[nodiscard]] const std::optional<FourierPlaneLessonObservation>&
+        fourierPlaneObservation() const noexcept {
+        return fourierPlaneObservation_;
+    }
+    [[nodiscard]] const std::optional<SpatialFilteringLessonObservation>&
+        spatialFilteringObservation() const noexcept {
+        return spatialFilteringObservation_;
+    }
+    [[nodiscard]] const std::optional<NaPsfLessonObservation>&
+        naPsfObservation() const noexcept {
+        return naPsfObservation_;
+    }
+    [[nodiscard]] const std::optional<CoherenceLessonObservation>&
+        coherenceObservation() const noexcept {
+        return coherenceObservation_;
+    }
 
     void replaceProgress(LessonProgress progress);
     void beginLesson(std::string_view lessonId);
@@ -55,6 +71,20 @@ public:
         const wave::WaveDetectorConfig& appliedConfig,
         const wave::WaveDetectorResult& result);
     [[nodiscard]] bool confirmDiffractionObservation();
+    void observeSamplingDebugger(
+        const wave::WaveDetectorResult& detectorResult,
+        const samplingdebug::SamplingDebuggerConfig& appliedConfig,
+        const samplingdebug::SamplingDebuggerResult& result);
+    [[nodiscard]] bool confirmFourierPlaneIdentification(
+        FourierPlaneIdentification identification);
+    [[nodiscard]] bool confirmSpatialFilteringEffect(
+        SpatialFilteringEffect effect);
+    [[nodiscard]] bool confirmPsfWidthChange(PsfWidthChange change);
+    void observeSlmInterference(
+        const slmexperiment::SlmInterferenceExperimentConfig& appliedConfig,
+        const slmexperiment::SlmInterferenceExperimentResult& result);
+    [[nodiscard]] bool confirmFringeVisibilityChange(
+        FringeVisibilityChange change);
     void resetActiveLesson();
 
 private:
@@ -66,9 +96,20 @@ private:
     std::optional<ThinLensLessonObservation> thinLensObservation_;
     std::optional<RealVirtualLessonObservation> realVirtualObservation_;
     std::optional<DiffractionLessonObservation> diffractionObservation_;
+    std::optional<FourierPlaneLessonObservation> fourierPlaneObservation_;
+    std::optional<SpatialFilteringLessonObservation>
+        spatialFilteringObservation_;
+    std::optional<NaPsfLessonObservation> naPsfObservation_;
+    std::optional<CoherenceLessonObservation> coherenceObservation_;
     double thinLensTemplateScreenZMetres_ = 0.0;
     double diffractionTemplateHalfWidthMetres_ = 0.0;
     std::optional<double> diffractionBaselineHalfMaximumWidthMetres_;
+    FourierLessonTemplate fourierLessonTemplate_;
+    std::optional<double> spatialFilteringBaselineDetailMetric_;
+    std::optional<double> naPsfBaselineNumericalAperture_;
+    std::optional<double> naPsfBaselineFirstDarkRadiusMetres_;
+    slmexperiment::SlmInterferenceExperimentConfig coherenceLessonTemplate_;
+    std::optional<double> coherenceBaselineVisibility_;
     bool reflectionIncidenceChanged_ = false;
 };
 

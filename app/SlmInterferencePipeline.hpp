@@ -84,6 +84,7 @@ struct SlmWavelengthExperimentResult final {
 };
 
 struct SlmInterferenceExperimentResult final {
+    SlmInterferenceExperimentConfig sourceConfig;
     std::vector<SlmWavelengthExperimentResult> wavelengths;
 };
 

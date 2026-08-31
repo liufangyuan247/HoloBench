@@ -319,6 +319,7 @@ SlmInterferenceExperimentResult runSlmInterferenceExperiment(
     selectedSlm.bitDepth = 0;
 
     SlmInterferenceExperimentResult result;
+    result.sourceConfig = config;
     result.wavelengths.reserve(config.vacuumWavelengthsMetres.size());
     compute::fourier::FourierLensTransform lensTransform(fftBackend);
     for (const double wavelength : config.vacuumWavelengthsMetres) {

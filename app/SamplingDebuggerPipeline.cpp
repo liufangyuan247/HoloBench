@@ -171,6 +171,8 @@ SamplingDebuggerResult analyzeSamplingDebugger(
         fourF.imagePlane, config.fourFDisplayFloorDecibels);
     const auto pupilDiagnostics = pupil.diagnostics();
     return {
+        config,
+        selectedPlane,
         sampling,
         std::move(angularSpectrum),
         std::move(planeProbe),

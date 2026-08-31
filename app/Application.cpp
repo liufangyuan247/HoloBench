@@ -1259,6 +1259,7 @@ void Application::drawWaveDetectorPanel() {
     if (ImGui::Button("Apply & Recompute")) {
         detectorUiState_.apply();
         detectorResult_.reset();
+        samplingDebuggerResult_.reset();
         detectorStatusMessage_ = "Detector recompute queued";
         detectorErrorMessage_.clear();
     }
@@ -2321,6 +2322,7 @@ void Application::drawSlmInterferencePanel() {
     }
     if (ImGui::Button("Apply SLM Experiment")) {
         slmInterferenceUiState_.apply();
+        slmInterferenceResult_.reset();
         slmInterferenceStatusMessage_ = "SLM experiment recompute queued";
         slmInterferenceErrorMessage_.clear();
     }
@@ -2916,6 +2918,84 @@ void Application::drawHolographyPanel() {
     ImGui::End();
 }
 
+void Application::loadLessonTemplate(std::string_view lessonId) {
+    if (lessonId == "thin_lens") {
+        const auto lessonTemplate = lessons::makeThinLensLessonTemplate();
+        if (!applyScene(lessonTemplate, tracerOptions_)) {
+            throw std::runtime_error(
+                errorMessage_.empty()
+                    ? "application rejected the thin-lens template"
+                    : errorMessage_);
+        }
+        selectedTarget_ = GizmoTarget::Screen;
+        camera_.setPresetView(render::CameraPresetView::Perspective);
+        return;
+    }
+    if (lessonId == "real_virtual_images") {
+        const auto lessonTemplate = lessons::makeRealVirtualLessonTemplate();
+        if (!applyScene(lessonTemplate, tracerOptions_)) {
+            throw std::runtime_error(
+                errorMessage_.empty()
+                    ? "application rejected the real/virtual template"
+                    : errorMessage_);
+        }
+        lessonImageClassification_ = optics::scene::ImageNature::Real;
+        camera_.setPresetView(render::CameraPresetView::Perspective);
+        return;
+    }
+    if (lessonId == "diffraction") {
+        const auto lessonTemplate = lessons::makeDiffractionLessonTemplate();
+        detectorUiState_.setDraftConfig(lessonTemplate);
+        detectorUiState_.apply();
+        detectorUiState_.setViewMode(field::FieldViewMode::DecibelIntensity);
+        detectorResult_.reset();
+        samplingDebuggerResult_.reset();
+        detectorErrorMessage_.clear();
+        detectorStatusMessage_ = "Diffraction lesson recompute queued";
+        ImGui::SetWindowFocus(docking::DockLayoutConfig::kWaveDetectorWindowName);
+        return;
+    }
+    if (lessonId == "fourier_plane"
+        || lessonId == "spatial_filtering"
+        || lessonId == "na_psf") {
+        const auto lessonTemplate = lessons::makeFourierLessonTemplate();
+        detectorUiState_.setDraftConfig(lessonTemplate.waveDetector);
+        detectorUiState_.apply();
+        detectorUiState_.setViewMode(field::FieldViewMode::DecibelIntensity);
+        samplingDebuggerConfig_ = lessonTemplate.samplingDebugger;
+        detectorResult_.reset();
+        samplingDebuggerResult_.reset();
+        detectorErrorMessage_.clear();
+        samplingDebuggerErrorMessage_.clear();
+        detectorStatusMessage_ = "Fourier lesson source recompute queued";
+        if (lessonId == "fourier_plane") {
+            lessonFourierPlaneIdentification_
+                = lessons::FourierPlaneIdentification::ObjectPlane;
+        } else if (lessonId == "spatial_filtering") {
+            lessonSpatialFilteringEffect_
+                = lessons::SpatialFilteringEffect::Sharper;
+        } else {
+            lessonPsfWidthChange_ = lessons::PsfWidthChange::Wider;
+        }
+        ImGui::SetWindowFocus(
+            docking::DockLayoutConfig::kSamplingDebuggerWindowName);
+        return;
+    }
+    if (lessonId == "coherence_interference") {
+        const auto lessonTemplate = lessons::makeCoherenceLessonTemplate();
+        slmInterferenceUiState_.setDraftConfig(lessonTemplate);
+        slmInterferenceUiState_.apply();
+        slmInterferenceUiState_.setDisplayPlane(slmui::DisplayPlane::Interference);
+        slmInterferenceResult_.reset();
+        slmInterferenceErrorMessage_.clear();
+        slmInterferenceStatusMessage_ = "Coherence lesson recompute queued";
+        lessonFringeVisibilityChange_
+            = lessons::FringeVisibilityChange::Higher;
+        ImGui::SetWindowFocus(
+            docking::DockLayoutConfig::kSlmInterferenceWindowName);
+    }
+}
+
 void Application::drawLearnPanel() {
     ImGui::Begin(docking::DockLayoutConfig::kLearnWindowName);
 
@@ -2995,51 +3075,12 @@ void Application::drawLearnPanel() {
                         : "Start lesson")) {
                 try {
                     learnSession_.beginLesson(definition.id);
-                    if (definition.id == "thin_lens") {
-                        const auto lessonTemplate = lessons::makeThinLensLessonTemplate();
-                        if (!applyScene(lessonTemplate, tracerOptions_)) {
-                            learnSession_.endLesson();
-                            throw std::runtime_error(
-                                errorMessage_.empty()
-                                    ? "application rejected the thin-lens template"
-                                    : errorMessage_);
-                        }
-                        selectedTarget_ = GizmoTarget::Screen;
-                        camera_.setPresetView(render::CameraPresetView::Perspective);
-                    } else if (definition.id == "real_virtual_images") {
-                        const auto lessonTemplate
-                            = lessons::makeRealVirtualLessonTemplate();
-                        if (!applyScene(lessonTemplate, tracerOptions_)) {
-                            learnSession_.endLesson();
-                            throw std::runtime_error(
-                                errorMessage_.empty()
-                                    ? "application rejected the real/virtual template"
-                                    : errorMessage_);
-                        }
-                        lessonImageClassification_
-                            = optics::scene::ImageNature::Real;
-                        camera_.setPresetView(
-                            render::CameraPresetView::Perspective);
-                    } else if (definition.id == "diffraction") {
-                        const auto lessonTemplate
-                            = lessons::makeDiffractionLessonTemplate();
-                        detectorUiState_.setDraftConfig(lessonTemplate);
-                        detectorUiState_.apply();
-                        detectorUiState_.setViewMode(
-                            field::FieldViewMode::DecibelIntensity);
-                        detectorResult_.reset();
-                        detectorErrorMessage_.clear();
-                        detectorStatusMessage_
-                            = "Diffraction lesson recompute queued";
-                    }
+                    loadLessonTemplate(definition.id);
                     learnSession_.confirmTemplateLoaded();
                     lessonErrorMessage_.clear();
                     lessonStatusMessage_ = "Started " + definition.id;
-                    if (definition.id == "diffraction") {
-                        ImGui::SetWindowFocus(
-                            docking::DockLayoutConfig::kWaveDetectorWindowName);
-                    }
                 } catch (const std::exception& ex) {
+                    learnSession_.endLesson();
                     lessonErrorMessage_ = "Lesson start failed: "
                         + std::string(ex.what());
                     lessonStatusMessage_.clear();
@@ -3059,6 +3100,21 @@ void Application::drawLearnPanel() {
                     && detectorResult_) {
                     learnSession_.observeWaveDetector(
                         detectorUiState_.appliedConfig(), *detectorResult_);
+                } else if ((definition.id == "fourier_plane"
+                                || definition.id == "spatial_filtering"
+                                || definition.id == "na_psf")
+                    && detectorResult_ && samplingDebuggerResult_) {
+                    if (samplingDebuggerResult_->sourceConfig
+                        == samplingDebuggerConfig_) {
+                        learnSession_.observeSamplingDebugger(
+                            *detectorResult_, samplingDebuggerConfig_,
+                            *samplingDebuggerResult_);
+                    }
+                } else if (definition.id == "coherence_interference"
+                    && slmInterferenceResult_) {
+                    learnSession_.observeSlmInterference(
+                        slmInterferenceUiState_.appliedConfig(),
+                        *slmInterferenceResult_);
                 }
             } catch (const std::exception& ex) {
                 lessonErrorMessage_ = "Lesson observation failed: "
@@ -3255,6 +3311,205 @@ void Application::drawLearnPanel() {
                     ImGui::TextDisabled(
                         "Waiting for the shared Wave Detector result.");
                 }
+            } else if (definition.id == "fourier_plane") {
+                ImGui::SeparatorText("Shared Sampling Debugger observation");
+                if (samplingDebuggerResult_
+                    && samplingDebuggerResult_->sourceConfig
+                        != samplingDebuggerConfig_) {
+                    ImGui::TextColored(
+                        ImVec4(0.98F, 0.73F, 0.20F, 1.0F),
+                        "Sampling Debugger controls are pending Refresh.");
+                }
+                if (learnSession_.fourierPlaneObservation().has_value()) {
+                    const auto& observation
+                        = learnSession_.fourierPlaneObservation().value();
+                    ImGui::Text(
+                        "Non-DC Fourier energy: %.3f%% | probe planes: %zu",
+                        100.0 * observation.nonDcSpectralEnergyFraction,
+                        observation.probePlaneCount);
+                    ImGui::TextDisabled(
+                        "Set Sampling Debugger > Probe offset z to at least 1 mm, "
+                        "then Refresh Sampling Debugger.");
+                    constexpr std::array<const char*, 3> planeNames {
+                        "Object plane", "Fourier plane", "Image plane"};
+                    int planeIndex = static_cast<int>(
+                        lessonFourierPlaneIdentification_);
+                    if (ImGui::Combo(
+                            "Plane containing the spatial spectrum",
+                            &planeIndex,
+                            planeNames.data(),
+                            static_cast<int>(planeNames.size()))) {
+                        lessonFourierPlaneIdentification_
+                            = static_cast<lessons::FourierPlaneIdentification>(
+                                planeIndex);
+                    }
+                    const bool ready = completedSteps == 2U
+                        && observation.probeMoved
+                        && observation.spectrumResolved;
+                    ImGui::BeginDisabled(!ready);
+                    if (ImGui::Button("Confirm Fourier plane")) {
+                        if (learnSession_.confirmFourierPlaneIdentification(
+                                lessonFourierPlaneIdentification_)) {
+                            lessonStatusMessage_ = "Fourier Plane completed";
+                            lessonErrorMessage_.clear();
+                        } else {
+                            lessonErrorMessage_
+                                = "Identify the plane where position represents spatial frequency.";
+                        }
+                    }
+                    ImGui::EndDisabled();
+                } else {
+                    ImGui::TextDisabled(
+                        "Waiting for the shared Sampling Debugger result.");
+                }
+            } else if (definition.id == "spatial_filtering") {
+                ImGui::SeparatorText("Shared 4-f filter observation");
+                if (samplingDebuggerResult_
+                    && samplingDebuggerResult_->sourceConfig
+                        != samplingDebuggerConfig_) {
+                    ImGui::TextColored(
+                        ImVec4(0.98F, 0.73F, 0.20F, 1.0F),
+                        "Sampling Debugger controls are pending Refresh.");
+                }
+                if (learnSession_.spatialFilteringObservation().has_value()) {
+                    const auto& observation
+                        = learnSession_.spatialFilteringObservation().value();
+                    ImGui::Text(
+                        "Image detail metric: %.6g | power transmission: %.3f%%",
+                        observation.imageDetailMetric,
+                        100.0 * observation.integratedIntensityTransmission);
+                    ImGui::TextDisabled(
+                        "Select Low pass in Sampling Debugger, keep the 0.08 mm "
+                        "outer radius, then Refresh.");
+                    constexpr std::array<const char*, 3> effectNames {
+                        "Sharper", "Smoother / blurred", "Only brighter"};
+                    int effectIndex = static_cast<int>(
+                        lessonSpatialFilteringEffect_);
+                    if (ImGui::Combo(
+                            "Observed image effect",
+                            &effectIndex,
+                            effectNames.data(),
+                            static_cast<int>(effectNames.size()))) {
+                        lessonSpatialFilteringEffect_
+                            = static_cast<lessons::SpatialFilteringEffect>(
+                                effectIndex);
+                    }
+                    const bool ready = completedSteps == 2U
+                        && observation.imageSmoothed;
+                    ImGui::BeginDisabled(!ready);
+                    if (ImGui::Button("Confirm spatial-filter effect")) {
+                        if (learnSession_.confirmSpatialFilteringEffect(
+                                lessonSpatialFilteringEffect_)) {
+                            lessonStatusMessage_ = "Spatial Filtering completed";
+                            lessonErrorMessage_.clear();
+                        } else {
+                            lessonErrorMessage_
+                                = "Relate blocked outer frequencies to the measured loss of image detail.";
+                        }
+                    }
+                    ImGui::EndDisabled();
+                } else {
+                    ImGui::TextDisabled(
+                        "Waiting for the shared 4-f result and pass-all baseline.");
+                }
+            } else if (definition.id == "na_psf") {
+                ImGui::SeparatorText("Shared PSF / MTF observation");
+                if (samplingDebuggerResult_
+                    && samplingDebuggerResult_->sourceConfig
+                        != samplingDebuggerConfig_) {
+                    ImGui::TextColored(
+                        ImVec4(0.98F, 0.73F, 0.20F, 1.0F),
+                        "Sampling Debugger controls are pending Refresh.");
+                }
+                if (learnSession_.naPsfObservation().has_value()) {
+                    const auto& observation
+                        = learnSession_.naPsfObservation().value();
+                    ImGui::Text(
+                        "Paraxial NA: %.6g | first-dark radius: %.3f um",
+                        observation.paraxialNumericalAperture,
+                        observation.firstDarkRadiusMetres * 1.0e6);
+                    ImGui::TextDisabled(
+                        "Increase Sampling Debugger > Circular pupil radius "
+                        "from 0.50 mm to at least 0.625 mm, then Refresh.");
+                    constexpr std::array<const char*, 3> widthNames {
+                        "Wider", "Narrower", "Unchanged"};
+                    int widthIndex = static_cast<int>(lessonPsfWidthChange_);
+                    if (ImGui::Combo(
+                            "PSF width after increasing NA",
+                            &widthIndex,
+                            widthNames.data(),
+                            static_cast<int>(widthNames.size()))) {
+                        lessonPsfWidthChange_
+                            = static_cast<lessons::PsfWidthChange>(widthIndex);
+                    }
+                    const bool ready = completedSteps == 2U
+                        && observation.psfNarrowed;
+                    ImGui::BeginDisabled(!ready);
+                    if (ImGui::Button("Confirm NA / PSF relationship")) {
+                        if (learnSession_.confirmPsfWidthChange(
+                                lessonPsfWidthChange_)) {
+                            lessonStatusMessage_ = "NA / PSF completed";
+                            lessonErrorMessage_.clear();
+                        } else {
+                            lessonErrorMessage_
+                                = "Use the measured first-dark radius to classify the PSF change.";
+                        }
+                    }
+                    ImGui::EndDisabled();
+                } else {
+                    ImGui::TextDisabled(
+                        "Waiting for the shared PSF baseline.");
+                }
+            } else if (definition.id == "coherence_interference") {
+                ImGui::SeparatorText("Shared SLM interference observation");
+                if (slmInterferenceUiState_.isDirty()) {
+                    ImGui::TextColored(
+                        ImVec4(0.98F, 0.73F, 0.20F, 1.0F),
+                        "SLM draft is pending Apply SLM Experiment.");
+                }
+                if (learnSession_.coherenceObservation().has_value()) {
+                    const auto& observation
+                        = learnSession_.coherenceObservation().value();
+                    ImGui::Text(
+                        "OPD: %+.3f mm | |gamma|: %.6g | visibility: %.6g",
+                        observation.opticalPathDifferenceMetres * 1.0e3,
+                        observation.coherenceMagnitude,
+                        observation.fringeVisibility);
+                    ImGui::TextDisabled(
+                        "Set SLM > Optical path difference to at least 1.0 mm "
+                        "with the 1/e coherence length fixed at 1.0 mm, then Apply.");
+                    constexpr std::array<const char*, 3> visibilityNames {
+                        "Higher", "Lower", "Unchanged"};
+                    int visibilityIndex = static_cast<int>(
+                        lessonFringeVisibilityChange_);
+                    if (ImGui::Combo(
+                            "Fringe visibility change",
+                            &visibilityIndex,
+                            visibilityNames.data(),
+                            static_cast<int>(visibilityNames.size()))) {
+                        lessonFringeVisibilityChange_
+                            = static_cast<lessons::FringeVisibilityChange>(
+                                visibilityIndex);
+                    }
+                    const bool ready = completedSteps == 2U
+                        && observation.visibilityReduced;
+                    ImGui::BeginDisabled(!ready);
+                    if (ImGui::Button("Confirm coherence effect")) {
+                        if (learnSession_.confirmFringeVisibilityChange(
+                                lessonFringeVisibilityChange_)) {
+                            lessonStatusMessage_
+                                = "Coherence / Interference completed";
+                            lessonErrorMessage_.clear();
+                        } else {
+                            lessonErrorMessage_
+                                = "Compare the measured fringe visibility before and after the OPD change.";
+                        }
+                    }
+                    ImGui::EndDisabled();
+                } else {
+                    ImGui::TextDisabled(
+                        "Waiting for the shared SLM interference baseline.");
+                }
             }
 
             if (lessons::lessonStatus(
@@ -3269,43 +3524,12 @@ void Application::drawLearnPanel() {
             if (ImGui::Button("Reset lesson")) {
                 try {
                     learnSession_.resetActiveLesson();
-                    if (definition.id == "thin_lens") {
-                        const auto lessonTemplate = lessons::makeThinLensLessonTemplate();
-                        if (!applyScene(lessonTemplate, tracerOptions_)) {
-                            learnSession_.endLesson();
-                            throw std::runtime_error(
-                                errorMessage_.empty()
-                                    ? "application rejected the thin-lens template"
-                                    : errorMessage_);
-                        }
-                    } else if (definition.id == "real_virtual_images") {
-                        const auto lessonTemplate
-                            = lessons::makeRealVirtualLessonTemplate();
-                        if (!applyScene(lessonTemplate, tracerOptions_)) {
-                            learnSession_.endLesson();
-                            throw std::runtime_error(
-                                errorMessage_.empty()
-                                    ? "application rejected the real/virtual template"
-                                    : errorMessage_);
-                        }
-                        lessonImageClassification_
-                            = optics::scene::ImageNature::Real;
-                    } else if (definition.id == "diffraction") {
-                        const auto lessonTemplate
-                            = lessons::makeDiffractionLessonTemplate();
-                        detectorUiState_.setDraftConfig(lessonTemplate);
-                        detectorUiState_.apply();
-                        detectorUiState_.setViewMode(
-                            field::FieldViewMode::DecibelIntensity);
-                        detectorResult_.reset();
-                        detectorErrorMessage_.clear();
-                        detectorStatusMessage_
-                            = "Diffraction lesson recompute queued";
-                    }
+                    loadLessonTemplate(definition.id);
                     learnSession_.confirmTemplateLoaded();
                     lessonErrorMessage_.clear();
                     lessonStatusMessage_ = "Reset " + definition.id;
                 } catch (const std::exception& ex) {
+                    learnSession_.endLesson();
                     lessonErrorMessage_ = "Lesson reset failed: "
                         + std::string(ex.what());
                 }

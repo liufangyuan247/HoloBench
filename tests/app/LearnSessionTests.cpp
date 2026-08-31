@@ -33,6 +33,22 @@ void completeLesson(
 
 TEST_SUITE("LearnSession") {
 
+TEST_CASE("the first eight catalog lessons expose guided workflows") {
+    for (const auto lessonId : {
+             "reflection_refraction",
+             "thin_lens",
+             "real_virtual_images",
+             "diffraction",
+             "fourier_plane",
+             "spatial_filtering",
+             "na_psf",
+             "coherence_interference"}) {
+        CHECK(lessons::hasInteractiveLessonWorkflow(lessonId));
+    }
+    CHECK_FALSE(lessons::hasInteractiveLessonWorkflow("holography"));
+    CHECK_FALSE(lessons::hasInteractiveLessonWorkflow("h1_h2_advanced"));
+}
+
 TEST_CASE("reflection workflow requires template angle change and valid observation") {
     lessons::LearnSession session;
     session.beginLesson("reflection_refraction");
@@ -177,6 +193,123 @@ TEST_CASE("diffraction workflow observes applied shared-wave broadening") {
     CHECK(lessons::nextLessonStepIndex(
         session.catalog(), session.progress(), "diffraction") == 2U);
     CHECK(session.confirmDiffractionObservation());
+}
+
+TEST_CASE("Fourier plane workflow requires a moved shared probe and correct plane") {
+    lessons::LearnSession session;
+    lessons::LessonProgress progress;
+    completeLesson(session.catalog(), progress, "reflection_refraction");
+    completeLesson(session.catalog(), progress, "thin_lens");
+    completeLesson(session.catalog(), progress, "diffraction");
+    session.replaceProgress(progress);
+    session.beginLesson("fourier_plane");
+    session.confirmTemplateLoaded();
+
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto lessonTemplate = lessons::makeFourierLessonTemplate();
+    const auto detectorResult = holobench::app::wave::simulateDetectorField(
+        lessonTemplate.waveDetector, fft);
+    auto config = lessonTemplate.samplingDebugger;
+    config.propagationDistanceMetres = 5.0e-3;
+    config.probeDistancesMetres = {0.0, config.propagationDistanceMetres};
+    const auto result = holobench::app::samplingdebug::analyzeSamplingDebugger(
+        detectorResult.field, config, fft);
+    session.observeSamplingDebugger(detectorResult, config, result);
+    CHECK_FALSE(session.confirmFourierPlaneIdentification(
+        lessons::FourierPlaneIdentification::ObjectPlane));
+    CHECK(session.confirmFourierPlaneIdentification(
+        lessons::FourierPlaneIdentification::FourierPlane));
+}
+
+TEST_CASE("spatial filtering workflow requires measured shared low-pass smoothing") {
+    lessons::LearnSession session;
+    lessons::LessonProgress progress;
+    completeLesson(session.catalog(), progress, "reflection_refraction");
+    completeLesson(session.catalog(), progress, "thin_lens");
+    completeLesson(session.catalog(), progress, "diffraction");
+    completeLesson(session.catalog(), progress, "fourier_plane");
+    session.replaceProgress(progress);
+    session.beginLesson("spatial_filtering");
+    session.confirmTemplateLoaded();
+
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto lessonTemplate = lessons::makeFourierLessonTemplate();
+    const auto detectorResult = holobench::app::wave::simulateDetectorField(
+        lessonTemplate.waveDetector, fft);
+    const auto baselineResult
+        = holobench::app::samplingdebug::analyzeSamplingDebugger(
+            detectorResult.field, lessonTemplate.samplingDebugger, fft);
+    session.observeSamplingDebugger(
+        detectorResult, lessonTemplate.samplingDebugger, baselineResult);
+    auto filteredConfig = lessonTemplate.samplingDebugger;
+    filteredConfig.fourFFilterKind
+        = holobench::compute::fourier::CircularFilterKind::LowPass;
+    const auto filteredResult
+        = holobench::app::samplingdebug::analyzeSamplingDebugger(
+            detectorResult.field, filteredConfig, fft);
+    session.observeSamplingDebugger(
+        detectorResult, filteredConfig, filteredResult);
+    CHECK_FALSE(session.confirmSpatialFilteringEffect(
+        lessons::SpatialFilteringEffect::Sharper));
+    CHECK(session.confirmSpatialFilteringEffect(
+        lessons::SpatialFilteringEffect::SmootherBlurred));
+}
+
+TEST_CASE("NA PSF workflow requires a measured narrower shared PSF") {
+    lessons::LearnSession session;
+    lessons::LessonProgress progress;
+    completeLesson(session.catalog(), progress, "reflection_refraction");
+    completeLesson(session.catalog(), progress, "thin_lens");
+    completeLesson(session.catalog(), progress, "diffraction");
+    session.replaceProgress(progress);
+    session.beginLesson("na_psf");
+    session.confirmTemplateLoaded();
+
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto lessonTemplate = lessons::makeFourierLessonTemplate();
+    const auto detectorResult = holobench::app::wave::simulateDetectorField(
+        lessonTemplate.waveDetector, fft);
+    const auto baselineResult
+        = holobench::app::samplingdebug::analyzeSamplingDebugger(
+            detectorResult.field, lessonTemplate.samplingDebugger, fft);
+    session.observeSamplingDebugger(
+        detectorResult, lessonTemplate.samplingDebugger, baselineResult);
+    auto changedConfig = lessonTemplate.samplingDebugger;
+    changedConfig.psfPupilRadiusMetres *= 1.5;
+    const auto changedResult
+        = holobench::app::samplingdebug::analyzeSamplingDebugger(
+            detectorResult.field, changedConfig, fft);
+    session.observeSamplingDebugger(detectorResult, changedConfig, changedResult);
+    CHECK_FALSE(session.confirmPsfWidthChange(lessons::PsfWidthChange::Wider));
+    CHECK(session.confirmPsfWidthChange(lessons::PsfWidthChange::Narrower));
+}
+
+TEST_CASE("coherence workflow requires shared visibility loss and correct classification") {
+    lessons::LearnSession session;
+    lessons::LessonProgress progress;
+    completeLesson(session.catalog(), progress, "reflection_refraction");
+    completeLesson(session.catalog(), progress, "diffraction");
+    session.replaceProgress(progress);
+    session.beginLesson("coherence_interference");
+    session.confirmTemplateLoaded();
+
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto lessonTemplate = lessons::makeCoherenceLessonTemplate();
+    const auto baselineResult
+        = holobench::app::slmexperiment::runSlmInterferenceExperiment(
+            lessonTemplate, fft);
+    session.observeSlmInterference(lessonTemplate, baselineResult);
+    auto changedConfig = lessonTemplate;
+    changedConfig.mutualCoherence.opticalPathDifferenceMetres
+        = changedConfig.mutualCoherence.coherenceLengthMetres;
+    const auto changedResult
+        = holobench::app::slmexperiment::runSlmInterferenceExperiment(
+            changedConfig, fft);
+    session.observeSlmInterference(changedConfig, changedResult);
+    CHECK_FALSE(session.confirmFringeVisibilityChange(
+        lessons::FringeVisibilityChange::Higher));
+    CHECK(session.confirmFringeVisibilityChange(
+        lessons::FringeVisibilityChange::Lower));
 }
 
 } // TEST_SUITE("LearnSession")

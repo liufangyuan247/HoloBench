@@ -32,15 +32,15 @@ lessons during M7.
   separately from physics project documents.
 - [x] Dockable Learn UI with locked/unlocked/completed state, ordered-step
   guidance, reset/review controls, and visible learning objectives. Guided
-  interaction is enabled only for the first four implemented workflows; future
+  interaction is enabled only for the first eight implemented workflows; future
   catalog entries remain visibly unavailable rather than simulating completion.
-- [ ] At least the first eight complete guided experiments using the existing
+- [x] At least the first eight complete guided experiments using the existing
   M1-M6 physics and diagnostics.
 - [ ] Versioned project templates that open in Lab mode and remain compatible
   with normal project save/load.
 - [ ] Contextual explanations that declare units, approximations, solver
   fidelity, and limitations without making formulas the primary interaction.
-  The first four workflows include these explanations; lessons 5-8 remain.
+  All first-eight workflows include these explanations.
 - [ ] Undo/redo for lesson-relevant editing actions with deterministic tests.
 - [x] Basic English/`zh-Hans` localization architecture based on stable message
   keys, English fallback, and no localized strings used as serialized identity.
@@ -74,8 +74,7 @@ lessons during M7.
   malformed input, migration where applicable, and byte-stable round trip.
 - [x] Every currently completed lesson has a deterministic workflow test that
   exercises the same physics path used by Lab mode and checks its stated
-  observation (Reflection / Refraction, Thin Lens, Real / Virtual Images, and
-  Diffraction at this increment).
+  observation (all required lessons 1-8 at this increment).
 - [x] Windows Clang/MSVC and Ubuntu GCC warnings-as-errors builds pass for
   every currently integrated M7 increment.
 - [ ] Complete application smoke and named M7 benchmark scenes pass.

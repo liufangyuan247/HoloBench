@@ -183,6 +183,66 @@ LocalizationCatalog makeDefaultLessonLocalization() {
         "This finite sampled result is evidence from the propagated field, not a claim of an exact Fraunhofer limit; sampling and window warnings still apply.",
         "比较图样", "当测得的水平方向半高全宽至少增大 10% 后确认。",
         "这是有限采样传播场给出的证据，并不宣称处于精确夫琅禾费极限；采样和窗口警告仍然有效。");
+    addStep(messages, "fourier_plane", "load_4f_template",
+        "Load the 4-f source", "Load the double-slit field into the shared Wave Detector and Sampling Debugger.",
+        "The ideal scalar 4-f relay uses physical focal-plane coordinates and the same centred FFT conventions as Lab.",
+        "载入 4-f 光源", "把双缝场载入共用的波动探测器和采样调试器。",
+        "理想标量 4-f 中继使用物理焦平面坐标，并与实验室采用相同的居中 FFT 约定。");
+    addStep(messages, "fourier_plane", "place_probe",
+        "Move the plane probe", "Set a non-zero probe offset and refresh the Sampling Debugger.",
+        "The probe follows the same angular-spectrum field; it does not create a second propagation model.",
+        "移动平面探针", "设置非零探针偏移量，然后刷新采样调试器。",
+        "探针沿用同一个角谱场，不会创建第二套传播模型。");
+    addStep(messages, "fourier_plane", "identify_spectrum",
+        "Identify the spectrum", "Choose which 4-f plane maps position to spatial frequency.",
+        "The Fourier-plane centre is DC; increasing radius represents finer spatial frequency, subject to finite sampling and periodic boundaries.",
+        "识别频谱", "选择 4-f 系统中把位置映射为空间频率的平面。",
+        "傅里叶平面中心是直流分量，半径越大表示空间频率越高；结果仍受有限采样和周期边界约束。");
+    addStep(messages, "spatial_filtering", "inspect_spectrum",
+        "Inspect the unfiltered image", "Record the pass-all 4-f image and its measured detail metric.",
+        "Every displayed log-intensity plane is peak-normalized independently; use numerical transmission for power comparisons.",
+        "观察未滤波图像", "记录全通 4-f 图像及其测得的细节指标。",
+        "各对数强度图会分别按峰值归一化；比较功率时应使用数值透射率。");
+    addStep(messages, "spatial_filtering", "apply_filter",
+        "Apply a low-pass filter", "Select the circular low-pass filter and refresh the Sampling Debugger.",
+        "Blocking outer Fourier-plane samples removes fine spatial detail in this coherent scalar model.",
+        "应用低通滤波器", "选择圆形低通滤波器，然后刷新采样调试器。",
+        "在这个相干标量模型中，阻挡傅里叶平面外侧采样会去除精细空间细节。");
+    addStep(messages, "spatial_filtering", "explain_image",
+        "Explain the image", "Classify the measured image change after the low-pass filter.",
+        "A lower normalized gradient metric is evidence of smoothing; it is distinct from display brightness normalization.",
+        "解释图像变化", "判断低通滤波后测得的图像变化。",
+        "较低的归一化梯度指标说明图像变平滑，这与显示亮度归一化不同。");
+    addStep(messages, "na_psf", "inspect_aperture",
+        "Inspect the pupil", "Record the circular-pupil paraxial NA and Airy first-dark radius.",
+        "The shared PSF is an ideal scalar paraxial circular-pupil result; the displayed MTF is incoherent intensity MTF.",
+        "观察光瞳", "记录圆形光瞳的近轴 NA 和艾里斑第一暗环半径。",
+        "共用 PSF 是理想标量近轴圆形光瞳结果；显示的 MTF 是非相干强度 MTF。");
+    addStep(messages, "na_psf", "change_na",
+        "Increase NA", "Increase the pupil radius by at least 25% and refresh the Sampling Debugger.",
+        "At fixed wavelength and focal length, the paraxial NA rises with pupil radius.",
+        "提高 NA", "把光瞳半径至少增大 25%，然后刷新采样调试器。",
+        "在波长和焦距固定时，近轴 NA 随光瞳半径增大而提高。");
+    addStep(messages, "na_psf", "compare_psf",
+        "Compare the PSF", "Classify the measured first-dark-radius change after increasing NA.",
+        "The ideal Airy first-dark radius scales approximately as 1.22 lambda f / D inside the stated scalar paraxial model.",
+        "比较 PSF", "判断提高 NA 后测得的第一暗环半径变化。",
+        "在所声明的标量近轴模型内，理想艾里斑第一暗环半径近似按 1.22 lambda f / D 缩放。");
+    addStep(messages, "coherence_interference", "overlap_beams",
+        "Overlap object and reference", "Load the shared SLM interference experiment at zero optical path difference.",
+        "The result uses scalar time-averaged mutual coherence and does not model polarization unless the separate LCD teaching approximation is selected.",
+        "叠加物光与参考光", "载入光程差为零的共用 SLM 干涉实验。",
+        "结果采用标量时间平均互相干模型；除非另选 LCD 教学近似，否则不建模偏振。");
+    addStep(messages, "coherence_interference", "change_path_difference",
+        "Change path difference", "Increase optical path difference to at least the stated 1/e coherence length, then Apply.",
+        "For the Gaussian envelope, the magnitude of the complex degree of coherence falls with path difference.",
+        "改变光程差", "把光程差增大到至少给定的 1/e 相干长度，然后应用。",
+        "对于高斯包络，复相干度的模会随光程差增加而下降。");
+    addStep(messages, "coherence_interference", "compare_visibility",
+        "Compare visibility", "Classify the measured fringe-visibility change.",
+        "Visibility is measured from the shared interference extrema; reduced coherence suppresses only the cross term, not the individual beam intensities.",
+        "比较可见度", "判断测得的条纹可见度变化。",
+        "可见度由共用干涉结果的极值测得；相干性下降只抑制交叉项，不改变两束光各自的强度。");
     return LocalizationCatalog(std::move(messages));
 }
 

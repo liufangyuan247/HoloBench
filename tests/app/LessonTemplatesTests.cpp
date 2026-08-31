@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <complex>
 #include <numbers>
 #include <stdexcept>
 
@@ -130,6 +131,133 @@ TEST_CASE("narrower shared wave aperture produces a broader diffraction result")
     CHECK(narrowed.patternBroadened);
     CHECK(narrowed.horizontalHalfMaximumWidthMetres
         > baseline.horizontalHalfMaximumWidthMetres);
+}
+
+TEST_CASE("Fourier lesson observes the shared 4-f spectrum and moved plane probe") {
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto lessonTemplate = lessons::makeFourierLessonTemplate();
+    const auto detectorResult = holobench::app::wave::simulateDetectorField(
+        lessonTemplate.waveDetector, fft);
+    auto config = lessonTemplate.samplingDebugger;
+    config.propagationDistanceMetres = 5.0e-3;
+    config.probeDistancesMetres = {0.0, config.propagationDistanceMetres};
+    const auto result = holobench::app::samplingdebug::analyzeSamplingDebugger(
+        detectorResult.field, config, fft);
+    const auto observation = lessons::evaluateFourierPlaneLessonObservation(
+        lessonTemplate, detectorResult, config, result);
+    CAPTURE(observation.nonDcSpectralEnergyFraction);
+    CHECK(observation.probeMoved);
+    CHECK(observation.spectrumResolved);
+    CHECK(observation.probePlaneCount == 2U);
+
+    auto mismatchedDetector = detectorResult;
+    mismatchedDetector.field.at(0U, 0U) += std::complex<double> {1.0, 0.0};
+    CHECK_THROWS_AS(
+        static_cast<void>(lessons::evaluateFourierPlaneLessonObservation(
+            lessonTemplate, mismatchedDetector, config, result)),
+        std::invalid_argument);
+
+    auto mismatchedConfig = config;
+    mismatchedConfig.fourFFirstFocalLengthMetres *= 2.0;
+    CHECK_THROWS_AS(
+        static_cast<void>(lessons::evaluateFourierPlaneLessonObservation(
+            lessonTemplate, detectorResult, mismatchedConfig, result)),
+        std::invalid_argument);
+}
+
+TEST_CASE("spatial filtering lesson measures shared low-pass smoothing") {
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto lessonTemplate = lessons::makeFourierLessonTemplate();
+    const auto detectorResult = holobench::app::wave::simulateDetectorField(
+        lessonTemplate.waveDetector, fft);
+    const auto baselineResult
+        = holobench::app::samplingdebug::analyzeSamplingDebugger(
+            detectorResult.field, lessonTemplate.samplingDebugger, fft);
+    const auto baseline = lessons::evaluateSpatialFilteringLessonObservation(
+        lessonTemplate,
+        detectorResult,
+        lessonTemplate.samplingDebugger,
+        baselineResult);
+    auto filteredConfig = lessonTemplate.samplingDebugger;
+    filteredConfig.fourFFilterKind
+        = holobench::compute::fourier::CircularFilterKind::LowPass;
+    const auto filteredResult
+        = holobench::app::samplingdebug::analyzeSamplingDebugger(
+            detectorResult.field, filteredConfig, fft);
+    const auto filtered = lessons::evaluateSpatialFilteringLessonObservation(
+        lessonTemplate,
+        detectorResult,
+        filteredConfig,
+        filteredResult,
+        baseline.imageDetailMetric);
+    CAPTURE(baseline.imageDetailMetric);
+    CAPTURE(filtered.imageDetailMetric);
+    CAPTURE(filtered.integratedIntensityTransmission);
+    CHECK(filtered.lowPassApplied);
+    CHECK(filtered.imageSmoothed);
+    CHECK(filtered.imageDetailMetric < baseline.imageDetailMetric);
+}
+
+TEST_CASE("NA lesson measures a narrower shared Airy PSF") {
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto lessonTemplate = lessons::makeFourierLessonTemplate();
+    const auto detectorResult = holobench::app::wave::simulateDetectorField(
+        lessonTemplate.waveDetector, fft);
+    const auto baselineResult
+        = holobench::app::samplingdebug::analyzeSamplingDebugger(
+            detectorResult.field, lessonTemplate.samplingDebugger, fft);
+    const auto baseline = lessons::evaluateNaPsfLessonObservation(
+        lessonTemplate,
+        detectorResult,
+        lessonTemplate.samplingDebugger,
+        baselineResult);
+    auto widerPupilConfig = lessonTemplate.samplingDebugger;
+    widerPupilConfig.psfPupilRadiusMetres *= 1.5;
+    const auto widerPupilResult
+        = holobench::app::samplingdebug::analyzeSamplingDebugger(
+            detectorResult.field, widerPupilConfig, fft);
+    const auto widerPupil = lessons::evaluateNaPsfLessonObservation(
+        lessonTemplate,
+        detectorResult,
+        widerPupilConfig,
+        widerPupilResult,
+        baseline.paraxialNumericalAperture,
+        baseline.firstDarkRadiusMetres);
+    CHECK(widerPupil.numericalApertureIncreased);
+    CHECK(widerPupil.psfNarrowed);
+    CHECK(widerPupil.firstDarkRadiusMetres
+        < baseline.firstDarkRadiusMetres);
+}
+
+TEST_CASE("coherence lesson measures visibility loss from the shared SLM result") {
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto lessonTemplate = lessons::makeCoherenceLessonTemplate();
+    const auto baselineResult
+        = holobench::app::slmexperiment::runSlmInterferenceExperiment(
+            lessonTemplate, fft);
+    const auto baseline = lessons::evaluateCoherenceLessonObservation(
+        lessonTemplate, lessonTemplate, baselineResult);
+    auto changedConfig = lessonTemplate;
+    changedConfig.mutualCoherence.opticalPathDifferenceMetres
+        = lessonTemplate.mutualCoherence.coherenceLengthMetres;
+    CHECK_THROWS_AS(
+        static_cast<void>(lessons::evaluateCoherenceLessonObservation(
+            lessonTemplate, changedConfig, baselineResult)),
+        std::invalid_argument);
+    const auto changedResult
+        = holobench::app::slmexperiment::runSlmInterferenceExperiment(
+            changedConfig, fft);
+    const auto changed = lessons::evaluateCoherenceLessonObservation(
+        lessonTemplate,
+        changedConfig,
+        changedResult,
+        baseline.fringeVisibility);
+    CAPTURE(baseline.fringeVisibility);
+    CAPTURE(changed.fringeVisibility);
+    CHECK(changed.pathDifferenceChanged);
+    CHECK(changed.visibilityReduced);
+    CHECK(changed.coherenceMagnitude
+        < baseline.coherenceMagnitude);
 }
 
 } // TEST_SUITE("LessonTemplates")

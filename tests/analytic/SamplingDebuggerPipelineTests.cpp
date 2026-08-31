@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -40,6 +41,11 @@ TEST_CASE("debugger aggregates sampling spectrum probe PSF and incoherent MTF") 
     const auto result = samplingdebug::analyzeSamplingDebugger(
         selectedPlane, config, backend);
 
+    CHECK(result.sourceConfig == config);
+    CHECK(result.sourcePlane.samples().size() == selectedPlane.samples().size());
+    CHECK(std::equal(
+        result.sourcePlane.samples().begin(), result.sourcePlane.samples().end(),
+        selectedPlane.samples().begin(), selectedPlane.samples().end()));
     CHECK_FALSE(result.sampling.spatialAliasingRisk);
     CHECK(result.sampling.containsEvanescentBins);
     CHECK(result.angularSpectrum.propagatingSpectralEnergyFraction

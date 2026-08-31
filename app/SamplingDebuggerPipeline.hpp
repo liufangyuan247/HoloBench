@@ -45,9 +45,13 @@ struct SamplingDebuggerConfig final {
     double fourFFilterInnerRadiusMetres = 0.25e-3;
     double fourFFilterOuterRadiusMetres = 0.50e-3;
     double fourFDisplayFloorDecibels = -60.0;
+
+    bool operator==(const SamplingDebuggerConfig&) const = default;
 };
 
 struct SamplingDebuggerResult final {
+    SamplingDebuggerConfig sourceConfig;
+    field::ComplexField2D sourcePlane;
     compute::sampling::SamplingDiagnostics sampling;
     compute::sampling::AngularSpectrumAnalysis angularSpectrum;
     compute::sampling::PlaneProbeResult planeProbe;

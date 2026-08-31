@@ -122,15 +122,17 @@ Product Alpha)** is active development. For the current repository state and roa
 - **Learn mode foundation**: A docked course catalog presents ten stable lesson
   identities, prerequisite locking, ordered steps, visible objectives, review/
   reset controls, and a progress file kept separate from physics projects.
-- **First shared-physics workflows**: Reflection / Refraction calls the existing
+- **Eight shared-physics workflows**: Reflection / Refraction calls the existing
   mirror and dielectric-interface tracers; Thin Lens and Real / Virtual Images
   observe the normal optical-bench scene and shared paraxial solver; Diffraction
-  measures broadening from the existing Wave Detector propagation result. No
-  lesson owns a duplicate physics model.
+  measures the existing Wave Detector result; Fourier Plane, Spatial Filtering,
+  and NA / PSF observe the shared Sampling Debugger; Coherence / Interference
+  observes the existing SLM mutual-coherence result. No lesson owns a duplicate
+  physics model.
 - **Localization architecture**: English and `zh-Hans` resources resolve from
-  stable message keys with English fallback. The first four workflows have full
+  stable message keys with English fallback. The first eight workflows have full
   step text; packaged CJK font coverage remains work in progress.
-- **Current scope**: Lessons 5-10 are visible for prerequisite planning but
+- **Current scope**: The two advanced Holography lessons remain visible but
   cannot be started until their guided workflows and ordinary project
   templates are implemented and validated.
 
@@ -152,7 +154,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (372 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (381 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -160,7 +162,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 347/347 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 381/381 tests passing):
 
 ```powershell
 cmake --preset core-ci

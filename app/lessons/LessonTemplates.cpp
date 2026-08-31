@@ -5,6 +5,7 @@
 #include <numbers>
 #include <stdexcept>
 
+#include "app/SlmInterferenceUiState.hpp"
 #include "core/math/Vec3.hpp"
 #include "optics/ray/Ray.hpp"
 #include "optics/scene/GeometricComponents.hpp"
@@ -20,6 +21,85 @@ namespace {
     const double cosine = std::clamp(
         std::abs(math::dot(unitDirection, unitNormal)), 0.0, 1.0);
     return std::acos(cosine);
+}
+
+void validateSamplingLessonResult(
+    const FourierLessonTemplate& lessonTemplate,
+    const wave::WaveDetectorResult& detectorResult,
+    const samplingdebug::SamplingDebuggerConfig& appliedConfig,
+    const samplingdebug::SamplingDebuggerResult& result) {
+    const auto& sourcePlane = result.sourcePlane;
+    const auto& detectorPlane = detectorResult.field;
+    const bool sameSourcePlane = sourcePlane.width() == detectorPlane.width()
+        && sourcePlane.height() == detectorPlane.height()
+        && sourcePlane.pitchXMetres() == detectorPlane.pitchXMetres()
+        && sourcePlane.pitchYMetres() == detectorPlane.pitchYMetres()
+        && sourcePlane.vacuumWavelengthMetres()
+            == detectorPlane.vacuumWavelengthMetres()
+        && sourcePlane.refractiveIndex() == detectorPlane.refractiveIndex()
+        && std::equal(
+            sourcePlane.samples().begin(), sourcePlane.samples().end(),
+            detectorPlane.samples().begin(), detectorPlane.samples().end());
+    if (detectorResult.sourceConfig != lessonTemplate.waveDetector
+        || result.sourceConfig != appliedConfig
+        || !sameSourcePlane
+        || result.fourF.imagePlane.width() != detectorResult.field.width()
+        || result.fourF.imagePlane.height() != detectorResult.field.height()
+        || result.fourF.imagePlane.vacuumWavelengthMetres()
+            != detectorResult.field.vacuumWavelengthMetres()
+        || result.fourF.imagePlane.refractiveIndex()
+            != detectorResult.field.refractiveIndex()) {
+        throw std::invalid_argument(
+            "sampling lesson requires current results from its shared detector template");
+    }
+}
+
+[[nodiscard]] double nonDcSpectralEnergyFraction(
+    const field::ComplexField2D& spectrum) {
+    long double total = 0.0L;
+    long double nonDc = 0.0L;
+    const std::size_t centerX = spectrum.width() / 2U;
+    const std::size_t centerY = spectrum.height() / 2U;
+    for (std::size_t y = 0; y < spectrum.height(); ++y) {
+        for (std::size_t x = 0; x < spectrum.width(); ++x) {
+            const long double intensity = std::norm(spectrum.at(x, y));
+            total += intensity;
+            if (x != centerX || y != centerY) {
+                nonDc += intensity;
+            }
+        }
+    }
+    if (!(total > 0.0L)) {
+        throw std::invalid_argument("Fourier lesson spectrum must have non-zero energy");
+    }
+    return static_cast<double>(nonDc / total);
+}
+
+[[nodiscard]] double normalizedImageDetailMetric(
+    const field::ComplexField2D& image) {
+    long double totalIntensity = 0.0L;
+    long double variation = 0.0L;
+    for (std::size_t y = 0; y < image.height(); ++y) {
+        for (std::size_t x = 0; x < image.width(); ++x) {
+            const double intensity = std::norm(image.at(x, y));
+            if (!std::isfinite(intensity)) {
+                throw std::invalid_argument("spatial-filter image must be finite");
+            }
+            totalIntensity += intensity;
+            if (x + 1U < image.width()) {
+                variation += std::abs(
+                    std::norm(image.at(x + 1U, y)) - intensity);
+            }
+            if (y + 1U < image.height()) {
+                variation += std::abs(
+                    std::norm(image.at(x, y + 1U)) - intensity);
+            }
+        }
+    }
+    if (!(totalIntensity > 0.0L)) {
+        throw std::invalid_argument("spatial-filter image must have non-zero energy");
+    }
+    return static_cast<double>(variation / totalIntensity);
 }
 
 } // namespace
@@ -239,6 +319,185 @@ DiffractionLessonObservation evaluateDiffractionLessonObservation(
             && baselineHalfMaximumWidthMetres.has_value()
             && halfMaximumWidth >= baselineHalfMaximumWidthMetres.value()
                 * kRequiredBroadeningRatio,
+    };
+}
+
+FourierLessonTemplate makeFourierLessonTemplate() {
+    FourierLessonTemplate lessonTemplate;
+    lessonTemplate.waveDetector.sourceKind = wave::WaveSourceKind::PlaneWave;
+    lessonTemplate.waveDetector.apertureKind = wave::WaveApertureKind::DoubleSlit;
+    lessonTemplate.waveDetector.doubleSlitWidthMetres = 0.08e-3;
+    lessonTemplate.waveDetector.doubleSlitHeightMetres = 1.20e-3;
+    lessonTemplate.waveDetector.doubleSlitSeparationMetres = 0.60e-3;
+    lessonTemplate.waveDetector.propagator = wave::WavePropagatorKind::AngularSpectrum;
+    lessonTemplate.waveDetector.propagationDistanceMetres = 5.0e-3;
+    lessonTemplate.waveDetector.gridResolution = 128U;
+    lessonTemplate.waveDetector.gridPhysicalSpanMetres = 4.0e-3;
+    lessonTemplate.samplingDebugger.probeXIndex = 64U;
+    lessonTemplate.samplingDebugger.probeYIndex = 64U;
+    lessonTemplate.samplingDebugger.fourFFilterKind
+        = compute::fourier::CircularFilterKind::PassAll;
+    lessonTemplate.samplingDebugger.fourFFilterOuterRadiusMetres = 0.08e-3;
+    return lessonTemplate;
+}
+
+FourierPlaneLessonObservation evaluateFourierPlaneLessonObservation(
+    const FourierLessonTemplate& lessonTemplate,
+    const wave::WaveDetectorResult& detectorResult,
+    const samplingdebug::SamplingDebuggerConfig& appliedConfig,
+    const samplingdebug::SamplingDebuggerResult& result) {
+    validateSamplingLessonResult(
+        lessonTemplate, detectorResult, appliedConfig, result);
+    auto normalizedConfig = appliedConfig;
+    normalizedConfig.propagationDistanceMetres
+        = lessonTemplate.samplingDebugger.propagationDistanceMetres;
+    normalizedConfig.probeDistancesMetres
+        = lessonTemplate.samplingDebugger.probeDistancesMetres;
+    normalizedConfig.probeXIndex
+        = lessonTemplate.samplingDebugger.probeXIndex;
+    normalizedConfig.probeYIndex
+        = lessonTemplate.samplingDebugger.probeYIndex;
+    if (normalizedConfig != lessonTemplate.samplingDebugger
+        || appliedConfig.fourFFilterKind
+            != compute::fourier::CircularFilterKind::PassAll) {
+        throw std::invalid_argument(
+            "Fourier-plane lesson permits only the relative probe distance to change");
+    }
+    const double nonDcFraction = nonDcSpectralEnergyFraction(
+        result.fourF.fourierPlaneBeforeFilter);
+    const bool probeMoved = std::abs(appliedConfig.propagationDistanceMetres)
+        >= 1.0e-3
+        && result.planeProbe.samples.size() >= 2U;
+    return {
+        .nonDcSpectralEnergyFraction = nonDcFraction,
+        .probePlaneCount = result.planeProbe.samples.size(),
+        .probeMoved = probeMoved,
+        .spectrumResolved = nonDcFraction >= 0.05,
+    };
+}
+
+SpatialFilteringLessonObservation evaluateSpatialFilteringLessonObservation(
+    const FourierLessonTemplate& lessonTemplate,
+    const wave::WaveDetectorResult& detectorResult,
+    const samplingdebug::SamplingDebuggerConfig& appliedConfig,
+    const samplingdebug::SamplingDebuggerResult& result,
+    std::optional<double> baselineImageDetailMetric) {
+    validateSamplingLessonResult(
+        lessonTemplate, detectorResult, appliedConfig, result);
+    auto normalizedConfig = appliedConfig;
+    normalizedConfig.fourFFilterKind
+        = lessonTemplate.samplingDebugger.fourFFilterKind;
+    normalizedConfig.fourFFilterInnerRadiusMetres
+        = lessonTemplate.samplingDebugger.fourFFilterInnerRadiusMetres;
+    normalizedConfig.fourFFilterOuterRadiusMetres
+        = lessonTemplate.samplingDebugger.fourFFilterOuterRadiusMetres;
+    if (normalizedConfig != lessonTemplate.samplingDebugger) {
+        throw std::invalid_argument(
+            "spatial-filter lesson permits only the circular filter to change");
+    }
+    const auto& diagnostics = result.fourF.filterDiagnostics;
+    const double detailMetric = normalizedImageDetailMetric(result.fourF.imagePlane);
+    const bool lowPassApplied = appliedConfig.fourFFilterKind
+            == compute::fourier::CircularFilterKind::LowPass
+        && diagnostics.kind == compute::fourier::CircularFilterKind::LowPass
+        && diagnostics.blockedSampleCount > 0U
+        && diagnostics.integratedIntensityTransmission < 0.98;
+    return {
+        .imageDetailMetric = detailMetric,
+        .integratedIntensityTransmission
+            = diagnostics.integratedIntensityTransmission,
+        .lowPassApplied = lowPassApplied,
+        .imageSmoothed = lowPassApplied
+            && baselineImageDetailMetric.has_value()
+            && detailMetric <= baselineImageDetailMetric.value() * 0.90,
+    };
+}
+
+NaPsfLessonObservation evaluateNaPsfLessonObservation(
+    const FourierLessonTemplate& lessonTemplate,
+    const wave::WaveDetectorResult& detectorResult,
+    const samplingdebug::SamplingDebuggerConfig& appliedConfig,
+    const samplingdebug::SamplingDebuggerResult& result,
+    std::optional<double> baselineNumericalAperture,
+    std::optional<double> baselineFirstDarkRadiusMetres) {
+    validateSamplingLessonResult(
+        lessonTemplate, detectorResult, appliedConfig, result);
+    auto normalizedConfig = appliedConfig;
+    normalizedConfig.psfPupilRadiusMetres
+        = lessonTemplate.samplingDebugger.psfPupilRadiusMetres;
+    if (normalizedConfig != lessonTemplate.samplingDebugger) {
+        throw std::invalid_argument(
+            "NA/PSF lesson permits only the circular pupil radius to change");
+    }
+    const auto& diagnostics = result.pupilDiagnostics;
+    const bool numericalApertureIncreased = baselineNumericalAperture.has_value()
+        && appliedConfig.psfPupilRadiusMetres
+            >= lessonTemplate.samplingDebugger.psfPupilRadiusMetres * 1.25
+        && diagnostics.paraxialNumericalAperture
+            >= baselineNumericalAperture.value() * 1.20;
+    return {
+        .paraxialNumericalAperture = diagnostics.paraxialNumericalAperture,
+        .firstDarkRadiusMetres = diagnostics.firstDarkRadiusMetres,
+        .numericalApertureIncreased = numericalApertureIncreased,
+        .psfNarrowed = numericalApertureIncreased
+            && baselineFirstDarkRadiusMetres.has_value()
+            && diagnostics.firstDarkRadiusMetres
+                <= baselineFirstDarkRadiusMetres.value() * 0.85,
+    };
+}
+
+slmexperiment::SlmInterferenceExperimentConfig makeCoherenceLessonTemplate() {
+    auto config = slmexperiment::makeDefaultSlmInterferenceExperimentConfig();
+    config.fieldWidth = 64U;
+    config.fieldHeight = 64U;
+    config.vacuumWavelengthsMetres = {532e-9};
+    config.mutualCoherence.zeroDelayDegree = {1.0, 0.0};
+    config.mutualCoherence.opticalPathDifferenceMetres = 0.0;
+    config.mutualCoherence.coherenceLengthMetres = 1.0e-3;
+    config.mutualCoherence.envelope = optics::wave::CoherenceEnvelope::Gaussian;
+    return config;
+}
+
+CoherenceLessonObservation evaluateCoherenceLessonObservation(
+    const slmexperiment::SlmInterferenceExperimentConfig& lessonTemplate,
+    const slmexperiment::SlmInterferenceExperimentConfig& appliedConfig,
+    const slmexperiment::SlmInterferenceExperimentResult& result,
+    std::optional<double> baselineVisibility) {
+    if (!slmui::sameExperimentPhysicsConfig(result.sourceConfig, appliedConfig)
+        || result.wavelengths.size() != appliedConfig.vacuumWavelengthsMetres.size()
+        || result.wavelengths.empty()) {
+        throw std::invalid_argument(
+            "coherence lesson requires the current shared SLM result");
+    }
+    auto normalizedConfig = appliedConfig;
+    normalizedConfig.mutualCoherence.opticalPathDifferenceMetres
+        = lessonTemplate.mutualCoherence.opticalPathDifferenceMetres;
+    if (!slmui::sameExperimentPhysicsConfig(normalizedConfig, lessonTemplate)) {
+        throw std::invalid_argument(
+            "coherence lesson permits only optical path difference to change");
+    }
+    const auto& interference = result.wavelengths.front().interference;
+    const double sum = interference.maximumIntensity
+        + interference.minimumIntensity;
+    const double visibility = sum > 0.0
+        ? (interference.maximumIntensity - interference.minimumIntensity) / sum
+        : 0.0;
+    if (!std::isfinite(visibility) || visibility < 0.0 || visibility > 1.0) {
+        throw std::invalid_argument("coherence lesson visibility must be in [0, 1]");
+    }
+    const double pathDifference = std::abs(
+        appliedConfig.mutualCoherence.opticalPathDifferenceMetres);
+    const bool pathDifferenceChanged = pathDifference
+        >= lessonTemplate.mutualCoherence.coherenceLengthMetres;
+    return {
+        .opticalPathDifferenceMetres
+            = appliedConfig.mutualCoherence.opticalPathDifferenceMetres,
+        .coherenceMagnitude = std::abs(interference.degreeOfCoherence),
+        .fringeVisibility = visibility,
+        .pathDifferenceChanged = pathDifferenceChanged,
+        .visibilityReduced = pathDifferenceChanged
+            && baselineVisibility.has_value()
+            && visibility <= baselineVisibility.value() * 0.80,
     };
 }
 

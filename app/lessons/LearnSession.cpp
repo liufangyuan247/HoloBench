@@ -6,6 +6,8 @@
 #include <type_traits>
 #include <utility>
 
+#include "app/SlmInterferenceUiState.hpp"
+
 namespace holobench::app::lessons {
 namespace {
 
@@ -23,7 +25,11 @@ bool hasInteractiveLessonWorkflow(std::string_view lessonId) noexcept {
     return lessonId == "reflection_refraction"
         || lessonId == "thin_lens"
         || lessonId == "real_virtual_images"
-        || lessonId == "diffraction";
+        || lessonId == "diffraction"
+        || lessonId == "fourier_plane"
+        || lessonId == "spatial_filtering"
+        || lessonId == "na_psf"
+        || lessonId == "coherence_interference";
 }
 
 LearnSession::LearnSession()
@@ -54,6 +60,8 @@ void LearnSession::beginLesson(std::string_view lessonId) {
     double nextThinLensTemplateScreenZMetres = thinLensTemplateScreenZMetres_;
     double nextDiffractionTemplateHalfWidthMetres
         = diffractionTemplateHalfWidthMetres_;
+    FourierLessonTemplate nextFourierLessonTemplate = fourierLessonTemplate_;
+    auto nextCoherenceLessonTemplate = coherenceLessonTemplate_;
     if (nextActiveLessonId == "reflection_refraction") {
         nextReflectionResult = evaluateReflectionRefractionLesson(nextReflectionConfig);
     } else if (nextActiveLessonId == "thin_lens") {
@@ -61,10 +69,16 @@ void LearnSession::beginLesson(std::string_view lessonId) {
         nextThinLensTemplateScreenZMetres = lessonTemplate.screen.planeZMetres;
     } else if (nextActiveLessonId == "real_virtual_images") {
         static_cast<void>(makeRealVirtualLessonTemplate());
-    } else {
+    } else if (nextActiveLessonId == "diffraction") {
         const auto lessonTemplate = makeDiffractionLessonTemplate();
         nextDiffractionTemplateHalfWidthMetres
             = lessonTemplate.rectangularHalfWidthMetres;
+    } else if (nextActiveLessonId == "fourier_plane"
+        || nextActiveLessonId == "spatial_filtering"
+        || nextActiveLessonId == "na_psf") {
+        nextFourierLessonTemplate = makeFourierLessonTemplate();
+    } else {
+        nextCoherenceLessonTemplate = makeCoherenceLessonTemplate();
     }
 
     static_assert(std::is_nothrow_move_assignable_v<std::string>);
@@ -72,12 +86,22 @@ void LearnSession::beginLesson(std::string_view lessonId) {
     thinLensObservation_.reset();
     realVirtualObservation_.reset();
     diffractionObservation_.reset();
+    fourierPlaneObservation_.reset();
+    spatialFilteringObservation_.reset();
+    naPsfObservation_.reset();
+    coherenceObservation_.reset();
     diffractionBaselineHalfMaximumWidthMetres_.reset();
+    spatialFilteringBaselineDetailMetric_.reset();
+    naPsfBaselineNumericalAperture_.reset();
+    naPsfBaselineFirstDarkRadiusMetres_.reset();
+    coherenceBaselineVisibility_.reset();
     reflectionConfig_ = nextReflectionConfig;
     reflectionResult_ = nextReflectionResult;
     thinLensTemplateScreenZMetres_ = nextThinLensTemplateScreenZMetres;
     diffractionTemplateHalfWidthMetres_
         = nextDiffractionTemplateHalfWidthMetres;
+    fourierLessonTemplate_ = std::move(nextFourierLessonTemplate);
+    coherenceLessonTemplate_ = std::move(nextCoherenceLessonTemplate);
     reflectionIncidenceChanged_ = false;
 }
 
@@ -86,7 +110,15 @@ void LearnSession::endLesson() noexcept {
     thinLensObservation_.reset();
     realVirtualObservation_.reset();
     diffractionObservation_.reset();
+    fourierPlaneObservation_.reset();
+    spatialFilteringObservation_.reset();
+    naPsfObservation_.reset();
+    coherenceObservation_.reset();
     diffractionBaselineHalfMaximumWidthMetres_.reset();
+    spatialFilteringBaselineDetailMetric_.reset();
+    naPsfBaselineNumericalAperture_.reset();
+    naPsfBaselineFirstDarkRadiusMetres_.reset();
+    coherenceBaselineVisibility_.reset();
     reflectionIncidenceChanged_ = false;
 }
 
@@ -228,6 +260,161 @@ bool LearnSession::confirmDiffractionObservation() {
     }
     if (!diffractionObservation_.has_value()
         || !diffractionObservation_->patternBroadened
+        || !isProgressStep(catalog_, progress_, activeLessonId_, 2U)) {
+        return false;
+    }
+    completeLessonStep(
+        catalog_, progress_, activeLessonId_,
+        catalog_.lesson(activeLessonId_).steps[2].id);
+    return true;
+}
+
+void LearnSession::observeSamplingDebugger(
+    const wave::WaveDetectorResult& detectorResult,
+    const samplingdebug::SamplingDebuggerConfig& appliedConfig,
+    const samplingdebug::SamplingDebuggerResult& result) {
+    if (activeLessonId_ == "fourier_plane") {
+        auto observation = evaluateFourierPlaneLessonObservation(
+            fourierLessonTemplate_, detectorResult, appliedConfig, result);
+        if (observation.probeMoved
+            && isProgressStep(catalog_, progress_, activeLessonId_, 1U)) {
+            completeLessonStep(
+                catalog_, progress_, activeLessonId_,
+                catalog_.lesson(activeLessonId_).steps[1].id);
+        }
+        fourierPlaneObservation_ = observation;
+        return;
+    }
+    if (activeLessonId_ == "spatial_filtering") {
+        auto observation = evaluateSpatialFilteringLessonObservation(
+            fourierLessonTemplate_, detectorResult, appliedConfig, result,
+            spatialFilteringBaselineDetailMetric_);
+        const bool captureBaseline
+            = !spatialFilteringBaselineDetailMetric_.has_value()
+            && appliedConfig == fourierLessonTemplate_.samplingDebugger;
+        if (captureBaseline) {
+            spatialFilteringBaselineDetailMetric_ = observation.imageDetailMetric;
+        }
+        if (observation.lowPassApplied
+            && isProgressStep(catalog_, progress_, activeLessonId_, 1U)) {
+            completeLessonStep(
+                catalog_, progress_, activeLessonId_,
+                catalog_.lesson(activeLessonId_).steps[1].id);
+        }
+        spatialFilteringObservation_ = observation;
+        return;
+    }
+    if (activeLessonId_ != "na_psf") {
+        return;
+    }
+    auto observation = evaluateNaPsfLessonObservation(
+        fourierLessonTemplate_, detectorResult, appliedConfig, result,
+        naPsfBaselineNumericalAperture_,
+        naPsfBaselineFirstDarkRadiusMetres_);
+    const bool captureBaseline
+        = !naPsfBaselineNumericalAperture_.has_value()
+        && appliedConfig == fourierLessonTemplate_.samplingDebugger;
+    if (captureBaseline) {
+        naPsfBaselineNumericalAperture_
+            = observation.paraxialNumericalAperture;
+        naPsfBaselineFirstDarkRadiusMetres_
+            = observation.firstDarkRadiusMetres;
+    }
+    if (observation.numericalApertureIncreased
+        && isProgressStep(catalog_, progress_, activeLessonId_, 1U)) {
+        completeLessonStep(
+            catalog_, progress_, activeLessonId_,
+            catalog_.lesson(activeLessonId_).steps[1].id);
+    }
+    naPsfObservation_ = observation;
+}
+
+bool LearnSession::confirmFourierPlaneIdentification(
+    FourierPlaneIdentification identification) {
+    if (activeLessonId_ != "fourier_plane") {
+        throw std::invalid_argument(
+            "Fourier-plane identification requires the active lesson");
+    }
+    if (!fourierPlaneObservation_.has_value()
+        || !fourierPlaneObservation_->spectrumResolved
+        || identification != FourierPlaneIdentification::FourierPlane
+        || !isProgressStep(catalog_, progress_, activeLessonId_, 2U)) {
+        return false;
+    }
+    completeLessonStep(
+        catalog_, progress_, activeLessonId_,
+        catalog_.lesson(activeLessonId_).steps[2].id);
+    return true;
+}
+
+bool LearnSession::confirmSpatialFilteringEffect(
+    SpatialFilteringEffect effect) {
+    if (activeLessonId_ != "spatial_filtering") {
+        throw std::invalid_argument(
+            "spatial-filter classification requires the active lesson");
+    }
+    if (!spatialFilteringObservation_.has_value()
+        || !spatialFilteringObservation_->imageSmoothed
+        || effect != SpatialFilteringEffect::SmootherBlurred
+        || !isProgressStep(catalog_, progress_, activeLessonId_, 2U)) {
+        return false;
+    }
+    completeLessonStep(
+        catalog_, progress_, activeLessonId_,
+        catalog_.lesson(activeLessonId_).steps[2].id);
+    return true;
+}
+
+bool LearnSession::confirmPsfWidthChange(PsfWidthChange change) {
+    if (activeLessonId_ != "na_psf") {
+        throw std::invalid_argument(
+            "PSF classification requires the active NA/PSF lesson");
+    }
+    if (!naPsfObservation_.has_value()
+        || !naPsfObservation_->psfNarrowed
+        || change != PsfWidthChange::Narrower
+        || !isProgressStep(catalog_, progress_, activeLessonId_, 2U)) {
+        return false;
+    }
+    completeLessonStep(
+        catalog_, progress_, activeLessonId_,
+        catalog_.lesson(activeLessonId_).steps[2].id);
+    return true;
+}
+
+void LearnSession::observeSlmInterference(
+    const slmexperiment::SlmInterferenceExperimentConfig& appliedConfig,
+    const slmexperiment::SlmInterferenceExperimentResult& result) {
+    if (activeLessonId_ != "coherence_interference") {
+        return;
+    }
+    auto observation = evaluateCoherenceLessonObservation(
+        coherenceLessonTemplate_, appliedConfig, result,
+        coherenceBaselineVisibility_);
+    const bool captureBaseline = !coherenceBaselineVisibility_.has_value()
+        && slmui::sameExperimentPhysicsConfig(
+            appliedConfig, coherenceLessonTemplate_);
+    if (captureBaseline) {
+        coherenceBaselineVisibility_ = observation.fringeVisibility;
+    }
+    if (observation.pathDifferenceChanged
+        && isProgressStep(catalog_, progress_, activeLessonId_, 1U)) {
+        completeLessonStep(
+            catalog_, progress_, activeLessonId_,
+            catalog_.lesson(activeLessonId_).steps[1].id);
+    }
+    coherenceObservation_ = observation;
+}
+
+bool LearnSession::confirmFringeVisibilityChange(
+    FringeVisibilityChange change) {
+    if (activeLessonId_ != "coherence_interference") {
+        throw std::invalid_argument(
+            "fringe classification requires the active coherence lesson");
+    }
+    if (!coherenceObservation_.has_value()
+        || !coherenceObservation_->visibilityReduced
+        || change != FringeVisibilityChange::Lower
         || !isProgressStep(catalog_, progress_, activeLessonId_, 2U)) {
         return false;
     }

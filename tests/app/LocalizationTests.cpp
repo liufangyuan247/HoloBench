@@ -34,7 +34,11 @@ TEST_CASE("implemented workflows localize every step and fall back to English") 
              "reflection_refraction",
              "thin_lens",
              "real_virtual_images",
-             "diffraction"}) {
+             "diffraction",
+             "fourier_plane",
+             "spatial_filtering",
+             "na_psf",
+             "coherence_interference"}) {
         for (const auto& step : catalog.lesson(lessonId).steps) {
             CHECK(localization.contains(
                 lessons::LessonLocale::SimplifiedChinese, step.titleKey));
