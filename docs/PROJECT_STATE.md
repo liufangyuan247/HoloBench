@@ -126,6 +126,12 @@ Previous: **M5 - SLM, Coherence & Interference: complete**
 - **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 347/347 deterministic cases; the Clang development preset passes 348/348 including the GPU executable. Complete Clang/MSVC applications build and both pass the 120-frame hidden-window smoke, which requires a valid Holography Lab texture, no Lab error, and a semantic format-v2 holography-project round trip. Forty-six M6 cases add exact `sin^2(nu)` transmission and `tanh^2(nu)` reflection Bragg limits, detuning symmetry, the reflection critical limit, wavelength/shrinkage detuning, evanescent-order classification, v1-to-v2 project migration, plus the prior thin/phase/H1/H2/Lab gates.
 - **Release CI**: GitHub Actions run [33378162951](https://github.com/liufangyuan247/HoloBench/actions/runs/33378162951) passes Windows and Ubuntu core build/tests, the named M6 CPU performance gate on both systems, and Windows/Ubuntu application compilation with warnings as errors at `eea50c6`.
 
+## M7 progress
+
+- **Lesson catalog**: `app/lessons/` defines ten stable, non-localized course IDs, three ordered steps per course, template references, localization message keys, and an explicit prerequisite DAG. Construction rejects empty catalogs, duplicate or unstable IDs, duplicate steps/prerequisites, missing prerequisites, and direct or indirect cycles.
+- **Independent progress persistence**: Format-v1 `holobench_lesson_progress` JSON stores only ordered completed-step prefixes and never embeds or mutates physics-project state. Lock/unlock, completion, unknown IDs, out-of-order steps, impossible prerequisite state, transitive dependent reset, strict keys/types/version/kind, malformed input, file I/O, and byte-stable round trips are covered.
+- **Current validation**: Ten M7 domain cases bring the suite to 356/356 on Windows Clang 21, MSVC 19.44 `/W4 /WX`, and WSL GCC 15.2 warnings-as-errors. The complete Clang development build passes 357/357 including the existing OpenGL GPU executable. No GPU dispatch or compatibility behavior changed.
+
 ## Known limitations (M1/M2)
 
 - **Paraxial approximation**: Thin-lens solver, Fresnel TF, and Fraunhofer propagators assume small angles and paraxial conditions.
@@ -136,10 +142,8 @@ Previous: **M5 - SLM, Coherence & Interference: complete**
 
 ## Next five tasks
 
-1. Implement the M7 lesson catalog, prerequisite graph, and progress state.
-2. Ship the first guided Reflection/Refraction and Thin Lens lesson flows.
-3. Add project templates and contextual explanations without weakening engineering diagnostics.
-4. Add lesson progress persistence separately from physics project state.
-5. Consider GPU
-   acceleration only after the CPU/product model is stable, retaining runtime
-   capability dispatch and the default path on untested devices.
+1. Integrate docked Learn UI with lesson state, step navigation, and progress controls.
+2. Ship the guided Reflection/Refraction and Thin Lens lesson workflows and templates.
+3. Add contextual explanations and stable localization resources without weakening engineering diagnostics.
+4. Add deterministic undo/redo for lesson-relevant editing actions.
+5. Add named M7 benchmark scenes after the first complete lesson workflows stabilize.

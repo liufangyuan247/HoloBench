@@ -26,9 +26,9 @@ lessons during M7.
 
 ## Deliverables
 
-- [ ] `app/lessons/` catalog with stable IDs, prerequisite DAG validation,
+- [x] `app/lessons/` catalog with stable IDs, prerequisite DAG validation,
   ordered steps, project-template references, and stable localization keys.
-- [ ] Strict, versioned, byte-stable lesson-progress persistence, stored
+- [x] Strict, versioned, byte-stable lesson-progress persistence, stored
   separately from physics project documents.
 - [ ] Dockable Learn UI with locked/unlocked/completed state, step navigation,
   reset, and visible learning objectives.
@@ -62,10 +62,10 @@ lessons during M7.
 
 ## Automated gate
 
-- [ ] Catalog covers at least eight lessons and is deterministic.
-- [ ] Tests reject duplicate/unknown identifiers, invalid step definitions,
+- [x] Catalog covers at least eight lessons and is deterministic.
+- [x] Tests reject duplicate/unknown identifiers, invalid step definitions,
   missing prerequisites, and prerequisite cycles.
-- [ ] Tests cover lock/unlock, completion, reset, schema/version rejection,
+- [x] Tests cover lock/unlock, completion, reset, schema/version rejection,
   malformed input, migration where applicable, and byte-stable round trip.
 - [ ] Every completed lesson has a deterministic workflow test that exercises
   the same physics path used by Lab mode and checks its stated observation.
