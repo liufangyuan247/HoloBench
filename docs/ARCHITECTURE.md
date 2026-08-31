@@ -36,10 +36,12 @@ Following ADR 0003:
 
 Project JSON carries an explicit integer `format_version`. Loading an unknown version fails rather than silently misinterpreting physical data. Canonical persisted length values use keys suffixed with `_m` and SI metres.
 
-## Architectural decisions & next milestone (M2)
+## Architectural decisions & current milestone (M4)
 
 The following wave and Fourier-optics architecture decisions are locked:
 - Wave optics Fourier sign, FFT normalization, and complex phasor time convention (ADR 0005).
 - Ideal Fourier-lens transforms and solver-independent sampling-risk diagnostics (ADR 0006).
 - 2D complex optical field data structure and GPU/CPU backend dispatch.
 - Boundary condition absorption and grid sampling limits for Angular Spectrum Method (ASM).
+- Real-lens prescription, rotational-surface, material-dispersion, sequential
+  tracing, and independent-validation conventions (ADR 0007).
