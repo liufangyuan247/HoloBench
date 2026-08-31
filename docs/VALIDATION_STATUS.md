@@ -8,7 +8,7 @@
 | Geometric optics (M1) | Validated | 92/92 deterministic tests across `dev` and `core-ci` presets (`ThinLensTests.cpp`, `SnellTests.cpp`, `GeometricElementsTests.cpp`, `NumericalApertureTests.cpp`, `BenchTracerTests.cpp`) | Interactive ray tracing |
 | Wave optics (M2 CPU/GPU & detector) | Validated | 203 deterministic CPU/application cases; OpenGL executable 7/7 cases and 720/720 assertions; analytic oracles and three external full-field `waveprop 0.0.12` cross-validation cases | CPU reference, interactive GPU propagation, detector UI |
 | Fourier optics and Sampling Debugger (M3) | Validated | 229/229 deterministic cases; 4-f direct-DFT/inversion/filter/Airy oracles; 8/8 GPU cases and 1121/1121 assertions; seven-texture OpenGL smoke; named CPU debugger and GPU 4-f budgets pass; four-job release CI passes | Interactive 4-f filtering and sampling diagnostics |
-| Real-lens engineering (M4) | Locally release-qualified | Real surfaces, SI dispersion, rigid poses, sequential assemblies, wavelength/field/combined spot statistics, longitudinal chromatic focus, versioned JSON/CSV exchange, interactive editor/plots, and five pinned Optiland 0.6.2 benchmark prescriptions; 270/270 on Clang, MSVC, and GCC; named 729-ray budget and local smoke pass | Final remote release CI pending |
+| Real-lens engineering (M4) | Validated | Real surfaces, SI dispersion, rigid poses, sequential assemblies, wavelength/field/combined spot statistics, longitudinal chromatic focus, versioned JSON/CSV exchange, interactive editor/plots, and five pinned Optiland 0.6.2 benchmark prescriptions; 270/270 on Clang, MSVC, and GCC; named 729-ray budget, local smoke, and four-job release CI pass | Interactive real-lens engineering |
 | Holography (M6) | Not implemented | None | Prohibited |
 
 ## M1 Validation Breakdown
@@ -108,6 +108,7 @@
 - **OpenGL Smoke Test**:
   - Hidden detector `--gl-smoke` and 120-frame application run on AMD Radeon Pro 5300M with OpenGL 4.6 Core / GLSL 4.60: both complete with exit code 0 and 0 reported OpenGL debug errors.
 - **GitHub Actions Remote CI**:
+  - Final M4 integration run [33357679559](https://github.com/liufangyuan247/HoloBench/actions/runs/33357679559): all four jobs pass at commit `a943123`.
   - Final M3 integration run [33351374693](https://github.com/liufangyuan247/HoloBench/actions/runs/33351374693): all four jobs pass at commit `2f2a0c5`.
   - Final M2 integration run [33346353729](https://github.com/liufangyuan247/HoloBench/actions/runs/33346353729): all four jobs pass at commit `c3e62a6`.
   - Windows and Ubuntu `core-ci`: warnings-as-errors builds and all 229 M3 headless tests pass, including all three external `waveprop` golden comparisons.

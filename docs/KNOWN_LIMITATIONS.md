@@ -34,7 +34,7 @@
 - Local verification has been executed on Windows Clang/Ninja and MSVC/Ninja with warnings as errors.
 - The interactive GPU wave backend is FP32 and supports rectangular power-of-two grids. Unsupported dimensions and unavailable contexts fail explicitly; there is no silent CPU fallback.
 - GPU limits are queried at runtime. One exact AMD Radeon Pro 5300M driver build (`23.9.3.230915`) uses CPU-generated cached twiddle factors to avoid corrupt shader trigonometric results; all FFT data flow remains on the GPU and all other devices retain shader twiddle generation. NVIDIA and other unavailable hardware measurements are pending follow-up access, not release blockers; no unverified device-specific workaround is applied.
-- The current M4 integration is locally verified with Windows Clang/MSVC and Ubuntu GCC; the final M4 GitHub Actions run is pending. The last completed remote milestone gate is M3 run [33351374693](https://github.com/liufangyuan247/HoloBench/actions/runs/33351374693).
+- M4 is verified with Windows Clang/MSVC, Ubuntu GCC, and final four-job GitHub Actions run [33357679559](https://github.com/liufangyuan247/HoloBench/actions/runs/33357679559).
 
 ## Architecture & data
 

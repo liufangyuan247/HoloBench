@@ -45,7 +45,8 @@ against an independent optical-design implementation.
 - [x] Windows Clang/MSVC and Ubuntu GCC warnings-as-errors builds, 270
   deterministic tests, the named 729-ray performance budget, and local
   application smoke pass.
-- [ ] Final four-job Windows/Ubuntu release CI passes on the integration commit.
+- [x] Final four-job Windows/Ubuntu release CI passes on integration commit
+  `a943123` in run [33357679559](https://github.com/liufangyuan247/HoloBench/actions/runs/33357679559).
 
 ## Product gate
 

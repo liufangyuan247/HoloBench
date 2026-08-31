@@ -2,7 +2,7 @@
 
 HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator, and a long-term R&D tool for CHIMERA-like holographic printing.
 
-**Milestone status**: **M0–M3** are complete through Fourier optics and the Sampling Debugger. **M4 (Real Lens Engineering Model)** is locally release-qualified; the final remote CI run and milestone tag remain. For the current repository state and roadmap, see [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
+**Milestone status**: **M0–M4** are complete through the validated Real Lens Engineering Model. **M5 (SLM, coherence, and interference)** is active development. For the current repository state and roadmap, see [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
 
 ## M1 Features
 

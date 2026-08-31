@@ -4,11 +4,11 @@ Last updated: 2026-08-31
 
 ## Current milestone
 
-**M3 — Fourier Optics & Sampling Debugger: complete**
+**M4 — Real Lens Engineering Model: complete**
 
-Active development: **M4 — Real Lens Engineering Model release integration**
+Active development: **M5 — SLM, Coherence & Interference**
 
-Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
+Previous: **M3 — Fourier Optics & Sampling Debugger: complete**
 
 ## Completed
 
@@ -93,6 +93,7 @@ Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 - **Pinned external validation**: Optiland 0.6.2 at source commit `019413c2d8a2a367b7f6f7e8c422c8f76d6eb5ad` independently traces five committed plano-convex, positive-meniscus, cemented-achromat, conic, and even-asphere prescriptions. Hashed, byte-reproducible goldens cover 135 F/d/C rays, every surface hit and outgoing direction, cumulative optical path, image-plane spots, wavelength best focus, and longitudinal focal shift. The generator verifies SI/mm radius, aperture, and asphere conversions and remains validation-only.
 - **M4 named performance gate**: `ray/real_lens_default_729_refresh` performs the complete three-field, three-wavelength workbench refresh, including spot, chromatic, and polyline outputs. On Intel Core i7-9750H with the Windows Clang 21.1.8 Release build, 5 warmups and 30 samples record p50 **6.422 ms**, p95 **6.594 ms**, and max **6.641 ms**, meeting the p95 < 50 ms budget. MSVC independently records p95 **10.857 ms** against the same budget.
 - **Local toolchain gate**: Windows Clang 21 warnings-as-errors core and application builds pass with 270/270 headless tests. MSVC 19.44 `/W4 /WX` passes 270/270 and builds the complete SDL/OpenGL/ImGui application and all benchmark targets. Ubuntu/WSL GCC 15.2 warnings-as-errors passes 270/270 and builds the complete application. Hidden OpenGL smoke passes for both Clang and MSVC builds on the available AMD device and requires drawable Real Lens Workbench output.
+- **M4 release CI**: GitHub Actions run [33357679559](https://github.com/liufangyuan247/HoloBench/actions/runs/33357679559) passes all four Windows/Ubuntu core-test and application-compile jobs at integration commit `a943123`.
 
 ## Known limitations (M1/M2)
 
@@ -104,8 +105,8 @@ Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 
 ## Next five tasks
 
-1. Run the final four-job Windows/Ubuntu release CI on the M4 integration commit.
-2. Publish the `m4-real-lens` completion tag after the remote gate passes.
-3. Start M5 with an ADR fixing SLM pixel, phase, fill-factor, coherence, and interference conventions.
-4. Implement the deterministic CPU complex-field modulation/coherent-combination reference.
-5. Add analytic two-beam interference and sampled-SLM validation before GPU acceleration.
+1. Start M5 with an ADR fixing SLM pixel, phase, fill-factor, coherence, and interference conventions.
+2. Implement the deterministic CPU complex-field modulation/coherent-combination reference.
+3. Add analytic two-beam interference and sampled-SLM validation before GPU acceleration.
+4. Add explicit temporal/spatial coherence envelopes without presenting scalar approximations as full polarization models.
+5. Integrate the validated M5 pipeline into a dockable, apply-gated teaching workflow.
