@@ -145,6 +145,10 @@ Product Alpha)** is active development. For the current repository state and roa
   Interference uses its independent format-v2 SLM document with strict v1
   migration. Template ID/version provenance survives Lab edits, undo/redo,
   Save As, and reload. Computed results are never embedded in a template.
+- **Named M7 performance gate**: Eight `teaching/*` CPU-reference scenes run
+  each guided workflow from baseline through the required learner change and
+  shared observation. The executable reports per-scene p50/p95/checksum,
+  enforces platform-neutral budgets, and runs in Windows and Linux CI.
 - **Current scope**: The two advanced Holography lessons remain visible but
   cannot be started until their guided workflows and ordinary project
   templates are implemented and validated.

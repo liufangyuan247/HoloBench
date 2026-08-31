@@ -42,15 +42,16 @@ lessons during M7.
   fidelity, and limitations without making formulas the primary interaction.
   All first-eight workflows include these explanations.
 - [x] Undo/redo for lesson-relevant editing actions with deterministic tests.
-  The 64-state bounded history covers the shared optical-bench, Wave Detector,
-  Sampling Debugger, and SLM inputs plus calibration provenance. Restored
-  drafts remain Apply/Refresh gated; result data and lesson progress are never
-  stored in the history.
+  The 64-state bounded history covers Reflection / Refraction, the shared
+  optical-bench, Wave Detector, Sampling Debugger, and SLM inputs plus project
+  names/provenance and calibration source. Restored drafts remain
+  Apply/Refresh gated; result data and lesson progress are never stored in the
+  history.
 - [x] Basic English/`zh-Hans` localization architecture based on stable message
   keys, English fallback, and no localized strings used as serialized identity.
   Packaged CJK font coverage is still required before localization is a
   release-complete user experience.
-- [ ] Named benchmark scenes covering the guided workflows and a documented
+- [x] Named benchmark scenes covering the guided workflows and a documented
   reference-hardware profile.
 
 ## Architecture and data rules
@@ -81,7 +82,7 @@ lessons during M7.
   observation (all required lessons 1-8 at this increment).
 - [x] Windows Clang/MSVC and Ubuntu GCC warnings-as-errors builds pass for
   every currently integrated M7 increment.
-- [ ] Complete application smoke and named M7 benchmark scenes pass.
+- [x] Complete application smoke and named M7 benchmark scenes pass.
 
 ## Product gate
 

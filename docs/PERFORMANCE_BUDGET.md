@@ -149,3 +149,36 @@ it is not a per-frame rendering target. The executable returns nonzero when the
 p95 budget is missed and runs in both Windows and Ubuntu core CI jobs. It has no
 GPU dispatch, vendor/model branch, speculative workaround, precision reduction,
 or device-specific performance cap.
+
+## M7 Verified Teaching-Workflow Benchmarks
+
+### Benchmark profiles: `teaching/*`
+
+- **Hardware Profile**: Intel Core i7-9750H (6 cores / 12 logical processors),
+  Windows 10 10.0.19045 and Ubuntu/WSL, Release builds.
+- **Workload**: Eight independently named scenes execute the same shared paths
+  as the required guided lessons. Every scene includes the lesson baseline,
+  the required learner-side physical change, and the normal observation gate:
+  reflection/Snell laws; thin-lens focus; real-to-virtual crossing; aperture
+  narrowing/diffraction broadening; Fourier-plane identification; 4-f
+  low-pass smoothing; pupil/NA/PSF narrowing; and coherence-length visibility
+  loss. The wave/Fourier/SLM scenes use the CPU FFT reference backend.
+- **Execution Parameters**: Two warmups and ten measured complete scene runs.
+  Checksums are identical on Clang, MSVC, and GCC. Each scene returns failure
+  if its physical observation is not achieved or its p95 budget is missed.
+
+| Named scene | Clang p50 | Clang p95 | MSVC p95 | GCC p95 | p95 budget |
+|---|---:|---:|---:|---:|---:|
+| `teaching/reflection_refraction_laws` | 0.000600 ms | 0.000800 ms | 0.001700 ms | 0.000800 ms | < 5 ms |
+| `teaching/thin_lens_focus` | 0.008800 ms | 0.008900 ms | 0.015500 ms | 0.071900 ms | < 10 ms |
+| `teaching/real_virtual_classification` | 0.000400 ms | 0.000500 ms | 0.001400 ms | 0.000300 ms | < 5 ms |
+| `teaching/diffraction_aperture_broadening` | 13.658900 ms | 17.586700 ms | 23.391500 ms | 15.513499 ms | < 75 ms |
+| `teaching/fourier_plane_identification` | 41.442100 ms | 42.433200 ms | 66.227500 ms | 36.425600 ms | < 200 ms |
+| `teaching/spatial_filtering_low_pass` | 66.525000 ms | 84.889200 ms | 103.447100 ms | 57.114900 ms | < 250 ms |
+| `teaching/na_psf_narrowing` | 66.149800 ms | 76.286300 ms | 127.422200 ms | 56.724300 ms | < 250 ms |
+| `teaching/coherence_visibility_loss` | 8.174300 ms | 9.605200 ms | 22.387600 ms | 7.159300 ms | < 75 ms |
+
+These are explicit lesson-action refresh budgets, not per-frame rendering
+targets. `holobench_m7_benchmark` runs in both Windows and Ubuntu core CI. It
+contains no GPU dispatch, vendor/model branch, speculative compatibility
+workaround, precision reduction, or hardware-specific performance cap.
