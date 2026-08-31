@@ -12,6 +12,13 @@ namespace {
 
 [[nodiscard]] app::LessonEditState makeState() {
     return {
+        .reflectionRefractionConfig
+            = lessons::makeReflectionRefractionLessonTemplate(),
+        .reflectionProjectProvenance
+            = holobench::project::makeLessonTemplateProvenance(
+                "lesson_reflection_refraction"),
+        .reflectionProjectName
+            = "Lesson Template: Reflection and Refraction",
         .scene = lessons::makeThinLensLessonTemplate(),
         .sceneProvenance = holobench::project::makeLessonTemplateProvenance(
             "lesson_thin_lens"),
@@ -92,6 +99,20 @@ TEST_CASE("wave project provenance is a lesson-relevant history input") {
         = holobench::project::makeLessonTemplateProvenance(
             "lesson_fourier_plane");
     derived.waveProjectName = "Lesson Template: Fourier Plane";
+
+    CHECK(history.record(derived));
+    CHECK(app::sameLessonEditState(history.undo(), initial));
+    CHECK(app::sameLessonEditState(history.redo(), derived));
+}
+
+TEST_CASE("reflection workbench config and provenance are history inputs") {
+    app::LessonEditHistory history;
+    const auto initial = makeState();
+    history.reset(initial);
+    auto derived = initial;
+    derived.reflectionRefractionConfig.incidenceAngleRadians += 0.1;
+    derived.reflectionProjectProvenance = {};
+    derived.reflectionProjectName = "Reflection derivative";
 
     CHECK(history.record(derived));
     CHECK(app::sameLessonEditState(history.undo(), initial));

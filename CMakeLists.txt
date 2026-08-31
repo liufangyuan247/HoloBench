@@ -117,6 +117,7 @@ add_library(holobench_app_logic STATIC
     app/lessons/LessonTemplateRepository.cpp
     app/lessons/Localization.cpp
     app/RealLensWorkbenchPipeline.cpp
+    app/ReflectionRefractionWorkbench.cpp
     app/SamplingDebuggerPipeline.cpp
     app/SlmInterferencePipeline.cpp
     app/SlmInterferenceProject.cpp
@@ -363,6 +364,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/app/LessonProgressTests.cpp
         tests/app/LessonTemplatesTests.cpp
         tests/app/LocalizationTests.cpp
+        tests/app/ReflectionRefractionWorkbenchTests.cpp
         tests/app/SlmInterferenceProjectTests.cpp
         tests/app/WaveWorkbenchProjectTests.cpp
         render/Camera.cpp

@@ -36,7 +36,7 @@ lessons during M7.
   catalog entries remain visibly unavailable rather than simulating completion.
 - [x] At least the first eight complete guided experiments using the existing
   M1-M6 physics and diagnostics.
-- [ ] Versioned project templates that open in Lab mode and remain compatible
+- [x] Versioned project templates that open in Lab mode and remain compatible
   with normal project save/load.
 - [x] Contextual explanations that declare units, approximations, solver
   fidelity, and limitations without making formulas the primary interaction.

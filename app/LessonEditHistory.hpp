@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "app/ReflectionRefractionWorkbench.hpp"
 #include "app/SamplingDebuggerPipeline.hpp"
 #include "app/SlmInterferencePipeline.hpp"
 #include "app/WaveDetectorPipeline.hpp"
@@ -16,6 +17,9 @@ namespace holobench::app {
 // A snapshot contains only learner-editable physics inputs. Numerical results,
 // display choices, and lesson progress deliberately have separate lifecycles.
 struct LessonEditState final {
+    reflection::ReflectionRefractionConfig reflectionRefractionConfig;
+    project::ProjectProvenance reflectionProjectProvenance;
+    std::string reflectionProjectName;
     optics::scene::OpticalBenchScene scene;
     project::ProjectProvenance sceneProvenance;
     optics::ray::BenchTracerOptions tracerOptions;

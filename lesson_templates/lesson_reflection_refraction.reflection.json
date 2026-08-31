@@ -1,0 +1,15 @@
+{
+  "format_version": 1,
+  "model": "reflection_refraction_workbench",
+  "name": "Lesson Template: Reflection and Refraction",
+  "provenance": {
+    "origin": "lesson_template",
+    "source_id": "lesson_reflection_refraction",
+    "source_version": 1
+  },
+  "workbench": {
+    "incidence_angle_rad": 0.5235987755982988,
+    "incident_refractive_index": 1.0,
+    "transmitted_refractive_index": 1.5
+  }
+}

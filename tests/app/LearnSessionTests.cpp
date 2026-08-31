@@ -68,6 +68,25 @@ TEST_CASE("reflection workflow requires template angle change and valid observat
         == lessons::LessonStatus::Completed);
 }
 
+TEST_CASE("restoring reflection workbench input does not mutate lesson progress") {
+    lessons::LearnSession session;
+    session.beginLesson("reflection_refraction");
+    session.confirmTemplateLoaded();
+    auto config = session.reflectionConfig();
+    config.incidenceAngleRadians
+        = 42.0 * std::numbers::pi_v<double> / 180.0;
+
+    session.replaceReflectionConfig(config);
+
+    CHECK(session.reflectionConfig() == config);
+    CHECK(lessons::nextLessonStepIndex(
+        session.catalog(), session.progress(), "reflection_refraction") == 1U);
+    CHECK_FALSE(session.confirmReflectionObservation());
+    session.setReflectionConfig(config);
+    CHECK(lessons::nextLessonStepIndex(
+        session.catalog(), session.progress(), "reflection_refraction") == 2U);
+}
+
 TEST_CASE("thin lens workflow advances only after template move and shared focus") {
     lessons::LearnSession session;
     lessons::LessonProgress progress;

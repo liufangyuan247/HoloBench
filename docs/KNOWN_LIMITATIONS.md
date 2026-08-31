@@ -93,6 +93,11 @@
   Loading remains draft-only, computed interference results are not persisted,
   and only the Coherence / Interference lesson currently has a packaged SLM
   template.
+- Reflection / Refraction is a scalar geometric workbench for one planar
+  mirror and one ideal planar dielectric interface. Its format-v1 project
+  stores incidence angle, refractive indices, name, and provenance, but not
+  recomputable rays/results; it does not model Fresnel power, polarization,
+  roughness, absorption, dispersion, or multilayer coatings.
 - Undo/redo currently covers lesson-relevant optical-bench, Wave Detector,
   Sampling Debugger, and SLM inputs. Real Lens and Holography Lab editing are
   not yet included. There is no autosave, crash recovery, release-complete CJK

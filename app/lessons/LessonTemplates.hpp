@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include "app/ReflectionRefractionWorkbench.hpp"
 #include "app/SamplingDebuggerPipeline.hpp"
 #include "app/SlmInterferencePipeline.hpp"
 #include "app/WaveDetectorPipeline.hpp"
@@ -10,25 +11,17 @@
 
 namespace holobench::app::lessons {
 
-struct ReflectionRefractionLessonConfig final {
-    double incidenceAngleRadians = 0.5235987755982988;
-    double incidentRefractiveIndex = 1.0;
-    double transmittedRefractiveIndex = 1.5;
-};
-
-struct ReflectionRefractionLessonResult final {
-    double incidenceAngleRadians = 0.0;
-    double reflectionAngleRadians = 0.0;
-    double transmissionAngleRadians = 0.0;
-    double reflectionAngleErrorRadians = 0.0;
-    double snellResidual = 0.0;
-    bool totalInternalReflection = false;
-};
+using ReflectionRefractionLessonConfig
+    = reflection::ReflectionRefractionConfig;
+using ReflectionRefractionLessonResult
+    = reflection::ReflectionRefractionResult;
 
 void validateReflectionRefractionLessonConfig(
     const ReflectionRefractionLessonConfig& config);
 [[nodiscard]] ReflectionRefractionLessonResult evaluateReflectionRefractionLesson(
     const ReflectionRefractionLessonConfig& config);
+[[nodiscard]] ReflectionRefractionLessonConfig
+makeReflectionRefractionLessonTemplate();
 
 struct ThinLensLessonObservation final {
     optics::scene::ThinLensImagePrediction prediction;

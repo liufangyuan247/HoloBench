@@ -9,6 +9,7 @@
 
 #include "app/lessons/LessonTemplates.hpp"
 #include "app/lessons/LessonTemplateRepository.hpp"
+#include "app/ReflectionRefractionWorkbench.hpp"
 #include "app/WaveWorkbenchProject.hpp"
 #include "app/SlmInterferenceProject.hpp"
 #include "app/SlmInterferenceUiState.hpp"
@@ -31,6 +32,27 @@ namespace {
 } // namespace
 
 TEST_SUITE("LessonTemplates") {
+
+TEST_CASE("packaged reflection workbench matches factory and canonical bytes") {
+    const std::filesystem::path root(HOLOBENCH_LESSON_TEMPLATE_DIR);
+    const auto loaded = lessons::loadReflectionRefractionLessonTemplate(
+        root, "lesson_reflection_refraction");
+
+    CHECK(loaded.config == lessons::makeReflectionRefractionLessonTemplate());
+    CHECK(loaded.provenance
+        == holobench::project::makeLessonTemplateProvenance(
+            "lesson_reflection_refraction",
+            lessons::kLessonTemplateVersion));
+    CHECK(holobench::app::reflection::
+              serializeReflectionRefractionWorkbenchJson(loaded)
+        == readBytes(
+            root / "lesson_reflection_refraction.reflection.json"));
+    CHECK_THROWS_AS(
+        static_cast<void>(
+            lessons::loadReflectionRefractionLessonTemplate(
+                root, "lesson_thin_lens")),
+        std::invalid_argument);
+}
 
 TEST_CASE("packaged optical-bench templates match factories and provenance") {
     const std::filesystem::path root(HOLOBENCH_LESSON_TEMPLATE_DIR);

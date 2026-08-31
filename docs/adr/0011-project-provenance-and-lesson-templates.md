@@ -20,6 +20,11 @@ had no place to preserve origin information.
   zero. No other combination is valid.
 - The optical-bench project schema is format v2. Format-v1 documents migrate
   on load to v2 with user provenance; Save writes only canonical v2 data.
+- Reflection / Refraction uses an independent format-v1
+  `reflection_refraction_workbench` document containing the incidence angle,
+  two refractive indices, project name, and provenance. It persists no derived
+  ray or result, and both lesson and Inspector controls call the shared planar
+  mirror/interface solvers.
 - The Wave Detector and Sampling Debugger use one independent format-v1
   `wave_sampling_workbench` document. It stores both complete editable configs
   and provenance, but no computed field, texture, diagnostic, or lesson state.
@@ -45,8 +50,8 @@ had no place to preserve origin information.
 Old scene and SLM experiment files now genuinely open through their normal Lab
 loaders and are upgraded on their next save. Unknown schema keys, unsupported
 versions, invalid origin combinations, unstable IDs, invalid complete
-Wave/Sampling or SLM configs, and mismatched packaged-template identity fail
-explicitly. Distribution builds must copy `lesson_templates/` beside the
-executable, and application smoke validates the required packaged files.
-Packaged template tests also require canonical serializer bytes and exact
-equality with the lesson factories used by progress observers.
+Reflection, Wave/Sampling, or SLM configs, and mismatched packaged-template
+identity fail explicitly. Distribution builds must copy `lesson_templates/`
+beside the executable, and application smoke validates all eight required
+files. Packaged template tests also require canonical serializer bytes and
+exact equality with the lesson factories used by progress observers.

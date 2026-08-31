@@ -8,6 +8,29 @@
 
 namespace holobench::app::lessons {
 
+reflection::ReflectionRefractionWorkbenchDocument
+loadReflectionRefractionLessonTemplate(
+    const std::filesystem::path& templateRoot,
+    std::string_view projectTemplateId) {
+    if (projectTemplateId != "lesson_reflection_refraction") {
+        throw std::invalid_argument(
+            "project template is not a reflection/refraction lesson template");
+    }
+    if (!project::isStableProjectSourceId(projectTemplateId)) {
+        throw std::invalid_argument("project template ID is not stable ASCII");
+    }
+    const auto path = templateRoot
+        / (std::string(projectTemplateId) + ".reflection.json");
+    auto loaded = reflection::loadReflectionRefractionWorkbench(path);
+    const auto expected = project::makeLessonTemplateProvenance(
+        std::string(projectTemplateId), kLessonTemplateVersion);
+    if (loaded.provenance != expected) {
+        throw std::invalid_argument(
+            "lesson template provenance does not match its requested identity");
+    }
+    return loaded;
+}
+
 optics::scene::OpticalBenchProject loadOpticalBenchLessonTemplate(
     const std::filesystem::path& templateRoot,
     std::string_view projectTemplateId) {

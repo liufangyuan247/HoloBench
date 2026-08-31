@@ -389,6 +389,9 @@ Application::Application()
     , fourFImageTexture_(std::make_unique<render::gl::Texture2D>())
     , slmInterferenceTexture_(std::make_unique<render::gl::Texture2D>())
     , holographyTexture_(std::make_unique<render::gl::Texture2D>())
+    , reflectionRefractionResult_(
+          reflection::evaluateReflectionRefraction(
+              reflectionRefractionConfig_))
     , realLensConfig_(reallens::makeDefaultRealLensWorkbenchConfig())
     , lessonLocalization_(lessons::makeDefaultLessonLocalization())
     , scene_(optics::scene::createDefaultRealImageScene())
@@ -449,6 +452,9 @@ bool Application::applyScene(
 
 LessonEditState Application::captureLessonEditState() const {
     return {
+        .reflectionRefractionConfig = reflectionRefractionConfig_,
+        .reflectionProjectProvenance = reflectionProjectProvenance_,
+        .reflectionProjectName = reflectionProjectName_,
         .scene = scene_,
         .sceneProvenance = sceneProjectProvenance_,
         .tracerOptions = tracerOptions_,
@@ -472,8 +478,13 @@ void Application::recordLessonEdit() {
 bool Application::restoreLessonEditState(const LessonEditState& state) {
     restoringLessonEdit_ = true;
     try {
+        const auto restoredReflectionResult
+            = reflection::evaluateReflectionRefraction(
+                state.reflectionRefractionConfig);
         slmexperiment::validateSlmInterferenceExperimentConfig(
             state.slmInterferenceDraft);
+        project::validateProjectProvenance(
+            state.reflectionProjectProvenance);
         project::validateProjectProvenance(state.sceneProvenance);
         project::validateProjectProvenance(state.waveProjectProvenance);
         project::validateProjectProvenance(state.slmProjectProvenance);
@@ -490,6 +501,14 @@ bool Application::restoreLessonEditState(const LessonEditState& state) {
             state.slmInterferenceDraft, state.slmCalibrationSource);
         slmProjectProvenance_ = state.slmProjectProvenance;
         slmProjectName_ = state.slmProjectName;
+        reflectionRefractionConfig_ = state.reflectionRefractionConfig;
+        reflectionRefractionResult_ = restoredReflectionResult;
+        reflectionProjectProvenance_ = state.reflectionProjectProvenance;
+        reflectionProjectName_ = state.reflectionProjectName;
+        if (learnSession_.activeLessonId() == "reflection_refraction") {
+            learnSession_.replaceReflectionConfig(
+                state.reflectionRefractionConfig);
+        }
         restoringLessonEdit_ = false;
 
         detectorStatusMessage_
@@ -498,12 +517,34 @@ bool Application::restoreLessonEditState(const LessonEditState& state) {
             = "Edit history restored debugger inputs; Refresh if they differ from the result";
         slmInterferenceStatusMessage_
             = "Edit history restored the SLM draft; Apply if it differs from the result";
+        reflectionStatusMessage_
+            = "Edit history restored the reflection/refraction workbench";
         statusMessage_ = "Restored lesson-relevant editable inputs";
         return true;
     } catch (const std::exception& ex) {
         restoringLessonEdit_ = false;
         errorMessage_ = "Edit history restore failed: " + std::string(ex.what());
         statusMessage_.clear();
+        return false;
+    }
+}
+
+bool Application::applyReflectionRefractionConfig(
+    const reflection::ReflectionRefractionConfig& config) {
+    try {
+        const auto result = reflection::evaluateReflectionRefraction(config);
+        if (learnSession_.activeLessonId() == "reflection_refraction") {
+            learnSession_.setReflectionConfig(config);
+        }
+        reflectionRefractionConfig_ = config;
+        reflectionRefractionResult_ = result;
+        reflectionErrorMessage_.clear();
+        reflectionStatusMessage_ = "Reflection/refraction result updated";
+        recordLessonEdit();
+        return true;
+    } catch (const std::exception& ex) {
+        reflectionErrorMessage_ = ex.what();
+        reflectionStatusMessage_.clear();
         return false;
     }
 }
@@ -730,6 +771,8 @@ bool Application::initialize(const RunOptions& options) {
     }
 
     try {
+        static_cast<void>(lessons::loadReflectionRefractionLessonTemplate(
+            lessonTemplateRoot(), "lesson_reflection_refraction"));
         static_cast<void>(lessons::loadOpticalBenchLessonTemplate(
             lessonTemplateRoot(), "lesson_thin_lens"));
         static_cast<void>(lessons::loadOpticalBenchLessonTemplate(
@@ -1070,6 +1113,55 @@ void Application::saveSlmCalibration() {
     }
 }
 
+void Application::loadReflectionRefractionProject() {
+    try {
+        const std::filesystem::path path(reflectionProjectPathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument(
+                "reflection/refraction project path cannot be empty");
+        }
+        auto document
+            = reflection::loadReflectionRefractionWorkbench(path);
+        const auto result
+            = reflection::evaluateReflectionRefraction(document.config);
+        if (learnSession_.activeLessonId() == "reflection_refraction") {
+            learnSession_.replaceReflectionConfig(document.config);
+        }
+        reflectionRefractionConfig_ = document.config;
+        reflectionRefractionResult_ = result;
+        reflectionProjectProvenance_ = std::move(document.provenance);
+        reflectionProjectName_ = std::move(document.name);
+        recordLessonEdit();
+        reflectionErrorMessage_.clear();
+        reflectionStatusMessage_
+            = "Loaded reflection/refraction workbench from " + path.string();
+    } catch (const std::exception& ex) {
+        reflectionErrorMessage_ = "Load failed: " + std::string(ex.what());
+        reflectionStatusMessage_.clear();
+    }
+}
+
+void Application::saveReflectionRefractionProject() {
+    try {
+        const std::filesystem::path path(reflectionProjectPathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument(
+                "reflection/refraction project path cannot be empty");
+        }
+        reflection::ReflectionRefractionWorkbenchDocument document;
+        document.name = reflectionProjectName_;
+        document.provenance = reflectionProjectProvenance_;
+        document.config = reflectionRefractionConfig_;
+        reflection::saveReflectionRefractionWorkbench(path, document);
+        reflectionErrorMessage_.clear();
+        reflectionStatusMessage_
+            = "Saved reflection/refraction workbench to " + path.string();
+    } catch (const std::exception& ex) {
+        reflectionErrorMessage_ = "Save failed: " + std::string(ex.what());
+        reflectionStatusMessage_.clear();
+    }
+}
+
 void Application::loadSlmExperimentProject() {
     try {
         const std::filesystem::path path(slmProjectPathBuffer_);
@@ -1324,6 +1416,90 @@ void Application::saveRealLensPrescription(bool csv) {
     } catch (const std::exception& ex) {
         realLensErrorMessage_ = "Prescription save failed: " + std::string(ex.what());
         realLensStatusMessage_.clear();
+    }
+}
+
+void Application::drawReflectionRefractionPanel() {
+    if (!ImGui::CollapsingHeader(
+            "Reflection / Refraction Workbench",
+            ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    if (reflectionProjectProvenance_.originKind
+        == project::ProjectOriginKind::LessonTemplate) {
+        ImGui::Text(
+            "Origin: lesson template %s v%d",
+            reflectionProjectProvenance_.sourceId.c_str(),
+            reflectionProjectProvenance_.sourceVersion);
+    } else {
+        ImGui::TextDisabled("Origin: user project");
+    }
+    ImGui::Text("Project: %s", reflectionProjectName_.c_str());
+    ImGui::InputText(
+        "Workbench JSON path",
+        reflectionProjectPathBuffer_,
+        sizeof(reflectionProjectPathBuffer_));
+    if (ImGui::Button("Load reflection project")) {
+        loadReflectionRefractionProject();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Save reflection project")) {
+        saveReflectionRefractionProject();
+    }
+
+    auto config = reflectionRefractionConfig_;
+    float angleDegrees = static_cast<float>(
+        config.incidenceAngleRadians * 180.0
+        / std::numbers::pi_v<double>);
+    bool edited = false;
+    if (ImGui::SliderFloat(
+            "Workbench incidence angle", &angleDegrees,
+            0.0F, 85.0F, "%.1f deg")) {
+        config.incidenceAngleRadians = static_cast<double>(angleDegrees)
+            * std::numbers::pi_v<double> / 180.0;
+        edited = true;
+    }
+    edited = ImGui::InputDouble(
+        "Workbench incident index n1",
+        &config.incidentRefractiveIndex,
+        0.01, 0.1, "%.4f") || edited;
+    edited = ImGui::InputDouble(
+        "Workbench transmitted index n2",
+        &config.transmittedRefractiveIndex,
+        0.01, 0.1, "%.4f") || edited;
+    if (edited) {
+        static_cast<void>(applyReflectionRefractionConfig(config));
+    }
+
+    ImGui::Text(
+        "Incidence %.3f deg | reflection %.3f deg | error %.3e rad",
+        reflectionRefractionResult_.incidenceAngleRadians * 180.0
+            / std::numbers::pi_v<double>,
+        reflectionRefractionResult_.reflectionAngleRadians * 180.0
+            / std::numbers::pi_v<double>,
+        reflectionRefractionResult_.reflectionAngleErrorRadians);
+    if (reflectionRefractionResult_.totalInternalReflection) {
+        ImGui::TextColored(
+            ImVec4(0.98F, 0.73F, 0.20F, 1.0F),
+            "Total internal reflection: no transmitted ray.");
+    } else {
+        ImGui::Text(
+            "Transmission %.3f deg | Snell residual %.3e",
+            reflectionRefractionResult_.transmissionAngleRadians * 180.0
+                / std::numbers::pi_v<double>,
+            reflectionRefractionResult_.snellResidual);
+    }
+    ImGui::TextDisabled(
+        "Uses the shared planar mirror/interface ray solvers; results are recomputed and not persisted.");
+    if (!reflectionErrorMessage_.empty()) {
+        ImGui::TextColored(
+            ImVec4(1.0F, 0.35F, 0.35F, 1.0F),
+            "%s", reflectionErrorMessage_.c_str());
+    } else if (!reflectionStatusMessage_.empty()) {
+        ImGui::TextColored(
+            ImVec4(0.35F, 0.9F, 0.45F, 1.0F),
+            "%s", reflectionStatusMessage_.c_str());
     }
 }
 
@@ -3157,6 +3333,24 @@ void Application::drawHolographyPanel() {
 }
 
 void Application::loadLessonTemplate(std::string_view lessonId) {
+    if (lessonId == "reflection_refraction") {
+        const auto lessonTemplate
+            = lessons::loadReflectionRefractionLessonTemplate(
+                lessonTemplateRoot(), "lesson_reflection_refraction");
+        const auto result = reflection::evaluateReflectionRefraction(
+            lessonTemplate.config);
+        learnSession_.replaceReflectionConfig(lessonTemplate.config);
+        reflectionRefractionConfig_ = lessonTemplate.config;
+        reflectionRefractionResult_ = result;
+        reflectionProjectProvenance_ = lessonTemplate.provenance;
+        reflectionProjectName_ = lessonTemplate.name;
+        reflectionErrorMessage_.clear();
+        reflectionStatusMessage_ = "Reflection/refraction lesson loaded";
+        recordLessonEdit();
+        ImGui::SetWindowFocus(
+            docking::DockLayoutConfig::kInspectorWindowName);
+        return;
+    }
     if (lessonId == "thin_lens") {
         const auto lessonTemplate = lessons::loadOpticalBenchLessonTemplate(
             lessonTemplateRoot(), "lesson_thin_lens");
@@ -3410,7 +3604,7 @@ void Application::drawLearnPanel() {
 
             if (definition.id == "reflection_refraction") {
                 ImGui::SeparatorText("Interactive observation");
-                auto config = learnSession_.reflectionConfig();
+                auto config = reflectionRefractionConfig_;
                 float angleDegrees = static_cast<float>(
                     config.incidenceAngleRadians * 180.0
                     / std::numbers::pi_v<double>);
@@ -3429,16 +3623,15 @@ void Application::drawLearnPanel() {
                     "Transmitted index n2", &config.transmittedRefractiveIndex,
                     0.01, 0.1, "%.4f") || edited;
                 if (edited) {
-                    try {
-                        learnSession_.setReflectionConfig(config);
+                    if (applyReflectionRefractionConfig(config)) {
                         lessonErrorMessage_.clear();
-                    } catch (const std::exception& ex) {
+                    } else {
                         lessonErrorMessage_ = "Lesson control rejected: "
-                            + std::string(ex.what());
+                            + reflectionErrorMessage_;
                     }
                 }
 
-                const auto& result = learnSession_.reflectionResult();
+                const auto& result = reflectionRefractionResult_;
                 ImGui::Text(
                     "Measured: incidence %.3f deg | reflection %.3f deg",
                     result.incidenceAngleRadians * 180.0
@@ -4187,6 +4380,8 @@ void Application::drawWorkspace() {
         "%zu undo / %zu redo; lesson progress is separate",
         lessonEditHistory_.undoDepth(), lessonEditHistory_.redoDepth());
 
+    drawReflectionRefractionPanel();
+
     if (ImGui::CollapsingHeader("Active Gizmo Selection", ImGuiTreeNodeFlags_DefaultOpen)) {
         const char* selName = (selectedTarget_ == GizmoTarget::Lens) ? "Thin Lens"
             : (selectedTarget_ == GizmoTarget::Screen) ? "Screen" : "None (Click 3D handle)";
@@ -4731,6 +4926,27 @@ int Application::run(const RunOptions& options) {
             || !holographyErrorMessage_.empty())) {
         SDL_Log("OpenGL smoke check failed: Holography Lab did not produce drawable analysis");
         rawGlError = true;
+    }
+    if (glSmokeMode_) {
+        try {
+            reflection::ReflectionRefractionWorkbenchDocument document;
+            document.name = reflectionProjectName_;
+            document.provenance = reflectionProjectProvenance_;
+            document.config = reflectionRefractionConfig_;
+            const auto restored
+                = reflection::deserializeReflectionRefractionWorkbenchJson(
+                    reflection::serializeReflectionRefractionWorkbenchJson(
+                        document));
+            if (restored != document) {
+                SDL_Log("OpenGL smoke check failed: reflection/refraction project semantic round trip changed state");
+                rawGlError = true;
+            }
+        } catch (const std::exception& ex) {
+            SDL_Log(
+                "OpenGL smoke check failed: reflection/refraction project round trip: %s",
+                ex.what());
+            rawGlError = true;
+        }
     }
     if (glSmokeMode_) {
         try {

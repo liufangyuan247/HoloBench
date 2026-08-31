@@ -63,6 +63,7 @@ public:
     void endLesson() noexcept;
     void confirmTemplateLoaded();
     void setReflectionConfig(ReflectionRefractionLessonConfig config);
+    void replaceReflectionConfig(ReflectionRefractionLessonConfig config);
     [[nodiscard]] bool confirmReflectionObservation();
     void observeOpticalBenchScene(const optics::scene::OpticalBenchScene& scene);
     [[nodiscard]] bool confirmRealVirtualClassification(

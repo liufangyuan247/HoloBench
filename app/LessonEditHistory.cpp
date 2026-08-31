@@ -25,7 +25,10 @@ namespace {
 bool sameLessonEditState(
     const LessonEditState& lhs,
     const LessonEditState& rhs) noexcept {
-    return lhs.scene == rhs.scene
+    return lhs.reflectionRefractionConfig == rhs.reflectionRefractionConfig
+        && lhs.reflectionProjectProvenance == rhs.reflectionProjectProvenance
+        && lhs.reflectionProjectName == rhs.reflectionProjectName
+        && lhs.scene == rhs.scene
         && lhs.sceneProvenance == rhs.sceneProvenance
         && sameTracerOptions(lhs.tracerOptions, rhs.tracerOptions)
         && lhs.waveDetectorDraft == rhs.waveDetectorDraft

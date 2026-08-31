@@ -154,6 +154,22 @@ void LearnSession::setReflectionConfig(ReflectionRefractionLessonConfig config) 
     reflectionIncidenceChanged_ = incidenceChanged;
 }
 
+void LearnSession::replaceReflectionConfig(
+    ReflectionRefractionLessonConfig config) {
+    if (activeLessonId_ != "reflection_refraction") {
+        throw std::invalid_argument(
+            "reflection controls require the active reflection lesson");
+    }
+    reflectionResult_ = evaluateReflectionRefractionLesson(config);
+    constexpr double kRequiredAngleChange
+        = 5.0 * std::numbers::pi_v<double> / 180.0;
+    reflectionIncidenceChanged_ = std::abs(
+        config.incidenceAngleRadians
+        - ReflectionRefractionLessonConfig {}.incidenceAngleRadians)
+        >= kRequiredAngleChange;
+    reflectionConfig_ = config;
+}
+
 bool LearnSession::confirmReflectionObservation() {
     if (activeLessonId_ != "reflection_refraction") {
         throw std::invalid_argument("reflection observation requires the active lesson");

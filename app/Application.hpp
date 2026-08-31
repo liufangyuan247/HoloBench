@@ -16,6 +16,7 @@
 #include "app/HolographyLabPipeline.hpp"
 #include "app/HolographyUiState.hpp"
 #include "app/RealLensWorkbenchPipeline.hpp"
+#include "app/ReflectionRefractionWorkbench.hpp"
 #include "app/SamplingDebuggerPipeline.hpp"
 #include "app/SlmInterferenceUiState.hpp"
 #include "app/lessons/LearnSession.hpp"
@@ -278,6 +279,7 @@ private:
     bool initialize(const RunOptions& options);
     void shutdown() noexcept;
     void drawWorkspace();
+    void drawReflectionRefractionPanel();
     void drawWaveDetectorPanel();
     void drawSamplingDebuggerPanel();
     void drawRealLensPanel();
@@ -294,6 +296,8 @@ private:
     void saveRealLensPrescription(bool csv);
     void loadSlmCalibration();
     void saveSlmCalibration();
+    void loadReflectionRefractionProject();
+    void saveReflectionRefractionProject();
     void loadSlmExperimentProject();
     void saveSlmExperimentProject();
     void loadWaveWorkbenchProject();
@@ -307,6 +311,8 @@ private:
     void undoLessonEdit();
     void redoLessonEdit();
     [[nodiscard]] bool restoreLessonEditState(const LessonEditState& state);
+    bool applyReflectionRefractionConfig(
+        const reflection::ReflectionRefractionConfig& config);
     bool applySceneProject(
         const optics::scene::OpticalBenchScene& candidateScene,
         const optics::ray::BenchTracerOptions& candidateOptions,
@@ -353,6 +359,11 @@ private:
     std::unique_ptr<reallens::RealLensWorkbenchResult> realLensResult_;
     std::unique_ptr<slmexperiment::SlmInterferenceExperimentResult> slmInterferenceResult_;
     std::unique_ptr<holographylab::HolographyLabResult> holographyResult_;
+    reflection::ReflectionRefractionConfig reflectionRefractionConfig_;
+    reflection::ReflectionRefractionResult reflectionRefractionResult_;
+    project::ProjectProvenance reflectionProjectProvenance_;
+    std::string reflectionProjectName_
+        = "Reflection & Refraction Workbench";
     waveui::WaveDetectorUiState detectorUiState_;
     samplingdebug::SamplingDebuggerConfig samplingDebuggerConfig_;
     project::ProjectProvenance waveProjectProvenance_;
@@ -381,6 +392,8 @@ private:
     std::string slmInterferenceStatusMessage_;
     std::string holographyErrorMessage_;
     std::string holographyStatusMessage_;
+    std::string reflectionErrorMessage_;
+    std::string reflectionStatusMessage_;
     std::string lessonErrorMessage_;
     std::string lessonStatusMessage_;
     std::string selectedLessonId_ = "reflection_refraction";
@@ -408,6 +421,7 @@ private:
     std::string errorMessage_;
     std::string statusMessage_;
     char projectPathBuffer_[512] = "holobench_scene.json";
+    char reflectionProjectPathBuffer_[512] = "reflection_workbench.json";
     char realLensPathBuffer_[512] = "holobench_lens.json";
     char slmCalibrationPathBuffer_[512] = "slm_response.json";
     char slmProjectPathBuffer_[512] = "slm_experiment.json";
