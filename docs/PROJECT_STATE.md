@@ -49,13 +49,12 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
   - **Detector Field UI**: Intensity, log-intensity, and wrapped-phase texture views; SI internal units with nm/um/mm presentation; Apply/dirty single-recompute semantics; aspect-correct display; orientation-correct hover and click-lock complex probes; hidden `--gl-smoke` texture/upload verification.
   - **M2 GPU Benchmark**: `wave/asm_1024_square_gpu_recompute` on AMD Radeon Pro 5300M (1024x1024, 4 um pitch, 532 nm, 0.10 m, 5 warmups, 30 samples, synchronized) records p50 **35.433 ms**, p95 **42.593 ms**, max **44.658 ms**, meeting the p95 < 50 ms budget.
   - **Test Suite Status**: 203 deterministic CPU/application CTest cases plus one GPU executable containing 7/7 passing hardware cases and 720/720 assertions. Windows Clang and MSVC pass 204/204; WSL GCC passes 203 cases and explicitly skips the GPU executable when an OpenGL 4.6 context is unavailable. The hidden detector smoke and 120-frame OpenGL smoke both exit 0 on the reference AMD Radeon Pro 5300M.
-  - **Cross-platform CI**: GitHub Actions run [33342229206](https://github.com/liufangyuan247/HoloBench/actions/runs/33342229206) passes all four M2 integration gates: Windows and Ubuntu core build/tests plus Windows and Ubuntu application compilation with warnings as errors.
+  - **Cross-platform CI**: GitHub Actions run [33346353729](https://github.com/liufangyuan247/HoloBench/actions/runs/33346353729) passes all four final M2 integration gates at `c3e62a6`: Windows and Ubuntu core build/tests plus Windows and Ubuntu application compilation with warnings as errors.
 
 ## In progress / Remaining for M2
 
 - M2 implementation and local integration gates are complete. The following release evidence is still pending before the milestone tag:
   - NVIDIA hardware parity and named 1024x1024 benchmark, confirming the default `twiddle_source=gpu-shader` path without inheriting the AMD device quirk.
-  - Remote GitHub Actions gates for the final integrated commit.
   - Fast-forward integration to `main` and the `m2-wave-core` tag after all release gates are green.
 
 ## Known limitations (M1/M2)
@@ -70,6 +69,6 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 
 1. Run and record GPU parity plus `wave/asm_1024_square_gpu_recompute` on the target NVIDIA card.
 2. Commit the integrated M2 implementation and documentation after final diff review.
-3. Fast-forward `main`, push, and verify all four Windows/Ubuntu GitHub Actions gates.
-4. Tag the verified commit as `m2-wave-core` only after hardware and remote CI evidence is green.
+3. Fast-forward `main` after NVIDIA hardware evidence is green and rerun the four Windows/Ubuntu gates on `main`.
+4. Tag the verified commit as `m2-wave-core` only after the post-merge gates remain green.
 5. Start M3 Fourier-optics and sampling-debugger implementation from the tagged M2 baseline.

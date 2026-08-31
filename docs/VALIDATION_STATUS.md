@@ -90,7 +90,6 @@
 - **OpenGL Smoke Test**:
   - Hidden detector `--gl-smoke` and 120-frame application run on AMD Radeon Pro 5300M with OpenGL 4.6 Core / GLSL 4.60: both complete with exit code 0 and 0 reported OpenGL debug errors.
 - **GitHub Actions Remote CI**:
-  - M2 integration run [33342229206](https://github.com/liufangyuan247/HoloBench/actions/runs/33342229206): all four jobs pass on `main` at commit `9fb2e29`.
-  - Windows and Ubuntu `core-ci`: warnings-as-errors builds and 185/185 tests passed for the earlier CPU-reference baseline, including all three external `waveprop` golden comparisons.
+  - Final M2 integration run [33346353729](https://github.com/liufangyuan247/HoloBench/actions/runs/33346353729): all four jobs pass at commit `c3e62a6`.
+  - Windows and Ubuntu `core-ci`: warnings-as-errors builds and all 203 headless tests pass, including all three external `waveprop` golden comparisons.
   - Windows and Ubuntu `app-ci`: warnings-as-errors application compilation passes; the Windows job explicitly binds Glad generation to Python 3.14.7 with pinned Jinja2 3.1.6 and MarkupSafe 3.0.3 dependencies.
-  - Final remote CI for the integrated GPU/detector commit remains pending and is required before tagging M2.
