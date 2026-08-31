@@ -124,8 +124,14 @@
   transmission versus opposite-side reflection geometry and reject
   cross-wavelength/coherence pairs. Thin same-side exposure is now available as
   a revision-bound recomputable result, but branch-role overrides, persisted
-  recording recipes, replay/order propagation, volume grating formation,
-  reflection Bragg replay, and sampled reconstructed fields remain open.
+  recording recipes, volume grating formation, reflection Bragg replay, and
+  spatial-image reconstruction through refined upstream paths remain open.
+- Thin transmission replay currently keeps the recorded transverse grid and
+  accepts only a parallel, axis-aligned, coaxial Screen/Detector or Field Probe that covers
+  the sampled ROI and lies on the transmitted side. It exposes the physical
+  full replay plus separately labelled analytic orders. Tilted/decentered
+  observation requires an explicit, validated off-axis resampler and is
+  rejected rather than approximated as coaxial.
 - Plate-local source fields use scalar envelopes. A collimated source is a hard
   circular profile, an object source is rectangular, and the current Gaussian
   adapter uses the configured source radius at the observer without propagated

@@ -73,6 +73,7 @@ add_library(holobench_optics STATIC
     optics/analysis/ChromaticAnalysis.cpp
     optics/analysis/SpotDiagram.cpp
     optics/holography/BenchHologramRecording.cpp
+    optics/holography/BenchHologramReplay.cpp
     optics/holography/PhaseOnlyHologram.cpp
     optics/holography/PlateFieldSampling.cpp
     optics/holography/PlateIncidentFields.cpp

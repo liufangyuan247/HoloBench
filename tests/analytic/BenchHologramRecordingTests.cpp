@@ -4,7 +4,9 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "compute/fft/CpuFftBackend.hpp"
 #include "optics/holography/BenchHologramRecording.hpp"
+#include "optics/holography/BenchHologramReplay.hpp"
 #include "optics/ray/DynamicBenchTracer.hpp"
 
 namespace holography = holobench::optics::holography;
@@ -56,7 +58,7 @@ scene::BenchComponent makeSource(
     return source;
 }
 
-scene::BenchScene recordingBench(bool reflection) {
+scene::BenchScene recordingBench(bool reflection, bool withObserver = false) {
     scene::BenchScene bench;
     bench.add(makeSource(
         scene::BenchComponentKind::ObjectWavefrontSource,
@@ -77,6 +79,12 @@ scene::BenchScene recordingBench(bool reflection) {
     parameters.heightMetres = 0.02;
     plate.parameters = parameters;
     bench.add(std::move(plate));
+    if (withObserver) {
+        auto screen = scene::makeDefaultBenchComponent(
+            scene::BenchComponentKind::ScreenDetector, "screen");
+        screen.transform.translationMetres = {0.0, 0.0, 0.01};
+        bench.add(std::move(screen));
+    }
     return bench;
 }
 
@@ -200,4 +208,101 @@ TEST_CASE("thin plate recording is deterministic and becomes stale after a bench
         static_cast<void>(holography::recordThinTransmissionPlate(
             bench, fields, ids.object, ids.reference, resolvedOptions())),
         std::invalid_argument);
+}
+
+TEST_CASE("placed screen receives physical full replay and separately propagated orders") {
+    const auto bench = recordingBench(false, true);
+    const auto fields = holography::collectPlateIncidentFields(
+        bench, ray::traceDynamicBench(bench), "plate");
+    const auto ids = pairIds(fields);
+    const auto recording = holography::recordThinTransmissionPlate(
+        bench, fields, ids.object, ids.reference, resolvedOptions());
+    holobench::compute::fft::CpuFftBackend backend;
+    const auto replay = holography::replayThinTransmissionToObservation(
+        bench,
+        recording,
+        "screen",
+        holography::ThinPlateReplayKind::ConjugateReference,
+        backend);
+
+    CHECK(replay.plateComponentId == "plate");
+    CHECK(replay.observationComponentId == "screen");
+    CHECK(replay.sourceRevision == bench.revision());
+    CHECK(replay.signedObservationDistanceMetres
+        == doctest::Approx(0.01).epsilon(1e-15));
+    CHECK(replay.replayKind
+        == holography::ThinPlateReplayKind::ConjugateReference);
+    CHECK(replay.fullReplayAtObservation.width() == 128U);
+    CHECK(replay.propagation.propagatingBinCount > 0U);
+    CHECK_FALSE(replay.isStaleFor(bench));
+    double maximumDecompositionResidual = 0.0;
+    for (std::size_t index = 0;
+         index < replay.fullReplayAtObservation.sampleCount();
+         ++index) {
+        const auto decomposed = replay.zeroOrderAtObservation.samples()[index]
+            + replay.objectBearingOrderAtObservation.samples()[index]
+            + replay.conjugateOrderAtObservation.samples()[index];
+        maximumDecompositionResidual = std::max(
+            maximumDecompositionResidual,
+            std::abs(
+                replay.fullReplayAtObservation.samples()[index]
+                - decomposed));
+    }
+    CHECK(maximumDecompositionResidual < 2e-12);
+}
+
+TEST_CASE("thin replay rejects hidden tilted decentered backward and undersized observations") {
+    auto verifyRejected = [](scene::BenchScene bench, const char* observerId) {
+        const auto fields = holography::collectPlateIncidentFields(
+            bench, ray::traceDynamicBench(bench), "plate");
+        const auto ids = pairIds(fields);
+        const auto recording = holography::recordThinTransmissionPlate(
+            bench, fields, ids.object, ids.reference, resolvedOptions());
+        holobench::compute::fft::CpuFftBackend backend;
+        CHECK_THROWS_AS(
+            static_cast<void>(holography::replayThinTransmissionToObservation(
+                bench,
+                recording,
+                observerId,
+                holography::ThinPlateReplayKind::OrdinaryReference,
+                backend)),
+            std::invalid_argument);
+    };
+
+    auto decentered = recordingBench(false, true);
+    auto screen = *decentered.find("screen");
+    screen.transform.translationMetres.x = 1e-3;
+    decentered.replace(screen.id, screen);
+    verifyRejected(std::move(decentered), "screen");
+
+    auto tilted = recordingBench(false, true);
+    screen = *tilted.find("screen");
+    screen.transform.localXAxisInWorld = {0.0, 0.0, -1.0};
+    screen.transform.localYAxisInWorld = {0.0, 1.0, 0.0};
+    screen.transform.localZAxisInWorld = {1.0, 0.0, 0.0};
+    tilted.replace(screen.id, screen);
+    verifyRejected(std::move(tilted), "screen");
+
+    auto inPlaneRotated = recordingBench(false, true);
+    screen = *inPlaneRotated.find("screen");
+    screen.transform.localXAxisInWorld = {-1.0, 0.0, 0.0};
+    screen.transform.localYAxisInWorld = {0.0, -1.0, 0.0};
+    inPlaneRotated.replace(screen.id, screen);
+    verifyRejected(std::move(inPlaneRotated), "screen");
+
+    auto undersized = recordingBench(false, true);
+    screen = *undersized.find("screen");
+    auto screenParameters = std::get<scene::ScreenDetectorParameters>(
+        screen.parameters);
+    screenParameters.widthMetres = 0.5e-3;
+    screen.parameters = screenParameters;
+    undersized.replace(screen.id, screen);
+    verifyRejected(std::move(undersized), "screen");
+
+    auto backward = recordingBench(false, false);
+    auto probe = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::FieldProbe, "probe-behind");
+    probe.transform.translationMetres = {0.0, 0.0, -0.01};
+    backward.add(std::move(probe));
+    verifyRejected(std::move(backward), "probe-behind");
 }

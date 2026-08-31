@@ -476,6 +476,7 @@ Application::Application()
     , slmInterferenceTexture_(std::make_unique<render::gl::Texture2D>())
     , holographyTexture_(std::make_unique<render::gl::Texture2D>())
     , sandboxPlateTexture_(std::make_unique<render::gl::Texture2D>())
+    , sandboxReplayTexture_(std::make_unique<render::gl::Texture2D>())
     , reflectionRefractionResult_(
           reflection::evaluateReflectionRefraction(
               reflectionRefractionConfig_))
@@ -1102,12 +1103,16 @@ void Application::shutdown() noexcept {
     if (sandboxPlateTexture_) {
         sandboxPlateTexture_->destroy();
     }
+    if (sandboxReplayTexture_) {
+        sandboxReplayTexture_->destroy();
+    }
     detectorResult_.reset();
     samplingDebuggerResult_.reset();
     realLensResult_.reset();
     slmInterferenceResult_.reset();
     holographyResult_.reset();
     sandboxPlateRecording_.reset();
+    sandboxPlateReplay_.reset();
     if (imguiGlInitialized_) {
         ImGui_ImplOpenGL3_Shutdown();
         imguiGlInitialized_ = false;
@@ -5014,6 +5019,10 @@ void Application::drawSandboxInspector() {
                                         sandboxPlateRecording_ = std::make_unique<
                                             optics::holography::ThinPlateRecordingResult>(
                                                 std::move(recording));
+                                        sandboxPlateReplay_.reset();
+                                        if (sandboxReplayTexture_) {
+                                            sandboxReplayTexture_->destroy();
+                                        }
                                         errorMessage_.clear();
                                         statusMessage_
                                             = "Recorded thin transmission exposure on plate "
@@ -5088,6 +5097,160 @@ void Application::drawSandboxInspector() {
                                     ImVec2(imageSize, imageSize),
                                     ImVec2(0.0F, 1.0F),
                                     ImVec2(1.0F, 0.0F));
+                            }
+
+                            ImGui::SeparatorText("Replay to Placed Observation");
+                            constexpr const char* kReplayKinds
+                                = "Ordinary reference\0Conjugate reference\0";
+                            ImGui::Combo(
+                                "Replay illumination",
+                                &sandboxPlateReplayKindIndex_,
+                                kReplayKinds);
+                            ImGui::TextDisabled(
+                                "First adapter accepts parallel, axis-aligned, coaxial Screen/Probe planes on the transmitted side.");
+                            bool hasObservationComponent = false;
+                            ImGui::BeginDisabled(stale);
+                            for (const auto& component
+                                 : benchProject_.scene.components()) {
+                                if (component.kind
+                                        != bench::BenchComponentKind::ScreenDetector
+                                    && component.kind
+                                        != bench::BenchComponentKind::FieldProbe) {
+                                    continue;
+                                }
+                                hasObservationComponent = true;
+                                const std::string label
+                                    = "Replay to " + component.id;
+                                if (ImGui::Button(label.c_str())) {
+                                    try {
+                                        if (!detectorFftBackend_) {
+                                            throw std::runtime_error(
+                                                "CPU FFT backend is unavailable");
+                                        }
+                                        const auto replayKind
+                                            = sandboxPlateReplayKindIndex_ == 0
+                                            ? optics::holography::ThinPlateReplayKind::OrdinaryReference
+                                            : optics::holography::ThinPlateReplayKind::ConjugateReference;
+                                        auto replay
+                                            = optics::holography::replayThinTransmissionToObservation(
+                                                benchProject_.scene,
+                                                *sandboxPlateRecording_,
+                                                component.id,
+                                                replayKind,
+                                                *detectorFftBackend_);
+                                        field::FieldVisualizationOptions viewOptions;
+                                        viewOptions.colormap = field::ColormapKind::Inferno;
+                                        const auto image = field::renderLinearIntensity(
+                                            replay.fullReplayAtObservation,
+                                            viewOptions);
+                                        if (!sandboxReplayTexture_
+                                            || !sandboxReplayTexture_->uploadImage(image)) {
+                                            throw std::runtime_error(
+                                                "OpenGL rejected the thin replay texture");
+                                        }
+                                        sandboxPlateReplay_ = std::make_unique<
+                                            optics::holography::ThinPlateReplayResult>(
+                                                std::move(replay));
+                                        sandboxPlateReplayViewIndex_ = 0;
+                                        errorMessage_.clear();
+                                        statusMessage_
+                                            = "Replayed thin hologram to "
+                                            + component.id;
+                                    } catch (const std::exception& error) {
+                                        errorMessage_
+                                            = "Plate replay failed: "
+                                            + std::string(error.what());
+                                        statusMessage_.clear();
+                                    }
+                                }
+                            }
+                            ImGui::EndDisabled();
+                            if (!hasObservationComponent) {
+                                ImGui::TextDisabled(
+                                    "Place a Screen / Detector or Field Probe to observe reconstruction.");
+                            }
+
+                            if (sandboxPlateReplay_
+                                && sandboxPlateReplay_->plateComponentId
+                                    == selected->id) {
+                                const bool replayStale
+                                    = sandboxPlateReplay_->isStaleFor(
+                                        benchProject_.scene);
+                                if (replayStale) {
+                                    ImGui::TextColored(
+                                        ImVec4(1.0F, 0.45F, 0.25F, 1.0F),
+                                        "STALE replay: bench revision changed.");
+                                }
+                                ImGui::TextWrapped(
+                                    "%s -> %s | signed distance %.6g m | %zu propagating, %zu evanescent bins",
+                                    sandboxPlateReplay_->replayKind
+                                            == optics::holography::ThinPlateReplayKind::OrdinaryReference
+                                        ? "Ordinary"
+                                        : "Conjugate",
+                                    sandboxPlateReplay_->observationComponentId.c_str(),
+                                    sandboxPlateReplay_->signedObservationDistanceMetres,
+                                    sandboxPlateReplay_->propagation
+                                        .propagatingBinCount,
+                                    sandboxPlateReplay_->propagation
+                                        .evanescentBinCount);
+                                constexpr const char* kReplayViews
+                                    = "Physical full replay\0Zero order\0Object-bearing order\0Conjugate order\0";
+                                if (ImGui::Combo(
+                                        "Replay view",
+                                        &sandboxPlateReplayViewIndex_,
+                                        kReplayViews)) {
+                                    try {
+                                        const field::ComplexField2D* replayField
+                                            = &sandboxPlateReplay_
+                                                ->fullReplayAtObservation;
+                                        switch (sandboxPlateReplayViewIndex_) {
+                                        case 1:
+                                            replayField = &sandboxPlateReplay_
+                                                ->zeroOrderAtObservation;
+                                            break;
+                                        case 2:
+                                            replayField = &sandboxPlateReplay_
+                                                ->objectBearingOrderAtObservation;
+                                            break;
+                                        case 3:
+                                            replayField = &sandboxPlateReplay_
+                                                ->conjugateOrderAtObservation;
+                                            break;
+                                        default:
+                                            break;
+                                        }
+                                        field::FieldVisualizationOptions viewOptions;
+                                        viewOptions.colormap
+                                            = field::ColormapKind::Inferno;
+                                        const auto image
+                                            = field::renderLinearIntensity(
+                                                *replayField, viewOptions);
+                                        if (!sandboxReplayTexture_
+                                            || !sandboxReplayTexture_
+                                                ->uploadImage(image)) {
+                                            throw std::runtime_error(
+                                                "OpenGL rejected the replay-order texture");
+                                        }
+                                    } catch (const std::exception& error) {
+                                        errorMessage_
+                                            = "Replay visualization failed: "
+                                            + std::string(error.what());
+                                        statusMessage_.clear();
+                                    }
+                                }
+                                if (sandboxReplayTexture_
+                                    && sandboxReplayTexture_->isValid()) {
+                                    const float availableWidth
+                                        = ImGui::GetContentRegionAvail().x;
+                                    const float imageSize = std::clamp(
+                                        availableWidth, 160.0F, 360.0F);
+                                    ImGui::Image(
+                                        toImTextureID(
+                                            sandboxReplayTexture_->handle()),
+                                        ImVec2(imageSize, imageSize),
+                                        ImVec2(0.0F, 1.0F),
+                                        ImVec2(1.0F, 0.0F));
+                                }
                             }
                         }
                     }

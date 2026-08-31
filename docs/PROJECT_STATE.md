@@ -76,6 +76,15 @@ rebuilt on the shared bench.
   stale revision. Opposite-side pairs and unresolved fringe carriers fail
   explicitly. A labelled physical irradiance defines relative `I=1`; shrinking
   the ROI never concentrates the complete beam power into that window.
+- **Placed thin replay observation**: an ordinary or conjugate reference now
+  replays the recorded thin response onto a user-placed Screen/Detector or
+  Field Probe through the validated angular-spectrum propagator. The physical
+  full replay and separately labelled zero, object-bearing, and conjugate
+  orders propagate to the same observation plane, retain the bench revision,
+  and are selectable in the plate Inspector. The first adapter accepts only a
+  parallel, axis-aligned, coaxial, sufficiently large plane on the transmitted output side;
+  tilted, decentered, backward, and undersized observers fail explicitly until
+  off-axis resampling is independently validated.
 
 - **Dynamic scene foundation (headless)**: `BenchScene` is now the first shared
   scene truth source for the new product path. It owns a dynamic component
@@ -119,10 +128,10 @@ rebuilt on the shared bench.
   order; hop, branch, minimum-power, escape, clipping, absorption, and invalid
   interaction endings are explicit.
 - **Current verification**: Windows Clang 21 `core-ci` warnings-as-errors build
-  passes with 457/457 deterministic cases; the complete development build and
-  application link pass with 459/459 cases including the packaged-font and
+  passes with 459/459 deterministic cases; the complete development build and
+  application link pass with 461/461 cases including the packaged-font and
   hardware OpenGL tests. The development and warnings-as-errors application
-  smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Forty-five M7
+  smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Forty-seven M7
   cases cover all twelve
   schemas, invalid IDs/transforms/physics, scene mutation/revision/staleness,
   RGB and arbitrary-transform canonical persistence, strict parser rejection,
@@ -133,7 +142,7 @@ rebuilt on the shared bench.
   branch clearing, bounded eviction, revision-safe restore, local source-field
   power/phase/Nyquist, ROI flux, and thin placed-plate exposure. Full
   path-dependent beam-envelope transforms, sampled screen/probe fields, the
-  resolved real-lens adapter, lens/filter/SLM wave transforms, thin replay,
+  resolved real-lens adapter, lens/filter/SLM wave transforms, off-axis replay,
   volume reflection, and RGB recording/replay remain open,
   so M7 is not yet accepted even though the interactive M7.1 path is present.
 

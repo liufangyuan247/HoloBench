@@ -28,6 +28,7 @@
 #include "optics/ray/BenchTracer.hpp"
 #include "optics/ray/DynamicBenchTracer.hpp"
 #include "optics/holography/BenchHologramRecording.hpp"
+#include "optics/holography/BenchHologramReplay.hpp"
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
 #include "render/Camera.hpp"
@@ -419,6 +420,8 @@ private:
     int sandboxPlateSampleSize_ = 256;
     float sandboxPlateWindowMillimetres_ = 1.0F;
     float sandboxPlateRelativeReferenceKilowattsPerSquareMetre_ = 100.0F;
+    int sandboxPlateReplayKindIndex_ = 1;
+    int sandboxPlateReplayViewIndex_ = 0;
 
     GizmoTarget selectedTarget_ = GizmoTarget::None;
     GizmoTarget draggedTarget_ = GizmoTarget::None;
@@ -442,6 +445,7 @@ private:
     std::unique_ptr<render::gl::Texture2D> slmInterferenceTexture_;
     std::unique_ptr<render::gl::Texture2D> holographyTexture_;
     std::unique_ptr<render::gl::Texture2D> sandboxPlateTexture_;
+    std::unique_ptr<render::gl::Texture2D> sandboxReplayTexture_;
     std::unique_ptr<wave::WaveDetectorResult> detectorResult_;
     std::unique_ptr<samplingdebug::SamplingDebuggerResult> samplingDebuggerResult_;
     std::unique_ptr<reallens::RealLensWorkbenchResult> realLensResult_;
@@ -449,6 +453,8 @@ private:
     std::unique_ptr<holographylab::HolographyLabResult> holographyResult_;
     std::unique_ptr<optics::holography::ThinPlateRecordingResult>
         sandboxPlateRecording_;
+    std::unique_ptr<optics::holography::ThinPlateReplayResult>
+        sandboxPlateReplay_;
     reflection::ReflectionRefractionConfig reflectionRefractionConfig_;
     reflection::ReflectionRefractionResult reflectionRefractionResult_;
     project::ProjectProvenance reflectionProjectProvenance_;
