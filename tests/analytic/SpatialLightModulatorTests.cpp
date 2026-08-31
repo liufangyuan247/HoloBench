@@ -117,6 +117,30 @@ TEST_CASE("pixelated phase SLM quantizes normalized commands to bit-depth endpoi
     CHECK(std::abs(value.at(1, 0) - std::complex<double>(-1.0, 0.0)) < 2e-16);
 }
 
+TEST_CASE("micrometre pixel boundaries retain the locked half-open classification") {
+    field::ComplexField2D value(128, 64, 1e-6, 1e-6, 532e-9);
+    value.fill({1.0, 0.0});
+    slm::PixelatedSlmParameters parameters;
+    parameters.pixelColumns = 16;
+    parameters.pixelRows = 8;
+    parameters.pixelPitchXMetres = 8e-6;
+    parameters.pixelPitchYMetres = 8e-6;
+    parameters.fillFactorX = 0.75;
+    parameters.fillFactorY = 0.75;
+    parameters.centerXMetres = 1e-6;
+    parameters.mode = slm::ModulationMode::Amplitude;
+    const std::vector<double> commands(16U * 8U, 1.0);
+
+    const auto diagnostics = slm::applyPixelatedSlm(value, parameters, commands);
+
+    CHECK(diagnostics.modulatedSampleCount == 48U * 96U);
+    CHECK(diagnostics.deadSpaceSampleCount == 64U * 127U - 48U * 96U);
+    CHECK(diagnostics.outsideActiveAreaSampleCount == 64U);
+    CHECK(value.at(2, 4) == std::complex<double>(1.0, 0.0));
+    CHECK(value.at(1, 4) == std::complex<double>(0.0, 0.0));
+    CHECK(value.at(8, 4) == std::complex<double>(0.0, 0.0));
+}
+
 TEST_CASE("SLM operations are deterministic and reject bad input without mutation") {
     auto first = makeField(7, 5, 2e-6);
     auto second = first;

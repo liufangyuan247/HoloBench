@@ -66,7 +66,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (284 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (286 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -74,7 +74,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 284/284 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 286/286 tests passing):
 
 ```powershell
 cmake --preset core-ci

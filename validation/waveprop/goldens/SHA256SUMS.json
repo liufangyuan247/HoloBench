@@ -1,12 +1,14 @@
 {
   "files": {
-    "generate_goldens.py": "224343b6549ae41c51810f5332c84ecd4f374f7017424b3ef07b0d9cf470839a",
+    "generate_goldens.py": "1fa6885c0627ad9969fcc4d75a5328d8c230c63acf42e24df02b7148eacabfb8",
     "goldens/asm_rectangular_tilted_gaussian.csv": "bb4e1b595d6772a4b4bb25c75928f44984a8c0bc7b9c099f10cc406546678fdd",
     "goldens/asm_rectangular_tilted_gaussian.json": "6bccdbebca3fd8291fbd2694b8ab46fc7b1820ce27b6f7edbe33eaade1052016",
     "goldens/fraunhofer_rectangular_double_slit.csv": "1d2aba17fa507d369ec6479f660f300d2133f376626914a6fc4a9b37b6520a32",
     "goldens/fraunhofer_rectangular_double_slit.json": "857c750399d01dcac3abd1ab151343c914e1d2ffd8992c3352d5bc37c427a438",
     "goldens/fresnel_tf_square_gaussian.csv": "7b4a2249e45b483f9b8f8fc608ab8fe8f9fbb49845634df699a0f4175c7c5a03",
     "goldens/fresnel_tf_square_gaussian.json": "155e323911723a67c3fa465ea707f8f67484ba17b73f453628a484fb363ff8ad",
+    "goldens/slm_selected_pixel_fraunhofer.csv": "9f6d67d26380c3efc7d7d3dbd00a9a38adeeb3ae51ca60978ff864733f28aa1c",
+    "goldens/slm_selected_pixel_fraunhofer.json": "0be68110e80b4b8485e6284f8720ab874f8fc378e056e061f5255525ab5e88c7",
     "requirements-validation.txt": "64a46fb7cae2585e4b50b0ae2f08910d77e2e8cb29fb95039752c5cd533d7889"
   },
   "format_version": 1,

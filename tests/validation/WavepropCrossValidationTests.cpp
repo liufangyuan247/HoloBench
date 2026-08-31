@@ -18,10 +18,12 @@
 #include <nlohmann/json.hpp>
 
 #include "compute/fft/CpuFftBackend.hpp"
+#include "compute/fourier/FourierOptics.hpp"
 #include "compute/propagation/AngularSpectrumPropagator.hpp"
 #include "compute/propagation/FraunhoferPropagator.hpp"
 #include "compute/propagation/FresnelPropagator.hpp"
 #include "core/field/ComplexField2D.hpp"
+#include "optics/slm/SpatialLightModulator.hpp"
 
 #ifndef HOLOBENCH_WAVEPROP_GOLDEN_DIR
 #error "HOLOBENCH_WAVEPROP_GOLDEN_DIR must identify the configured golden-data directory"
@@ -298,6 +300,68 @@ TEST_CASE("Fraunhofer rectangular double slit agrees with waveprop 0.0.12") {
         // the 1 m longitudinal carrier phase (k*z is approximately 9.9e6 rad).
         5e-9,
         5e-9);
+}
+
+TEST_CASE("selected pixel SLM mask and angular intensity agree with waveprop 0.0.12") {
+    const auto golden = loadGoldenCase("slm_selected_pixel_fraunhofer");
+    CHECK(golden.generator
+        == "waveprop.slm.get_slm_mask + waveprop.fraunhofer.fraunhofer");
+    holobench::field::ComplexField2D input(
+        golden.width,
+        golden.height,
+        golden.inputPitchXMetres,
+        golden.inputPitchYMetres,
+        golden.wavelengthMetres,
+        golden.refractiveIndex);
+    input.fill({1.0, 0.0});
+    holobench::optics::slm::PixelatedSlmParameters parameters;
+    parameters.pixelColumns = 16;
+    parameters.pixelRows = 8;
+    parameters.pixelPitchXMetres = 8e-6;
+    parameters.pixelPitchYMetres = 8e-6;
+    parameters.fillFactorX = 0.75;
+    parameters.fillFactorY = 0.75;
+    // waveprop 0.0.12 rasterizes X cells one sample to the right. The golden
+    // metadata records this explicit coordinate conversion rather than
+    // shifting either result after generation.
+    parameters.centerXMetres = golden.inputPitchXMetres;
+    parameters.mode = holobench::optics::slm::ModulationMode::Amplitude;
+    std::vector<double> commands(parameters.pixelColumns * parameters.pixelRows, 0.0);
+    commands[5U * parameters.pixelColumns + 12U] = 1.0;
+    const auto slmDiagnostics = holobench::optics::slm::applyPixelatedSlm(
+        input, parameters, commands);
+
+    double maximumMaskError = 0.0;
+    for (std::size_t index = 0; index < input.sampleCount(); ++index) {
+        maximumMaskError = std::max(
+            maximumMaskError, std::abs(input.samples()[index] - golden.input[index]));
+    }
+    INFO("maximum waveprop SLM mask error: " << maximumMaskError);
+    CHECK(maximumMaskError < 1e-15);
+    CHECK(slmDiagnostics.modulatedSampleCount == 48U * 96U);
+    CHECK(slmDiagnostics.deadSpaceSampleCount == 64U * 127U - 48U * 96U);
+    CHECK(slmDiagnostics.outsideActiveAreaSampleCount == 64U);
+
+    holobench::compute::fft::CpuFftBackend fft;
+    holobench::compute::fourier::FourierLensTransform lens(fft);
+    const auto result = lens.transformFrontToBackFocalPlane(input, golden.distanceMetres);
+    checkCoordinates(golden, input, result.field);
+    CHECK(result.diagnostics.outputPitchXMetres
+        == doctest::Approx(golden.outputPitchXMetres));
+    CHECK(result.diagnostics.outputPitchYMetres
+        == doctest::Approx(golden.outputPitchYMetres));
+    const auto metrics = calculateErrorMetrics(
+        result.field.samples(), golden.expectedOutput);
+    INFO("SLM angular normalized intensity L2 error: "
+        << metrics.normalizedIntensityL2);
+    INFO("SLM angular maximum intensity error / reference peak: "
+        << metrics.maximumIntensityErrorRelativeToPeak);
+    // waveprop's Fraunhofer field includes an output quadratic phase that is
+    // absent from the ideal front/back focal-plane ABCD transform. Intensity,
+    // physical coordinates, and normalization are the independent common
+    // observables; complex phase is intentionally not compared here.
+    CHECK(metrics.normalizedIntensityL2 < 1e-12);
+    CHECK(metrics.maximumIntensityErrorRelativeToPeak < 1e-12);
 }
 
 } // TEST_SUITE("waveprop external cross-validation")

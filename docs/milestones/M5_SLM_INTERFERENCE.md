@@ -28,7 +28,7 @@ model.
   command quantization, and pixel active/dead boundary tests.
 - [x] Equal-amplitude visibility, analytic crossing-angle fringe period, phase
   translation, and 1/e coherence-envelope tests.
-- [ ] Independent SLM diffraction and angular mapping oracle on committed data.
+- [x] Independent SLM diffraction and angular mapping oracle on committed data.
 - [ ] Complete warnings-as-errors builds on Windows Clang/MSVC and Ubuntu GCC.
 
 ## Product gate

@@ -1,0 +1,39 @@
+{
+  "complex_phasor_convention": "exp(-i*omega*t), forward propagation exp(+i*k*z)",
+  "format_version": 1,
+  "generator": "waveprop.slm.get_slm_mask + waveprop.fraunhofer.fraunhofer",
+  "height": 64,
+  "input_pitch_x_metres": 1e-06,
+  "input_pitch_y_metres": 1e-06,
+  "name": "slm_selected_pixel_fraunhofer",
+  "options": {
+    "cell_height_metres": 6e-06,
+    "cell_width_metres": 6e-06,
+    "deadspace": true,
+    "holobench_center_x_metres": 1e-06,
+    "holobench_center_y_metres": 0.0,
+    "pixel_pitch_x_metres": 8e-06,
+    "pixel_pitch_y_metres": 8e-06,
+    "selected_column_negative_to_positive_x": 12,
+    "selected_row_negative_to_positive_y": 5,
+    "slm_columns": 16,
+    "slm_rows": 8,
+    "waveprop_command_conversion": "flip both command axes",
+    "waveprop_x_raster_origin": "+1 field sample; represented by HoloBench center_x"
+  },
+  "output_pitch_x_metres": 0.000332499999999996,
+  "output_pitch_y_metres": 0.0006649999999999989,
+  "package_versions": {
+    "numpy": "2.4.4",
+    "pyffs": "2.2.3",
+    "scipy": "1.18.1",
+    "torch": "2.13.0",
+    "torchvision": "0.28.0",
+    "waveprop": "0.0.12"
+  },
+  "propagation_distance_metres": 0.08,
+  "refractive_index": 1.0,
+  "row_major_order": "y then x",
+  "vacuum_wavelength_metres": 5.32e-07,
+  "width": 128
+}

@@ -15,6 +15,8 @@ import numpy as np
 from waveprop.fraunhofer import fraunhofer
 from waveprop.fresnel import fresnel_conv
 from waveprop.rs import angular_spectrum
+from waveprop.devices import SLMParam, SensorParam
+from waveprop.slm import get_slm_mask
 
 
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
@@ -168,6 +170,75 @@ def build_cases() -> list[dict[str, object]]:
                 "slit_width_metres": 32.0e-6,
                 "slit_height_metres": 160.0e-6,
                 "centre_separation_metres": 96.0e-6,
+            },
+        )
+    )
+
+    # waveprop indexes device values from its positive-Y/positive-X corner and
+    # rasterizes the X cell one field sample to the right. Flip the canonical
+    # HoloBench command grid and record the explicit +dx device-centre offset;
+    # no post-generation shift is applied to either reference field.
+    nx, ny = 128, 64
+    dx = dy = 1.0e-6
+    wavelength, focal_length = 532.0e-9, 80.0e-3
+    slm_rows, slm_columns = 8, 16
+    pitch_y = pitch_x = 8.0e-6
+    cell_y = cell_x = 6.0e-6
+    commands = np.zeros((slm_rows, slm_columns), dtype=np.float64)
+    selected_row, selected_column = 5, 12
+    commands[selected_row, selected_column] = 1.0
+    slm_config = {
+        SLMParam.PITCH: np.array([pitch_y, pitch_x]),
+        SLMParam.CELL_SIZE: np.array([cell_y, cell_x]),
+        SLMParam.DEADSPACE: np.array([pitch_y - cell_y, pitch_x - cell_x]),
+    }
+    sensor_config = {
+        SensorParam.SIZE: np.array([slm_rows, slm_columns])
+        * slm_config[SLMParam.PITCH]
+        - slm_config[SLMParam.DEADSPACE],
+    }
+    waveprop_commands = np.flip(commands, axis=(0, 1))
+    mask = get_slm_mask(
+        waveprop_commands,
+        slm_config,
+        sensor_config,
+        crop_fact=1.0,
+        target_dim=np.array([ny, nx]),
+        deadspace=True,
+        pytorch=False,
+    )[0].astype(np.complex128)
+    output, x_out, y_out = fraunhofer(
+        mask, wavelength, [dy, dx], focal_length
+    )
+    x_in, y_in = coordinates(nx, ny, dx, dy)
+    cases.append(
+        make_case(
+            name="slm_selected_pixel_fraunhofer",
+            algorithm="waveprop.slm.get_slm_mask + waveprop.fraunhofer.fraunhofer",
+            input_field=mask,
+            output_field=output,
+            x_in=x_in,
+            y_in=y_in,
+            x_out=x_out,
+            y_out=y_out,
+            wavelength=wavelength,
+            distance=focal_length,
+            dx=dx,
+            dy=dy,
+            options={
+                "slm_rows": slm_rows,
+                "slm_columns": slm_columns,
+                "pixel_pitch_x_metres": pitch_x,
+                "pixel_pitch_y_metres": pitch_y,
+                "cell_width_metres": cell_x,
+                "cell_height_metres": cell_y,
+                "selected_row_negative_to_positive_y": selected_row,
+                "selected_column_negative_to_positive_x": selected_column,
+                "holobench_center_x_metres": dx,
+                "holobench_center_y_metres": 0.0,
+                "waveprop_command_conversion": "flip both command axes",
+                "waveprop_x_raster_origin": "+1 field sample; represented by HoloBench center_x",
+                "deadspace": True,
             },
         )
     )

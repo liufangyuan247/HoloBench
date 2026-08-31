@@ -101,7 +101,8 @@ Previous: **M3 — Fourier Optics & Sampling Debugger: complete**
 - **SLM CPU reference**: Ideal amplitude and phase modulators plus a finite pixelated SLM preserve strong exception safety, reject non-finite/non-representable state, and expose active, dead-space, outside-grid, and quantized-sample evidence.
 - **Interference CPU reference**: Fully coherent fields add as complex amplitudes. Partial scalar coherence evaluates `|U1|^2 + |U2|^2 + 2 Re(gamma U1 conj(U2))` with bounded `|gamma|`, Gaussian/exponential visibility envelopes, and explicit polarization limitations.
 - **Angular experiment**: A deterministic headless `Laser -> SLM -> ideal Fourier lens -> Angular Probe` pipeline emits multi-wavelength angular distributions, normalized single-pixel angular PSFs, geometric and sampled pixel-centre predictions, measured angular-spectrum centroids, and SLM/reference-beam interference.
-- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors builds pass 284/284 deterministic cases; the complete Windows Clang application also builds. Analytic gates cover ideal modulation endpoints, phase invariance, fill-factor boundaries, bit-depth quantization, fringe period and translation, visibility, coherence length, pixel-to-angle mapping, wavelength scaling, invalid input, and determinism.
+- **Independent waveprop validation**: A pinned waveprop 0.0.12 case rasterizes an 8x16 selected-pixel SLM with physical pitch, active cell, and dead space, then evaluates Fraunhofer diffraction. The complete mask agrees sample-for-sample and the full normalized angular intensity agrees below `1e-12`; metadata makes waveprop's command-axis and raster-origin conversion explicit. Regeneration is byte-for-byte stable.
+- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors builds pass 286/286 deterministic cases; the complete Windows Clang application also builds. Analytic gates cover ideal modulation endpoints, phase invariance, fill-factor boundaries, bit-depth quantization, fringe period and translation, visibility, coherence length, pixel-to-angle mapping, wavelength scaling, invalid input, and determinism. GitHub Actions run [33358955749](https://github.com/liufangyuan247/HoloBench/actions/runs/33358955749) passes all four baseline jobs at `5417019`.
 
 ## Known limitations (M1/M2)
 
@@ -113,8 +114,8 @@ Previous: **M3 — Fourier Optics & Sampling Debugger: complete**
 
 ## Next five tasks
 
-1. Add a pinned independent SLM diffraction/angular-mapping oracle and committed golden data.
-2. Add calibrated wavelength-response/LUT persistence and an explicitly limited LCD/polarizer teaching model.
-3. Integrate the validated M5 pipeline into a dockable, apply-gated teaching workflow.
-4. Add the named M5 CPU performance workload and repeat Clang/MSVC/GCC release gates.
+1. Add calibrated wavelength-response/LUT persistence and an explicitly limited LCD/polarizer teaching model.
+2. Integrate the validated M5 pipeline into a dockable, apply-gated teaching workflow.
+3. Add the named M5 CPU performance workload and repeat Clang/MSVC/GCC release gates.
+4. Extend project persistence for the M5 experiment without breaking legacy scene files.
 5. Consider GPU acceleration only after the CPU/product model is stable; retain runtime capability dispatch and the default path on untested devices.

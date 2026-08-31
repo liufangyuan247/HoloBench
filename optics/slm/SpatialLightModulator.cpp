@@ -130,6 +130,12 @@ struct PixelLocation final {
     std::size_t row = 0;
 };
 
+[[nodiscard]] double snapNearBoundary(double value, double boundary, double scale) noexcept {
+    const double tolerance = 32.0 * std::numeric_limits<double>::epsilon()
+        * std::max({1.0, std::abs(value), std::abs(boundary), std::abs(scale)});
+    return std::abs(value - boundary) <= tolerance ? boundary : value;
+}
+
 [[nodiscard]] PixelLocation locatePixel(
     double xMetres,
     double yMetres,
@@ -143,11 +149,13 @@ struct PixelLocation final {
         * parameters.pixelPitchYMetres;
     const double left = parameters.centerXMetres - 0.5 * width;
     const double bottom = parameters.centerYMetres - 0.5 * height;
-    const double gridX = (xMetres - left) / parameters.pixelPitchXMetres;
-    const double gridY = (yMetres - bottom) / parameters.pixelPitchYMetres;
+    double gridX = (xMetres - left) / parameters.pixelPitchXMetres;
+    double gridY = (yMetres - bottom) / parameters.pixelPitchYMetres;
     if (!std::isfinite(gridX) || !std::isfinite(gridY)) {
         throw std::overflow_error("SLM normalized field coordinate is not representable");
     }
+    gridX = snapNearBoundary(gridX, std::round(gridX), gridX);
+    gridY = snapNearBoundary(gridY, std::round(gridY), gridY);
     if (gridX < 0.0 || gridY < 0.0
         || gridX >= static_cast<double>(parameters.pixelColumns)
         || gridY >= static_cast<double>(parameters.pixelRows)) {
@@ -156,12 +164,18 @@ struct PixelLocation final {
 
     const auto column = static_cast<std::size_t>(std::floor(gridX));
     const auto row = static_cast<std::size_t>(std::floor(gridY));
-    const double localX = gridX - (static_cast<double>(column) + 0.5);
-    const double localY = gridY - (static_cast<double>(row) + 0.5);
-    const bool active = localX >= -0.5 * parameters.fillFactorX
-        && localX < 0.5 * parameters.fillFactorX
-        && localY >= -0.5 * parameters.fillFactorY
-        && localY < 0.5 * parameters.fillFactorY;
+    double localX = gridX - (static_cast<double>(column) + 0.5);
+    double localY = gridY - (static_cast<double>(row) + 0.5);
+    const double halfFillX = 0.5 * parameters.fillFactorX;
+    const double halfFillY = 0.5 * parameters.fillFactorY;
+    localX = snapNearBoundary(
+        snapNearBoundary(localX, -halfFillX, gridX), halfFillX, gridX);
+    localY = snapNearBoundary(
+        snapNearBoundary(localY, -halfFillY, gridY), halfFillY, gridY);
+    const bool active = localX >= -halfFillX
+        && localX < halfFillX
+        && localY >= -halfFillY
+        && localY < halfFillY;
     return {
         .insideGrid = true,
         .insideActivePixel = active,
