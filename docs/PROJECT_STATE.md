@@ -121,7 +121,8 @@ Previous: **M4 — Real Lens Engineering Model: complete**
 - **Order placement and sampling**: A backend-neutral diagnostic predicts zero- and twin-order carrier centres relative to the desired image order for ordinary or conjugate replay. It reports physical propagation, signed transverse displacement, desired-order separation, per-axis Nyquist sampling, and whether each centre remains inside the native periodic field window. The physical replay fields are unchanged and retain all orders.
 - **Holography Lab foundation**: A headless product pipeline generates a deterministic two-feature complex object for independent RGB channels and runs the complete H1/H2 workflow. Draft/applied UI state keeps physics changes dirty until explicit Apply, while plane/channel display changes request visualization only. A separate format-v1 `holography_lab_project` JSON document preserves the full grid, RGB wavelengths/indices, object features, H1/H2 geometry, references, material-response parameters, and tolerance with strict keys, semantic validation, file APIs, and byte-stable round trips; loading remains apply-gated.
 - **Interactive Holography Lab**: A dedicated dock edits 32/64/128 grids, pitch, three wavelength/index pairs, both complex Gaussian features, H1/H2 axial geometry, reference waves, and thin-plate bias/gain. Apply is the sole physics refresh gate; RGB channel and H1-exposure/H1-real-image/H2-exposure/H2-replay selection only refresh visualization. The result surface reports signed image placement, complex reconstruction errors, and zero/twin sampled/propagating/window status while retaining the explicit thin-transmission model boundary.
-- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 337/337 deterministic cases; the Clang development build passes 338/338 including the OpenGL GPU executable. Complete Clang/MSVC applications build, and both pass a 120-frame hidden-window smoke that now requires a valid Holography Lab texture, no Lab error, and a semantic holography-project round trip. Thirty-six M6 cases include the prior physics/oracle gates plus complete default/transplane Lab execution, invalid Lab configuration rejection, dirty/apply/display state transitions, strict JSON schema/version/kind/physics rejection, file round-trip stability, and project-load apply gating.
+- **Volume/Kogelnik CPU reference**: [ADR 0010](adr/0010-volume-hologram-and-kogelnik-conventions.md) defines a separate uniform sinusoidal phase-grating model for transmission and reflection geometries. It derives post-shrink grating period, propagating-order state, longitudinal phase mismatch, coupling, detuning, and scalar-TE diffraction efficiency from thickness, index modulation, record/replay wavelength, and internal angle. It never passes through the thin-mask API or claims calibrated photopolymer/Maxwell fidelity.
+- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 346/346 deterministic cases. Complete Clang/MSVC applications build, and both pass a 120-frame hidden-window smoke that requires a valid Holography Lab texture, no Lab error, and a semantic holography-project round trip. Forty-five M6 cases add exact `sin^2(nu)` transmission and `tanh^2(nu)` reflection Bragg limits, detuning symmetry, the reflection critical limit, wavelength/shrinkage detuning, evanescent-order classification, plus the prior thin/phase/H1/H2/Lab/project gates.
 
 ## Known limitations (M1/M2)
 
@@ -133,10 +134,10 @@ Previous: **M4 — Real Lens Engineering Model: complete**
 
 ## Next five tasks
 
-1. Implement the separate volume-hologram/Kogelnik CPU reference and oracles.
-2. Add volume controls and Bragg/selectivity diagnostics to the Holography Lab.
-3. Add a named M6 CPU benchmark and cross-platform release gate.
-4. Complete the M6 product acceptance checklist and annotated release tag.
+1. Add volume controls and Bragg/selectivity diagnostics to the Holography Lab.
+2. Add a named M6 CPU benchmark and cross-platform release gate.
+3. Complete the M6 product acceptance checklist and annotated release tag.
+4. Start the M7 teaching-product acceptance flows and lesson structure.
 5. Consider GPU
    acceleration only after the CPU/product model is stable, retaining runtime
    capability dispatch and the default path on untested devices.

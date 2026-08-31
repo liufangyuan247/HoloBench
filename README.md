@@ -102,6 +102,12 @@ development. For the current repository state and roadmap, see
   sampling diagnostics, and keeps all FFT work behind explicit Apply. The
   OpenGL smoke gate requires a drawable holography texture and a semantic
   experiment-project round trip.
+- **Separate volume/Kogelnik reference**: A distinct lossless sinusoidal phase-
+  grating model derives transmission or reflection Bragg mismatch from record/
+  replay wavelength, internal angle, thickness, and isotropic shrinkage. The
+  scalar-TE coupled-wave solution exposes coupling, detuning, grating period,
+  propagating-order state, and efficiency without reusing or relabelling the
+  thin-mask pipeline.
 
 ## Physical Assumptions & Limitations (M1)
 
@@ -121,7 +127,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (337 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (346 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -129,7 +135,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 337/337 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 346/346 tests passing):
 
 ```powershell
 cmake --preset core-ci

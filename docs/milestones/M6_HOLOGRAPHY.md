@@ -24,7 +24,7 @@ clearly separate first volume-hologram model.
   periodic-window diagnostics without hidden order filtering.
 - [x] Apply-gated Holography Lab state and strict byte-stable project persistence.
 - [x] Dockable interactive Holography Lab controls, views, and diagnostics.
-- [ ] Separate volume-hologram data model and first Kogelnik coupled-wave path.
+- [x] Separate volume-hologram data model and first Kogelnik coupled-wave path.
 - [ ] Named CPU performance profile and cross-platform compiler/CI gates.
 
 ## Numerical gate
@@ -38,7 +38,7 @@ clearly separate first volume-hologram model.
 - [x] H1/H2 placement and RGB wavelength-scaling oracles.
 - [x] Ordinary/conjugate carrier-sign, geometric displacement, Nyquist alias,
   non-propagating twin-order, and periodic-window boundary oracles.
-- [ ] Thin/volume boundary and Kogelnik limiting-case oracles.
+- [x] Thin/volume boundary and Kogelnik limiting-case oracles.
 
 ## Product gate
 
@@ -48,6 +48,7 @@ see which image/order is being observed. Thin, scalar, coherent, paraxial,
 sampling, and material limitations remain visible.
 
 Conventions are fixed by
-[ADR 0009](../adr/0009-thin-hologram-recording-and-replay-conventions.md).
+[ADR 0009](../adr/0009-thin-hologram-recording-and-replay-conventions.md) and
+[ADR 0010](../adr/0010-volume-hologram-and-kogelnik-conventions.md).
 
 Completion tag: `m6-holography`.
