@@ -17,8 +17,10 @@ outside the architecture and would be computationally wasteful.
 - Global routing remains geometric. Wave refinement creates one transverse
   `ComplexField2D` and propagates it only between local component planes with
   the angular-spectrum method and an injected FFT backend.
-- The first validated domain is a coaxial, centred, normally incident chain
-  whose local X/Y axes agree. It applies, in physical path order:
+- The first validated domain is a straight-direction, normally incident chain
+  whose local X/Y axes agree. Traced hit coordinates locate aligned decentered
+  masks and devices in the sampled transverse frame. It applies, in physical
+  path order:
   - ideal thin-lens clear aperture and quadratic phase;
   - circular/elliptical or rectangular aperture transmission;
   - the declared spatial-filter pinhole as a hard scalar mask; and
@@ -29,13 +31,17 @@ outside the architecture and would be computationally wasteful.
 - Propagation uses the field's declared uniform refractive index, scalar
   polarization-free physics, and periodic FFT boundaries. Support at the
   sampled boundary produces an explicit wrap-risk warning.
-- A tilted, decentered, rotated, folded, direction-changing, or real-lens
-  prescription path is not projected onto the coaxial grid. It retains the
+- A tilted, rotated, folded, direction-changing, decentered powered-lens, or
+  real-lens prescription path is not projected onto the straight-axis grid. It retains the
   prior centreline/source-envelope evidence and reports why refinement was
   skipped. A later tilted-plane resampler must have its own validation domain.
 - Recorded results retain the applied component IDs, warnings, exact scene
   revision, and intercepted power. The Inspector shows that evidence instead
   of implying every placed element was applied.
+- A parallel axis-aligned observation plane may be offset by at most half the
+  sampled width/height. The field is embedded in a centred 2x zero-padded grid,
+  propagated with the analytic Fourier shift phase, and cropped in the
+  observer-local window. Larger offsets and tilted observers reject explicitly.
 
 ## Consequences
 

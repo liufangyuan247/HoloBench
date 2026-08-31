@@ -236,22 +236,6 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
         throw std::invalid_argument(
             "volume replay observation plane is smaller than the sampled recording window");
     }
-    const double coaxialTolerance = 0.5 * std::min(
-        object.field.pitchXMetres(), object.field.pitchYMetres());
-    if (std::hypot(observerCentre.x, observerCentre.y) > coaxialTolerance) {
-        throw std::invalid_argument(
-            "volume replay currently requires a coaxial observation plane");
-    }
-    const double lateralShift = std::hypot(
-        observerCentre.z * reconstructedExternal.x
-            / reconstructedExternal.z,
-        observerCentre.z * reconstructedExternal.y
-            / reconstructedExternal.z);
-    if (lateralShift > coaxialTolerance) {
-        throw std::invalid_argument(
-            "volume replay currently requires an axis-aligned reconstructed order; off-axis observation resampling is not yet supported");
-    }
-
     const double shrinkScale
         = 1.0 - recording.material.isotropicLinearShrinkageFraction;
     const math::Vec3d gratingCorrection
@@ -299,8 +283,15 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
 
     auto reconstructedAtObservation = reconstructedAtPlate;
     compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
-    const auto propagation = propagator.propagateInPlace(
-        reconstructedAtObservation, observerCentre.z);
+    const bool shifted = observerCentre.x != 0.0 || observerCentre.y != 0.0;
+    const auto propagation = shifted
+        ? propagator.propagateShiftedPaddedInPlace(
+            reconstructedAtObservation,
+            observerCentre.z,
+            observerCentre.x,
+            observerCentre.y)
+        : propagator.propagateInPlace(
+            reconstructedAtObservation, observerCentre.z);
     return {
         .plateComponentId = recording.plateComponentId,
         .observationComponentId = std::move(observationComponentId),
@@ -311,6 +302,9 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
         .reconstructedDirectionInMediumLocal = reconstructedInternal,
         .reconstructedDirectionExternalLocal = reconstructedExternal,
         .signedObservationDistanceMetres = observerCentre.z,
+        .observationOffsetXMetres = observerCentre.x,
+        .observationOffsetYMetres = observerCentre.y,
+        .usedShiftedPaddedPropagation = shifted,
         .replayPowerOnSampledWindowWatts
             = replay.diagnostics.integratedPowerWatts,
         .reconstructedPowerOnSampledWindowWatts = targetPower,

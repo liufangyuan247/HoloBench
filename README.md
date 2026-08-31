@@ -21,9 +21,13 @@ roadmap. For the current repository state and roadmap, see
 
 For supported centred, normally incident paths, placed ideal lenses,
 apertures, pinholes, and SLM finite pixels/dead space now act on a propagated
-local complex field before plate recording. Tilted, decentered, folded, and
-real-prescription paths remain visibly unrefined until validated plane
-resampling is implemented.
+local complex field before plate recording. Tilted, folded, direction-changing,
+decentered powered-lens, and real-prescription paths remain visibly unrefined until validated plane
+resampling is implemented. On a straight aligned path, traced hit coordinates
+now place decentered apertures, pinholes, and SLM active areas at their physical
+transverse positions. Thin, RGB, and reflection-volume reconstruction also
+supports bounded decentered parallel Screen/Probe planes through explicit 2x
+zero-padded shifted angular-spectrum propagation.
 
 Recording a placed thin, reflection-volume, or RGB hologram now writes a
 versioned recipe into the ordinary bench project. The recipe keeps stable
@@ -180,7 +184,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (486 deterministic CPU/application cases,
+Standard dev build and test suite (491 deterministic CPU/application cases,
 including the OpenGL GPU test executable):
 
 ```powershell
@@ -189,7 +193,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 484/484 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 489/489 tests passing):
 
 ```powershell
 cmake --preset core-ci

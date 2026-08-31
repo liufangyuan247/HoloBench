@@ -101,13 +101,14 @@ Current implementation status (2026-09-01): M8.1 is implemented; M8.2 has an
 end-to-end placed thin-transmission record/replay path; M8.3 records the full
 placed reflection grating vector and evaluates wavelength/angle/material Bragg
 selectivity, then reconstructs a Bragg-weighted sampled field on the physical
-reflection side at a placed parallel/coaxial Screen/Probe. General off-axis
-observation resampling remains pending. M8.4 has an editable RGB layout and
+reflection side at a placed parallel Screen/Probe. Bounded decentered parallel
+observation now uses shifted, 2x zero-padded ASM; tilted-plane resampling remains
+pending. M8.4 has an editable RGB layout and
 strict per-wavelength pairing, three-channel batch recording/replay, and
 display-only uncalibrated intensity composition. Unified format-v2 recording
 recipes now persist and recompute thin, RGB, and volume experiments. General
 tilted/folded path and observation resampling and performance closure remain
-pending. Centred normally incident paths now propagate a sampled field
+pending. Straight, normally incident paths now propagate a sampled field
 through placed ideal lenses, apertures, pinholes, and SLM finite-pixel/dead-space
 transforms; unsupported geometry stays explicit rather than being projected
 onto the coaxial model.

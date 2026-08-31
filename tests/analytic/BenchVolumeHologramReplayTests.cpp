@@ -153,3 +153,39 @@ TEST_CASE("volume observation replay rejects the wrong side and stale evidence")
             fft)),
         std::invalid_argument);
 }
+
+TEST_CASE("volume replay samples a bounded decentered reflection-side probe") {
+    auto project = holobench::app::makeReflectionHolographyPreset();
+    auto probe = *project.scene.find("reflection-reconstruction-probe");
+    probe.transform.translationMetres.x = 0.25e-3;
+    probe.transform.translationMetres.y = -0.125e-3;
+    project.scene.replace(probe.id, probe);
+    const auto input = reflectionInput(std::move(project));
+    const auto recording = holography::recordVolumePlate(
+        input.project.scene,
+        input.fields,
+        input.objectBranchId,
+        input.referenceBranchId);
+    holobench::compute::fft::CpuFftBackend fft;
+
+    const auto replay = holography::replayVolumeReflectionToObservation(
+        input.project.scene,
+        input.fields,
+        recording,
+        input.referenceBranchId,
+        "reflection-reconstruction-probe",
+        replaySampling(),
+        fft);
+
+    CHECK(replay.usedShiftedPaddedPropagation);
+    CHECK(replay.observationOffsetXMetres
+        == doctest::Approx(0.25e-3).epsilon(1e-15));
+    CHECK(replay.observationOffsetYMetres
+        == doctest::Approx(-0.125e-3).epsilon(1e-15));
+    CHECK(replay.propagation.propagatingBinCount
+        == 4U * replay.reconstructedAtPlate.sampleCount());
+    for (const auto& sample : replay.reconstructedAtObservation.samples()) {
+        CHECK(std::isfinite(sample.real()));
+        CHECK(std::isfinite(sample.imag()));
+    }
+}

@@ -23,6 +23,9 @@ struct VolumePlateObservationReplayResult final {
     math::Vec3d reconstructedDirectionInMediumLocal {};
     math::Vec3d reconstructedDirectionExternalLocal {};
     double signedObservationDistanceMetres = 0.0;
+    double observationOffsetXMetres = 0.0;
+    double observationOffsetYMetres = 0.0;
+    bool usedShiftedPaddedPropagation = false;
     double replayPowerOnSampledWindowWatts = 0.0;
     double reconstructedPowerOnSampledWindowWatts = 0.0;
     field::ComplexField2D reconstructedAtPlate;
@@ -37,8 +40,9 @@ struct VolumePlateObservationReplayResult final {
 // actually reaches the plate, then propagates the first scalar reconstructed
 // field to a placed parallel Screen/Probe. The field transfer uses the sampled
 // object-reference phase product and normalizes its outgoing power to the
-// Kogelnik diffraction efficiency. The first observation adapter deliberately
-// rejects off-axis/decentred resampling instead of wrapping a shifted field.
+// Kogelnik diffraction efficiency. Parallel axis-aligned observation planes
+// may be decentered within the bounded 2x zero-padded propagation window;
+// tilted observation planes remain unsupported.
 [[nodiscard]] VolumePlateObservationReplayResult
 replayVolumeReflectionToObservation(
     const scene::BenchScene& bench,

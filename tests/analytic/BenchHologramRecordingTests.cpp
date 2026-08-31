@@ -251,7 +251,7 @@ TEST_CASE("placed screen receives physical full replay and separately propagated
     CHECK(maximumDecompositionResidual < 2e-12);
 }
 
-TEST_CASE("thin replay rejects hidden tilted decentered backward and undersized observations") {
+TEST_CASE("thin replay rejects tilted out-of-support backward and undersized observations") {
     auto verifyRejected = [](scene::BenchScene bench, const char* observerId) {
         const auto fields = holography::collectPlateIncidentFields(
             bench, ray::traceDynamicBench(bench), "plate");
@@ -305,4 +305,39 @@ TEST_CASE("thin replay rejects hidden tilted decentered backward and undersized 
     probe.transform.translationMetres = {0.0, 0.0, -0.01};
     backward.add(std::move(probe));
     verifyRejected(std::move(backward), "probe-behind");
+}
+
+TEST_CASE("thin replay samples a bounded decentered parallel observation plane") {
+    auto bench = recordingBench(false, true);
+    auto screen = *bench.find("screen");
+    screen.transform.translationMetres.x = 0.25e-3;
+    screen.transform.translationMetres.y = -0.125e-3;
+    bench.replace(screen.id, screen);
+    const auto fields = holography::collectPlateIncidentFields(
+        bench, ray::traceDynamicBench(bench), "plate");
+    const auto ids = pairIds(fields);
+    const auto recording = holography::recordThinTransmissionPlate(
+        bench, fields, ids.object, ids.reference, resolvedOptions());
+    holobench::compute::fft::CpuFftBackend backend;
+
+    const auto replay = holography::replayThinTransmissionToObservation(
+        bench,
+        recording,
+        "screen",
+        holography::ThinPlateReplayKind::OrdinaryReference,
+        backend);
+
+    CHECK(replay.usedShiftedPaddedPropagation);
+    CHECK(replay.observationOffsetXMetres
+        == doctest::Approx(0.25e-3).epsilon(1e-15));
+    CHECK(replay.observationOffsetYMetres
+        == doctest::Approx(-0.125e-3).epsilon(1e-15));
+    CHECK(replay.fullReplayAtObservation.width()
+        == recording.relativeObjectField.width());
+    CHECK(replay.propagation.propagatingBinCount
+        == 4U * recording.relativeObjectField.sampleCount());
+    for (const auto& sample : replay.fullReplayAtObservation.samples()) {
+        CHECK(std::isfinite(sample.real()));
+        CHECK(std::isfinite(sample.imag()));
+    }
 }

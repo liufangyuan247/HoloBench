@@ -36,13 +36,6 @@ std::pair<double, double> observerExtent(
     return {value.widthMetres, value.heightMetres};
 }
 
-void propagate(
-    field::ComplexField2D& value,
-    double distanceMetres,
-    compute::propagation::AngularSpectrumPropagator& propagator) {
-    static_cast<void>(propagator.propagateInPlace(value, distanceMetres));
-}
-
 } // namespace
 
 bool ThinPlateReplayResult::isStaleFor(
@@ -86,13 +79,6 @@ ThinPlateReplayResult replayThinTransmissionToObservation(
     }
     const auto observerCentre = math::transformPointWorldToLocal(
         plate->transform, observer.transform.translationMetres);
-    const double coaxialTolerance = 0.5 * std::min(
-        recording.relativeObjectField.pitchXMetres(),
-        recording.relativeObjectField.pitchYMetres());
-    if (std::hypot(observerCentre.x, observerCentre.y) > coaxialTolerance) {
-        throw std::invalid_argument(
-            "thin-plate replay currently requires a coaxial observation plane");
-    }
     if (observerCentre.z == 0.0) {
         throw std::invalid_argument(
             "thin-plate replay observation plane must be separated from the plate");
@@ -134,17 +120,47 @@ ThinPlateReplayResult replayThinTransmissionToObservation(
     auto conjugateOrder = std::move(orders.conjugateOrderField);
 
     compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
-    const auto diagnostics = propagator.propagateInPlace(
-        full, observerCentre.z);
-    propagate(zero, observerCentre.z, propagator);
-    propagate(objectOrder, observerCentre.z, propagator);
-    propagate(conjugateOrder, observerCentre.z, propagator);
+    const bool shifted = observerCentre.x != 0.0 || observerCentre.y != 0.0;
+    compute::propagation::AngularSpectrumDiagnostics diagnostics;
+    if (shifted) {
+        diagnostics = propagator.propagateShiftedPaddedInPlace(
+            full,
+            observerCentre.z,
+            observerCentre.x,
+            observerCentre.y);
+        static_cast<void>(propagator.propagateShiftedPaddedInPlace(
+            zero,
+            observerCentre.z,
+            observerCentre.x,
+            observerCentre.y));
+        static_cast<void>(propagator.propagateShiftedPaddedInPlace(
+            objectOrder,
+            observerCentre.z,
+            observerCentre.x,
+            observerCentre.y));
+        static_cast<void>(propagator.propagateShiftedPaddedInPlace(
+            conjugateOrder,
+            observerCentre.z,
+            observerCentre.x,
+            observerCentre.y));
+    } else {
+        diagnostics = propagator.propagateInPlace(full, observerCentre.z);
+        static_cast<void>(propagator.propagateInPlace(
+            zero, observerCentre.z));
+        static_cast<void>(propagator.propagateInPlace(
+            objectOrder, observerCentre.z));
+        static_cast<void>(propagator.propagateInPlace(
+            conjugateOrder, observerCentre.z));
+    }
     return {
         .plateComponentId = recording.plateComponentId,
         .observationComponentId = std::move(observationComponentId),
         .sourceRevision = recording.sourceRevision,
         .replayKind = replayKind,
         .signedObservationDistanceMetres = observerCentre.z,
+        .observationOffsetXMetres = observerCentre.x,
+        .observationOffsetYMetres = observerCentre.y,
+        .usedShiftedPaddedPropagation = shifted,
         .replayAtPlate = std::move(replayAtPlate),
         .fullReplayAtObservation = std::move(full),
         .zeroOrderAtObservation = std::move(zero),

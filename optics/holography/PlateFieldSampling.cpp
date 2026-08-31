@@ -189,7 +189,6 @@ bool supportsCoaxialWavePath(
     const scene::BenchComponent& source,
     const PlateIncidentBranch& branch,
     std::string& reason) {
-    constexpr double kCentredToleranceMetres = 1e-10;
     if (branch.pathInteractions.empty()) {
         reason = "ordered source-to-plate interaction evidence is unavailable";
         return false;
@@ -227,13 +226,6 @@ bool supportsCoaxialWavePath(
             reason = "a local optical plane is tilted or rotated relative to the sampled path";
             return false;
         }
-        const auto localHit = math::transformPointWorldToLocal(
-            component->transform, interaction.hitPointMetres);
-        if (std::abs(localHit.x) > kCentredToleranceMetres
-            || std::abs(localHit.y) > kCentredToleranceMetres) {
-            reason = "a local optical element is decentered from the traced axis";
-            return false;
-        }
     }
     return true;
 }
@@ -241,10 +233,13 @@ bool supportsCoaxialWavePath(
 void applyCoaxialElement(
     field::ComplexField2D& value,
     const scene::BenchComponent& component,
+    math::Vec3d hitPointMetres,
     const PlateFieldSamplingOptions& options,
     PlateFieldSamplingDiagnostics& diagnostics) {
-    const double centreX = -options.centreXMetres;
-    const double centreY = -options.centreYMetres;
+    const auto localHit = math::transformPointWorldToLocal(
+        component.transform, hitPointMetres);
+    const double centreX = -localHit.x - options.centreXMetres;
+    const double centreY = -localHit.y - options.centreYMetres;
     switch (component.kind) {
     case scene::BenchComponentKind::IdealThinLens: {
         const auto& parameters = std::get<scene::IdealThinLensParameters>(
@@ -367,7 +362,11 @@ SampledPlateIncidentField sampleCoaxialWavePath(
         }
         if (component->kind != scene::BenchComponentKind::HolographicPlate) {
             applyCoaxialElement(
-                propagated, *component, options, baseline.diagnostics);
+                propagated,
+                *component,
+                interaction.hitPointMetres,
+                options,
+                baseline.diagnostics);
         }
         previousPoint = interaction.hitPointMetres;
     }

@@ -351,6 +351,53 @@ TEST_CASE("coaxial placed aperture clips the propagated plate field with analyti
         == doctest::Approx(expectedPower).epsilon(1e-4));
 }
 
+TEST_CASE("decentered aligned aperture applies at its physical transverse position") {
+    auto aperture = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::Aperture, "decentered-aperture");
+    aperture.transform.translationMetres.x = 0.00075;
+    auto parameters = std::get<scene::ApertureParameters>(
+        aperture.parameters);
+    parameters.shape = scene::ApertureShape::Circular;
+    parameters.widthMetres = 0.002;
+    parameters.heightMetres = 0.002;
+    aperture.parameters = parameters;
+    const auto bench = coaxialElementBench(std::move(aperture));
+    const auto fields = incidentFields(bench);
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto sampled = holography::samplePlateIncidentField(
+        bench,
+        fields,
+        fields.branches.front().beam.provenance.branchId,
+        coaxialSampling(),
+        fft);
+
+    REQUIRE(sampled.diagnostics.appliedCoaxialWavePath);
+    const auto nearestIndex = [&](double coordinateMetres) {
+        return static_cast<std::size_t>(std::llround(
+            coordinateMetres / sampled.field.pitchXMetres()
+            + 0.5 * static_cast<double>(sampled.field.width() - 1U)));
+    };
+    const std::size_t shiftedX = nearestIndex(0.00075);
+    const std::size_t centre = nearestIndex(0.0);
+    CHECK(std::norm(sampled.field.at(shiftedX, centre)) > 0.0);
+    CHECK(std::norm(sampled.field.at(nearestIndex(0.001), centre))
+        > std::norm(sampled.field.at(nearestIndex(-0.001), centre)));
+
+    double weightedCentroidX = 0.0;
+    double totalIntensity = 0.0;
+    for (std::size_t y = 0; y < sampled.field.height(); ++y) {
+        for (std::size_t x = 0; x < sampled.field.width(); ++x) {
+            const double intensity = std::norm(sampled.field.at(x, y));
+            weightedCentroidX += intensity
+                * sampled.field.xCoordinateMetres(x);
+            totalIntensity += intensity;
+        }
+    }
+    REQUIRE(totalIntensity > 0.0);
+    CHECK(weightedCentroidX / totalIntensity
+        == doctest::Approx(0.00075).epsilon(0.04));
+}
+
 TEST_CASE("coaxial placed thin lens creates a sampled focal-plane concentration") {
     auto lens = scene::makeDefaultBenchComponent(
         scene::BenchComponentKind::IdealThinLens, "lens");

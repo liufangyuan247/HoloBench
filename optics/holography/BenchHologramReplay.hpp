@@ -22,6 +22,9 @@ struct ThinPlateReplayResult final {
     scene::SceneRevision sourceRevision = 0;
     ThinPlateReplayKind replayKind = ThinPlateReplayKind::ConjugateReference;
     double signedObservationDistanceMetres = 0.0;
+    double observationOffsetXMetres = 0.0;
+    double observationOffsetYMetres = 0.0;
+    bool usedShiftedPaddedPropagation = false;
     field::ComplexField2D replayAtPlate;
     field::ComplexField2D fullReplayAtObservation;
     field::ComplexField2D zeroOrderAtObservation;
@@ -33,9 +36,9 @@ struct ThinPlateReplayResult final {
 };
 
 // Replays a current thin transmission recording onto a physically placed,
-// parallel, axis-aligned and coaxial Screen/Detector or Field Probe. The first adapter keeps
-// the recording grid and rejects tilted/decentred resampling rather than
-// silently treating an unsupported plane as coaxial.
+// parallel and axis-aligned Screen/Detector or Field Probe. A bounded
+// decentered plane uses 2x zero-padding plus shifted angular-spectrum
+// propagation. Tilted planes remain explicitly unsupported.
 [[nodiscard]] ThinPlateReplayResult replayThinTransmissionToObservation(
     const scene::BenchScene& bench,
     const ThinPlateRecordingResult& recording,

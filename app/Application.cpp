@@ -5836,7 +5836,7 @@ void Application::drawSandboxInspector() {
                             ImGui::SeparatorText(
                                 "Reconstruct to Placed Observation");
                             ImGui::TextDisabled(
-                                "Uses recorded reference branch #%llu as the physical replay illumination. First adapter accepts a coaxial reconstructed order and parallel Screen/Probe.",
+                                "Uses recorded reference branch #%llu as the physical replay illumination. Parallel Screen/Probe planes may be offset within the 2x zero-padded support window.",
                                 static_cast<unsigned long long>(
                                     recording.pair.referenceBranchId));
                             bool hasVolumeObservationComponent = false;
@@ -5952,14 +5952,16 @@ void Application::drawSandboxInspector() {
                                     = observation
                                         .reconstructedDirectionExternalLocal;
                                 ImGui::TextWrapped(
-                                    "Branch #%llu -> %s | direction local (%.6g, %.6g, %.6g) | distance %.6g m",
+                                    "Branch #%llu -> %s | direction local (%.6g, %.6g, %.6g) | distance %.6g m | local offset (%.6g, %.6g) m",
                                     static_cast<unsigned long long>(
                                         observation.replayBranchId),
                                     observation.observationComponentId.c_str(),
                                     direction.x,
                                     direction.y,
                                     direction.z,
-                                    observation.signedObservationDistanceMetres);
+                                    observation.signedObservationDistanceMetres,
+                                    observation.observationOffsetXMetres,
+                                    observation.observationOffsetYMetres);
                                 ImGui::TextWrapped(
                                     "Sampled replay %.6g W -> reconstructed %.6g W | efficiency %.3f%% | %zu propagating, %zu evanescent bins",
                                     observation
@@ -5973,6 +5975,10 @@ void Application::drawSandboxInspector() {
                                         .propagatingBinCount,
                                     observation.propagation
                                         .evanescentBinCount);
+                                if (observation.usedShiftedPaddedPropagation) {
+                                    ImGui::TextDisabled(
+                                        "This reconstruction used shifted angular-spectrum propagation on a 2x zero-padded grid before cropping to the probe window.");
+                                }
                                 if (sandboxVolumeReplayTexture_
                                     && sandboxVolumeReplayTexture_->isValid()) {
                                     const float availableWidth
@@ -6080,7 +6086,7 @@ void Application::drawSandboxInspector() {
                                 &sandboxPlateReplayKindIndex_,
                                 kReplayKinds);
                             ImGui::TextDisabled(
-                                "First adapter accepts parallel, axis-aligned, coaxial Screen/Probe planes on the transmitted side.");
+                                "Parallel axis-aligned Screen/Probe planes may be offset by up to half the sampled window; shifted replay uses explicit 2x zero-padding.");
                             bool hasObservationComponent = false;
                             ImGui::BeginDisabled(stale);
                             for (const auto& component
@@ -6155,17 +6161,24 @@ void Application::drawSandboxInspector() {
                                         "STALE replay: bench revision changed.");
                                 }
                                 ImGui::TextWrapped(
-                                    "%s -> %s | signed distance %.6g m | %zu propagating, %zu evanescent bins",
+                                    "%s -> %s | signed distance %.6g m | local offset (%.6g, %.6g) m | %zu propagating, %zu evanescent bins",
                                     sandboxPlateReplay_->replayKind
                                             == optics::holography::ThinPlateReplayKind::OrdinaryReference
                                         ? "Ordinary"
                                         : "Conjugate",
                                     sandboxPlateReplay_->observationComponentId.c_str(),
                                     sandboxPlateReplay_->signedObservationDistanceMetres,
+                                    sandboxPlateReplay_->observationOffsetXMetres,
+                                    sandboxPlateReplay_->observationOffsetYMetres,
                                     sandboxPlateReplay_->propagation
                                         .propagatingBinCount,
                                     sandboxPlateReplay_->propagation
                                         .evanescentBinCount);
+                                if (sandboxPlateReplay_
+                                        ->usedShiftedPaddedPropagation) {
+                                    ImGui::TextDisabled(
+                                        "This observation used shifted angular-spectrum propagation on a 2x zero-padded grid before cropping to the physical observer window.");
+                                }
                                 constexpr const char* kReplayViews
                                     = "Physical full replay\0Zero order\0Object-bearing order\0Conjugate order\0";
                                 if (ImGui::Combo(

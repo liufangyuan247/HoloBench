@@ -33,9 +33,66 @@ void validateFiniteSamples(const field::ComplexField2D& value, const char* messa
     }
 }
 
-void validateInput(const field::ComplexField2D& value, double distanceMetres, const fft::IFftBackend& backend) {
-    if (!std::isfinite(distanceMetres)) {
-        throw std::invalid_argument("ASM propagation distance must be finite");
+field::ComplexField2D padCentered(const field::ComplexField2D& input) {
+    if (input.width() > std::numeric_limits<std::size_t>::max() / 2U
+        || input.height() > std::numeric_limits<std::size_t>::max() / 2U) {
+        throw std::overflow_error("shifted ASM padded dimensions overflow");
+    }
+    field::ComplexField2D result(
+        input.width() * 2U,
+        input.height() * 2U,
+        input.pitchXMetres(),
+        input.pitchYMetres(),
+        input.vacuumWavelengthMetres(),
+        input.refractiveIndex());
+    const std::size_t offsetX = input.width() / 2U;
+    const std::size_t offsetY = input.height() / 2U;
+    for (std::size_t y = 0; y < input.height(); ++y) {
+        for (std::size_t x = 0; x < input.width(); ++x) {
+            result.at(x + offsetX, y + offsetY) = input.at(x, y);
+        }
+    }
+    return result;
+}
+
+field::ComplexField2D cropCentered(
+    const field::ComplexField2D& input,
+    std::size_t width,
+    std::size_t height) {
+    if (width > input.width() || height > input.height()
+        || (input.width() - width) % 2U != 0U
+        || (input.height() - height) % 2U != 0U) {
+        throw std::logic_error(
+            "shifted ASM padded field cannot be cropped symmetrically");
+    }
+    field::ComplexField2D result(
+        width,
+        height,
+        input.pitchXMetres(),
+        input.pitchYMetres(),
+        input.vacuumWavelengthMetres(),
+        input.refractiveIndex());
+    const std::size_t offsetX = (input.width() - width) / 2U;
+    const std::size_t offsetY = (input.height() - height) / 2U;
+    for (std::size_t y = 0; y < height; ++y) {
+        for (std::size_t x = 0; x < width; ++x) {
+            result.at(x, y) = input.at(x + offsetX, y + offsetY);
+        }
+    }
+    return result;
+}
+
+void validateInput(
+    const field::ComplexField2D& value,
+    double distanceMetres,
+    double outputShiftXMetres,
+    double outputShiftYMetres,
+    const fft::IFftBackend& backend) {
+    if (!std::isfinite(distanceMetres)
+        || !std::isfinite(outputShiftXMetres)
+        || !std::isfinite(outputShiftYMetres)) {
+        throw std::invalid_argument(
+            "ASM propagation distance and output shift must be finite");
     }
     if (!backend.supportsDimensions(value.width(), value.height())) {
         throw std::invalid_argument("FFT backend does not support the field dimensions");
@@ -70,8 +127,20 @@ AngularSpectrumPropagator::AngularSpectrumPropagator(fft::IFftBackend& fftBacken
 AngularSpectrumTransferFunction makeAngularSpectrumTransferFunction(
     const field::ComplexField2D& field,
     double distanceMetres) {
-    if (!std::isfinite(distanceMetres)) {
-        throw std::invalid_argument("ASM propagation distance must be finite");
+    return makeShiftedAngularSpectrumTransferFunction(
+        field, distanceMetres, 0.0, 0.0);
+}
+
+AngularSpectrumTransferFunction makeShiftedAngularSpectrumTransferFunction(
+    const field::ComplexField2D& field,
+    double distanceMetres,
+    double outputShiftXMetres,
+    double outputShiftYMetres) {
+    if (!std::isfinite(distanceMetres)
+        || !std::isfinite(outputShiftXMetres)
+        || !std::isfinite(outputShiftYMetres)) {
+        throw std::invalid_argument(
+            "ASM propagation distance and output shift must be finite");
     }
     const double cutoffCyclesPerMetre =
         field.refractiveIndex() / field.vacuumWavelengthMetres();
@@ -107,7 +176,18 @@ AngularSpectrumTransferFunction makeAngularSpectrumTransferFunction(
 
             const double ratio = transverseFrequency / cutoffCyclesPerMetre;
             const double longitudinalFactor = std::sqrt(std::max(0.0, 1.0 - ratio * ratio));
-            const double phase = wavenumber * longitudinalFactor * distanceMetres;
+            const double propagationPhase
+                = wavenumber * longitudinalFactor * distanceMetres;
+            const double shiftPhase = 2.0 * std::numbers::pi
+                * std::fma(
+                    fx,
+                    outputShiftXMetres,
+                    fy * outputShiftYMetres);
+            const double phase = propagationPhase + shiftPhase;
+            if (!std::isfinite(phase)) {
+                throw std::overflow_error(
+                    "shifted ASM transfer phase exceeds the finite double range");
+            }
             result.samples[index] = std::polar(1.0, phase);
             ++result.diagnostics.propagatingBinCount;
         }
@@ -117,7 +197,9 @@ AngularSpectrumTransferFunction makeAngularSpectrumTransferFunction(
 
 AngularSpectrumDiagnostics AngularSpectrumPropagator::ensureTransferFunction(
     const field::ComplexField2D& field,
-    double distanceMetres) {
+    double distanceMetres,
+    double outputShiftXMetres,
+    double outputShiftYMetres) {
     const TransferFunctionKey requestedKey {
         field.width(),
         field.height(),
@@ -125,12 +207,18 @@ AngularSpectrumDiagnostics AngularSpectrumPropagator::ensureTransferFunction(
         field.pitchYMetres(),
         field.vacuumWavelengthMetres(),
         field.refractiveIndex(),
-        distanceMetres};
+        distanceMetres,
+        outputShiftXMetres,
+        outputShiftYMetres};
     if (hasCachedTransferFunction_ && requestedKey == cachedKey_) {
         return cachedDiagnostics_;
     }
 
-    auto prepared = makeAngularSpectrumTransferFunction(field, distanceMetres);
+    auto prepared = makeShiftedAngularSpectrumTransferFunction(
+        field,
+        distanceMetres,
+        outputShiftXMetres,
+        outputShiftYMetres);
     transferFunction_.swap(prepared.samples);
     cachedKey_ = requestedKey;
     cachedDiagnostics_ = prepared.diagnostics;
@@ -141,11 +229,26 @@ AngularSpectrumDiagnostics AngularSpectrumPropagator::ensureTransferFunction(
 AngularSpectrumDiagnostics AngularSpectrumPropagator::propagateInPlace(
     field::ComplexField2D& field,
     double distanceMetres) {
-    validateInput(field, distanceMetres, fftBackend_);
+    return propagateShiftedInPlace(field, distanceMetres, 0.0, 0.0);
+}
+
+AngularSpectrumDiagnostics AngularSpectrumPropagator::propagateShiftedInPlace(
+    field::ComplexField2D& field,
+    double distanceMetres,
+    double outputShiftXMetres,
+    double outputShiftYMetres) {
+    validateInput(
+        field,
+        distanceMetres,
+        outputShiftXMetres,
+        outputShiftYMetres,
+        fftBackend_);
 
     const AngularSpectrumDiagnostics diagnostics = ensureTransferFunction(
         field,
-        distanceMetres);
+        distanceMetres,
+        outputShiftXMetres,
+        outputShiftYMetres);
 
     auto propagated = field;
     fftBackend_.forward2D(propagated);
@@ -160,6 +263,40 @@ AngularSpectrumDiagnostics AngularSpectrumPropagator::propagateInPlace(
     validateFiniteSamples(propagated, "ASM inverse FFT produced non-finite samples");
 
     field = std::move(propagated);
+    return diagnostics;
+}
+
+AngularSpectrumDiagnostics
+AngularSpectrumPropagator::propagateShiftedPaddedInPlace(
+    field::ComplexField2D& field,
+    double distanceMetres,
+    double outputShiftXMetres,
+    double outputShiftYMetres) {
+    if (!std::isfinite(outputShiftXMetres)
+        || !std::isfinite(outputShiftYMetres)) {
+        throw std::invalid_argument(
+            "shifted padded ASM output offset must be finite");
+    }
+    const double extentWidth = field.pitchXMetres()
+        * static_cast<double>(field.width());
+    const double extentHeight = field.pitchYMetres()
+        * static_cast<double>(field.height());
+    if (std::abs(outputShiftXMetres) > 0.5 * extentWidth
+        || std::abs(outputShiftYMetres) > 0.5 * extentHeight) {
+        throw std::invalid_argument(
+            "shifted padded ASM offset exceeds the zero-padded support window");
+    }
+    auto padded = padCentered(field);
+    if (!fftBackend_.supportsDimensions(padded.width(), padded.height())) {
+        throw std::invalid_argument(
+            "FFT backend does not support the shifted padded ASM grid");
+    }
+    const auto diagnostics = propagateShiftedInPlace(
+        padded,
+        distanceMetres,
+        outputShiftXMetres,
+        outputShiftYMetres);
+    field = cropCentered(padded, field.width(), field.height());
     return diagnostics;
 }
 

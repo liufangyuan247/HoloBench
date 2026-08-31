@@ -116,9 +116,10 @@
   same-side thin transmission exposure over an explicit ROI. A centred,
   normally incident chain now applies angular-spectrum propagation, ideal-lens
   phase/aperture, circular/rectangular masks, explicit pinholes, and SLM finite
-  pixels/dead space. Tilted, decentered, folded, direction-changing, and real-
-  prescription paths retain explicit unrefined warnings; the placed SLM command
-  is currently uniform zero phase.
+  pixels/dead space. Aligned decentered masks, pinholes, and SLMs use their
+  traced physical hit coordinates. Tilted, folded, direction-changing,
+  decentered powered-lens, and real-prescription paths retain explicit
+  unrefined warnings; the placed SLM command is currently uniform zero phase.
 - Plate candidates currently infer object branches from an Object/Wavefront
   Source and reference branches from a Laser Source. They classify same-side
   transmission versus opposite-side reflection geometry and reject
@@ -128,12 +129,12 @@
   overrides and general tilted/folded spatial-image paths remain open. Recording
   recipes now persist stable path/wavelength/coherence selectors and physical
   parameters, but deliberately do not persist numerical field caches.
-- Thin transmission replay currently keeps the recorded transverse grid and
-  accepts only a parallel, axis-aligned, coaxial Screen/Detector or Field Probe that covers
-  the sampled ROI and lies on the transmitted side. It exposes the physical
-  full replay plus separately labelled analytic orders. Tilted/decentered
-  observation requires an explicit, validated off-axis resampler and is
-  rejected rather than approximated as coaxial.
+- Thin/RGB and reflection-volume replay keep the recorded transverse grid and
+  accept a parallel, axis-aligned Screen/Detector or Field Probe that covers
+  the sampled ROI and lies on the physical output side. A decentered observer
+  within half the sampled extent uses a 2x zero-padded shifted ASM evaluation;
+  larger offsets reject before periodic wrap. Tilted observation still requires
+  a separately validated plane-rotation resampler.
 - Plate-local source fields use scalar envelopes. A collimated source is a hard
   circular profile, an object source is rectangular, and the current Gaussian
   adapter uses the configured source radius at the observer without propagated

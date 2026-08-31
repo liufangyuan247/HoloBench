@@ -154,6 +154,58 @@ TEST_CASE("ASM single transverse spectral bin gains its analytic longitudinal ph
     checkSamplesNear(value, expected, 2e-10);
 }
 
+TEST_CASE("shifted ASM samples a parallel offset plane with analytic phase") {
+    constexpr std::size_t xBin = 2U;
+    constexpr std::size_t yBin = 1U;
+    constexpr double pitch = 4e-6;
+    constexpr double shiftX = 3.25e-6;
+    constexpr double shiftY = -1.5e-6;
+    auto value = makeField(16U, 8U, pitch);
+    fillSpectralBin(value, xBin, yBin);
+    const auto original = copySamples(value);
+    const double fx = static_cast<double>(xBin)
+        / (static_cast<double>(value.width()) * pitch);
+    const double fy = static_cast<double>(yBin)
+        / (static_cast<double>(value.height()) * pitch);
+    const auto expectedShift = std::polar(
+        1.0,
+        2.0 * std::numbers::pi * (fx * shiftX + fy * shiftY));
+
+    fft::CpuFftBackend backend;
+    propagation::AngularSpectrumPropagator propagator(backend);
+    propagator.propagateShiftedInPlace(
+        value, 0.0, shiftX, shiftY);
+
+    auto expected = original;
+    for (auto& sample : expected) {
+        sample *= expectedShift;
+    }
+    checkSamplesNear(value, expected, 2e-10);
+}
+
+TEST_CASE("shifted padded ASM translates a zero-distance impulse without wrap") {
+    constexpr double pitch = 5e-6;
+    auto value = makeField(8U, 8U, pitch);
+    value.fill({0.0, 0.0});
+    value.at(4U, 4U) = {1.0, 0.0};
+
+    fft::CpuFftBackend backend;
+    propagation::AngularSpectrumPropagator propagator(backend);
+    const auto diagnostics = propagator.propagateShiftedPaddedInPlace(
+        value, 0.0, pitch, 0.0);
+
+    CHECK(diagnostics.propagatingBinCount == 4U * value.sampleCount());
+    CHECK(std::abs(value.at(3U, 4U) - std::complex<double>(1.0, 0.0))
+        < 2e-12);
+    for (std::size_t y = 0; y < value.height(); ++y) {
+        for (std::size_t x = 0; x < value.width(); ++x) {
+            if (x != 3U || y != 4U) {
+                CHECK(std::abs(value.at(x, y)) < 2e-12);
+            }
+        }
+    }
+}
+
 TEST_CASE("ASM conserves integrated intensity when every represented bin propagates") {
     auto value = makeField(32, 16, 10e-6);
     fillDeterministic(value);
@@ -205,6 +257,14 @@ TEST_CASE("ASM rejects invalid input and backend failures without changing the f
     propagation::AngularSpectrumPropagator cpuPropagator(cpuBackend);
     CHECK_THROWS_AS(
         cpuPropagator.propagateInPlace(value, std::numeric_limits<double>::quiet_NaN()),
+        std::invalid_argument);
+    checkSamplesExactly(value, original);
+    CHECK_THROWS_AS(
+        cpuPropagator.propagateShiftedInPlace(
+            value,
+            0.0,
+            std::numeric_limits<double>::infinity(),
+            0.0),
         std::invalid_argument);
     checkSamplesExactly(value, original);
 

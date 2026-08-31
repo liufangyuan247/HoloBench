@@ -83,10 +83,10 @@ rebuilt on the shared bench.
   Field Probe through the validated angular-spectrum propagator. The physical
   full replay and separately labelled zero, object-bearing, and conjugate
   orders propagate to the same observation plane, retain the bench revision,
-  and are selectable in the plate Inspector. The first adapter accepts only a
-  parallel, axis-aligned, coaxial, sufficiently large plane on the transmitted output side;
-  tilted, decentered, backward, and undersized observers fail explicitly until
-  off-axis resampling is independently validated.
+  and are selectable in the plate Inspector. A parallel, axis-aligned,
+  sufficiently large plane may be offset by up to half the sampled extent on
+  the transmitted side; shifted replay uses a 2x zero-padded ASM window.
+  Tilted, out-of-support, backward, and undersized observers fail explicitly.
 - **Editable holography bench presets**: the Inspector can load ordinary unified
   projects for thin transmission, opposite-side reflection/Denisyuk, and RGB
   full-colour layouts. Every source, plate, and observation component remains
@@ -328,15 +328,16 @@ completion because it is primarily driven through fixed parameter panels:
   sampled on a labelled plate-local 2D patch. Recording exposes power, fringe,
   carrier/Nyquist, and exposure diagnostics. Ordinary or conjugate replay
   propagates the physical complete field and separately labelled zero,
-  object-bearing, and conjugate orders to a physically placed coaxial
-  Screen/Detector or Field Probe.
+  object-bearing, and conjugate orders to a physically placed parallel
+  Screen/Detector or Field Probe, including bounded decentered observers.
 - **Placed local wave path**: Ordered trace lineage now drives an injected-FFT
-  angular-spectrum field through centred, normally incident local planes.
+  angular-spectrum field through aligned, normally incident local planes.
   Ideal lens clear aperture/quadratic phase, circular/elliptical or rectangular aperture,
   explicit pinhole, and SLM finite bounds/pixel dead space affect the field
   that reaches the plate. Applied component IDs, intercepted power, boundary
-  risk, and limitations are visible in the Inspector. Tilted, decentered,
-  folded, direction-changing, and real-prescription paths retain explicit
+  risk, and limitations are visible in the Inspector. Aligned decentered masks,
+  pinholes, and SLMs use their traced transverse position. Tilted, folded,
+  direction-changing, decentered powered-lens, and real-prescription paths retain explicit
   unrefined evidence instead of being mislabeled as sampled propagation; see
   [ADR 0012](adr/0012-placed-local-wave-path-conventions.md).
 - **Placed volume workflow**: Counter-propagating reflection recording refracts
@@ -348,9 +349,9 @@ completion because it is primarily driven through fixed parameter panels:
   equivalent symmetric Bragg angle and does not falsely claim arbitrary
   slanted-grating coupled-wave fidelity. The recorded reference branch can
   reconstruct a Bragg-weighted sampled complex field on the physical reflection
-  side and propagate it to a placed parallel, coaxial Screen/Probe. The first
-  adapter rejects off-axis/decentred resampling and TIR instead of wrapping the
-  finite analysis window.
+  side and propagate it to a placed parallel Screen/Probe. Bounded decenter uses
+  shifted 2x zero-padded ASM; tilted planes, out-of-support offsets, and TIR
+  reject instead of wrapping the finite analysis window.
 - **Placed RGB workflow**: The RGB preset exposes exactly three unambiguous
   same-wavelength/coherence transmission pairs ordered red, green, and blue.
   Batch recording and replay invoke the validated single-channel path three
@@ -370,9 +371,9 @@ completion because it is primarily driven through fixed parameter panels:
 - **Revision provenance**: Plate incident evidence, thin recordings, thin
   replays, volume recordings, and volume replays carry the exact scene
   revision and visibly become stale after a bench edit.
-- **Current local validation**: Windows Clang development build passes 486/486
+- **Current local validation**: Windows Clang development build passes 491/491
   deterministic CPU, application, font, and OpenGL GPU cases after the placed
-  volume/RGB/local-wave-path/recipe increments; `core-ci` passes 484/484, `app-ci` compiles
+  volume/RGB/local-wave-path/recipe increments; `core-ci` passes 489/489, `app-ci` compiles
   warnings-as-errors, and the hidden OpenGL smoke exits successfully on AMD
   Radeon Pro 5300M. Remote cross-compiler CI remains required before the M8
   slice is closed.
@@ -388,8 +389,7 @@ completion because it is primarily driven through fixed parameter panels:
 ## Next five tasks
 
 1. Generalize local component and observation adapters with validated
-   tilted/decentred/folded-plane resampling and explicit finite-window support
-   diagnostics.
+   tilted/folded-plane resampling and explicit finite-window support diagnostics.
 2. Add editable SLM command/pattern provenance so placed SLMs can carry more
    than the current explicit uniform zero-phase command.
 3. Add named M8 performance scenes and complete cross-compiler/application
