@@ -37,6 +37,23 @@ Performance claims are accepted only when they identify hardware, build type, sc
 
 - `ray/thin_lens_bench_5k_rays_10k_segs` — Validated (M1)
 - `ray/thin_lens_100k` — Future M1+ stress benchmark
-- `wave/asm_1024_square_single_step` — Target for M2 Angular Spectrum Method
+- `wave/asm_1024_square_gpu_recompute` — Validated on AMD Radeon Pro 5300M (M2)
 - `wave/asm_2048_square_single_step` — Target for M2 Angular Spectrum Method
 - `project/load_reference_scene` — Target for scene load latency
+
+## M2 Verified GPU Wave Benchmark
+
+### Benchmark Profile: `wave/asm_1024_square_gpu_recompute`
+
+- **Hardware Profile**: AMD Radeon Pro 5300M, OpenGL `4.6.0 Core Profile Context 23.9.3.230915`.
+- **Workload**: 1024x1024 complex Gaussian input, 4 um square pitch, 532 nm vacuum wavelength, 0.10 m ASM propagation.
+- **Execution Parameters**: Fused upload -> forward FFT -> spectral transfer -> inverse FFT -> download; 5 warmups, 30 measured recomputes, `glFinish()` before and after each sample.
+- **Device path**: `twiddle_source=cpu-device-quirk` for this exact renderer/driver only. FFT samples, butterfly stages, spectral multiply, normalization, and transfer data remain on the GPU; unaffected devices use `twiddle_source=gpu-shader`.
+
+| Metric | Result | Target Budget | Status |
+|---|---|---|---|
+| p50 recompute | **35.433 ms** | Informational | Recorded |
+| p95 recompute | **42.593 ms** | **< 50 ms** | Met |
+| Max recompute | **44.658 ms** | Informational | Recorded |
+
+NVIDIA results must be appended with renderer/driver identity and `twiddle_source=gpu-shader`; the AMD quirk is not a basis for a vendor-wide limit.

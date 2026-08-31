@@ -131,7 +131,7 @@ layout(std430, binding = 1) writeonly buffer OutputBuffer {
     ComplexValue outSamples[];
 };
 
-layout(std430, binding = 2) readonly buffer TwiddleBuffer {
+layout(std430, binding = 2) buffer TwiddleBuffer {
     ComplexValue twiddleSamples[];
 };
 
@@ -146,6 +146,7 @@ uniform uint u_log2_dim;
 uniform uint u_sub_length;
 uniform uint u_twiddle_stride;
 uniform float u_twiddle_sign;
+uniform uint u_twiddle_dimension;
 uniform float u_scale;
 
 uint reverseBits(uint x, uint bits) {
@@ -259,6 +260,15 @@ void main() {
         float transferImaginary = spectralTransferSamples[gid].imaginary;
         outSamples[gid].real = inputReal * transferReal - inputImaginary * transferImaginary;
         outSamples[gid].imaginary = inputReal * transferImaginary + inputImaginary * transferReal;
+    } else if (u_pass_type == 6u) {
+        // Default path: generate the maximum-dimension twiddle table on the GPU.
+        uint twiddleCount = u_twiddle_dimension / 2u;
+        if (gid >= twiddleCount) {
+            return;
+        }
+        float angle = 6.28318530717958647692 * float(gid) / float(u_twiddle_dimension);
+        twiddleSamples[gid].real = cos(angle);
+        twiddleSamples[gid].imaginary = sin(angle);
     }
 }
 )";
@@ -297,6 +307,29 @@ bool OpenGlComputeFftBackend::isContextAvailable() noexcept {
         return false;
     }
     return true;
+}
+
+bool OpenGlComputeFftBackend::requiresCpuTwiddleQuirk(
+    std::string_view vendor,
+    std::string_view renderer,
+    std::string_view version) noexcept {
+    // Radeon Pro 5300M driver 23.9.3.230915 returned corrupt shader-generated
+    // trigonometric values during validation. Match only the observed device and
+    // driver build; newer drivers and every other GPU retain the default GPU path.
+    return vendor == "ATI Technologies Inc."
+        && renderer == "AMD Radeon Pro 5300M"
+        && version.find("23.9.3.230915") != std::string_view::npos;
+}
+
+std::string_view OpenGlComputeFftBackend::twiddleGenerationModeName(
+    TwiddleGenerationMode mode) noexcept {
+    switch (mode) {
+    case TwiddleGenerationMode::GpuShader:
+        return "gpu-shader";
+    case TwiddleGenerationMode::CpuDeviceQuirk:
+        return "cpu-device-quirk";
+    }
+    return "unknown";
 }
 
 bool OpenGlComputeFftBackend::supportsDimensions(std::size_t width, std::size_t height) const noexcept {
@@ -483,12 +516,28 @@ void OpenGlComputeFftBackend::releaseGpuResources() noexcept {
     locSubLength_ = -1;
     locTwiddleStride_ = -1;
     locTwiddleSign_ = -1;
+    locTwiddleDimension_ = -1;
     locScale_ = -1;
+    twiddleGenerationMode_ = TwiddleGenerationMode::GpuShader;
+    deviceProfileInitialized_ = false;
 }
 
 void OpenGlComputeFftBackend::ensureResourcesInitialized(
     std::size_t sampleCount,
     std::size_t maximumDimension) {
+    if (!deviceProfileInitialized_) {
+        const auto* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+        const auto* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+        const auto* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+        requireNoGlError("querying the OpenGL device profile");
+        twiddleGenerationMode_ = requiresCpuTwiddleQuirk(
+            vendor != nullptr ? std::string_view(vendor) : std::string_view {},
+            renderer != nullptr ? std::string_view(renderer) : std::string_view {},
+            version != nullptr ? std::string_view(version) : std::string_view {})
+            ? TwiddleGenerationMode::CpuDeviceQuirk
+            : TwiddleGenerationMode::GpuShader;
+        deviceProfileInitialized_ = true;
+    }
     if (programId_ == 0) {
         const GLuint shaderId = glCreateShader(GL_COMPUTE_SHADER);
         if (shaderId == 0) {
@@ -553,10 +602,12 @@ void OpenGlComputeFftBackend::ensureResourcesInitialized(
         const GLint subLengthLocation = glGetUniformLocation(progId, "u_sub_length");
         const GLint twiddleStrideLocation = glGetUniformLocation(progId, "u_twiddle_stride");
         const GLint twiddleSignLocation = glGetUniformLocation(progId, "u_twiddle_sign");
+        const GLint twiddleDimensionLocation = glGetUniformLocation(progId, "u_twiddle_dimension");
         const GLint scaleLocation = glGetUniformLocation(progId, "u_scale");
         if (passTypeLocation < 0 || widthLocation < 0 || heightLocation < 0
             || log2DimLocation < 0 || subLengthLocation < 0
-            || twiddleStrideLocation < 0 || twiddleSignLocation < 0 || scaleLocation < 0) {
+            || twiddleStrideLocation < 0 || twiddleSignLocation < 0
+            || twiddleDimensionLocation < 0 || scaleLocation < 0) {
             glDeleteProgram(progId);
             throw OpenGlFftError("FFT compute shader is missing a required active uniform");
         }
@@ -574,6 +625,7 @@ void OpenGlComputeFftBackend::ensureResourcesInitialized(
         locSubLength_ = subLengthLocation;
         locTwiddleStride_ = twiddleStrideLocation;
         locTwiddleSign_ = twiddleSignLocation;
+        locTwiddleDimension_ = twiddleDimensionLocation;
         locScale_ = scaleLocation;
     }
 
@@ -613,7 +665,9 @@ void OpenGlComputeFftBackend::ensureResourcesInitialized(
 
     const std::size_t requiredTwiddleCount = maximumDimension > 1 ? maximumDimension / 2 : 0;
     if (requiredTwiddleCount > twiddleCapacitySamples_) {
-        twiddleStaging_.reserve(requiredTwiddleCount);
+        if (twiddleGenerationMode_ == TwiddleGenerationMode::CpuDeviceQuirk) {
+            twiddleStaging_.reserve(requiredTwiddleCount);
+        }
         GLuint newTwiddleSsbo = 0;
         glGenBuffers(1, &newTwiddleSsbo);
         if (newTwiddleSsbo == 0) {
@@ -650,19 +704,29 @@ void OpenGlComputeFftBackend::uploadTwiddles(std::size_t maximumDimension) {
         return;
     }
     const std::size_t count = maximumDimension / 2;
-    twiddleStaging_.resize(count);
-    for (std::size_t index = 0; index < count; ++index) {
-        const double angle = 2.0 * std::numbers::pi
-            * static_cast<double>(index) / static_cast<double>(maximumDimension);
-        twiddleStaging_[index] = GpuComplex {
-            static_cast<float>(std::cos(angle)),
-            static_cast<float>(std::sin(angle))};
-    }
-    const GLsizeiptr byteCount = static_cast<GLsizeiptr>(count * sizeof(GpuComplex));
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbos_[2]);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, byteCount, twiddleStaging_.data());
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2U, ssbos_[2]);
-    requireNoGlError("uploading FFT twiddle factors");
+    if (twiddleGenerationMode_ == TwiddleGenerationMode::CpuDeviceQuirk) {
+        twiddleStaging_.resize(count);
+        for (std::size_t index = 0; index < count; ++index) {
+            const double angle = 2.0 * std::numbers::pi
+                * static_cast<double>(index) / static_cast<double>(maximumDimension);
+            twiddleStaging_[index] = GpuComplex {
+                static_cast<float>(std::cos(angle)),
+                static_cast<float>(std::sin(angle))};
+        }
+        const GLsizeiptr byteCount = static_cast<GLsizeiptr>(count * sizeof(GpuComplex));
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbos_[2]);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, byteCount, twiddleStaging_.data());
+        requireNoGlError("uploading device-quirk FFT twiddle factors");
+    } else {
+        glUseProgram(programId_);
+        glUniform1ui(locPassType_, 6U);
+        glUniform1ui(locTwiddleDimension_, static_cast<GLuint>(maximumDimension));
+        const GLuint groupCount = static_cast<GLuint>((count + kLocalSize - 1U) / kLocalSize);
+        glDispatchCompute(groupCount, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+        requireNoGlError("generating FFT twiddle factors on the GPU");
+    }
     uploadedTwiddleDimension_ = maximumDimension;
 }
 

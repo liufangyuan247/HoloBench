@@ -24,8 +24,8 @@ Deliver a validated scalar-wave vertical slice spanning a sampled complex field,
 - [x] Circular-aperture Airy minima and radial profile meet documented tolerances (quadratic sub-pixel measured first-dark-ring radius $r_1 \approx 1.21966989 \frac{\lambda z}{D}$ within 0.5% relative error, on-axis peak within 0.5% matching discrete circle pixel area, secondary peak within 5% at $N_F \le 0.02$ and full-grid paraxial parameter $<0.1$).
 - [x] Propagating-spectrum energy is conserved within the declared numerical tolerance ($< 2\times 10^{-12}$ for Fresnel and $< 10^{-12}$ for Fraunhofer under Parseval).
 - [x] Three complete-field cases cross-validate ASM, Fresnel TF, and Fraunhofer propagation against `waveprop 0.0.12` without linking validation tools into runtime binaries.
-- [ ] GPU and CPU backends agree within a documented error bound.
-- [ ] The named 1024x1024 interactive propagation benchmark is below 50 ms on the reference GPU.
+- [x] OpenGL GPU and CPU backends agree on rectangular FFT forward/inverse transforms (per-component relative tolerance $3\times10^{-6}$) and ASM/Fresnel propagation (relative tolerance $10^{-5}$); the GPU executable passes 7/7 cases and 720/720 assertions on the reference AMD GPU.
+- [x] `wave/asm_1024_square_gpu_recompute` is below 50 ms p95 on the reference GPU: p50 = 35.433 ms, p95 = 42.593 ms, max = 44.658 ms across 30 samples after 5 warmups with `glFinish` synchronization.
 - [x] Windows and Ubuntu warnings-as-errors CI, local smoke tests, documentation, and project compatibility checks pass for the current M2 integration baseline.
 
 ## Deferred beyond M2
@@ -45,3 +45,9 @@ HoloBench.exe --gl-smoke
 ```
 
 The command performs the initial CPU-reference propagation, uploads the detector texture, renders three hidden frames, calls `glFinish`, checks `glGetError`, and fails if the GL debug callback reported an error or no detector texture was produced.
+
+## GPU device compatibility rule
+
+GPU capability and dispatch limits are queried from the active OpenGL context; renderer/vendor allowlists are prohibited. The default FFT path generates twiddle factors in the compute shader. Only the exact validated tuple `ATI Technologies Inc.` / `AMD Radeon Pro 5300M` / driver build `23.9.3.230915` uses one-time CPU twiddle generation because that driver produced corrupt shader trigonometric results. The FFT data flow and butterfly work remain on the GPU. The quirk automatically retires for every other driver string and must be removed entirely once the affected hardware passes the native path on an updated driver.
+
+Before the M2 tag, run `holobench_gpu_tests.exe` and `holobench_gpu_benchmark.exe` on the target NVIDIA card. Record renderer and OpenGL/driver version, confirm `twiddle_source=gpu-shader`, 7/7 numerical parity cases, and p95 < 50 ms for the named 1024x1024 benchmark.

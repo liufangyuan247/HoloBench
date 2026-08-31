@@ -31,11 +31,13 @@
 
 - Requires an OpenGL 4.6 Core context; macOS is unsupported.
 - Local verification has been executed on Windows Clang/Ninja and MSVC/Ninja with warnings as errors.
+- The interactive GPU wave backend is FP32 and supports rectangular power-of-two grids. Unsupported dimensions and unavailable contexts fail explicitly; there is no silent CPU fallback.
+- GPU limits are queried at runtime. One exact AMD Radeon Pro 5300M driver build (`23.9.3.230915`) uses CPU-generated cached twiddle factors to avoid corrupt shader trigonometric results; all FFT data flow remains on the GPU, all other devices retain shader twiddle generation, and NVIDIA parity/performance is pending hardware confirmation.
 - Remote GitHub Actions verification passes on Windows and Ubuntu for both core build/tests and application compilation ([run 33332649845](https://github.com/liufangyuan247/HoloBench/actions/runs/33332649845)).
 
 ## Architecture & data
 
-- Compute backend interfaces for GPU diffraction (ASM) are placeholders pending M2.
+- The current GPU propagation backend covers fused ASM-style spectral transfer; arbitrary non-power-of-two FFTs, automatic padding, and CUDA-specific acceleration are not implemented.
 - JSON project document format v1 is intentionally minimal, with strict version rejection and no migration framework yet.
 - There is no undo/redo, autosave, crash recovery, localization, accessibility layer, or Steam integration.
 - Hardware control and digital-twin calibration are long-term roadmap modules.

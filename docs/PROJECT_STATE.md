@@ -44,15 +44,19 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
     - Diagnostics validate caller-provided centred support against every non-zero sample, report a combined `farFieldConditionSatisfied` gate ($N_F<0.1$ and paraxial parameter $<0.1$), and independently report exact discrete maximum adjacent quadratic phase step across even ($2m-1=N-1$) and odd ($2m-1=N-2$) grids.
   - **Field Sources & Elements**: Plane wave and fundamental paraxial Gaussian beam sources; binary circular, rectangular, and double-slit aperture masks; ideal thin-lens quadratic phase screen.
   - **External Golden Cross-Validation**: Three complete complex fields independently generated with `waveprop 0.0.12` validate ASM, Fresnel TF, and Fraunhofer propagation. Tests check coordinate conventions, normalized complex-field error, peak-normalized maximum error, and independent intensity errors; the Python validation environment is never linked into runtime binaries.
-  - **Test Suite Status**: 185/185 deterministic unit tests passing across `dev` and headless `core-ci`, including three external `waveprop` cross-validation cases; the strict `app-ci` build and 120-frame OpenGL smoke test also pass on the reference AMD Radeon Pro 5300M.
+  - **OpenGL GPU Wave Backend**: Fused upload -> FP32 forward FFT -> pointwise spectral transfer -> inverse FFT -> download path for rectangular power-of-two fields, explicit context/error handling, strong caller-field exception safety, runtime compute-limit queries, external SSBO binding restoration, and no silent CPU fallback. FFT parity uses $3\times10^{-6}$ relative tolerance; ASM/Fresnel parity uses $10^{-5}$.
+  - **Device-Scoped Compatibility**: Shader twiddle generation is the default. Only the exact AMD Radeon Pro 5300M driver build `23.9.3.230915` uses one-time CPU twiddle generation after a reproduced shader-trigonometry defect; the FFT data flow remains on the GPU and no vendor-wide capability or performance restriction is applied.
+  - **Detector Field UI**: Intensity, log-intensity, and wrapped-phase texture views; SI internal units with nm/um/mm presentation; Apply/dirty single-recompute semantics; aspect-correct display; orientation-correct hover and click-lock complex probes; hidden `--gl-smoke` texture/upload verification.
+  - **M2 GPU Benchmark**: `wave/asm_1024_square_gpu_recompute` on AMD Radeon Pro 5300M (1024x1024, 4 um pitch, 532 nm, 0.10 m, 5 warmups, 30 samples, synchronized) records p50 **35.433 ms**, p95 **42.593 ms**, max **44.658 ms**, meeting the p95 < 50 ms budget.
+  - **Test Suite Status**: 203 deterministic CPU/application CTest cases plus one GPU executable containing 7/7 passing hardware cases and 720/720 assertions. Windows Clang and MSVC pass 204/204; WSL GCC passes 203 cases and explicitly skips the GPU executable when an OpenGL 4.6 context is unavailable. The hidden detector smoke and 120-frame OpenGL smoke both exit 0 on the reference AMD Radeon Pro 5300M.
   - **Cross-platform CI**: GitHub Actions run [33342229206](https://github.com/liufangyuan247/HoloBench/actions/runs/33342229206) passes all four M2 integration gates: Windows and Ubuntu core build/tests plus Windows and Ubuntu application compilation with warnings as errors.
 
 ## In progress / Remaining for M2
 
-- M2 remains **in progress**; the following components are still pending before M2 milestone completion:
-  - Portable GPU FFT and wave propagation backend (with CPU-reference parity).
-  - Interactive 1024x1024 wave propagation benchmark (< 50 ms target on reference GPU).
-  - Detector field visualization and UI inspector for complex field amplitude, phase, and log-intensity maps.
+- M2 implementation and local integration gates are complete. The following release evidence is still pending before the milestone tag:
+  - NVIDIA hardware parity and named 1024x1024 benchmark, confirming the default `twiddle_source=gpu-shader` path without inheriting the AMD device quirk.
+  - Remote GitHub Actions gates for the final integrated commit.
+  - Fast-forward integration to `main` and the `m2-wave-core` tag after all release gates are green.
 
 ## Known limitations (M1/M2)
 
@@ -64,8 +68,8 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 
 ## Next five tasks
 
-1. Define and implement the portable GPU FFT and wave-propagation backend with CPU-reference parity tests.
-2. Integrate detector intensity, log-intensity, and wrapped-phase views into ImGui without moving physical calculations into the rendering layer.
-3. Execute and record the 1024x1024 GPU propagation performance benchmark.
-4. Run the complete `dev`, `core-ci`, and `app-ci` gates plus the OpenGL smoke test on the integrated M2 branch.
-5. Prepare the M2 release tag and verify Windows/Ubuntu remote CI.
+1. Run and record GPU parity plus `wave/asm_1024_square_gpu_recompute` on the target NVIDIA card.
+2. Commit the integrated M2 implementation and documentation after final diff review.
+3. Fast-forward `main`, push, and verify all four Windows/Ubuntu GitHub Actions gates.
+4. Tag the verified commit as `m2-wave-core` only after hardware and remote CI evidence is green.
+5. Start M3 Fourier-optics and sampling-debugger implementation from the tagged M2 baseline.

@@ -173,6 +173,7 @@ int main() {
         const double maximum = *std::max_element(milliseconds.begin(), milliseconds.end());
         const double fftRoundTripP50 = nearestRankPercentile(fftRoundTripMilliseconds, 0.50);
         const bool targetMet = p95 < kP95TargetMilliseconds;
+        const auto twiddleMode = backend.twiddleGenerationMode();
 
         backend.releaseGpuResources();
         if (glGetError() != GL_NO_ERROR) {
@@ -182,11 +183,13 @@ int main() {
 
         std::printf(
             "benchmark=wave/asm_1024_square_gpu_recompute renderer=\"%s\" version=\"%s\" "
-            "grid=%zux%zu pitch_um=%.3f wavelength_nm=%.3f distance_m=%.3f "
+            "twiddle_source=%.*s grid=%zux%zu pitch_um=%.3f wavelength_nm=%.3f distance_m=%.3f "
             "warmup=%zu samples=%zu gpu_sync=true p50_ms=%.6f p95_ms=%.6f max_ms=%.6f "
             "fft_round_trip_p50_ms=%.6f target_p95_ms=%.3f target_met=%s\n",
             renderer != nullptr ? renderer : "unknown",
             version != nullptr ? version : "unknown",
+            static_cast<int>(fft::OpenGlComputeFftBackend::twiddleGenerationModeName(twiddleMode).size()),
+            fft::OpenGlComputeFftBackend::twiddleGenerationModeName(twiddleMode).data(),
             kGridSize,
             kGridSize,
             kPitchMetres * 1.0e6,

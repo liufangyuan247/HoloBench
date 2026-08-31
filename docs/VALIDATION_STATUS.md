@@ -6,7 +6,7 @@
 | Project JSON round trip | Validated | Deterministic round-trip & version rejection tests (`ProjectDocumentTests.cpp`, `SceneProjectAdapterTests.cpp`) | Project persistence |
 | OpenGL context & 3D bench | Validated | 120-frame smoke run (exit 0, 0 GL errors, AMD Radeon Pro 5300M, GL 4.6/GLSL 4.60); camera & gizmo unit tests (`CameraTests.cpp`, `GizmoTests.cpp`) | Interactive UI shell |
 | Geometric optics (M1) | Validated | 92/92 deterministic tests across `dev` and `core-ci` presets (`ThinLensTests.cpp`, `SnellTests.cpp`, `GeometricElementsTests.cpp`, `NumericalApertureTests.cpp`, `BenchTracerTests.cpp`) | Interactive ray tracing |
-| Wave optics (M2 CPU reference & observables) | In progress | 185/185 deterministic `core-ci` tests, including analytic oracles and three external full-field `waveprop 0.0.12` cross-validation cases (`WavepropCrossValidationTests.cpp`) | CPU reference solvers |
+| Wave optics (M2 CPU/GPU & detector) | Release validation | 203 deterministic CPU/application cases; OpenGL executable 7/7 cases and 720/720 assertions; analytic oracles and three external full-field `waveprop 0.0.12` cross-validation cases | CPU reference, interactive GPU propagation, detector UI |
 | Holography (M4–M5) | Not implemented | None | Prohibited |
 
 ## M1 Validation Breakdown
@@ -79,12 +79,18 @@
 ## Build and CI Execution Status
 
 - **Local Build & Tests**:
-  - `dev` preset: clean warnings-as-errors build and 185/185 deterministic tests pass.
-  - `core-ci` preset: clean warnings-as-errors build and 185/185 deterministic tests pass (headless, no OpenGL dependency).
-  - `app-ci` preset: clean warnings-as-errors application compilation.
+  - Windows Clang 21 `app-ci`: warnings-as-errors build and 204/204 CTest cases pass, including the hardware GPU executable.
+  - Windows MSVC 19.44: `/W4 /WX` build and 204/204 CTest cases pass, including the hardware GPU executable.
+  - Ubuntu/WSL GCC 15.2: warnings-as-errors application and GPU targets compile; 203 deterministic cases pass and the registered GPU executable skips with code 77 because WSL has no compatible OpenGL 4.6 context.
+- **GPU Numerical Validation**:
+  - AMD Radeon Pro 5300M / OpenGL `4.6.0 Core Profile Context 23.9.3.230915`: 7/7 cases, 720/720 assertions; FFT forward/inverse per-component relative tolerance $3\times10^{-6}$; ASM and Fresnel parity tolerance $10^{-5}$.
+  - The exact AMD renderer/driver tuple reports `twiddle_source=cpu-device-quirk`; classification tests prove a different AMD driver and an NVIDIA renderer select the default `gpu-shader` path. NVIDIA numerical and performance execution remains a release gate.
+- **GPU Performance Validation**:
+  - `wave/asm_1024_square_gpu_recompute`: 1024x1024, 4 um pitch, 532 nm, 0.10 m, 5 warmups, 30 synchronized samples; p50 **35.433 ms**, p95 **42.593 ms**, max **44.658 ms** on the reference AMD GPU; p95 < 50 ms target met.
 - **OpenGL Smoke Test**:
-  - 120-frame run on AMD Radeon Pro 5300M with OpenGL 4.6 Core / GLSL 4.60: completed with exit code 0 and 0 reported OpenGL debug errors.
+  - Hidden detector `--gl-smoke` and 120-frame application run on AMD Radeon Pro 5300M with OpenGL 4.6 Core / GLSL 4.60: both complete with exit code 0 and 0 reported OpenGL debug errors.
 - **GitHub Actions Remote CI**:
   - M2 integration run [33342229206](https://github.com/liufangyuan247/HoloBench/actions/runs/33342229206): all four jobs pass on `main` at commit `9fb2e29`.
-  - Windows and Ubuntu `core-ci`: warnings-as-errors builds and 185/185 deterministic tests pass, including all three external `waveprop` golden comparisons.
+  - Windows and Ubuntu `core-ci`: warnings-as-errors builds and 185/185 tests passed for the earlier CPU-reference baseline, including all three external `waveprop` golden comparisons.
   - Windows and Ubuntu `app-ci`: warnings-as-errors application compilation passes; the Windows job explicitly binds Glad generation to Python 3.14.7 with pinned Jinja2 3.1.6 and MarkupSafe 3.0.3 dependencies.
+  - Final remote CI for the integrated GPU/detector commit remains pending and is required before tagging M2.

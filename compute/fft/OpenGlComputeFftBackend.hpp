@@ -22,6 +22,11 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+enum class TwiddleGenerationMode {
+    GpuShader,
+    CpuDeviceQuirk,
+};
+
 /**
  * Genuine OpenGL 4.6 compute-shader FFT backend using FP32 arithmetic for the
  * interactive path. ComplexField2D remains the FP64 reference representation;
@@ -60,6 +65,15 @@ public:
         std::span<const std::complex<double>> transferFunction);
 
     [[nodiscard]] static bool isContextAvailable() noexcept;
+    [[nodiscard]] static bool requiresCpuTwiddleQuirk(
+        std::string_view vendor,
+        std::string_view renderer,
+        std::string_view version) noexcept;
+    [[nodiscard]] TwiddleGenerationMode twiddleGenerationMode() const noexcept {
+        return twiddleGenerationMode_;
+    }
+    [[nodiscard]] static std::string_view twiddleGenerationModeName(
+        TwiddleGenerationMode mode) noexcept;
     [[nodiscard]] std::size_t bufferCapacitySamples() const noexcept { return bufferCapacitySamples_; }
     [[nodiscard]] bool hasGpuResources() const noexcept {
         return programId_ != 0 || ssbos_[0] != 0 || ssbos_[1] != 0
@@ -107,7 +121,10 @@ private:
     int locSubLength_ = -1;
     int locTwiddleStride_ = -1;
     int locTwiddleSign_ = -1;
+    int locTwiddleDimension_ = -1;
     int locScale_ = -1;
+    TwiddleGenerationMode twiddleGenerationMode_ = TwiddleGenerationMode::GpuShader;
+    bool deviceProfileInitialized_ = false;
 };
 
 using GlComputeFftBackend = OpenGlComputeFftBackend;
