@@ -191,4 +191,159 @@ TEST_CASE("reconstruction rejects clipping zero signal and invalid geometry") {
         std::invalid_argument);
 }
 
+TEST_CASE("phase-only spectral mode reconstructs with independent Helmholtz phase") {
+    constexpr std::size_t size = 16;
+    constexpr std::size_t xBin = 2;
+    constexpr std::size_t yBin = 1;
+    constexpr double pitch = 8e-6;
+    constexpr double wavelength = 532e-9;
+    constexpr double distance = 0.011;
+    constexpr double offset = 0.31;
+    field::ComplexField2D target(size, size, pitch, pitch, wavelength);
+    const double fx = static_cast<double>(xBin)
+        / (static_cast<double>(size) * pitch);
+    const double fy = static_cast<double>(yBin)
+        / (static_cast<double>(size) * pitch);
+    const double inverseWavelength = 1.0 / wavelength;
+    const double longitudinalCycles = std::sqrt(
+        inverseWavelength * inverseWavelength - fx * fx - fy * fy);
+    const auto axialTransfer = std::polar(
+        1.0, 2.0 * std::numbers::pi * longitudinalCycles * distance);
+    for (std::size_t y = 0; y < size; ++y) {
+        for (std::size_t x = 0; x < size; ++x) {
+            const double transversePhase = 2.0 * std::numbers::pi
+                * static_cast<double>(xBin * x + yBin * y)
+                / static_cast<double>(size);
+            target.at(x, y) = std::polar(1.0, transversePhase) * axialTransfer;
+        }
+    }
+    appholography::PhaseOnlyReconstructionConfig config;
+    config.hologramToTargetDistanceMetres = distance;
+    config.uniformReplayAmplitude = {0.7, -0.2};
+    config.encoding.phaseOffsetRadians = offset;
+    fft::CpuFftBackend backend;
+
+    const auto result = appholography::runPhaseOnlyReconstruction(
+        target, config, backend);
+
+    const auto expectedScale = config.uniformReplayAmplitude
+        * std::polar(1.0, offset);
+    CHECK(std::abs(
+        result.quality.bestFitTargetComplexScale - expectedScale) < 2e-12);
+    CHECK(result.quality.matchedModePowerFraction
+        == doctest::Approx(1.0).epsilon(2e-14));
+    CHECK(result.quality.replayNormalizedComplexResidual < 2e-12);
+    CHECK(result.quality.replayPeakNormalizedMaximumComplexResidual < 2e-12);
+    CHECK(result.quality.replayNormalizedIntensityResidual < 2e-12);
+    CHECK(result.quality.replayPeakNormalizedMaximumIntensityResidual < 2e-12);
+    CHECK(result.hologram.diagnostics.invalidPhaseSampleCount == 0);
+    CHECK(result.synthesisPropagation.evanescentBinCount == 0);
+    CHECK(result.replayPropagation.evanescentBinCount == 0);
+}
+
+TEST_CASE("phase-only reconstruction quality exposes discarded target amplitude") {
+    constexpr std::size_t size = 8;
+    field::ComplexField2D plate(size, size, 8e-6, 8e-6, 532e-9);
+    for (std::size_t index = 0; index < plate.sampleCount(); ++index) {
+        plate.samples()[index] = {
+            index % 2U == 0U ? 0.5 : 1.0,
+            0.0,
+        };
+    }
+    constexpr double distance = 0.007;
+    fft::CpuFftBackend backend;
+    holobench::compute::propagation::AngularSpectrumPropagator propagator(backend);
+    auto target = plate;
+    static_cast<void>(propagator.propagateInPlace(target, distance));
+    appholography::PhaseOnlyReconstructionConfig config;
+    config.hologramToTargetDistanceMetres = distance;
+
+    const auto result = appholography::runPhaseOnlyReconstruction(
+        target, config, backend);
+
+    // Parseval invariance makes this independent mode-overlap oracle equivalent
+    // at the plate: mean(a)^2 / mean(a^2) = 0.75^2 / 0.625 = 0.9.
+    CHECK(result.quality.matchedModePowerFraction
+        == doctest::Approx(0.9).epsilon(2e-13));
+    CHECK(result.quality.replayNormalizedComplexResidual
+        == doctest::Approx(std::sqrt(0.1)).epsilon(2e-12));
+    CHECK(result.quality.replayNormalizedIntensityResidual > 0.0);
+    CHECK(result.quality.replayPeakNormalizedMaximumIntensityResidual > 0.0);
+    CHECK(result.hologram.diagnostics.minimumTargetAmplitude
+        == doctest::Approx(0.5).epsilon(2e-12));
+    CHECK(result.hologram.diagnostics.maximumTargetAmplitude
+        == doctest::Approx(1.0).epsilon(2e-12));
+}
+
+TEST_CASE("phase quantization degrades a non-code spectral ramp deterministically") {
+    constexpr std::size_t size = 16;
+    field::ComplexField2D plate(size, size, 8e-6, 8e-6, 532e-9);
+    for (std::size_t y = 0; y < size; ++y) {
+        for (std::size_t x = 0; x < size; ++x) {
+            const double phase = 2.0 * std::numbers::pi
+                * static_cast<double>(x + 2U * y)
+                / static_cast<double>(size);
+            plate.at(x, y) = std::polar(1.0, phase);
+        }
+    }
+    constexpr double distance = 0.009;
+    fft::CpuFftBackend backend;
+    holobench::compute::propagation::AngularSpectrumPropagator propagator(backend);
+    auto target = plate;
+    static_cast<void>(propagator.propagateInPlace(target, distance));
+    appholography::PhaseOnlyReconstructionConfig continuousConfig;
+    continuousConfig.hologramToTargetDistanceMetres = distance;
+    auto quantizedConfig = continuousConfig;
+    quantizedConfig.encoding.bitDepth = 2;
+
+    const auto continuous = appholography::runPhaseOnlyReconstruction(
+        target, continuousConfig, backend);
+    const auto quantized = appholography::runPhaseOnlyReconstruction(
+        target, quantizedConfig, backend);
+    const auto repeated = appholography::runPhaseOnlyReconstruction(
+        target, quantizedConfig, backend);
+
+    CHECK(continuous.quality.replayNormalizedComplexResidual < 2e-12);
+    CHECK(quantized.quality.matchedModePowerFraction
+        < continuous.quality.matchedModePowerFraction);
+    CHECK(quantized.quality.replayNormalizedComplexResidual
+        > continuous.quality.replayNormalizedComplexResidual);
+    CHECK(quantized.hologram.diagnostics.quantizedPhaseSampleCount > 0);
+    CHECK(quantized.quality.replayNormalizedComplexResidual
+        == repeated.quality.replayNormalizedComplexResidual);
+    CHECK(maximumDifference(
+        quantized.reconstructedAtTarget,
+        repeated.reconstructedAtTarget) == 0.0);
+}
+
+TEST_CASE("phase-only reconstruction rejects invalid geometry signal and backend") {
+    const auto target = makeObjectField();
+    fft::CpuFftBackend backend;
+    appholography::PhaseOnlyReconstructionConfig config;
+
+    config.hologramToTargetDistanceMetres = 0.0;
+    CHECK_THROWS_AS(
+        static_cast<void>(appholography::runPhaseOnlyReconstruction(
+            target, config, backend)),
+        std::invalid_argument);
+    config = {};
+    config.uniformReplayAmplitude = {0.0, 0.0};
+    CHECK_THROWS_AS(
+        static_cast<void>(appholography::runPhaseOnlyReconstruction(
+            target, config, backend)),
+        std::invalid_argument);
+    config = {};
+    auto zero = target;
+    zero.fill({0.0, 0.0});
+    CHECK_THROWS_AS(
+        static_cast<void>(appholography::runPhaseOnlyReconstruction(
+            zero, config, backend)),
+        std::invalid_argument);
+    const auto unsupported = makeObjectField(15);
+    CHECK_THROWS_AS(
+        static_cast<void>(appholography::runPhaseOnlyReconstruction(
+            unsupported, config, backend)),
+        std::invalid_argument);
+}
+
 } // TEST_SUITE("HolographyReconstructionPipeline")

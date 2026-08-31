@@ -115,7 +115,8 @@ Previous: **M4 — Real Lens Engineering Model: complete**
 - **CPU reference foundation**: Thin amplitude recording reports exposure/transmission ranges and both clamp counts. Replay preserves all zero, object, and conjugate terms, permits a different replay wavelength on the same transverse plate grid, and rejects non-finite, corrupt, or incompatible state.
 - **Propagated reconstruction**: A headless ASM workflow propagates an arbitrary complex object from `z=-d` to H1, records and fully replays the plate, and explicitly decomposes unclipped linear zero/object/conjugate orders. Ordinary replay back-propagates its object-bearing order to the virtual image; conjugated-reference replay propagates its conjugate-bearing order to the real image. Full replay fields remain available and visibly differ from isolated teaching orders.
 - **Phase-only foundation**: The first ideal commanded-phase model wraps into `[0, 2π)`, optionally quantizes to the nearest circular `2^bitDepth` code, marks target samples without meaningful phase, and reports target-amplitude and circular phase-error diagnostics. Replay applies a unit-modulus transmission and preserves illumination intensity. It is explicitly wavelength-specific and rejects wavelength, medium, or transverse-grid mismatches; RGB will use separate per-wavelength channels rather than treating a commanded phase as a fixed-OPD achromatic plate.
-- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 318/318 deterministic cases; complete Clang/MSVC applications build. Seventeen M6 cases cover constant-field exposure, a non-zero-phase analytic carrier fringe, positive/negative response slopes and clamps, direct replay algebra at a changed wavelength, exact three-order summation, conjugation involution, an independent Helmholtz spectral-bin phase, ordinary/conjugate ASM round trips below `2e-12`, full-versus-isolated replay distinction, phase wrapping and circular quantization, invalid target-phase masking, intensity-preserving replay, compatibility rejection, determinism, and strict invalid-state rejection.
+- **Phase-only propagated quality**: A headless workflow back-propagates a requested image to the command plane, encodes phase only, replays with a uniform field, and propagates forward. Explicit least-squares global scale fitting separates arbitrary relative gain/phase from spatial error; diagnostics report matched complex-mode power plus replay-normalized and peak-normalized complex and intensity residuals. The metrics expose discarded target amplitude and phase quantization rather than hiding either behind image normalization.
+- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 322/322 deterministic cases; complete Clang/MSVC applications build. Twenty-one M6 cases cover constant-field exposure, a non-zero-phase analytic carrier fringe, positive/negative response slopes and clamps, direct replay algebra at a changed wavelength, exact three-order summation, conjugation involution, independent Helmholtz spectral-bin phase oracles for thin and phase-only reconstruction, ordinary/conjugate ASM round trips below `2e-12`, full-versus-isolated replay distinction, phase wrapping and circular quantization, invalid target-phase masking, intensity-preserving replay, analytic matched-mode loss from discarded amplitude, quantization degradation, compatibility rejection, determinism, and strict invalid-state rejection.
 
 ## Known limitations (M1/M2)
 
@@ -127,10 +128,10 @@ Previous: **M4 — Real Lens Engineering Model: complete**
 
 ## Next five tasks
 
-1. Add propagated phase-only reconstruction-quality diagnostics.
-2. Build H1-to-H2, transplane, and RGB CPU-reference orchestration.
-3. Add diffraction-order spatial placement and sampling diagnostics.
-4. Build the apply-gated Holography teaching workflow and persistence.
-5. Implement the separate volume-hologram/Kogelnik reference; consider GPU
+1. Build H1-to-H2, transplane, and RGB CPU-reference orchestration.
+2. Add diffraction-order spatial placement and sampling diagnostics.
+3. Build the apply-gated Holography teaching workflow and persistence.
+4. Implement the separate volume-hologram/Kogelnik CPU reference and oracles.
+5. Add a named M6 CPU benchmark; consider GPU
    acceleration only after the CPU/product model is stable, retaining runtime
    capability dispatch and the default path on untested devices.

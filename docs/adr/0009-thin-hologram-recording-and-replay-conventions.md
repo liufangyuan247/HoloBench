@@ -108,6 +108,11 @@ photopolymer, or a complete radiometric exposure model.
 - Phase-only cases independently cover continuous wrapping, nearest circular
   quantization and boundary wrap, invalid target-phase masking, pointwise
   intensity conservation, phase application, and incompatible/corrupt state.
+- Propagated phase-only quality uses an independent Helmholtz spectral-mode
+  oracle and Parseval mode-overlap result. Least-squares global complex and
+  intensity scales are reported explicitly; matched-mode power and residuals
+  expose amplitude loss and phase-code quantization without conflating either
+  with arbitrary relative-field gain or origin phase.
 
 ## Explicit limitations
 

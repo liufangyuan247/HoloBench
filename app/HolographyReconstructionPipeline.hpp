@@ -1,9 +1,11 @@
 #pragma once
 
+#include <complex>
 #include <cstddef>
 
 #include "compute/propagation/AngularSpectrumPropagator.hpp"
 #include "core/field/ComplexField2D.hpp"
+#include "optics/holography/PhaseOnlyHologram.hpp"
 #include "optics/holography/ThinHologram.hpp"
 #include "optics/wave/FieldSources.hpp"
 
@@ -60,6 +62,46 @@ struct ThinHologramReconstructionResult final {
 [[nodiscard]] ThinHologramReconstructionResult runThinHologramReconstruction(
     const field::ComplexField2D& objectPlaneField,
     const ThinHologramReconstructionConfig& config,
+    compute::fft::IFftBackend& fftBackend);
+
+struct PhaseOnlyReconstructionConfig final {
+    // The commanded phase plate is at z=0 and the requested target is at +z.
+    double hologramToTargetDistanceMetres = 0.01;
+    std::complex<double> uniformReplayAmplitude {1.0, 0.0};
+    optics::holography::PhaseOnlyEncodingParameters encoding;
+};
+
+struct PhaseOnlyReconstructionQuality final {
+    // Least-squares complex scale mapping the requested target to the replay.
+    std::complex<double> bestFitTargetComplexScale {0.0, 0.0};
+    // Fraction of replay power in the requested complex spatial mode [0, 1].
+    double matchedModePowerFraction = 0.0;
+    double replayNormalizedComplexResidual = 0.0;
+    double replayPeakNormalizedMaximumComplexResidual = 0.0;
+    // Least-squares non-negative scale mapping requested to replay intensity.
+    double bestFitTargetIntensityScale = 0.0;
+    double replayNormalizedIntensityResidual = 0.0;
+    double replayPeakNormalizedMaximumIntensityResidual = 0.0;
+};
+
+struct PhaseOnlyReconstructionResult final {
+    field::ComplexField2D targetBackPropagatedToHologram;
+    optics::holography::PhaseOnlyHologram hologram;
+    field::ComplexField2D replayAtHologram;
+    field::ComplexField2D reconstructedAtTarget;
+    PhaseOnlyReconstructionQuality quality;
+    compute::propagation::AngularSpectrumDiagnostics synthesisPropagation;
+    compute::propagation::AngularSpectrumDiagnostics replayPropagation;
+};
+
+// Back-propagates a requested target to the commanded-phase plane, discards
+// target amplitude there by phase-only encoding, then replays and propagates
+// forward. Quality is reported after explicit least-squares scale fitting so
+// relative hologram fields are not penalized for an arbitrary global gain or
+// phase while spatial-mode and intensity-shape loss remain visible.
+[[nodiscard]] PhaseOnlyReconstructionResult runPhaseOnlyReconstruction(
+    const field::ComplexField2D& requestedTargetField,
+    const PhaseOnlyReconstructionConfig& config,
     compute::fft::IFftBackend& fftBackend);
 
 } // namespace holobench::app::holography

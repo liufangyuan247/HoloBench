@@ -65,6 +65,140 @@ namespace {
     return expected;
 }
 
+[[nodiscard]] bool sameFieldGrid(
+    const field::ComplexField2D& first,
+    const field::ComplexField2D& second) noexcept {
+    return first.width() == second.width()
+        && first.height() == second.height()
+        && first.pitchXMetres() == second.pitchXMetres()
+        && first.pitchYMetres() == second.pitchYMetres()
+        && first.vacuumWavelengthMetres() == second.vacuumWavelengthMetres()
+        && first.refractiveIndex() == second.refractiveIndex();
+}
+
+[[nodiscard]] PhaseOnlyReconstructionQuality comparePhaseOnlyReconstruction(
+    const field::ComplexField2D& actual,
+    const field::ComplexField2D& target) {
+    if (!sameFieldGrid(actual, target)) {
+        throw std::invalid_argument(
+            "phase-only reconstruction quality fields are incompatible");
+    }
+
+    std::complex<long double> complexInner {0.0L, 0.0L};
+    long double targetPower = 0.0L;
+    long double actualPower = 0.0L;
+    long double intensityInner = 0.0L;
+    long double targetIntensitySquared = 0.0L;
+    long double actualIntensitySquared = 0.0L;
+    long double actualPeakAmplitude = 0.0L;
+    long double actualPeakIntensity = 0.0L;
+    for (std::size_t index = 0; index < actual.sampleCount(); ++index) {
+        const auto targetSample = target.samples()[index];
+        const auto actualSample = actual.samples()[index];
+        if (!std::isfinite(targetSample.real()) || !std::isfinite(targetSample.imag())
+            || !std::isfinite(actualSample.real())
+            || !std::isfinite(actualSample.imag())) {
+            throw std::invalid_argument(
+                "phase-only reconstruction quality fields must be finite");
+        }
+        const std::complex<long double> targetLong {
+            static_cast<long double>(targetSample.real()),
+            static_cast<long double>(targetSample.imag()),
+        };
+        const std::complex<long double> actualLong {
+            static_cast<long double>(actualSample.real()),
+            static_cast<long double>(actualSample.imag()),
+        };
+        const long double targetIntensity = std::norm(targetLong);
+        const long double actualIntensity = std::norm(actualLong);
+        complexInner += std::conj(targetLong) * actualLong;
+        targetPower += targetIntensity;
+        actualPower += actualIntensity;
+        intensityInner += targetIntensity * actualIntensity;
+        targetIntensitySquared += targetIntensity * targetIntensity;
+        actualIntensitySquared += actualIntensity * actualIntensity;
+        actualPeakAmplitude = std::max(
+            actualPeakAmplitude, std::abs(actualLong));
+        actualPeakIntensity = std::max(
+            actualPeakIntensity, actualIntensity);
+    }
+    if (!(targetPower > 0.0L) || !(actualPower > 0.0L)
+        || !(targetIntensitySquared > 0.0L)
+        || !(actualIntensitySquared > 0.0L)
+        || actualPeakAmplitude == 0.0L || actualPeakIntensity == 0.0L) {
+        throw std::invalid_argument(
+            "phase-only reconstruction quality needs nonzero target and replay fields");
+    }
+
+    const auto scaleLong = complexInner / targetPower;
+    const long double intensityScaleLong = intensityInner / targetIntensitySquared;
+    long double complexResidualSquared = 0.0L;
+    long double intensityResidualSquared = 0.0L;
+    long double maximumComplexResidual = 0.0L;
+    long double maximumIntensityResidual = 0.0L;
+    for (std::size_t index = 0; index < actual.sampleCount(); ++index) {
+        const auto targetSample = target.samples()[index];
+        const auto actualSample = actual.samples()[index];
+        const std::complex<long double> targetLong {
+            static_cast<long double>(targetSample.real()),
+            static_cast<long double>(targetSample.imag()),
+        };
+        const std::complex<long double> actualLong {
+            static_cast<long double>(actualSample.real()),
+            static_cast<long double>(actualSample.imag()),
+        };
+        const auto complexResidual = actualLong - scaleLong * targetLong;
+        const long double intensityResidual = std::norm(actualLong)
+            - intensityScaleLong * std::norm(targetLong);
+        complexResidualSquared += std::norm(complexResidual);
+        intensityResidualSquared += intensityResidual * intensityResidual;
+        maximumComplexResidual = std::max(
+            maximumComplexResidual, std::abs(complexResidual));
+        maximumIntensityResidual = std::max(
+            maximumIntensityResidual, std::abs(intensityResidual));
+    }
+
+    const long double rawModeFraction = std::norm(complexInner)
+        / (targetPower * actualPower);
+    const long double modeFraction = std::clamp(rawModeFraction, 0.0L, 1.0L);
+    const long double normalizedComplexResidual = std::sqrt(
+        complexResidualSquared / actualPower);
+    const long double normalizedIntensityResidual = std::sqrt(
+        intensityResidualSquared / actualIntensitySquared);
+    const long double peakNormalizedComplexResidual
+        = maximumComplexResidual / actualPeakAmplitude;
+    const long double peakNormalizedIntensityResidual
+        = maximumIntensityResidual / actualPeakIntensity;
+    const auto bestFitScale = std::complex<double> {
+        static_cast<double>(scaleLong.real()),
+        static_cast<double>(scaleLong.imag()),
+    };
+    const double bestFitIntensityScale = static_cast<double>(intensityScaleLong);
+    if (!std::isfinite(bestFitScale.real()) || !std::isfinite(bestFitScale.imag())
+        || !std::isfinite(bestFitIntensityScale)
+        || !std::isfinite(modeFraction)
+        || !std::isfinite(normalizedComplexResidual)
+        || !std::isfinite(normalizedIntensityResidual)
+        || !std::isfinite(peakNormalizedComplexResidual)
+        || !std::isfinite(peakNormalizedIntensityResidual)) {
+        throw std::overflow_error(
+            "phase-only reconstruction quality is not representable");
+    }
+    return {
+        .bestFitTargetComplexScale = bestFitScale,
+        .matchedModePowerFraction = static_cast<double>(modeFraction),
+        .replayNormalizedComplexResidual
+            = static_cast<double>(normalizedComplexResidual),
+        .replayPeakNormalizedMaximumComplexResidual
+            = static_cast<double>(peakNormalizedComplexResidual),
+        .bestFitTargetIntensityScale = bestFitIntensityScale,
+        .replayNormalizedIntensityResidual
+            = static_cast<double>(normalizedIntensityResidual),
+        .replayPeakNormalizedMaximumIntensityResidual
+            = static_cast<double>(peakNormalizedIntensityResidual),
+    };
+}
+
 } // namespace
 
 ThinHologramReconstructionResult runThinHologramReconstruction(
@@ -148,6 +282,55 @@ ThinHologramReconstructionResult runThinHologramReconstruction(
         .virtualImagePropagation = virtualDiagnostics,
         .realImagePropagation = realDiagnostics,
         .expectedImageAmplitudeScale = expectedScale,
+    };
+}
+
+PhaseOnlyReconstructionResult runPhaseOnlyReconstruction(
+    const field::ComplexField2D& requestedTargetField,
+    const PhaseOnlyReconstructionConfig& config,
+    compute::fft::IFftBackend& fftBackend) {
+    if (!std::isfinite(config.hologramToTargetDistanceMetres)
+        || config.hologramToTargetDistanceMetres <= 0.0) {
+        throw std::invalid_argument(
+            "phase-only hologram-to-target distance must be positive and finite");
+    }
+    const double replayPower = std::norm(config.uniformReplayAmplitude);
+    if (!std::isfinite(config.uniformReplayAmplitude.real())
+        || !std::isfinite(config.uniformReplayAmplitude.imag())
+        || !std::isfinite(replayPower) || replayPower == 0.0) {
+        throw std::invalid_argument(
+            "phase-only replay amplitude must be finite and nonzero");
+    }
+    if (!fftBackend.supportsDimensions(
+            requestedTargetField.width(), requestedTargetField.height())) {
+        throw std::invalid_argument(
+            "FFT backend does not support the phase-only reconstruction grid");
+    }
+
+    compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
+    auto targetAtHologram = requestedTargetField;
+    const auto synthesisDiagnostics = propagator.propagateInPlace(
+        targetAtHologram, -config.hologramToTargetDistanceMetres);
+    auto hologram = optics::holography::encodePhaseOnlyHologram(
+        targetAtHologram, config.encoding);
+    auto illumination = targetAtHologram;
+    illumination.fill(config.uniformReplayAmplitude);
+    auto replayAtHologram = optics::holography::replayPhaseOnlyHologram(
+        hologram, illumination).field;
+    auto reconstructed = replayAtHologram;
+    const auto replayDiagnostics = propagator.propagateInPlace(
+        reconstructed, config.hologramToTargetDistanceMetres);
+    const auto quality = comparePhaseOnlyReconstruction(
+        reconstructed, requestedTargetField);
+
+    return {
+        .targetBackPropagatedToHologram = std::move(targetAtHologram),
+        .hologram = std::move(hologram),
+        .replayAtHologram = std::move(replayAtHologram),
+        .reconstructedAtTarget = std::move(reconstructed),
+        .quality = quality,
+        .synthesisPropagation = synthesisDiagnostics,
+        .replayPropagation = replayDiagnostics,
     };
 }
 

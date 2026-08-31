@@ -69,7 +69,10 @@ development. For the current repository state and roadmap, see
   invalid-target masks and RMS/maximum circular phase-error diagnostics. Ideal
   replay applies unit-modulus transmission, preserves illumination intensity,
   and rejects wavelength, medium, or grid mismatches rather than pretending a
-  commanded phase pattern is achromatic.
+  commanded phase pattern is achromatic. A back-propagate/encode/replay/forward-
+  propagate workflow reports best-fit complex gain, matched-mode power, complex
+  residual, and intensity residual so discarded amplitude and phase
+  quantization remain measurable.
 - **Named CPU performance gate**: The fixed 128-square, three-wavelength,
   ideal/LUT/LCD full refresh records p95 **188.482 ms** with Clang and
   **278.183 ms** with MSVC on the reference i7-9750H, below the 350 ms budget.
@@ -92,7 +95,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (318 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (322 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -100,7 +103,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 318/318 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 322/322 tests passing):
 
 ```powershell
 cmake --preset core-ci

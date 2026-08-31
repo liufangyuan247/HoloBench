@@ -15,7 +15,8 @@ clearly separate first volume-hologram model.
   comparison, explicit linear-order decomposition, and complex-field metrics.
 - [x] Wavelength-specific phase-only encoding, circular quantization, invalid-
   target masking, ideal replay, and phase-error diagnostics.
-- [ ] Propagated phase-only reconstruction-quality metrics.
+- [x] Propagated phase-only synthesis/replay with matched-mode, complex-field,
+  and intensity-shape reconstruction-quality metrics.
 - [ ] RGB recording/replay basics with wavelength identity preserved.
 - [ ] H1 record -> conjugate replay -> real image -> H2 record/replay pipeline.
 - [ ] Transplane placement controls and image-plane traversal diagnostics.
