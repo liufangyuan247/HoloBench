@@ -12,9 +12,9 @@ against an independent optical-design implementation.
   conventions, clear apertures, analytic gradients, and robust intersections.
 - [x] Constant, Cauchy, and Sellmeier material models with declared wavelength
   domains and explicit catalog-unit conversion.
-- [ ] Sequential thick-lens and multi-element assembly tracing with per-surface
+- [x] Sequential thick-lens and multi-element assembly tracing with per-surface
   status, optical path length, refraction, TIR, clipping, and failure evidence.
-- [ ] Rigid surface poses supporting decenter and tilt without scale/shear or
+- [x] Rigid surface poses supporting decenter and tilt without scale/shear or
   Euler-order ambiguity.
 - [ ] Polychromatic/RGB ray bundles and longitudinal chromatic focal-shift
   analysis.
@@ -33,7 +33,7 @@ against an independent optical-design implementation.
   general surfaces satisfy named spatial residual and forward-root tolerances.
 - [x] Analytic normals agree with independent finite differences, including
   off-axis and negative-curvature cases.
-- [ ] Snell invariants and forward/reverse trace consistency pass away from
+- [x] Snell invariants and forward/reverse trace consistency pass away from
   clipping, absorption, and TIR.
 - [x] Cauchy and Sellmeier indices match independent hand-calculated and catalog
   reference values across the declared wavelength domain.

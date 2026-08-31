@@ -83,7 +83,9 @@ Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 - **Rotational surfaces**: The CPU double-precision reference implements plane, sphere, conic, and even-asphere sag/gradient models. Planes and base conics use stable analytic roots; even aspheres use safeguarded Newton iteration plus an ascending bracket fallback. Hits, misses, clear-aperture clipping, invalid domains, and non-convergence remain distinct.
 - **Surface validation**: Seven new deterministic cases with 41 assertions cover positive/negative curvature, explicit sphere sheet selection, an independent paraboloid result, independent asphere residuals, clear-aperture clipping, forward trace limits, and analytic normals against separate central differences.
 - **Dispersion materials**: Constant-index, SI Cauchy, and SI Sellmeier models enforce declared wavelength domains, reject poles and non-physical indices, and include an explicit SCHOTT N-BK7 micrometre-squared-to-SI catalog conversion. Independent hand calculations and four N-BK7 catalog wavelengths cover F/d/C Fraunhofer lines and 1 um.
-- **Local toolchain gate**: Windows Clang 21 warnings-as-errors core and application builds pass with 243/243 headless tests. MSVC 19.44 `/W4 /WX` also builds the complete headless target and passes 243/243.
+- **Rigid prescription tracing**: Right-handed orthonormal surface poses support decenter and tilt while rejecting scale, shear, and reflection. The sequential tracer transforms rays per surface, evaluates each material at the ray wavelength, applies the shared Snell/TIR solver, and records hit status, world point/normal, geometric length, segment/cumulative optical path, and outgoing ray.
+- **Trace validation**: A parallel plate independently verifies geometric and optical path, N-BK7 blue/red rays prove wavelength-aware dispatch, and dedicated cases cover clipping, TIR termination, invalid medium continuity, and rigid-transform metric round trips.
+- **Local toolchain gate**: Windows Clang 21 warnings-as-errors core and application builds pass with 249/249 headless tests. MSVC 19.44 `/W4 /WX` also builds the complete headless target and passes 249/249.
 
 ## Known limitations (M1/M2)
 
@@ -95,8 +97,8 @@ Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 
 ## Next five tasks
 
-1. Add rigid surface poses plus thick-lens and multi-surface sequential tracing with per-surface evidence.
-2. Add RGB/polychromatic bundles, longitudinal chromatic shift, and wavelength/field-grouped spot diagrams.
-3. Add versioned prescription JSON/CSV import/export and the interactive prescription editor.
-4. Build the pinned Optiland/prysm generator and commit hashed golden prescriptions.
-5. Validate at least five benchmark lenses before the `m4-real-lens` release gate.
+1. Add RGB/polychromatic bundles, longitudinal chromatic shift, and wavelength/field-grouped spot diagrams.
+2. Add versioned prescription JSON/CSV import/export and the interactive prescription editor.
+3. Build the pinned Optiland/prysm generator and commit hashed golden prescriptions.
+4. Validate at least five benchmark lenses against independent focal/spot results.
+5. Run named performance, smoke, cross-platform CI, and the `m4-real-lens` release gate.
