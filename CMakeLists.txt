@@ -108,8 +108,11 @@ add_library(holobench_app_logic STATIC
     app/HolographyProject.cpp
     app/HolographyReconstructionPipeline.cpp
     app/HolographyUiState.cpp
+    app/lessons/LearnSession.cpp
     app/lessons/LessonCatalog.cpp
     app/lessons/LessonProgress.cpp
+    app/lessons/LessonTemplates.cpp
+    app/lessons/Localization.cpp
     app/RealLensWorkbenchPipeline.cpp
     app/SamplingDebuggerPipeline.cpp
     app/SlmInterferencePipeline.cpp
@@ -344,8 +347,11 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/app/SlmInterferenceUiStateTests.cpp
         tests/app/HolographyUiStateTests.cpp
         tests/app/HolographyProjectTests.cpp
+        tests/app/LearnSessionTests.cpp
         tests/app/LessonCatalogTests.cpp
         tests/app/LessonProgressTests.cpp
+        tests/app/LessonTemplatesTests.cpp
+        tests/app/LocalizationTests.cpp
         tests/app/SlmInterferenceProjectTests.cpp
         render/Camera.cpp
         tests/render/CameraTests.cpp

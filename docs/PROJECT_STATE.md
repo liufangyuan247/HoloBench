@@ -130,7 +130,12 @@ Previous: **M5 - SLM, Coherence & Interference: complete**
 
 - **Lesson catalog**: `app/lessons/` defines ten stable, non-localized course IDs, three ordered steps per course, template references, localization message keys, and an explicit prerequisite DAG. Construction rejects empty catalogs, duplicate or unstable IDs, duplicate steps/prerequisites, missing prerequisites, and direct or indirect cycles.
 - **Independent progress persistence**: Format-v1 `holobench_lesson_progress` JSON stores only ordered completed-step prefixes and never embeds or mutates physics-project state. Lock/unlock, completion, unknown IDs, out-of-order steps, impossible prerequisite state, transitive dependent reset, strict keys/types/version/kind, malformed input, file I/O, and byte-stable round trips are covered.
-- **Current validation**: Ten M7 domain cases bring the suite to 356/356 on Windows Clang 21, MSVC 19.44 `/W4 /WX`, and WSL GCC 15.2 warnings-as-errors. The complete Clang development build passes 357/357 including the existing OpenGL GPU executable. No GPU dispatch or compatibility behavior changed.
+- **Docked Learn surface**: The right-side Learn dock resolves lesson titles/objectives independently from identity, shows locked/available/in-progress/completed state and prerequisite evidence, exposes the current ordered step, supports review/reset/end, and saves or loads the separate progress document. Catalog entries without an implemented workflow remain visible but cannot be started.
+- **Reflection / Refraction workflow**: The first lesson invokes the existing planar-mirror and plane-interface ray tracers, exposes incidence angle and both refractive indices, and reports reflection-angle error, transmitted angle, Snell residual, and total internal reflection. Completion requires a real control change of at least 5 degrees plus confirmation in a valid refracted state; a button press alone is not treated as the observation.
+- **Thin Lens workflow**: The second lesson loads an ordinary format-v1 optical-bench scene deliberately defocused by 30 mm, uses the existing scene application and paraxial thin-lens prediction, and watches the shared Lab scene while the learner moves the screen. Completion requires at least 5 mm of screen motion and focus within 1 mm of the predicted real-image plane.
+- **Localization foundation**: Stable English and `zh-Hans` resources cover all ten titles/objectives and every step in the first two workflows, with deterministic English fallback. Packaged CJK glyph coverage is not yet present, so this is the localization architecture rather than a claim of release-complete Chinese rendering.
+- **Compatibility boundary**: This increment adds no GPU dispatch, vendor/model branch, or compatibility workaround. It does not change any existing physics-project schema; reflection uses lesson configuration and Thin Lens uses the normal format-v1 scene path. Formal versioned templates for all guided experiments remain open M7 work.
+- **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and WSL GCC 15.2 warnings-as-errors pass 368/368 deterministic core/application cases. The complete Clang development preset passes 369/369 including the OpenGL GPU executable, while Clang/MSVC/GCC all build the complete application. Hidden OpenGL smoke passes with both Clang and MSVC; it now includes a byte-stable lesson-progress semantic round trip, and the Clang application also passes 120 hidden frames on AMD Radeon Pro 5300M with driver/OpenGL `23.9.3.230915` / 4.6. No GPU dispatch or compatibility behavior changed.
 
 ## Known limitations (M1/M2)
 
@@ -142,8 +147,8 @@ Previous: **M5 - SLM, Coherence & Interference: complete**
 
 ## Next five tasks
 
-1. Integrate docked Learn UI with lesson state, step navigation, and progress controls.
-2. Ship the guided Reflection/Refraction and Thin Lens lesson workflows and templates.
-3. Add contextual explanations and stable localization resources without weakening engineering diagnostics.
+1. Implement guided Real / Virtual Images and Diffraction workflows against the existing ray/wave paths.
+2. Implement Fourier Plane, Spatial Filtering, NA / PSF, and Coherence / Interference workflows.
+3. Promote lesson setups to ordinary versioned project templates with provenance and add packaged CJK font coverage.
 4. Add deterministic undo/redo for lesson-relevant editing actions.
-5. Add named M7 benchmark scenes after the first complete lesson workflows stabilize.
+5. Add named M7 benchmark scenes and run the external learner product gate after lessons 1-7 are complete.

@@ -117,6 +117,22 @@ Product Alpha)** is active development. For the current repository state and roa
   p95 values are **38.675 / 51.780 / 43.410 ms**, all below the platform-neutral
   150 ms budget with identical checksum `1512.57504282`.
 
+## M7 Teaching Product Alpha (in progress)
+
+- **Learn mode foundation**: A docked course catalog presents ten stable lesson
+  identities, prerequisite locking, ordered steps, visible objectives, review/
+  reset controls, and a progress file kept separate from physics projects.
+- **First shared-physics workflows**: Reflection / Refraction calls the existing
+  mirror and dielectric-interface tracers, while Thin Lens loads the normal
+  optical-bench scene and observes the existing paraxial image prediction as
+  the learner moves the screen. Neither lesson owns a duplicate physics model.
+- **Localization architecture**: English and `zh-Hans` resources resolve from
+  stable message keys with English fallback. The first two workflows have full
+  step text; packaged CJK font coverage remains work in progress.
+- **Current scope**: Lessons 3-10 are visible for prerequisite planning but
+  cannot be started until their guided workflows and ordinary project
+  templates are implemented and validated.
+
 ## Physical Assumptions & Limitations (M1)
 
 - **Paraxial Approximation**: Thin lenses and ray propagation assume small angles relative to the optical axis ($+Z$).
@@ -135,7 +151,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (347 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (368 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev

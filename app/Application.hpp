@@ -15,6 +15,8 @@
 #include "app/RealLensWorkbenchPipeline.hpp"
 #include "app/SamplingDebuggerPipeline.hpp"
 #include "app/SlmInterferenceUiState.hpp"
+#include "app/lessons/LearnSession.hpp"
+#include "app/lessons/Localization.hpp"
 #include "optics/ray/BenchTracer.hpp"
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
@@ -186,6 +188,7 @@ struct DockLayoutConfig {
     static constexpr const char* kRealLensWindowName = "Real Lens Workbench";
     static constexpr const char* kSlmInterferenceWindowName = "SLM & Interference Lab";
     static constexpr const char* kHolographyWindowName = "Holography Lab";
+    static constexpr const char* kLearnWindowName = "Learn";
     static constexpr const char* kDockSpaceIdStr = "HoloBenchDockSpace";
 };
 
@@ -277,6 +280,7 @@ private:
     void drawRealLensPanel();
     void drawSlmInterferencePanel();
     void drawHolographyPanel();
+    void drawLearnPanel();
     void updateWaveDetector();
     void updateSlmInterference();
     void updateHolography();
@@ -290,6 +294,8 @@ private:
     void saveSlmExperimentProject();
     void loadHolographyProject();
     void saveHolographyProject();
+    void loadLessonProgress();
+    void saveLessonProgress();
     bool applyScene(
         const optics::scene::OpticalBenchScene& candidateScene,
         const optics::ray::BenchTracerOptions& candidateOptions);
@@ -336,6 +342,9 @@ private:
     reallens::RealLensWorkbenchConfig realLensConfig_;
     slmui::SlmInterferenceUiState slmInterferenceUiState_;
     holographyui::HolographyUiState holographyUiState_;
+    lessons::LearnSession learnSession_;
+    lessons::LocalizationCatalog lessonLocalization_;
+    lessons::LessonLocale lessonLocale_ = lessons::LessonLocale::English;
     waveui::DetectorPixel detectorProbe_;
     bool hasDetectorProbe_ = false;
     bool detectorProbeLocked_ = false;
@@ -349,6 +358,9 @@ private:
     std::string slmInterferenceStatusMessage_;
     std::string holographyErrorMessage_;
     std::string holographyStatusMessage_;
+    std::string lessonErrorMessage_;
+    std::string lessonStatusMessage_;
+    std::string selectedLessonId_ = "reflection_refraction";
     bool realLensDirty_ = true;
     std::size_t selectedRealLensSurface_ = 0;
 
@@ -366,6 +378,7 @@ private:
     char slmCalibrationPathBuffer_[512] = "slm_response.json";
     char slmProjectPathBuffer_[512] = "slm_experiment.json";
     char holographyProjectPathBuffer_[512] = "holography_experiment.json";
+    char lessonProgressPathBuffer_[512] = "holobench_lesson_progress.json";
 
     bool isBenchmark_ = false;
     int vsyncInterval_ = 1;

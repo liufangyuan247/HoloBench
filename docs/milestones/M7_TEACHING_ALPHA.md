@@ -30,17 +30,22 @@ lessons during M7.
   ordered steps, project-template references, and stable localization keys.
 - [x] Strict, versioned, byte-stable lesson-progress persistence, stored
   separately from physics project documents.
-- [ ] Dockable Learn UI with locked/unlocked/completed state, step navigation,
-  reset, and visible learning objectives.
+- [x] Dockable Learn UI with locked/unlocked/completed state, ordered-step
+  guidance, reset/review controls, and visible learning objectives. Guided
+  interaction is enabled only for the first two implemented workflows; future
+  catalog entries remain visibly unavailable rather than simulating completion.
 - [ ] At least the first eight complete guided experiments using the existing
   M1-M6 physics and diagnostics.
 - [ ] Versioned project templates that open in Lab mode and remain compatible
   with normal project save/load.
 - [ ] Contextual explanations that declare units, approximations, solver
   fidelity, and limitations without making formulas the primary interaction.
+  The first two workflows include these explanations; lessons 3-8 remain.
 - [ ] Undo/redo for lesson-relevant editing actions with deterministic tests.
-- [ ] Basic localization architecture based on stable message keys, with no
-  localized strings used as serialized identity.
+- [x] Basic English/`zh-Hans` localization architecture based on stable message
+  keys, English fallback, and no localized strings used as serialized identity.
+  Packaged CJK font coverage is still required before localization is a
+  release-complete user experience.
 - [ ] Named benchmark scenes covering the guided workflows and a documented
   reference-hardware profile.
 
@@ -67,9 +72,11 @@ lessons during M7.
   missing prerequisites, and prerequisite cycles.
 - [x] Tests cover lock/unlock, completion, reset, schema/version rejection,
   malformed input, migration where applicable, and byte-stable round trip.
-- [ ] Every completed lesson has a deterministic workflow test that exercises
-  the same physics path used by Lab mode and checks its stated observation.
-- [ ] Windows Clang/MSVC and Ubuntu GCC warnings-as-errors builds pass.
+- [x] Every currently completed lesson has a deterministic workflow test that
+  exercises the same physics path used by Lab mode and checks its stated
+  observation (Reflection / Refraction and Thin Lens at this increment).
+- [x] Windows Clang/MSVC and Ubuntu GCC warnings-as-errors builds pass for
+  every currently integrated M7 increment.
 - [ ] Complete application smoke and named M7 benchmark scenes pass.
 
 ## Product gate

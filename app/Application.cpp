@@ -29,6 +29,7 @@
 #include "optics/slm/SlmResponseIO.hpp"
 #include "app/HolographyProject.hpp"
 #include "app/SlmInterferenceProject.hpp"
+#include "app/lessons/LessonProgress.hpp"
 #include "optics/ray/BenchTracer.hpp"
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
@@ -169,6 +170,20 @@ void drawViewportHud(
         return IM_COL32(74, 222, 128, alpha);
     }
     return IM_COL32(248, 113, 113, alpha);
+}
+
+[[nodiscard]] const char* lessonStatusName(lessons::LessonStatus status) noexcept {
+    switch (status) {
+    case lessons::LessonStatus::Locked:
+        return "Locked";
+    case lessons::LessonStatus::Available:
+        return "Available";
+    case lessons::LessonStatus::InProgress:
+        return "In progress";
+    case lessons::LessonStatus::Completed:
+        return "Completed";
+    }
+    return "Unknown";
 }
 
 [[nodiscard]] math::Vec3d rotateAroundAxis(
@@ -354,6 +369,7 @@ Application::Application()
     , slmInterferenceTexture_(std::make_unique<render::gl::Texture2D>())
     , holographyTexture_(std::make_unique<render::gl::Texture2D>())
     , realLensConfig_(reallens::makeDefaultRealLensWorkbenchConfig())
+    , lessonLocalization_(lessons::makeDefaultLessonLocalization())
     , scene_(optics::scene::createDefaultRealImageScene())
     , naResult_(optics::scene::computeObjectSideNumericalAperture(scene_)) {
     tracerOptions_.rayCount = 64;
@@ -456,6 +472,39 @@ void Application::loadSceneFromPath(const char* pathStr) {
     } catch (const std::exception& ex) {
         errorMessage_ = "Load failed: " + std::string(ex.what());
         statusMessage_.clear();
+    }
+}
+
+void Application::loadLessonProgress() {
+    try {
+        const std::filesystem::path path(lessonProgressPathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument("lesson progress path cannot be empty");
+        }
+        auto progress = lessons::loadLessonProgress(
+            path, learnSession_.catalog());
+        learnSession_.replaceProgress(std::move(progress));
+        lessonErrorMessage_.clear();
+        lessonStatusMessage_ = "Loaded lesson progress from " + path.string();
+    } catch (const std::exception& ex) {
+        lessonErrorMessage_ = "Progress load failed: " + std::string(ex.what());
+        lessonStatusMessage_.clear();
+    }
+}
+
+void Application::saveLessonProgress() {
+    try {
+        const std::filesystem::path path(lessonProgressPathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument("lesson progress path cannot be empty");
+        }
+        lessons::saveLessonProgress(
+            path, learnSession_.catalog(), learnSession_.progress());
+        lessonErrorMessage_.clear();
+        lessonStatusMessage_ = "Saved lesson progress to " + path.string();
+    } catch (const std::exception& ex) {
+        lessonErrorMessage_ = "Progress save failed: " + std::string(ex.what());
+        lessonStatusMessage_.clear();
     }
 }
 
@@ -2853,6 +2902,289 @@ void Application::drawHolographyPanel() {
     ImGui::End();
 }
 
+void Application::drawLearnPanel() {
+    ImGui::Begin(docking::DockLayoutConfig::kLearnWindowName);
+
+    constexpr std::array<const char*, 2> localeNames {
+        "English (en)",
+        "简体中文 (zh-Hans)",
+    };
+    int localeIndex = lessonLocale_ == lessons::LessonLocale::English ? 0 : 1;
+    if (ImGui::Combo(
+            "Language", &localeIndex, localeNames.data(),
+            static_cast<int>(localeNames.size()))) {
+        lessonLocale_ = localeIndex == 0
+            ? lessons::LessonLocale::English
+            : lessons::LessonLocale::SimplifiedChinese;
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled(
+        "Stable locale: %s",
+        std::string(lessons::lessonLocaleCode(lessonLocale_)).c_str());
+
+    ImGui::SeparatorText("Course catalog");
+    if (ImGui::BeginChild("LessonCatalog", ImVec2(0.0F, 220.0F), ImGuiChildFlags_Borders)) {
+        for (const auto& definition : learnSession_.catalog().lessons()) {
+            const auto status = lessons::lessonStatus(
+                learnSession_.catalog(), learnSession_.progress(), definition.id);
+            const auto& title = lessonLocalization_.text(
+                lessonLocale_, definition.titleKey);
+            const std::string label = title + "  [" + lessonStatusName(status)
+                + "]##" + definition.id;
+            if (ImGui::Selectable(
+                    label.c_str(), selectedLessonId_ == definition.id)) {
+                selectedLessonId_ = definition.id;
+            }
+        }
+    }
+    ImGui::EndChild();
+
+    if (ImGui::BeginChild("LessonDetails", ImVec2(0.0F, 0.0F), ImGuiChildFlags_Borders)) {
+        const auto& definition = learnSession_.catalog().lesson(selectedLessonId_);
+        const auto status = lessons::lessonStatus(
+            learnSession_.catalog(), learnSession_.progress(), definition.id);
+        ImGui::TextUnformatted(
+            lessonLocalization_.text(lessonLocale_, definition.titleKey).c_str());
+        ImGui::SameLine();
+        ImGui::TextDisabled("[%s]", lessonStatusName(status));
+        ImGui::TextWrapped(
+            "%s",
+            lessonLocalization_.text(
+                lessonLocale_, definition.objectiveKey).c_str());
+        ImGui::TextDisabled(
+            "Template: %s | identity: %s",
+            definition.projectTemplateId.c_str(), definition.id.c_str());
+
+        if (status == lessons::LessonStatus::Locked) {
+            ImGui::SeparatorText("Prerequisites");
+            for (const auto& prerequisiteId : definition.prerequisiteIds) {
+                const auto& prerequisite = learnSession_.catalog().lesson(prerequisiteId);
+                ImGui::BulletText(
+                    "%s [%s]",
+                    lessonLocalization_.text(
+                        lessonLocale_, prerequisite.titleKey).c_str(),
+                    lessonStatusName(lessons::lessonStatus(
+                        learnSession_.catalog(), learnSession_.progress(),
+                        prerequisiteId)));
+            }
+        }
+
+        const bool workflowReady = lessons::hasInteractiveLessonWorkflow(definition.id);
+        const bool isActive = learnSession_.hasActiveLesson()
+            && learnSession_.activeLessonId() == definition.id;
+        if (!isActive) {
+            ImGui::BeginDisabled(
+                status == lessons::LessonStatus::Locked || !workflowReady);
+            if (ImGui::Button(
+                    status == lessons::LessonStatus::Completed
+                        ? "Review lesson"
+                        : "Start lesson")) {
+                try {
+                    learnSession_.beginLesson(definition.id);
+                    if (definition.id == "thin_lens") {
+                        const auto lessonTemplate = lessons::makeThinLensLessonTemplate();
+                        if (!applyScene(lessonTemplate, tracerOptions_)) {
+                            learnSession_.endLesson();
+                            throw std::runtime_error(
+                                errorMessage_.empty()
+                                    ? "application rejected the thin-lens template"
+                                    : errorMessage_);
+                        }
+                        selectedTarget_ = GizmoTarget::Screen;
+                        camera_.setPresetView(render::CameraPresetView::Perspective);
+                    }
+                    learnSession_.confirmTemplateLoaded();
+                    lessonErrorMessage_.clear();
+                    lessonStatusMessage_ = "Started " + definition.id;
+                } catch (const std::exception& ex) {
+                    lessonErrorMessage_ = "Lesson start failed: "
+                        + std::string(ex.what());
+                    lessonStatusMessage_.clear();
+                }
+            }
+            ImGui::EndDisabled();
+            if (!workflowReady) {
+                ImGui::SameLine();
+                ImGui::TextDisabled("Guided workflow is scheduled in M7.");
+            }
+        } else {
+            try {
+                if (definition.id == "thin_lens") {
+                    learnSession_.observeOpticalBenchScene(scene_);
+                }
+            } catch (const std::exception& ex) {
+                lessonErrorMessage_ = "Lesson observation failed: "
+                    + std::string(ex.what());
+            }
+
+            const std::size_t completedSteps = lessons::nextLessonStepIndex(
+                learnSession_.catalog(), learnSession_.progress(), definition.id);
+            ImGui::SeparatorText("Guided steps");
+            for (std::size_t index = 0; index < definition.steps.size(); ++index) {
+                const auto& lessonStep = definition.steps[index];
+                const char* marker = index < completedSteps
+                    ? "[done]"
+                    : (index == completedSteps ? "[current]" : "[next]");
+                ImGui::Text(
+                    "%s %s",
+                    marker,
+                    lessonLocalization_.text(
+                        lessonLocale_, lessonStep.titleKey).c_str());
+                if (index == completedSteps) {
+                    ImGui::Indent();
+                    ImGui::TextWrapped(
+                        "%s",
+                        lessonLocalization_.text(
+                            lessonLocale_, lessonStep.instructionKey).c_str());
+                    ImGui::TextDisabled(
+                        "%s",
+                        lessonLocalization_.text(
+                            lessonLocale_, lessonStep.contextKey).c_str());
+                    ImGui::Unindent();
+                }
+            }
+
+            if (definition.id == "reflection_refraction") {
+                ImGui::SeparatorText("Interactive observation");
+                auto config = learnSession_.reflectionConfig();
+                float angleDegrees = static_cast<float>(
+                    config.incidenceAngleRadians * 180.0
+                    / std::numbers::pi_v<double>);
+                bool edited = false;
+                if (ImGui::SliderFloat(
+                        "Incidence angle", &angleDegrees,
+                        0.0F, 80.0F, "%.1f deg")) {
+                    config.incidenceAngleRadians = static_cast<double>(angleDegrees)
+                        * std::numbers::pi_v<double> / 180.0;
+                    edited = true;
+                }
+                edited = ImGui::InputDouble(
+                    "Incident index n1", &config.incidentRefractiveIndex,
+                    0.01, 0.1, "%.4f") || edited;
+                edited = ImGui::InputDouble(
+                    "Transmitted index n2", &config.transmittedRefractiveIndex,
+                    0.01, 0.1, "%.4f") || edited;
+                if (edited) {
+                    try {
+                        learnSession_.setReflectionConfig(config);
+                        lessonErrorMessage_.clear();
+                    } catch (const std::exception& ex) {
+                        lessonErrorMessage_ = "Lesson control rejected: "
+                            + std::string(ex.what());
+                    }
+                }
+
+                const auto& result = learnSession_.reflectionResult();
+                ImGui::Text(
+                    "Measured: incidence %.3f deg | reflection %.3f deg",
+                    result.incidenceAngleRadians * 180.0
+                        / std::numbers::pi_v<double>,
+                    result.reflectionAngleRadians * 180.0
+                        / std::numbers::pi_v<double>);
+                if (result.totalInternalReflection) {
+                    ImGui::TextColored(
+                        ImVec4(0.98F, 0.73F, 0.20F, 1.0F),
+                        "Total internal reflection: no transmitted ray.");
+                } else {
+                    ImGui::Text(
+                        "Transmission %.3f deg | Snell residual %.3e",
+                        result.transmissionAngleRadians * 180.0
+                            / std::numbers::pi_v<double>,
+                        result.snellResidual);
+                }
+                const bool readyToConfirm = completedSteps == 2U
+                    && !result.totalInternalReflection;
+                ImGui::BeginDisabled(!readyToConfirm);
+                if (ImGui::Button("Confirm measured laws")) {
+                    if (learnSession_.confirmReflectionObservation()) {
+                        lessonStatusMessage_ = "Reflection / Refraction completed";
+                        lessonErrorMessage_.clear();
+                    } else {
+                        lessonErrorMessage_ =
+                            "Change incidence by at least 5 degrees and use a refracted state.";
+                    }
+                }
+                ImGui::EndDisabled();
+            } else if (definition.id == "thin_lens") {
+                ImGui::SeparatorText("Shared Lab observation");
+                if (learnSession_.thinLensObservation().has_value()) {
+                    const auto& observation =
+                        learnSession_.thinLensObservation().value();
+                    ImGui::Text(
+                        "Predicted image plane: %.3f mm",
+                        observation.prediction.imagePlaneZMetres * 1000.0);
+                    ImGui::Text(
+                        "Screen position: %.3f mm | focus error: %+.3f mm",
+                        scene_.screen.planeZMetres * 1000.0,
+                        observation.screenFocusErrorMetres * 1000.0);
+                    ImGui::TextDisabled(
+                        "Use the orange 3D gizmo or Inspector Screen Z. "
+                        "Tolerance: +/-1.0 mm.");
+                }
+            }
+
+            if (lessons::lessonStatus(
+                    learnSession_.catalog(), learnSession_.progress(),
+                    definition.id) == lessons::LessonStatus::Completed) {
+                ImGui::TextColored(
+                    ImVec4(0.35F, 0.90F, 0.55F, 1.0F),
+                    "Lesson workflow completed. Human concept checks remain part of M7 acceptance.");
+            }
+
+            ImGui::Separator();
+            if (ImGui::Button("Reset lesson")) {
+                try {
+                    learnSession_.resetActiveLesson();
+                    if (definition.id == "thin_lens") {
+                        const auto lessonTemplate = lessons::makeThinLensLessonTemplate();
+                        if (!applyScene(lessonTemplate, tracerOptions_)) {
+                            learnSession_.endLesson();
+                            throw std::runtime_error(
+                                errorMessage_.empty()
+                                    ? "application rejected the thin-lens template"
+                                    : errorMessage_);
+                        }
+                    }
+                    learnSession_.confirmTemplateLoaded();
+                    lessonErrorMessage_.clear();
+                    lessonStatusMessage_ = "Reset " + definition.id;
+                } catch (const std::exception& ex) {
+                    lessonErrorMessage_ = "Lesson reset failed: "
+                        + std::string(ex.what());
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("End lesson")) {
+                learnSession_.endLesson();
+                lessonStatusMessage_ = "Ended guided session; progress retained";
+            }
+        }
+
+        ImGui::SeparatorText("Progress file (separate from physics projects)");
+        ImGui::InputText(
+            "Progress path", lessonProgressPathBuffer_,
+            sizeof(lessonProgressPathBuffer_));
+        if (ImGui::Button("Save progress")) {
+            saveLessonProgress();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Load progress")) {
+            loadLessonProgress();
+        }
+        if (!lessonErrorMessage_.empty()) {
+            ImGui::TextColored(
+                ImVec4(1.0F, 0.35F, 0.30F, 1.0F),
+                "%s", lessonErrorMessage_.c_str());
+        } else if (!lessonStatusMessage_.empty()) {
+            ImGui::TextColored(
+                ImVec4(0.35F, 0.90F, 0.55F, 1.0F),
+                "%s", lessonStatusMessage_.c_str());
+        }
+    }
+    ImGui::EndChild();
+    ImGui::End();
+}
+
 void Application::drawWorkspace() {
     updateWaveDetector();
     updateSlmInterference();
@@ -2911,6 +3243,7 @@ void Application::drawWorkspace() {
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kRealLensWindowName, dockBottomId);
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kSlmInterferenceWindowName, dockBottomId);
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kHolographyWindowName, dockBottomId);
+            ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kLearnWindowName, dockRightId);
 
             ImGui::DockBuilderFinish(dockspaceId);
         }
@@ -3537,6 +3870,7 @@ void Application::drawWorkspace() {
     drawRealLensPanel();
     drawSlmInterferencePanel();
     drawHolographyPanel();
+    drawLearnPanel();
 }
 
 int Application::run(const RunOptions& options) {
@@ -3736,6 +4070,26 @@ int Application::run(const RunOptions& options) {
         } catch (const std::exception& ex) {
             SDL_Log(
                 "OpenGL smoke check failed: Holography project round trip: %s",
+                ex.what());
+            rawGlError = true;
+        }
+    }
+    if (glSmokeMode_) {
+        try {
+            const auto serialized = lessons::serializeLessonProgressJson(
+                learnSession_.catalog(), learnSession_.progress());
+            const auto restored = lessons::deserializeLessonProgressJson(
+                learnSession_.catalog(), serialized);
+            const auto reserialized = lessons::serializeLessonProgressJson(
+                learnSession_.catalog(), restored);
+            if (serialized != reserialized) {
+                SDL_Log(
+                    "OpenGL smoke check failed: lesson progress round trip changed bytes");
+                rawGlError = true;
+            }
+        } catch (const std::exception& ex) {
+            SDL_Log(
+                "OpenGL smoke check failed: lesson progress round trip: %s",
                 ex.what());
             rawGlError = true;
         }

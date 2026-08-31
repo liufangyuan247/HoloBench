@@ -5,6 +5,7 @@
 #include <iterator>
 #include <set>
 #include <stdexcept>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 
@@ -123,7 +124,14 @@ void completeLessonStep(
     if (definition.steps[nextIndex].id != stepId) {
         throw std::invalid_argument("lesson steps must be completed in catalog order");
     }
-    progress.completedStepIds[definition.id].push_back(std::string(stepId));
+    std::string ownedStepId(stepId);
+    if (found == progress.completedStepIds.end()) {
+        std::vector<std::string> completedSteps;
+        completedSteps.push_back(std::move(ownedStepId));
+        progress.completedStepIds.emplace(definition.id, std::move(completedSteps));
+    } else {
+        found->second.push_back(std::move(ownedStepId));
+    }
 }
 
 void resetLessonAndDependents(
