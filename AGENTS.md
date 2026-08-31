@@ -34,6 +34,14 @@ Use `core-ci` when no display/OpenGL environment is available.
 - Never label scalar, paraxial, thin-lens, monochromatic, or coherent approximations as generally exact.
 - Any result not covered by validation must be presented as experimental/unvalidated.
 
+## GPU compatibility and performance
+
+- Base GPU availability, limits, precision, and dispatch sizes on runtime capability queries, never on a GPU-vendor allowlist or denylist.
+- A confirmed driver or device defect may use a narrowly scoped quirk that matches the specific affected device and driver range. Keep the default path unchanged for all other GPUs.
+- Do not turn one GPU model's workaround into a global precision downgrade, feature disablement, dispatch cap, synchronization cost, or performance limit.
+- Every device quirk must document the triggering hardware/driver evidence, preserve the CPU reference oracle, have a regression test where practical, and include an explicit retirement condition.
+- Treat NVIDIA parity and performance as a release validation target; record renderer, driver/OpenGL version, numerical parity, and the named benchmark result without assuming that AMD-derived workarounds apply.
+
 ## Definition of done
 
 A feature is not complete until it builds, has deterministic tests, documents physical assumptions and limitations, has a validation result, and preserves project save/load compatibility when applicable. Performance claims require a named benchmark scene and hardware profile.
@@ -51,4 +59,3 @@ A feature is not complete until it builds, has deterministic tests, documents ph
 - Update `docs/PROJECT_STATE.md` in the same change as milestone state transitions.
 - Add architectural decisions under `docs/adr/`.
 - Preserve unrelated user changes and do not rewrite history.
-
