@@ -90,6 +90,11 @@ development. For the current repository state and roadmap, see
   report propagation, Nyquist sampling, physical separation, and periodic-
   window escape independently. These diagnostics never filter an order out of
   the physical full replay.
+- **Holography Lab product foundation**: A deterministic two-feature complex
+  object generator drives the complete RGB H1/H2 pipeline. Draft/applied state
+  prevents recomputation before Apply, display-only plane/channel changes avoid
+  physics work, and a strict format-v1 JSON project preserves every grid,
+  spectral, object, reference, response, and placement parameter byte-stably.
 
 ## Physical Assumptions & Limitations (M1)
 
@@ -109,7 +114,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (327 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (337 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -117,7 +122,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 327/327 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 337/337 tests passing):
 
 ```powershell
 cmake --preset core-ci

@@ -103,7 +103,10 @@ holobench_set_warnings(holobench_optics)
 # solver-independent optical models with numerical backends without making
 # either lower-level library depend on the other implementation layer.
 add_library(holobench_app_logic STATIC
+    app/HolographyLabPipeline.cpp
+    app/HolographyProject.cpp
     app/HolographyReconstructionPipeline.cpp
+    app/HolographyUiState.cpp
     app/RealLensWorkbenchPipeline.cpp
     app/SamplingDebuggerPipeline.cpp
     app/SlmInterferencePipeline.cpp
@@ -306,6 +309,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/FieldElementTests.cpp
         tests/analytic/FraunhoferDiffractionTests.cpp
         tests/analytic/HolographyReconstructionPipelineTests.cpp
+        tests/analytic/HolographyLabPipelineTests.cpp
         tests/analytic/NumericalApertureTests.cpp
         tests/analytic/OpticalMaterialTests.cpp
         tests/analytic/RotationalSurfaceTests.cpp
@@ -323,6 +327,8 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/validation/WavepropCrossValidationTests.cpp
         tests/app/WaveDetectorUiStateTests.cpp
         tests/app/SlmInterferenceUiStateTests.cpp
+        tests/app/HolographyUiStateTests.cpp
+        tests/app/HolographyProjectTests.cpp
         tests/app/SlmInterferenceProjectTests.cpp
         render/Camera.cpp
         tests/render/CameraTests.cpp

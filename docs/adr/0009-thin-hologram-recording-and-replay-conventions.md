@@ -116,6 +116,20 @@ photopolymer, or a complete radiometric exposure model.
   a geometrically propagating centre outside the native periodic window. They
   do not silently select, discard, or spatially clamp any order.
 
+### Lab state and persistence
+
+- The Lab stores a complete draft and applied physics configuration. Editing
+  grid, spectrum, object, H1/H2 geometry, reference, response, or transplane
+  tolerance marks the draft dirty but cannot trigger simulation until Apply.
+  Selecting a displayed plane or RGB channel requests visualization only.
+- Holography experiments use a separate format-v1
+  `holography_lab_project` document. Strict keys preserve two analytic complex-
+  Gaussian object features, the three ordered wavelengths and refractive
+  indices, and all H1/H2 parameters. Unknown keys, versions, kinds, non-finite
+  numbers, and non-physical configurations are rejected; load updates the draft
+  and remains apply-gated. The legacy optical-bench and M5 experiment formats
+  are not reinterpreted.
+
 ## Validation
 
 - Constant complex fields validate the exposure and response coefficient.
@@ -160,5 +174,5 @@ photopolymer, or a complete radiometric exposure model.
 - A Denisyuk, reflection H2, or other volume hologram must use the later volume
   model/Kogelnik path. It must never be represented as this thin mask while
   being labelled physically complete.
-- Calibrated exposure, the interactive teaching workflow, and strict experiment
-  persistence are subsequent M6 increments.
+- Calibrated exposure and the docked interactive teaching views are subsequent
+  M6 increments.
