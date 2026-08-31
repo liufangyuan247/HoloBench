@@ -22,6 +22,8 @@ numerically false.
   wrap-around, required padding, support-to-boundary clearance, and evanescent
   sampled bins.
 - [ ] Sampling Debugger UI and arbitrary-plane probe workflow.
+  Headless orchestration and deterministic spectrum-image generation are
+  complete; interactive controls and smoke validation remain.
 
 ## Numerical gate
 

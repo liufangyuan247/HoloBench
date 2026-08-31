@@ -90,6 +90,7 @@ holobench_set_warnings(holobench_optics)
 # solver-independent optical models with numerical backends without making
 # either lower-level library depend on the other implementation layer.
 add_library(holobench_app_logic STATIC
+    app/SamplingDebuggerPipeline.cpp
     app/WaveDetectorPipeline.cpp
     app/WaveDetectorUiState.cpp
 )
@@ -249,6 +250,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/SnellTests.cpp
         tests/analytic/ThinLensTests.cpp
         tests/analytic/WaveDetectorPipelineTests.cpp
+        tests/analytic/SamplingDebuggerPipelineTests.cpp
         tests/analytic/WaveSourceTests.cpp
         tests/project/ProjectDocumentTests.cpp
         tests/project/SceneProjectAdapterTests.cpp
