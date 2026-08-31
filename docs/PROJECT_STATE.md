@@ -73,6 +73,7 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 - **Sampling diagnostics foundation**: Reports physical extent, Nyquist angles, requested-band aliasing, periodic wrap-around, required padding factor, aperture/support boundary clearance, and sampled evanescent bins. Caller support claims are checked against every non-zero sample.
 - **M3 named performance gates**: On the reference Windows workstation, `fourier/sampling_debugger_256_square_cpu_refresh` records p50 **117.736 ms** and p95 **118.458 ms** against a 250 ms budget on an Intel Core i7-9750H. `fourier/four_f_1024_square_gpu_recompute` records p50 **243.114 ms** and p95 **249.959 ms** against a 300 ms budget on AMD Radeon Pro 5300M. The GPU benchmark uses runtime capabilities and the existing exact driver quirk only; it introduces no vendor/model dispatch or precision limit.
 - **M3 GPU parity**: The OpenGL executable now passes 8/8 cases and 1121/1121 assertions. A dedicated 4-f case compares the unfiltered Fourier plane, filtered Fourier plane, final image, filter geometry, physical sampling, and integrated-intensity transmission against the double-precision CPU reference.
+- **Teaching workflow**: An always-open guide maps Fourier-plane centre-to-edge position to average-to-fine spatial detail, explains low-pass blur and the pupil/NA effect on PSF/MTF, and explicitly warns that Nyquist, padding, boundary, or wrap failures can create plausible-looking numerical artefacts.
 - **Cross-platform gate**: Windows Clang warnings-as-errors core/application builds pass with 229/229 headless tests. Windows MSVC 19.44 `/W4 /WX` builds every application, benchmark, CPU-test, and GPU-test target and passes 230/230 registered tests. Ubuntu/WSL GCC 15.2 warnings-as-errors builds the same targets, passes all 229 deterministic tests, and skips the registered GPU executable with code 77 only because WSL exposes no compatible OpenGL 4.6 context.
 - **OpenGL smoke**: Three hidden frames exit 0 on AMD Radeon Pro 5300M and require the detector, angular spectrum, and all four 4-f plane textures to upload successfully with no reported OpenGL errors.
 
@@ -87,7 +88,7 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 ## Next five tasks
 
 1. Run and record GPU parity plus `wave/asm_1024_square_gpu_recompute` on the target NVIDIA card.
-2. Complete the M3 teaching-workflow acceptance review and remote UI smoke evidence.
-3. Run and record the GitHub Actions Windows/Linux matrix for the M3 integration head.
-4. Complete M3 documentation and release-integration review.
-5. Tag only after every M2 prerequisite and M3 gate is green.
+2. Create the final M3 release-integration head including the `main` GPU policy commit.
+3. Run and record the GitHub Actions Windows/Linux matrix for that integration head.
+4. Complete M3 release-integration review.
+5. Merge/tag only after every M2 prerequisite and M3 gate is green.

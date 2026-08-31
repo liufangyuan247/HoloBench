@@ -789,6 +789,16 @@ void Application::drawWaveDetectorPanel() {
 void Application::drawSamplingDebuggerPanel() {
     ImGui::Begin(docking::DockLayoutConfig::kSamplingDebuggerWindowName);
     ImGui::TextDisabled("Selected plane: current Wave Detector output (relative probe z)");
+    if (ImGui::CollapsingHeader("How to read this debugger", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::BulletText(
+            "The Fourier-plane centre is the field's average/DC content; distance from the centre means finer spatial detail.");
+        ImGui::BulletText(
+            "A low-pass stop blocks outer fine-detail frequencies, so its image becomes smoother or blurred.");
+        ImGui::BulletText(
+            "A larger pupil or NA makes the PSF narrower and extends the MTF cutoff, preserving finer detail.");
+        ImGui::BulletText(
+            "Nyquist, padding, boundary, and wrap warnings mean a plausible-looking image may be a sampling artefact.");
+    }
 
     double angleXDegrees = samplingDebuggerConfig_.requestedHalfAngleXRadians
         * 180.0 / std::numbers::pi;

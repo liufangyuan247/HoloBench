@@ -51,7 +51,10 @@ Fourier-plane intensity transmission.
 - [x] Windows Clang/MSVC and Linux GCC warnings-as-errors builds pass; 229
   headless cases pass on every platform, the Windows GPU executable passes,
   and WSL skips it only because no OpenGL 4.6 context is available.
-- [ ] Final UI/teaching acceptance and remote CI evidence pass.
+- [x] The debugger explains the Fourier-plane centre/detail mapping, why a
+  low-pass stop blurs, how pupil/NA changes PSF and MTF, and why sampling
+  warnings can expose plausible-looking artefacts; the seven-texture smoke passes.
+- [ ] Remote CI evidence passes on the final M3 integration head.
 
 ## Teaching gate
 
