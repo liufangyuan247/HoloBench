@@ -806,6 +806,10 @@ bool Application::initialize(const RunOptions& options) {
             lessonTemplateRoot(), "lesson_na_psf"));
         static_cast<void>(lessons::loadSlmLessonTemplate(
             lessonTemplateRoot(), "lesson_coherence_interference"));
+        static_cast<void>(lessons::loadHolographyLessonTemplate(
+            lessonTemplateRoot(), "lesson_holography"));
+        static_cast<void>(lessons::loadHolographyLessonTemplate(
+            lessonTemplateRoot(), "lesson_h1_h2_advanced"));
     } catch (const std::exception& ex) {
         SDL_Log("Packaged lesson template validation failed: %s", ex.what());
         shutdown();
@@ -1284,6 +1288,8 @@ void Application::loadHolographyProject() {
         }
         auto document = holographyproject::loadHolographyProject(path);
         holographyUiState_.replaceDraftProject(std::move(document.config));
+        holographyProjectName_ = std::move(document.name);
+        holographyProjectProvenance_ = std::move(document.provenance);
         holographyErrorMessage_.clear();
         holographyStatusMessage_ = "Loaded holography experiment from "
             + path.string() + "; press Apply to recompute";
@@ -1302,6 +1308,8 @@ void Application::saveHolographyProject() {
                 "holography experiment project path cannot be empty");
         }
         holographyproject::HolographyProjectDocument document;
+        document.name = holographyProjectName_;
+        document.provenance = holographyProjectProvenance_;
         document.config = holographyUiState_.draftConfig();
         holographyproject::saveHolographyProject(path, document);
         holographyErrorMessage_.clear();
@@ -2889,6 +2897,15 @@ void Application::drawHolographyPanel() {
 
     if (ImGui::CollapsingHeader(
             "Experiment project", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Text("Project: %s", holographyProjectName_.c_str());
+        ImGui::TextDisabled(
+            "Origin: %s | source: %s | version: %d",
+            std::string(project::projectOriginKindName(
+                holographyProjectProvenance_.originKind)).c_str(),
+            holographyProjectProvenance_.sourceId.empty()
+                ? "(none)"
+                : holographyProjectProvenance_.sourceId.c_str(),
+            holographyProjectProvenance_.sourceVersion);
         ImGui::InputText(
             "Holography JSON path",
             holographyProjectPathBuffer_,
@@ -2901,7 +2918,8 @@ void Application::drawHolographyPanel() {
             saveHolographyProject();
         }
         ImGui::TextDisabled(
-            "Separate strict format-v1 document; loading replaces draft state only.");
+            "Strict format-v3 document; v1/v2 migrate to user provenance. "
+            "Loading replaces draft state only.");
     }
 
     auto draft = holographyUiState_.draftConfig();
@@ -3467,6 +3485,26 @@ void Application::loadLessonTemplate(std::string_view lessonId) {
             = lessons::FringeVisibilityChange::Higher;
         ImGui::SetWindowFocus(
             docking::DockLayoutConfig::kSlmInterferenceWindowName);
+        return;
+    }
+    if (lessonId == "holography"
+        || lessonId == "h1_h2_advanced") {
+        const auto lessonTemplate = lessons::loadHolographyLessonTemplate(
+            lessonTemplateRoot(), "lesson_" + std::string(lessonId));
+        holographyUiState_.replaceDraftProject(lessonTemplate.config);
+        holographyProjectName_ = lessonTemplate.name;
+        holographyProjectProvenance_ = lessonTemplate.provenance;
+        holographyUiState_.apply();
+        holographyUiState_.setDisplayPlane(
+            holographyui::DisplayPlane::H1Exposure);
+        holographyResult_.reset();
+        holographyErrorMessage_.clear();
+        holographyStatusMessage_ = "Holography lesson recompute queued";
+        lessonHolographyReplayContents_
+            = lessons::HolographyReplayContents::DesiredImageOnly;
+        lessonH1H2Placement_ = holography::H2ImagePlacement::PositiveSide;
+        ImGui::SetWindowFocus(
+            docking::DockLayoutConfig::kHolographyWindowName);
     }
 }
 
@@ -3589,6 +3627,14 @@ void Application::drawLearnPanel() {
                     learnSession_.observeSlmInterference(
                         slmInterferenceUiState_.appliedConfig(),
                         *slmInterferenceResult_);
+                } else if ((definition.id == "holography"
+                                || definition.id == "h1_h2_advanced")
+                    && holographyResult_) {
+                    learnSession_.observeHolographyLab(
+                        holographyUiState_.appliedConfig(),
+                        *holographyResult_,
+                        holographyUiState_.displayPlane()
+                            == holographyui::DisplayPlane::H1RealImage);
                 }
             } catch (const std::exception& ex) {
                 lessonErrorMessage_ = "Lesson observation failed: "
@@ -3982,6 +4028,115 @@ void Application::drawLearnPanel() {
                 } else {
                     ImGui::TextDisabled(
                         "Waiting for the shared SLM interference baseline.");
+                }
+            } else if (definition.id == "holography") {
+                ImGui::SeparatorText("Shared holography observation");
+                if (holographyUiState_.isDirty()) {
+                    ImGui::TextColored(
+                        ImVec4(0.98F, 0.73F, 0.20F, 1.0F),
+                        "Holography draft is pending Apply.");
+                }
+                if (learnSession_.holographyObservation().has_value()) {
+                    const auto& observation
+                        = learnSession_.holographyObservation().value();
+                    ImGui::Text(
+                        "Worst H1 replay error: %.3e | zero/twin separation: "
+                        "%.4g / %.4g mm",
+                        observation.worstRealImageNormalizedError,
+                        observation.minimumZeroOrderSeparationMetres * 1e3,
+                        observation.minimumTwinOrderSeparationMetres * 1e3);
+                    ImGui::TextDisabled(
+                        "After H1 records, choose 'H1 isolated real image' "
+                        "in Holography Lab to replay it.");
+                    constexpr std::array<const char*, 3> contentsNames {
+                        "Desired image only",
+                        "Zero + desired + conjugate/twin orders",
+                        "Incoherent noise"};
+                    int contentsIndex = static_cast<int>(
+                        lessonHolographyReplayContents_);
+                    if (ImGui::Combo(
+                            "Physical full replay contains",
+                            &contentsIndex,
+                            contentsNames.data(),
+                            static_cast<int>(contentsNames.size()))) {
+                        lessonHolographyReplayContents_
+                            = static_cast<lessons::HolographyReplayContents>(
+                                contentsIndex);
+                    }
+                    const bool ready = completedSteps == 2U
+                        && observation.orderDiagnosticsAvailable;
+                    ImGui::BeginDisabled(!ready);
+                    if (ImGui::Button("Confirm replay orders")) {
+                        if (learnSession_.confirmHolographyReplayContents(
+                                lessonHolographyReplayContents_)) {
+                            lessonStatusMessage_ = "Holography completed";
+                            lessonErrorMessage_.clear();
+                        } else {
+                            lessonErrorMessage_
+                                = "Distinguish the isolated desired order from the physical full replay.";
+                        }
+                    }
+                    ImGui::EndDisabled();
+                } else {
+                    ImGui::TextDisabled(
+                        "Waiting for the shared Holography Lab result.");
+                }
+            } else if (definition.id == "h1_h2_advanced") {
+                ImGui::SeparatorText("Shared H1/H2 observation");
+                if (holographyUiState_.isDirty()) {
+                    ImGui::TextColored(
+                        ImVec4(0.98F, 0.73F, 0.20F, 1.0F),
+                        "Holography draft is pending Apply.");
+                }
+                if (learnSession_.h1H2AdvancedObservation().has_value()) {
+                    const auto& observation
+                        = learnSession_.h1H2AdvancedObservation().value();
+                    ImGui::Text(
+                        "Signed image distance from H2: %+.4f mm | "
+                        "worst H2 replay error: %.3e",
+                        observation.signedImageDistanceFromH2Metres * 1e3,
+                        observation.worstH2ImageNormalizedError);
+                    ImGui::TextDisabled(
+                        "Move Holography Lab > H2 axial position from 8.0 mm "
+                        "to the H1 image at 10.0 mm, then Apply.");
+                    constexpr std::array<const char*, 3> placementNames {
+                        "Negative side", "Transplane", "Positive side"};
+                    int placementIndex = 2;
+                    if (lessonH1H2Placement_
+                        == holography::H2ImagePlacement::NegativeSide) {
+                        placementIndex = 0;
+                    } else if (lessonH1H2Placement_
+                        == holography::H2ImagePlacement::Transplane) {
+                        placementIndex = 1;
+                    }
+                    if (ImGui::Combo(
+                            "H1 image relative to H2",
+                            &placementIndex,
+                            placementNames.data(),
+                            static_cast<int>(placementNames.size()))) {
+                        lessonH1H2Placement_ = placementIndex == 0
+                            ? holography::H2ImagePlacement::NegativeSide
+                            : (placementIndex == 1
+                                    ? holography::H2ImagePlacement::Transplane
+                                    : holography::H2ImagePlacement::PositiveSide);
+                    }
+                    const bool ready = completedSteps == 2U
+                        && observation.transplaneReached;
+                    ImGui::BeginDisabled(!ready);
+                    if (ImGui::Button("Confirm transplane placement")) {
+                        if (learnSession_.confirmH1H2ImagePlacement(
+                                lessonH1H2Placement_)) {
+                            lessonStatusMessage_ = "H1/H2 Advanced completed";
+                            lessonErrorMessage_.clear();
+                        } else {
+                            lessonErrorMessage_
+                                = "Use the signed H1-image distance relative to H2.";
+                        }
+                    }
+                    ImGui::EndDisabled();
+                } else {
+                    ImGui::TextDisabled(
+                        "Waiting for the shared H1/H2 result.");
                 }
             }
 
@@ -5021,12 +5176,16 @@ int Application::run(const RunOptions& options) {
     if (glSmokeMode_) {
         try {
             holographyproject::HolographyProjectDocument document;
+            document.name = holographyProjectName_;
+            document.provenance = holographyProjectProvenance_;
             document.config = holographyUiState_.appliedConfig();
             const auto restored
                 = holographyproject::deserializeHolographyProjectJson(
                     holographyproject::serializeHolographyProjectJson(document));
             if (!holographyui::sameHolographyLabConfig(
-                    document.config, restored.config)) {
+                    document.config, restored.config)
+                || document.name != restored.name
+                || document.provenance != restored.provenance) {
                 SDL_Log("OpenGL smoke check failed: Holography project semantic round trip changed state");
                 rawGlError = true;
             }

@@ -57,6 +57,14 @@ public:
         coherenceObservation() const noexcept {
         return coherenceObservation_;
     }
+    [[nodiscard]] const std::optional<HolographyLessonObservation>&
+        holographyObservation() const noexcept {
+        return holographyObservation_;
+    }
+    [[nodiscard]] const std::optional<H1H2AdvancedLessonObservation>&
+        h1H2AdvancedObservation() const noexcept {
+        return h1H2AdvancedObservation_;
+    }
 
     void replaceProgress(LessonProgress progress);
     void beginLesson(std::string_view lessonId);
@@ -86,6 +94,14 @@ public:
         const slmexperiment::SlmInterferenceExperimentResult& result);
     [[nodiscard]] bool confirmFringeVisibilityChange(
         FringeVisibilityChange change);
+    void observeHolographyLab(
+        const holographylab::HolographyLabConfig& appliedConfig,
+        const holographylab::HolographyLabResult& result,
+        bool viewingH1RealImage);
+    [[nodiscard]] bool confirmHolographyReplayContents(
+        HolographyReplayContents contents);
+    [[nodiscard]] bool confirmH1H2ImagePlacement(
+        holography::H2ImagePlacement placement);
     void resetActiveLesson();
 
 private:
@@ -102,6 +118,8 @@ private:
         spatialFilteringObservation_;
     std::optional<NaPsfLessonObservation> naPsfObservation_;
     std::optional<CoherenceLessonObservation> coherenceObservation_;
+    std::optional<HolographyLessonObservation> holographyObservation_;
+    std::optional<H1H2AdvancedLessonObservation> h1H2AdvancedObservation_;
     double thinLensTemplateScreenZMetres_ = 0.0;
     double diffractionTemplateHalfWidthMetres_ = 0.0;
     std::optional<double> diffractionBaselineHalfMaximumWidthMetres_;
@@ -110,6 +128,8 @@ private:
     std::optional<double> naPsfBaselineNumericalAperture_;
     std::optional<double> naPsfBaselineFirstDarkRadiusMetres_;
     slmexperiment::SlmInterferenceExperimentConfig coherenceLessonTemplate_;
+    holographylab::HolographyLabConfig holographyLessonTemplate_;
+    holographylab::HolographyLabConfig h1H2AdvancedLessonTemplate_;
     std::optional<double> coherenceBaselineVisibility_;
     bool reflectionIncidenceChanged_ = false;
 };

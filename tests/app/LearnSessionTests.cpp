@@ -33,7 +33,7 @@ void completeLesson(
 
 TEST_SUITE("LearnSession") {
 
-TEST_CASE("the first eight catalog lessons expose guided workflows") {
+TEST_CASE("all ten catalog lessons expose guided workflows") {
     for (const auto lessonId : {
              "reflection_refraction",
              "thin_lens",
@@ -42,11 +42,12 @@ TEST_CASE("the first eight catalog lessons expose guided workflows") {
              "fourier_plane",
              "spatial_filtering",
              "na_psf",
-             "coherence_interference"}) {
+             "coherence_interference",
+             "holography",
+             "h1_h2_advanced"}) {
         CHECK(lessons::hasInteractiveLessonWorkflow(lessonId));
     }
-    CHECK_FALSE(lessons::hasInteractiveLessonWorkflow("holography"));
-    CHECK_FALSE(lessons::hasInteractiveLessonWorkflow("h1_h2_advanced"));
+    CHECK_FALSE(lessons::hasInteractiveLessonWorkflow("unknown"));
 }
 
 TEST_CASE("reflection workflow requires template angle change and valid observation") {
@@ -329,6 +330,67 @@ TEST_CASE("coherence workflow requires shared visibility loss and correct classi
         lessons::FringeVisibilityChange::Higher));
     CHECK(session.confirmFringeVisibilityChange(
         lessons::FringeVisibilityChange::Lower));
+}
+
+TEST_CASE("holography workflow records replays and identifies physical orders") {
+    lessons::LearnSession session;
+    lessons::LessonProgress progress;
+    completeLesson(session.catalog(), progress, "reflection_refraction");
+    completeLesson(session.catalog(), progress, "diffraction");
+    completeLesson(session.catalog(), progress, "coherence_interference");
+    session.replaceProgress(progress);
+    session.beginLesson("holography");
+    session.confirmTemplateLoaded();
+    CHECK(lessons::nextLessonStepIndex(
+        session.catalog(), session.progress(), "holography") == 0U);
+
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto lessonTemplate = lessons::makeHolographyLessonTemplate();
+    const auto result = holobench::app::holographylab::runHolographyLab(
+        lessonTemplate, fft);
+    session.observeHolographyLab(lessonTemplate, result, false);
+    CHECK(lessons::nextLessonStepIndex(
+        session.catalog(), session.progress(), "holography") == 1U);
+    session.observeHolographyLab(lessonTemplate, result, true);
+    CHECK(lessons::nextLessonStepIndex(
+        session.catalog(), session.progress(), "holography") == 2U);
+    CHECK_FALSE(session.confirmHolographyReplayContents(
+        lessons::HolographyReplayContents::DesiredImageOnly));
+    CHECK(session.confirmHolographyReplayContents(
+        lessons::HolographyReplayContents::ZeroDesiredAndTwinOrders));
+}
+
+TEST_CASE("H1 H2 advanced workflow requires a real transplane move") {
+    lessons::LearnSession session;
+    lessons::LessonProgress progress;
+    completeLesson(session.catalog(), progress, "reflection_refraction");
+    completeLesson(session.catalog(), progress, "diffraction");
+    completeLesson(session.catalog(), progress, "coherence_interference");
+    completeLesson(session.catalog(), progress, "holography");
+    session.replaceProgress(progress);
+    session.beginLesson("h1_h2_advanced");
+    session.confirmTemplateLoaded();
+
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto lessonTemplate = lessons::makeH1H2AdvancedLessonTemplate();
+    const auto baseline = holobench::app::holographylab::runHolographyLab(
+        lessonTemplate, fft);
+    session.observeHolographyLab(lessonTemplate, baseline, false);
+    CHECK(lessons::nextLessonStepIndex(
+        session.catalog(), session.progress(), "h1_h2_advanced") == 1U);
+
+    auto moved = lessonTemplate;
+    moved.transfer.h2AxialPositionMetres
+        = moved.transfer.h1.objectToPlateDistanceMetres;
+    const auto transplane = holobench::app::holographylab::runHolographyLab(
+        moved, fft);
+    session.observeHolographyLab(moved, transplane, false);
+    CHECK(lessons::nextLessonStepIndex(
+        session.catalog(), session.progress(), "h1_h2_advanced") == 2U);
+    CHECK_FALSE(session.confirmH1H2ImagePlacement(
+        holobench::app::holography::H2ImagePlacement::PositiveSide));
+    CHECK(session.confirmH1H2ImagePlacement(
+        holobench::app::holography::H2ImagePlacement::Transplane));
 }
 
 } // TEST_SUITE("LearnSession")

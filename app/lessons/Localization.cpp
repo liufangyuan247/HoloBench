@@ -254,6 +254,36 @@ LocalizationCatalog makeDefaultLessonLocalization() {
         "Visibility is measured from the shared interference extrema; reduced coherence suppresses only the cross term, not the individual beam intensities.",
         "比较可见度", "判断测得的条纹可见度变化。",
         "可见度由共用干涉结果的极值测得；相干性下降只抑制交叉项，不改变两束光各自的强度。");
+    addStep(messages, "holography", "record_hologram",
+        "Record H1", "Apply the packaged thin-hologram experiment and inspect the H1 exposure.",
+        "The shared Lab records object and coherent reference intensity in an unclipped linear thin-amplitude response.",
+        "记录 H1", "应用随包提供的薄全息实验，并观察 H1 曝光。",
+        "共用实验室把物光与相干参考光的强度记录在线性、未截断的薄振幅响应中。");
+    addStep(messages, "holography", "replay_hologram",
+        "Replay the real image", "Select the H1 isolated real-image plane in Holography Lab.",
+        "The isolated order is an explicitly labelled analytic decomposition used for inspection; physical full replay retains all orders.",
+        "重放实像", "在全息实验室中选择 H1 分离实像平面。",
+        "分离级次是用于观察并明确标注的解析分解；物理完整重放仍保留所有级次。");
+    addStep(messages, "holography", "identify_orders",
+        "Identify replay orders", "Classify which orders remain in the physical full replay.",
+        "A linear thin hologram produces a zero order, the desired image-bearing order, and a conjugate/twin order; sampling diagnostics report their carrier placement.",
+        "识别重放级次", "判断物理完整重放中保留了哪些级次。",
+        "线性薄全息图会产生零级、承载目标像的级次以及共轭（孪生）级；采样诊断会报告其载频位置。");
+    addStep(messages, "h1_h2_advanced", "record_h1",
+        "Record the H1 image", "Apply the packaged H1/H2 transfer and inspect the shared H1 result.",
+        "H1 forms a real image 10 mm after its plate using the same RGB scalar reconstruction used by Lab.",
+        "记录 H1 像", "应用随包提供的 H1/H2 转移实验，并观察共用 H1 结果。",
+        "H1 使用与实验室相同的 RGB 标量重建，在其记录板后 10 毫米形成实像。");
+    addStep(messages, "h1_h2_advanced", "position_h2",
+        "Position H2", "Move H2 from 8 mm to the H1 real-image plane at 10 mm, then Apply.",
+        "Only H2 axial position changes; the signed image distance is z(H1 image) minus z(H2).",
+        "放置 H2", "把 H2 从 8 毫米移动到 10 毫米处的 H1 实像平面，然后应用。",
+        "只改变 H2 轴向位置；带符号像距等于 z(H1 像) 减去 z(H2)。");
+    addStep(messages, "h1_h2_advanced", "observe_transplane",
+        "Confirm transplane placement", "Classify the H1 image when its signed distance from H2 is within the stated tolerance of zero.",
+        "Transplane is an explicit zero-distance case, distinct from an image on either the negative or positive side of H2.",
+        "确认跨平面位置", "当 H1 像相对 H2 的带符号距离在给定零值容差内时判断其位置。",
+        "跨平面是明确的零距离情况，不同于位于 H2 负侧或正侧的像。");
     return LocalizationCatalog(std::move(messages));
 }
 

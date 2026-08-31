@@ -51,6 +51,7 @@ struct HolographyLabConfig final {
 };
 
 struct HolographyLabResult final {
+    HolographyLabConfig sourceConfig;
     holography::RgbH1H2TransferResult rgbTransfer;
     optics::holography::VolumeHologramResult volume;
 };

@@ -80,6 +80,36 @@ void requireKeys(
     return {finiteNumber(value.at(0), context), finiteNumber(value.at(1), context)};
 }
 
+[[nodiscard]] Json provenanceJson(
+    const project::ProjectProvenance& provenance) {
+    project::validateProjectProvenance(provenance);
+    return {
+        {"origin", project::projectOriginKindName(provenance.originKind)},
+        {"source_id", provenance.sourceId},
+        {"source_version", provenance.sourceVersion},
+    };
+}
+
+[[nodiscard]] project::ProjectProvenance parseProvenance(const Json& value) {
+    requireKeys(
+        value, {"origin", "source_id", "source_version"},
+        "holography project provenance");
+    if (!value.at("origin").is_string()
+        || !value.at("source_id").is_string()
+        || !value.at("source_version").is_number_integer()) {
+        throw std::invalid_argument(
+            "holography project provenance has invalid field types");
+    }
+    project::ProjectProvenance provenance {
+        .originKind = project::projectOriginKindFromName(
+            value.at("origin").get<std::string>()),
+        .sourceId = value.at("source_id").get<std::string>(),
+        .sourceVersion = value.at("source_version").get<int>(),
+    };
+    project::validateProjectProvenance(provenance);
+    return provenance;
+}
+
 [[nodiscard]] Json referenceJson(
     const optics::wave::PlaneWaveParameters& value) {
     return {
@@ -335,7 +365,7 @@ void requireKeys(
         transfer.at("h2_response"), "H2 response");
     config.transfer.transplaneToleranceMetres = finiteNumber(
         transfer.at("transplane_tolerance_m"), "transplane tolerance");
-    if (formatVersion == kHolographyProjectFormatVersion) {
+    if (formatVersion != kLegacyHolographyProjectFormatVersion) {
         config.volume = parseVolume(value.at("volume"));
     }
     holographylab::validateHolographyLabConfig(config);
@@ -352,11 +382,13 @@ std::string serializeHolographyProjectJson(
     if (document.name.empty()) {
         throw std::invalid_argument("holography project name must not be empty");
     }
+    project::validateProjectProvenance(document.provenance);
     const Json root {
         {"config", configJson(document.config)},
         {"format_version", document.formatVersion},
         {"kind", "holography_lab_project"},
         {"name", document.name},
+        {"provenance", provenanceJson(document.provenance)},
     };
     return root.dump(2) + "\n";
 }
@@ -365,17 +397,27 @@ HolographyProjectDocument deserializeHolographyProjectJson(
     std::string_view jsonText) {
     try {
         const Json root = Json::parse(jsonText);
-        requireKeys(root, {"config", "format_version", "kind", "name"},
-            "holography project");
+        if (!root.is_object() || !root.contains("format_version")
+            || !root.at("format_version").is_number_integer()) {
+            throw std::invalid_argument(
+                "unsupported holography project format version");
+        }
+        const int formatVersion = root.at("format_version").get<int>();
+        if (formatVersion == kHolographyProjectFormatVersion) {
+            requireKeys(root,
+                {"config", "format_version", "kind", "name", "provenance"},
+                "holography project");
+        } else {
+            requireKeys(root, {"config", "format_version", "kind", "name"},
+                "legacy holography project");
+        }
         if (!root.at("kind").is_string()
             || root.at("kind").get<std::string>() != "holography_lab_project") {
             throw std::invalid_argument("unsupported holography project kind");
         }
-        if (!root.at("format_version").is_number_integer()) {
-            throw std::invalid_argument("unsupported holography project format version");
-        }
-        const int formatVersion = root.at("format_version").get<int>();
         if (formatVersion != kHolographyProjectFormatVersion
+            && formatVersion
+                != kPreProvenanceHolographyProjectFormatVersion
             && formatVersion != kLegacyHolographyProjectFormatVersion) {
             throw std::invalid_argument("unsupported holography project format version");
         }
@@ -386,6 +428,9 @@ HolographyProjectDocument deserializeHolographyProjectJson(
         return {
             .formatVersion = kHolographyProjectFormatVersion,
             .name = root.at("name").get<std::string>(),
+            .provenance = formatVersion == kHolographyProjectFormatVersion
+                ? parseProvenance(root.at("provenance"))
+                : project::ProjectProvenance {},
             .config = parseConfig(root.at("config"), formatVersion),
         };
     } catch (const std::invalid_argument&) {

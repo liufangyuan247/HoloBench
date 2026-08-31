@@ -9,9 +9,8 @@ implement, approximate, or silently override optical truth.
 
 ## Course catalog
 
-The catalog uses stable, non-localized lesson identifiers. The first eight
-lessons are required for the M7 gate; the final two may ship as advanced
-lessons during M7.
+The catalog uses stable, non-localized lesson identifiers. All ten lessons ship
+with guided workflows; lessons 9-10 are the advanced holography sequence.
 
 1. Reflection / Refraction.
 2. Thin Lens.
@@ -32,15 +31,14 @@ lessons during M7.
   separately from physics project documents.
 - [x] Dockable Learn UI with locked/unlocked/completed state, ordered-step
   guidance, reset/review controls, and visible learning objectives. Guided
-  interaction is enabled only for the first eight implemented workflows; future
-  catalog entries remain visibly unavailable rather than simulating completion.
-- [x] At least the first eight complete guided experiments using the existing
+  interaction is enabled for all ten implemented workflows.
+- [x] All ten complete guided experiments using the existing
   M1-M6 physics and diagnostics.
 - [x] Versioned project templates that open in Lab mode and remain compatible
   with normal project save/load.
 - [x] Contextual explanations that declare units, approximations, solver
   fidelity, and limitations without making formulas the primary interaction.
-  All first-eight workflows include these explanations.
+  All ten workflows include these explanations.
 - [x] Undo/redo for lesson-relevant editing actions with deterministic tests.
   The 64-state bounded history covers Reflection / Refraction, the shared
   optical-bench, Wave Detector, Sampling Debugger, and SLM inputs plus project
@@ -80,7 +78,7 @@ lessons during M7.
   malformed input, migration where applicable, and byte-stable round trip.
 - [x] Every currently completed lesson has a deterministic workflow test that
   exercises the same physics path used by Lab mode and checks its stated
-  observation (all required lessons 1-8 at this increment).
+  observation (all ten lessons at this increment).
 - [x] Windows Clang/MSVC and Ubuntu GCC warnings-as-errors builds pass for
   every currently integrated M7 increment.
 - [x] Complete application smoke and named M7 benchmark scenes pass.

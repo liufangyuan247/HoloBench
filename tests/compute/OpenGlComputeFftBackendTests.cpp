@@ -188,18 +188,11 @@ TEST_CASE("backend reports its contract and supported dimensions") {
     CHECK_FALSE(backend.supportsDimensions(12, 8));
     CHECK(fft::OpenGlComputeFftBackend::isContextAvailable());
     CHECK_FALSE(backend.hasGpuResources());
-    CHECK(fft::OpenGlComputeFftBackend::requiresCpuTwiddleQuirk(
-        "ATI Technologies Inc.",
-        "AMD Radeon Pro 5300M",
-        "4.6.0 Core Profile Context 23.9.3.230915"));
-    CHECK_FALSE(fft::OpenGlComputeFftBackend::requiresCpuTwiddleQuirk(
-        "ATI Technologies Inc.",
-        "AMD Radeon Pro 5300M",
-        "4.6.0 Core Profile Context 24.1.0"));
-    CHECK_FALSE(fft::OpenGlComputeFftBackend::requiresCpuTwiddleQuirk(
-        "NVIDIA Corporation",
-        "NVIDIA GeForce RTX 4090",
-        "4.6.0 NVIDIA 580.0"));
+    CHECK(fft::OpenGlComputeFftBackend::twiddleGenerationModeName(
+        fft::TwiddleGenerationMode::GpuShader) == "gpu-shader");
+    CHECK(fft::OpenGlComputeFftBackend::twiddleGenerationModeName(
+        fft::TwiddleGenerationMode::CpuValidationFallback)
+        == "cpu-validation-fallback");
 }
 
 TEST_CASE("missing current context is distinct and preserves the caller field") {
@@ -238,17 +231,9 @@ TEST_CASE("forward inverse and rectangular transforms agree with the CPU referen
 
         fft::OpenGlComputeFftBackend gpu;
         gpu.forward2D(actual);
-        const auto* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
-        const auto* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-        const auto* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
-        const bool expectedCpuQuirk = fft::OpenGlComputeFftBackend::requiresCpuTwiddleQuirk(
-            vendor != nullptr ? std::string_view(vendor) : std::string_view {},
-            renderer != nullptr ? std::string_view(renderer) : std::string_view {},
-            version != nullptr ? std::string_view(version) : std::string_view {});
-        CHECK(gpu.twiddleGenerationMode()
-            == (expectedCpuQuirk
-                    ? fft::TwiddleGenerationMode::CpuDeviceQuirk
-                    : fft::TwiddleGenerationMode::GpuShader));
+        const auto mode = gpu.twiddleGenerationMode();
+        CHECK((mode == fft::TwiddleGenerationMode::GpuShader
+            || mode == fft::TwiddleGenerationMode::CpuValidationFallback));
         checkFieldsNear(actual, expected, tolerance);
 
         gpu.inverse2D(actual);
@@ -257,6 +242,26 @@ TEST_CASE("forward inverse and rectangular transforms agree with the CPU referen
         CHECK_FALSE(gpu.hasGpuResources());
         CHECK(glGetError() == GL_NO_ERROR);
     }
+}
+
+TEST_CASE("1024-point twiddle capability path retains large-dimension parity") {
+    constexpr double tolerance = 5e-5;
+    auto actual = makeField(1024, 1);
+    fillDeterministic(actual);
+    const auto original = actual;
+    auto expected = actual;
+
+    fft::CpuFftBackend cpu;
+    cpu.forward2D(expected);
+    fft::OpenGlComputeFftBackend gpu;
+    gpu.forward2D(actual);
+    const auto mode = gpu.twiddleGenerationMode();
+    CHECK((mode == fft::TwiddleGenerationMode::GpuShader
+        || mode == fft::TwiddleGenerationMode::CpuValidationFallback));
+    checkFieldsNear(actual, expected, tolerance);
+
+    gpu.inverse2D(actual);
+    checkFieldsNear(actual, original, tolerance);
 }
 
 TEST_CASE("resource capacity is reused and grows without changing numerical results") {

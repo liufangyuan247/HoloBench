@@ -31,7 +31,7 @@ TEST_CASE("default localization covers catalog identity in English and Chinese")
             lessons::LessonLocale::SimplifiedChinese).size());
 }
 
-TEST_CASE("implemented workflows localize every step and fall back to English") {
+TEST_CASE("all guided workflows localize every step and fall back to English") {
     const auto catalog = lessons::makeDefaultLessonCatalog();
     const auto localization = lessons::makeDefaultLessonLocalization();
     for (const auto lessonId : {
@@ -42,7 +42,9 @@ TEST_CASE("implemented workflows localize every step and fall back to English") 
              "fourier_plane",
              "spatial_filtering",
              "na_psf",
-             "coherence_interference"}) {
+             "coherence_interference",
+             "holography",
+             "h1_h2_advanced"}) {
         for (const auto& step : catalog.lesson(lessonId).steps) {
             CHECK(localization.contains(
                 lessons::LessonLocale::SimplifiedChinese, step.titleKey));

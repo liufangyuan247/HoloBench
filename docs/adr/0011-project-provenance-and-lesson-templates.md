@@ -34,6 +34,11 @@ had no place to preserve origin information.
   source. Format-v1 documents migrate strictly to v2 user provenance; Save
   writes only canonical v2 data. Load remains draft-only and computed results
   are never persisted.
+- The independent Holography Lab schema is format v3 and stores the same
+  provenance beside its complete grid, RGB, object, H1/H2, thin-response, and
+  volume-grating state. Format-v1 documents gain default volume state and user
+  provenance; format-v2 documents retain volume state and gain user provenance.
+  Load remains draft-only and computed fields/results are never persisted.
 - Packaged lesson templates are ordinary project documents stored beside the
   application in `lesson_templates/`. Their embedded provenance must match the
   requested catalog `projectTemplateId` before the project can open.
@@ -52,6 +57,6 @@ loaders and are upgraded on their next save. Unknown schema keys, unsupported
 versions, invalid origin combinations, unstable IDs, invalid complete
 Reflection, Wave/Sampling, or SLM configs, and mismatched packaged-template
 identity fail explicitly. Distribution builds must copy `lesson_templates/`
-beside the executable, and application smoke validates all eight required
+beside the executable, and application smoke validates all ten
 files. Packaged template tests also require canonical serializer bytes and
 exact equality with the lesson factories used by progress observers.

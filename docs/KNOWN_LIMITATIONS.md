@@ -16,8 +16,10 @@
   polarization coupling, multiplexed gratings, nonlinear recording, scattering,
   chirp, slanted reflection fringes, anisotropic shrinkage, and rigorous Maxwell
   multi-order effects. Shrinkage is an explicit first isotropic approximation.
-- Holography project v2 migrates v1 files by adding documented default volume
-  parameters. It does not reinterpret legacy optical-bench or M5 documents.
+- Holography project v3 migrates v1 files by adding documented default volume
+  parameters and user provenance; v2 files gain user provenance without
+  changing their volume state. It does not reinterpret legacy optical-bench or
+  M5 documents.
 
 ## M5 SLM and interference scope
 
@@ -73,7 +75,7 @@
 - Requires an OpenGL 4.6 Core context; macOS is unsupported.
 - Local verification has been executed on Windows Clang/Ninja and MSVC/Ninja with warnings as errors.
 - The interactive GPU wave backend is FP32 and supports rectangular power-of-two grids. Unsupported dimensions and unavailable contexts fail explicitly; there is no silent CPU fallback.
-- GPU limits are queried at runtime. One exact AMD Radeon Pro 5300M driver build (`23.9.3.230915`) uses CPU-generated cached twiddle factors to avoid corrupt shader trigonometric results; all FFT data flow remains on the GPU and all other devices retain shader twiddle generation. NVIDIA and other unavailable hardware measurements are pending follow-up access, not release blockers; no unverified device-specific workaround is applied.
+- GPU limits are queried at runtime. Shader-generated twiddle tables are read back once per new dimension and checked against the CPU reference; a failed numerical probe switches only that backend instance to cached CPU-generated twiddles. All FFT data flow remains on the GPU, and no vendor/model/driver identity selects behavior. NVIDIA and other unavailable hardware measurements are pending follow-up access, not release blockers.
 - M4 is verified with Windows Clang/MSVC, Ubuntu GCC, and final four-job GitHub Actions run [33357679559](https://github.com/liufangyuan247/HoloBench/actions/runs/33357679559).
 
 ## Architecture & data
@@ -83,7 +85,7 @@
   strict v1-to-v2 user-project migration. It remains intentionally minimal.
   Real-lens prescriptions use separate versioned JSON/CSV exchange and are not
   embedded in that scene document; the separate holography document is format
-  v2 with its own narrowly scoped v1 migration.
+  v3 with narrowly scoped v1/v2 migrations.
 - Wave Detector and Sampling Debugger drafts share a strict format-v1
   `wave_sampling_workbench` document. Loading is deliberately draft-only;
   propagation and sampling refresh remain explicit operations, and numerical

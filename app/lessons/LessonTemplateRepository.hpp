@@ -4,6 +4,7 @@
 #include <string_view>
 
 #include "app/SlmInterferenceProject.hpp"
+#include "app/HolographyProject.hpp"
 #include "app/ReflectionRefractionWorkbench.hpp"
 #include "app/WaveWorkbenchProject.hpp"
 #include "optics/scene/SceneProjectAdapter.hpp"
@@ -29,6 +30,11 @@ loadWaveWorkbenchLessonTemplate(
 
 [[nodiscard]] slmproject::SlmInterferenceProjectDocument
 loadSlmLessonTemplate(
+    const std::filesystem::path& templateRoot,
+    std::string_view projectTemplateId);
+
+[[nodiscard]] holographyproject::HolographyProjectDocument
+loadHolographyLessonTemplate(
     const std::filesystem::path& templateRoot,
     std::string_view projectTemplateId);
 

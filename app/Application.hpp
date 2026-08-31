@@ -376,6 +376,8 @@ private:
     project::ProjectProvenance slmProjectProvenance_;
     std::string slmProjectName_ = "SLM & Interference Experiment";
     holographyui::HolographyUiState holographyUiState_;
+    project::ProjectProvenance holographyProjectProvenance_;
+    std::string holographyProjectName_ = "Holography Lab Experiment";
     lessons::LearnSession learnSession_;
     lessons::LocalizationCatalog lessonLocalization_;
     lessons::LessonLocale lessonLocale_ = lessons::LessonLocale::English;
@@ -410,6 +412,10 @@ private:
         = lessons::PsfWidthChange::Wider;
     lessons::FringeVisibilityChange lessonFringeVisibilityChange_
         = lessons::FringeVisibilityChange::Higher;
+    lessons::HolographyReplayContents lessonHolographyReplayContents_
+        = lessons::HolographyReplayContents::DesiredImageOnly;
+    holography::H2ImagePlacement lessonH1H2Placement_
+        = holography::H2ImagePlacement::PositiveSide;
     bool realLensDirty_ = true;
     std::size_t selectedRealLensSurface_ = 0;
 

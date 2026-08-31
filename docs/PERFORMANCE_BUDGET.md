@@ -51,15 +51,15 @@ Performance claims are accepted only when they identify hardware, build type, sc
 - **Hardware Profile**: AMD Radeon Pro 5300M, OpenGL `4.6.0 Core Profile Context 23.9.3.230915`.
 - **Workload**: 1024x1024 complex Gaussian input, 4 um square pitch, 532 nm vacuum wavelength, 0.10 m ASM propagation.
 - **Execution Parameters**: Fused upload -> forward FFT -> spectral transfer -> inverse FFT -> download; 5 warmups, 30 measured recomputes, `glFinish()` before and after each sample.
-- **Device path**: `twiddle_source=cpu-device-quirk` for this exact renderer/driver only. FFT samples, butterfly stages, spectral multiply, normalization, and transfer data remain on the GPU; unaffected devices use `twiddle_source=gpu-shader`.
+- **Device path**: `twiddle_source=gpu-shader`. Each newly generated table is read back once and checked against the CPU reference; only a failed numerical probe selects `cpu-validation-fallback` for that backend instance. FFT samples, butterfly stages, spectral multiply, normalization, and transfer data remain on the GPU in either mode.
 
 | Metric | Result | Target Budget | Status |
 |---|---|---|---|
-| p50 recompute | **35.433 ms** | Informational | Recorded |
-| p95 recompute | **42.593 ms** | **< 50 ms** | Met |
-| Max recompute | **44.658 ms** | Informational | Recorded |
+| p50 recompute | **29.294 ms** | Informational | Recorded |
+| p95 recompute | **33.139 ms** | **< 50 ms** | Met |
+| Max recompute | **35.990 ms** | Informational | Recorded |
 
-NVIDIA results must be appended with renderer/driver identity and `twiddle_source=gpu-shader`; the AMD quirk is not a basis for a vendor-wide limit.
+NVIDIA results must be appended with renderer/driver identity and the observed twiddle source. The same capability probe applies to every device; identity must never select the path.
 
 ## M3 Verified Fourier and Sampling Benchmarks
 
@@ -80,7 +80,7 @@ NVIDIA results must be appended with renderer/driver identity and `twiddle_sourc
 - **Hardware Profile**: AMD Radeon Pro 5300M, OpenGL `4.6.0 Core Profile Context 23.9.3.230915`.
 - **Workload**: 1024x1024 complex Gaussian field, 4 um square pitch, 532 nm vacuum wavelength, 50 mm / 75 mm coherent 4-f relay, and a 0.50 mm circular low-pass stop.
 - **Execution Parameters**: Two OpenGL forward FFTs with host-visible physical Fourier-plane scaling, hard-mask filtering, integrated-intensity diagnostics, and output assembly; 3 warmups, 15 measured recomputes, and `glFinish()` around each sample.
-- **Device path**: `twiddle_source=cpu-device-quirk` applies only to the already documented exact AMD renderer/driver tuple. The benchmark does not select dispatch sizes, precision, or performance caps by vendor or model.
+- **Device path**: Twiddle generation uses the same capability-driven validation as the M2 benchmark. The benchmark does not select generation mode, dispatch sizes, precision, or performance caps by vendor or model.
 
 | Metric | Result | Target Budget | Status |
 |---|---|---|---|
@@ -88,7 +88,7 @@ NVIDIA results must be appended with renderer/driver identity and `twiddle_sourc
 | p95 recompute | **249.959 ms** | **< 300 ms** | Met |
 | Max recompute | **249.959 ms** | Informational | Recorded |
 
-The Fourier-lens implementation precomputes separable centred X/Y phase factors. This preserves the same numerical-domain checks and direct-DFT oracle tolerances while avoiding per-pixel trigonometric recomputation. NVIDIA evidence remains additive: it must identify renderer/driver, confirm `twiddle_source=gpu-shader`, and satisfy the same named workload budget without changing defaults for other devices.
+The Fourier-lens implementation precomputes separable centred X/Y phase factors. This preserves the same numerical-domain checks and direct-DFT oracle tolerances while avoiding per-pixel trigonometric recomputation. NVIDIA evidence remains additive: it must identify renderer/driver, record the capability-selected twiddle source, and satisfy the same named workload budget without changing defaults for other devices.
 
 ## M4 Verified Real-Lens Benchmark
 

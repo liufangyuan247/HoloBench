@@ -48,6 +48,8 @@ TEST_SUITE("HolographyProject") {
 TEST_CASE("project JSON round trip is lossless and byte stable") {
     project::HolographyProjectDocument expected;
     expected.name = "RGB H1 to H2 transplane lesson";
+    expected.provenance = holobench::project::makeLessonTemplateProvenance(
+        "lesson_h1_h2_advanced", 1);
     expected.config.fieldPitchXMetres = 7e-6;
     expected.config.transfer.h2AxialPositionMetres = 0.009;
     expected.config.objectFeatures[1].phaseRadians = 0.75;
@@ -62,6 +64,7 @@ TEST_CASE("project JSON round trip is lossless and byte stable") {
     const auto second = project::serializeHolographyProjectJson(restored);
 
     CHECK(restored.name == expected.name);
+    CHECK(restored.provenance == expected.provenance);
     CHECK(ui::sameHolographyLabConfig(restored.config, expected.config));
     CHECK(second == first);
 }
@@ -88,7 +91,7 @@ TEST_CASE("strict project parser rejects unknown version kind keys and bad physi
         std::invalid_argument);
 
     json = nlohmann::json::parse(validText);
-    json["format_version"] = 3;
+    json["format_version"] = 4;
     CHECK_THROWS_AS(
         static_cast<void>(project::deserializeHolographyProjectJson(json.dump())),
         std::invalid_argument);
@@ -118,17 +121,19 @@ TEST_CASE("strict project parser rejects unknown version kind keys and bad physi
         std::invalid_argument);
 }
 
-TEST_CASE("format v1 projects migrate to v2 with explicit default volume state") {
+TEST_CASE("format v1 projects migrate to v3 with default volume and user provenance") {
     project::HolographyProjectDocument current;
     current.config.transfer.h2AxialPositionMetres = 0.0092;
     auto legacy = nlohmann::json::parse(
         project::serializeHolographyProjectJson(current));
     legacy["format_version"] = project::kLegacyHolographyProjectFormatVersion;
     legacy["config"].erase("volume");
+    legacy.erase("provenance");
 
     const auto migrated = project::deserializeHolographyProjectJson(legacy.dump());
 
     CHECK(migrated.formatVersion == project::kHolographyProjectFormatVersion);
+    CHECK(migrated.provenance == holobench::project::ProjectProvenance {});
     CHECK(migrated.config.transfer.h2AxialPositionMetres
         == current.config.transfer.h2AxialPositionMetres);
     CHECK(migrated.config.volume.geometry
@@ -140,6 +145,23 @@ TEST_CASE("format v1 projects migrate to v2 with explicit default volume state")
     CHECK(upgraded.at("format_version").get<int>()
         == project::kHolographyProjectFormatVersion);
     CHECK(upgraded.at("config").contains("volume"));
+    CHECK(upgraded.at("provenance").at("origin") == "user");
+}
+
+TEST_CASE("format v2 projects migrate to v3 user provenance") {
+    project::HolographyProjectDocument current;
+    auto legacy = nlohmann::json::parse(
+        project::serializeHolographyProjectJson(current));
+    legacy["format_version"]
+        = project::kPreProvenanceHolographyProjectFormatVersion;
+    legacy.erase("provenance");
+
+    const auto migrated = project::deserializeHolographyProjectJson(
+        legacy.dump());
+
+    CHECK(migrated.formatVersion == project::kHolographyProjectFormatVersion);
+    CHECK(migrated.provenance == holobench::project::ProjectProvenance {});
+    CHECK(ui::sameHolographyLabConfig(migrated.config, current.config));
 }
 
 TEST_CASE("loaded projects stay draft until explicit Apply") {

@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include <atomic>
 #include <cmath>
 #include <complex>
 #include <fstream>
@@ -9,6 +10,7 @@
 
 #include "app/lessons/LessonTemplates.hpp"
 #include "app/lessons/LessonTemplateRepository.hpp"
+#include "app/HolographyUiState.hpp"
 #include "app/ReflectionRefractionWorkbench.hpp"
 #include "app/WaveWorkbenchProject.hpp"
 #include "app/SlmInterferenceProject.hpp"
@@ -20,6 +22,27 @@
 namespace lessons = holobench::app::lessons;
 
 namespace {
+
+class TemporaryDirectory final {
+public:
+    TemporaryDirectory() {
+        static std::atomic<unsigned long long> counter {0};
+        path_ = std::filesystem::temp_directory_path()
+            / ("holobench-lesson-template-"
+                + std::to_string(counter.fetch_add(1)));
+        std::filesystem::create_directories(path_);
+    }
+    ~TemporaryDirectory() {
+        std::error_code ignored;
+        std::filesystem::remove_all(path_, ignored);
+    }
+    [[nodiscard]] const std::filesystem::path& path() const noexcept {
+        return path_;
+    }
+
+private:
+    std::filesystem::path path_;
+};
 
 [[nodiscard]] std::string readBytes(const std::filesystem::path& path) {
     std::ifstream stream(path, std::ios::binary);
@@ -127,6 +150,47 @@ TEST_CASE("packaged SLM template matches the coherence factory and canonical byt
     CHECK_THROWS_AS(
         static_cast<void>(lessons::loadSlmLessonTemplate(
             root, "lesson_volume_holograms")),
+        std::invalid_argument);
+}
+
+TEST_CASE("packaged holography templates match factories provenance and canonical bytes") {
+    const std::filesystem::path root(HOLOBENCH_LESSON_TEMPLATE_DIR);
+    const auto basic = lessons::loadHolographyLessonTemplate(
+        root, "lesson_holography");
+    const auto advanced = lessons::loadHolographyLessonTemplate(
+        root, "lesson_h1_h2_advanced");
+
+    CHECK(holobench::app::holographyui::sameHolographyLabConfig(
+        basic.config, lessons::makeHolographyLessonTemplate()));
+    CHECK(holobench::app::holographyui::sameHolographyLabConfig(
+        advanced.config, lessons::makeH1H2AdvancedLessonTemplate()));
+    for (const auto* document : {&basic, &advanced}) {
+        CHECK(document->provenance
+            == holobench::project::makeLessonTemplateProvenance(
+                document->provenance.sourceId,
+                lessons::kLessonTemplateVersion));
+        CHECK(holobench::app::holographyproject::
+                  serializeHolographyProjectJson(*document)
+            == readBytes(root / (document->provenance.sourceId
+                + ".holography.json")));
+    }
+    CHECK_THROWS_AS(
+        static_cast<void>(lessons::loadHolographyLessonTemplate(
+            root, "lesson_coherence_interference")),
+        std::invalid_argument);
+
+    TemporaryDirectory mismatchedRoot;
+    {
+        std::ofstream stream(
+            mismatchedRoot.path()
+                / "lesson_h1_h2_advanced.holography.json",
+            std::ios::binary);
+        stream << holobench::app::holographyproject::
+            serializeHolographyProjectJson(basic);
+    }
+    CHECK_THROWS_AS(
+        static_cast<void>(lessons::loadHolographyLessonTemplate(
+            mismatchedRoot.path(), "lesson_h1_h2_advanced")),
         std::invalid_argument);
 }
 
@@ -374,6 +438,61 @@ TEST_CASE("coherence lesson measures visibility loss from the shared SLM result"
     CHECK(changed.visibilityReduced);
     CHECK(changed.coherenceMagnitude
         < baseline.coherenceMagnitude);
+}
+
+TEST_CASE("holography lesson observes shared recording replay and order diagnostics") {
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto lessonTemplate = lessons::makeHolographyLessonTemplate();
+    const auto result = holobench::app::holographylab::runHolographyLab(
+        lessonTemplate, fft);
+    const auto observation = lessons::evaluateHolographyLessonObservation(
+        lessonTemplate, lessonTemplate, result);
+
+    CHECK(observation.h1Recorded);
+    CHECK(observation.realImageReplayed);
+    CHECK(observation.orderDiagnosticsAvailable);
+    CHECK(observation.worstRealImageNormalizedError < 1e-8);
+    CHECK(observation.minimumZeroOrderSeparationMetres > 0.0);
+    CHECK(observation.minimumTwinOrderSeparationMetres > 0.0);
+
+    auto staleConfig = lessonTemplate;
+    staleConfig.transfer.h2AxialPositionMetres += 1e-3;
+    CHECK_THROWS_AS(
+        static_cast<void>(lessons::evaluateHolographyLessonObservation(
+            lessonTemplate, staleConfig, result)),
+        std::invalid_argument);
+}
+
+TEST_CASE("H1 H2 lesson observes only an applied axial move to transplane") {
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto lessonTemplate = lessons::makeH1H2AdvancedLessonTemplate();
+    const auto baselineResult = holobench::app::holographylab::runHolographyLab(
+        lessonTemplate, fft);
+    const auto baseline = lessons::evaluateH1H2AdvancedLessonObservation(
+        lessonTemplate, lessonTemplate, baselineResult);
+    CHECK(baseline.h1Recorded);
+    CHECK_FALSE(baseline.h2PositionChanged);
+    CHECK_FALSE(baseline.transplaneReached);
+
+    auto moved = lessonTemplate;
+    moved.transfer.h2AxialPositionMetres
+        = moved.transfer.h1.objectToPlateDistanceMetres;
+    const auto movedResult = holobench::app::holographylab::runHolographyLab(
+        moved, fft);
+    const auto transplane = lessons::evaluateH1H2AdvancedLessonObservation(
+        lessonTemplate, moved, movedResult);
+    CHECK(transplane.h2PositionChanged);
+    CHECK(transplane.transplaneReached);
+    CHECK(std::abs(transplane.signedImageDistanceFromH2Metres) <= 0.1e-3);
+
+    auto illegalChange = moved;
+    illegalChange.objectFeatures[0].phaseRadians += 0.1;
+    const auto illegalResult = holobench::app::holographylab::runHolographyLab(
+        illegalChange, fft);
+    CHECK_THROWS_AS(
+        static_cast<void>(lessons::evaluateH1H2AdvancedLessonObservation(
+            lessonTemplate, illegalChange, illegalResult)),
+        std::invalid_argument);
 }
 
 } // TEST_SUITE("LessonTemplates")

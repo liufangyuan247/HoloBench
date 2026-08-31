@@ -3,6 +3,7 @@
 #include <optional>
 
 #include "app/ReflectionRefractionWorkbench.hpp"
+#include "app/HolographyLabPipeline.hpp"
 #include "app/SamplingDebuggerPipeline.hpp"
 #include "app/SlmInterferencePipeline.hpp"
 #include "app/WaveDetectorPipeline.hpp"
@@ -146,5 +147,43 @@ makeCoherenceLessonTemplate();
     const slmexperiment::SlmInterferenceExperimentConfig& appliedConfig,
     const slmexperiment::SlmInterferenceExperimentResult& result,
     std::optional<double> baselineVisibility = std::nullopt);
+
+enum class HolographyReplayContents {
+    DesiredImageOnly,
+    ZeroDesiredAndTwinOrders,
+    IncoherentNoise,
+};
+
+struct HolographyLessonObservation final {
+    double worstRealImageNormalizedError = 0.0;
+    double minimumZeroOrderSeparationMetres = 0.0;
+    double minimumTwinOrderSeparationMetres = 0.0;
+    bool h1Recorded = false;
+    bool realImageReplayed = false;
+    bool orderDiagnosticsAvailable = false;
+};
+
+[[nodiscard]] holographylab::HolographyLabConfig
+makeHolographyLessonTemplate();
+[[nodiscard]] HolographyLessonObservation evaluateHolographyLessonObservation(
+    const holographylab::HolographyLabConfig& lessonTemplate,
+    const holographylab::HolographyLabConfig& appliedConfig,
+    const holographylab::HolographyLabResult& result);
+
+struct H1H2AdvancedLessonObservation final {
+    double signedImageDistanceFromH2Metres = 0.0;
+    double worstH2ImageNormalizedError = 0.0;
+    bool h1Recorded = false;
+    bool h2PositionChanged = false;
+    bool transplaneReached = false;
+};
+
+[[nodiscard]] holographylab::HolographyLabConfig
+makeH1H2AdvancedLessonTemplate();
+[[nodiscard]] H1H2AdvancedLessonObservation
+evaluateH1H2AdvancedLessonObservation(
+    const holographylab::HolographyLabConfig& lessonTemplate,
+    const holographylab::HolographyLabConfig& appliedConfig,
+    const holographylab::HolographyLabResult& result);
 
 } // namespace holobench::app::lessons

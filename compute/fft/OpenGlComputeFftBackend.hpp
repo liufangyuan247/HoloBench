@@ -24,7 +24,7 @@ public:
 
 enum class TwiddleGenerationMode {
     GpuShader,
-    CpuDeviceQuirk,
+    CpuValidationFallback,
 };
 
 /**
@@ -36,7 +36,10 @@ enum class TwiddleGenerationMode {
  * The calling thread must own a current OpenGL 4.6 context for construction,
  * transforms, explicit resource release, and destruction after first use.
  * Call releaseGpuResources() before the owning context is destroyed.  No CPU
- * fallback is performed: unavailable contexts and GPU failures are explicit.
+ * transform fallback is performed: unavailable contexts and GPU failures are
+ * explicit. CPU-generated twiddle constants may be uploaded only when the
+ * active shader implementation fails the runtime numerical probe; butterfly
+ * and field data remain on the GPU.
  */
 class OpenGlComputeFftBackend final : public IFftBackend {
 public:
@@ -65,10 +68,6 @@ public:
         std::span<const std::complex<double>> transferFunction);
 
     [[nodiscard]] static bool isContextAvailable() noexcept;
-    [[nodiscard]] static bool requiresCpuTwiddleQuirk(
-        std::string_view vendor,
-        std::string_view renderer,
-        std::string_view version) noexcept;
     [[nodiscard]] TwiddleGenerationMode twiddleGenerationMode() const noexcept {
         return twiddleGenerationMode_;
     }
@@ -124,7 +123,6 @@ private:
     int locTwiddleDimension_ = -1;
     int locScale_ = -1;
     TwiddleGenerationMode twiddleGenerationMode_ = TwiddleGenerationMode::GpuShader;
-    bool deviceProfileInitialized_ = false;
 };
 
 using GlComputeFftBackend = OpenGlComputeFftBackend;

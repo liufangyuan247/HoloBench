@@ -18,6 +18,10 @@ TEST_CASE("default lab runs the complete RGB H1 H2 workflow") {
 
     const auto result = lab::runHolographyLab(config, backend);
 
+    CHECK(result.sourceConfig.fieldWidth == config.fieldWidth);
+    CHECK(result.sourceConfig.transfer.h2AxialPositionMetres
+        == config.transfer.h2AxialPositionMetres);
+
     CHECK(result.volume.kogelnikEfficiencyEvaluated);
     CHECK(result.volume.kogelnik.detuningParameter == doctest::Approx(0.0));
     CHECK(result.volume.kogelnik.diffractionEfficiency

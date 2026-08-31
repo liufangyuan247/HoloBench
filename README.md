@@ -93,9 +93,10 @@ Product Alpha)** is active development. For the current repository state and roa
 - **Holography Lab product foundation**: A deterministic two-feature complex
   object generator drives the complete RGB H1/H2 pipeline. Draft/applied state
   prevents recomputation before Apply, display-only plane/channel changes avoid
-  physics work, and a strict format-v2 JSON project preserves every grid,
+  physics work, and a strict format-v3 JSON project preserves every grid,
   spectral, object, reference, response, placement, and volume-grating
-  parameter byte-stably while migrating existing v1 projects.
+  parameter plus project provenance byte-stably while migrating existing v1
+  and v2 projects.
 - **Interactive Holography Lab**: A docked workflow edits the grid, independent
   RGB media, complex Gaussian object, H1/H2 positions, recording references,
   and thin-plate responses. It renders H1 exposure/real-image and H2
@@ -122,13 +123,15 @@ Product Alpha)** is active development. For the current repository state and roa
 - **Learn mode foundation**: A docked course catalog presents ten stable lesson
   identities, prerequisite locking, ordered steps, visible objectives, review/
   reset controls, and a progress file kept separate from physics projects.
-- **Eight shared-physics workflows**: Reflection / Refraction calls the existing
+- **Ten shared-physics workflows**: Reflection / Refraction calls the existing
   mirror and dielectric-interface tracers; Thin Lens and Real / Virtual Images
   observe the normal optical-bench scene and shared paraxial solver; Diffraction
   measures the existing Wave Detector result; Fourier Plane, Spatial Filtering,
   and NA / PSF observe the shared Sampling Debugger; Coherence / Interference
-  observes the existing SLM mutual-coherence result. No lesson owns a duplicate
-  physics model.
+  observes the existing SLM mutual-coherence result; Holography and H1/H2
+  Advanced observe the normal RGB Holography Lab pipeline, physical replay-order
+  diagnostics, and signed transplane placement. No lesson owns a duplicate
+  physics model or project format.
 - **Packaged English/Chinese UI font**: English and `zh-Hans` resources resolve
   from stable message keys with English fallback. Noto Sans CJK SC and its OFL
   license ship beside the executable; startup never depends on a system font.
@@ -139,21 +142,25 @@ Product Alpha)** is active development. For the current repository state and roa
   plus calibration provenance. Undo/redo restores editable inputs through the
   normal validation paths, leaves numerical Apply/Refresh explicit, and never
   stores or mutates lesson progress.
-- **Eight ordinary packaged templates**: Every required lesson opens versioned
+- **Ten ordinary packaged templates**: Every lesson opens versioned
   project data through a normal Lab surface. Reflection / Refraction has its
   own strict workbench document and Inspector Load/Save controls; Thin Lens and
   Real / Virtual Images use ordinary scene projects; the four Fourier/wave
   lessons share the byte-stable Wave & Sampling Workbench; Coherence /
   Interference uses its independent format-v2 SLM document with strict v1
-  migration. Template ID/version provenance survives Lab edits, undo/redo,
-  Save As, and reload. Computed results are never embedded in a template.
+  migration; both Holography lessons use ordinary format-v3 Holography Lab
+  documents with strict v1/v2 migration. Template ID/version provenance survives
+  Lab edits, Save As, and reload. Computed results are never embedded in a
+  template.
 - **Named M7 performance gate**: Eight `teaching/*` CPU-reference scenes run
   each guided workflow from baseline through the required learner change and
   shared observation. The executable reports per-scene p50/p95/checksum,
   enforces platform-neutral budgets, and runs in Windows and Linux CI.
-- **Current scope**: The two advanced Holography lessons remain visible but
-  cannot be started until their guided workflows and ordinary project
-  templates are implemented and validated.
+- **Advanced holography lessons**: Holography requires a real shared H1 result,
+  an explicit H1 real-image view, and correct identification of the physical
+  zero/desired/twin replay. H1/H2 Advanced permits only a real H2 axial move to
+  the H1 image plane and accepts the learner's transplane classification only
+  from a current shared result.
 
 ## Physical Assumptions & Limitations (M1)
 
@@ -173,7 +180,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (381 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (412 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -181,7 +188,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 381/381 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 412/412 tests passing):
 
 ```powershell
 cmake --preset core-ci
@@ -239,7 +246,7 @@ Tested on AMD Radeon Pro 5300M (OpenGL 4.6.0 Core, GLSL 4.60):
 
 *Note*: The benchmark measures raw GPU rendering throughput with VSync disabled and synchronous CPU-GPU sync. In normal interactive mode (`vsync=1`), the application syncs to display refresh (e.g. 60 Hz). Earlier ~32 FPS observations on certain displays were due to window compositor swap pacing rather than GPU rendering bottlenecks.
 
-The M2 wave benchmark on the same AMD Radeon Pro 5300M records p50 = **35.433 ms**, p95 = **42.593 ms**, and max = **44.658 ms**, meeting the p95 < 50 ms budget. This exact renderer and driver build (`23.9.3.230915`) activates the documented CPU-twiddle device quirk; other GPUs use shader-generated twiddles by default. NVIDIA and other unavailable GPU measurements will be added when hardware is available and do not block releases; speculative device workarounds are prohibited.
+The M2 wave benchmark on the same AMD Radeon Pro 5300M records p50 = **29.294 ms**, p95 = **33.139 ms**, and max = **35.990 ms**, meeting the p95 < 50 ms budget. Twiddle selection is capability-driven: each newly generated shader table is read back once and checked against the CPU reference, with CPU-generated twiddles used only if the active implementation fails that numerical probe. NVIDIA and other unavailable GPU measurements will be added when hardware is available and do not block releases; vendor/model workarounds are prohibited.
 
 ## CI & Automated Workflows
 
@@ -251,5 +258,5 @@ The M2 wave benchmark on the same AMD Radeon Pro 5300M records p50 = **35.433 ms
 - Ray and wave solvers are distinct and explicitly declare their physical assumptions.
 - Every physics feature requires an analytic or trusted-oracle validation test.
 - GPU implementations follow a deterministic CPU reference implementation.
-- GPU limits come from runtime capability queries. A confirmed device/driver defect may receive an exact-match quirk, but it must not reduce precision, capability, or performance for unaffected GPUs.
+- GPU limits and compatibility choices come from runtime capability and numerical-correctness probes. Vendor, model, and driver allowlists/denylists are prohibited; a failing capability may select a narrowly scoped fallback without reducing precision, capability, or performance for GPUs that pass.
 - A visually plausible result is not evidence of physical correctness.

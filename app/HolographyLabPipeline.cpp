@@ -162,6 +162,7 @@ HolographyLabResult runHolographyLab(
         makeObjectField(config, 2U),
     };
     return {
+        .sourceConfig = config,
         .rgbTransfer = holography::runRgbH1H2Transfer(
             objects, config.transfer, fftBackend),
         .volume = optics::holography::evaluateVolumeHologram(config.volume),

@@ -129,8 +129,10 @@ photopolymer, or a complete radiometric exposure model.
   numbers, and non-physical configurations are rejected; load updates the draft
   and remains apply-gated. ADR 0010 extends this document to format v2 with
   separate volume-grating state and a strict v1 migration to default volume
-  parameters. The legacy optical-bench and M5 experiment formats are not
-  reinterpreted.
+  parameters. ADR 0011 extends it to format v3 with project provenance: v1
+  gains both the default volume and user provenance, while v2 retains its
+  volume and gains user provenance. The legacy optical-bench and M5 experiment
+  formats are not reinterpreted.
 
 ## Validation
 

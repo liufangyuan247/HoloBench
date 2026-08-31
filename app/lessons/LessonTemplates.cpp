@@ -1,9 +1,12 @@
 #include "app/lessons/LessonTemplates.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 #include "app/SlmInterferenceUiState.hpp"
+#include "app/HolographyUiState.hpp"
 
 namespace holobench::app::lessons {
 namespace {
@@ -427,6 +430,120 @@ CoherenceLessonObservation evaluateCoherenceLessonObservation(
             && baselineVisibility.has_value()
             && visibility <= baselineVisibility.value() * 0.80,
     };
+}
+
+holographylab::HolographyLabConfig makeHolographyLessonTemplate() {
+    auto config = holographylab::makeDefaultHolographyLabConfig();
+    // Keep the zero and twin carriers below Nyquist for every RGB channel so
+    // the lesson can demonstrate the physical three-order replay without an
+    // aliased diagnostic. This is lesson content, not a solver-side clamp.
+    config.transfer.h1.recordingReference.directionCosineX = 0.01;
+    return config;
+}
+
+HolographyLessonObservation evaluateHolographyLessonObservation(
+    const holographylab::HolographyLabConfig& lessonTemplate,
+    const holographylab::HolographyLabConfig& appliedConfig,
+    const holographylab::HolographyLabResult& result) {
+    if (!holographyui::sameHolographyLabConfig(
+            result.sourceConfig, appliedConfig)) {
+        throw std::invalid_argument(
+            "holography lesson requires the current shared Lab result");
+    }
+    if (!holographyui::sameHolographyLabConfig(
+            appliedConfig, lessonTemplate)) {
+        throw std::invalid_argument(
+            "holography lesson template physics must remain unchanged");
+    }
+
+    HolographyLessonObservation observation;
+    observation.minimumZeroOrderSeparationMetres
+        = std::numeric_limits<double>::infinity();
+    observation.minimumTwinOrderSeparationMetres
+        = std::numeric_limits<double>::infinity();
+    observation.h1Recorded = true;
+    observation.realImageReplayed = true;
+    observation.orderDiagnosticsAvailable = true;
+    for (const auto& channel : result.rgbTransfer.channels) {
+        const auto& diagnostics = channel.h1.hologram.diagnostics;
+        observation.h1Recorded = observation.h1Recorded
+            && diagnostics.minimumClampedSampleCount == 0U
+            && diagnostics.maximumClampedSampleCount == 0U;
+        observation.worstRealImageNormalizedError = std::max(
+            observation.worstRealImageNormalizedError,
+            channel.h1.realImageQuality.normalizedComplexL2Error);
+        observation.realImageReplayed = observation.realImageReplayed
+            && channel.h1.realImageQuality.normalizedComplexL2Error < 1e-8;
+        const auto& order = channel.h1.conjugateRealImageOrderPlacement;
+        observation.minimumZeroOrderSeparationMetres = std::min(
+            observation.minimumZeroOrderSeparationMetres,
+            order.desiredToZeroOrderSeparationMetres);
+        observation.minimumTwinOrderSeparationMetres = std::min(
+            observation.minimumTwinOrderSeparationMetres,
+            order.desiredToTwinOrderSeparationMetres);
+        observation.orderDiagnosticsAvailable
+            = observation.orderDiagnosticsAvailable
+            && order.zeroOrderCarrierSampled
+            && order.twinOrderCarrierSampled
+            && order.zeroOrderCarrierPropagating
+            && order.twinOrderCarrierPropagating
+            && order.desiredToZeroOrderSeparationMetres > 0.0
+            && order.desiredToTwinOrderSeparationMetres > 0.0;
+    }
+    return observation;
+}
+
+holographylab::HolographyLabConfig makeH1H2AdvancedLessonTemplate() {
+    auto config = holographylab::makeDefaultHolographyLabConfig();
+    config.transfer.transplaneToleranceMetres = 0.1e-3;
+    return config;
+}
+
+H1H2AdvancedLessonObservation evaluateH1H2AdvancedLessonObservation(
+    const holographylab::HolographyLabConfig& lessonTemplate,
+    const holographylab::HolographyLabConfig& appliedConfig,
+    const holographylab::HolographyLabResult& result) {
+    if (!holographyui::sameHolographyLabConfig(
+            result.sourceConfig, appliedConfig)) {
+        throw std::invalid_argument(
+            "H1/H2 lesson requires the current shared Lab result");
+    }
+    auto normalizedConfig = appliedConfig;
+    normalizedConfig.transfer.h2AxialPositionMetres
+        = lessonTemplate.transfer.h2AxialPositionMetres;
+    if (!holographyui::sameHolographyLabConfig(
+            normalizedConfig, lessonTemplate)) {
+        throw std::invalid_argument(
+            "H1/H2 lesson permits only the H2 axial position to change");
+    }
+
+    H1H2AdvancedLessonObservation observation;
+    observation.h1Recorded = true;
+    observation.h2PositionChanged = std::abs(
+        appliedConfig.transfer.h2AxialPositionMetres
+        - lessonTemplate.transfer.h2AxialPositionMetres) >= 1.0e-3;
+    observation.transplaneReached = observation.h2PositionChanged;
+    bool firstChannel = true;
+    for (const auto& channel : result.rgbTransfer.channels) {
+        const auto& diagnostics = channel.h1.hologram.diagnostics;
+        observation.h1Recorded = observation.h1Recorded
+            && diagnostics.minimumClampedSampleCount == 0U
+            && diagnostics.maximumClampedSampleCount == 0U;
+        observation.worstH2ImageNormalizedError = std::max(
+            observation.worstH2ImageNormalizedError,
+            channel.h2ImageQuality.normalizedComplexL2Error);
+        observation.transplaneReached = observation.transplaneReached
+            && channel.imagePlacement == holography::H2ImagePlacement::Transplane
+            && std::abs(channel.imageDistanceFromH2Metres)
+                <= appliedConfig.transfer.transplaneToleranceMetres
+            && channel.h2ImageQuality.normalizedComplexL2Error < 1e-8;
+        if (firstChannel) {
+            observation.signedImageDistanceFromH2Metres
+                = channel.imageDistanceFromH2Metres;
+            firstChannel = false;
+        }
+    }
+    return observation;
 }
 
 } // namespace holobench::app::lessons

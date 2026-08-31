@@ -1,0 +1,94 @@
+{
+  "config": {
+    "field_height": 32,
+    "field_pitch_x_m": 8e-06,
+    "field_pitch_y_m": 8e-06,
+    "field_width": 32,
+    "object_features": [
+      {
+        "amplitude": 0.35,
+        "center_x_m": 2e-05,
+        "center_y_m": -1.2e-05,
+        "phase_rad": 0.2,
+        "sigma_x_m": 2.4e-05,
+        "sigma_y_m": 1.8e-05
+      },
+      {
+        "amplitude": 0.2,
+        "center_x_m": -2.8e-05,
+        "center_y_m": 2e-05,
+        "phase_rad": -0.4,
+        "sigma_x_m": 1.8e-05,
+        "sigma_y_m": 2.6e-05
+      }
+    ],
+    "refractive_indices": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "transfer": {
+      "h1": {
+        "object_to_plate_distance_m": 0.01,
+        "recording_reference": {
+          "amplitude": [
+            0.5,
+            0.0
+          ],
+          "direction_cosine_x": 0.02,
+          "direction_cosine_y": 0.0,
+          "phase_at_origin_rad": 0.0,
+          "plane_z_m": 0.0
+        },
+        "response": {
+          "amplitude_bias": 0.1,
+          "intensity_to_amplitude_gain": 0.2,
+          "maximum_amplitude_transmission": 1.0,
+          "minimum_amplitude_transmission": 0.0
+        }
+      },
+      "h2_axial_position_m": 0.008,
+      "h2_recording_reference": {
+        "amplitude": [
+          0.5,
+          0.0
+        ],
+        "direction_cosine_x": -0.02,
+        "direction_cosine_y": 0.0,
+        "phase_at_origin_rad": 0.0,
+        "plane_z_m": 0.008
+      },
+      "h2_response": {
+        "amplitude_bias": 0.1,
+        "intensity_to_amplitude_gain": 0.2,
+        "maximum_amplitude_transmission": 1.0,
+        "minimum_amplitude_transmission": 0.0
+      },
+      "transplane_tolerance_m": 0.0001
+    },
+    "vacuum_wavelengths_m": [
+      6.38e-07,
+      5.32e-07,
+      4.5e-07
+    ],
+    "volume": {
+      "average_refractive_index": 1.5,
+      "geometry": "reflection",
+      "index_modulation": 0.01,
+      "isotropic_linear_shrinkage_fraction": 0.0,
+      "recorded_thickness_m": 2e-05,
+      "recording_bragg_angle_in_medium_rad": 0.0,
+      "recording_vacuum_wavelength_m": 5.32e-07,
+      "replay_angle_in_medium_rad": 0.0,
+      "replay_vacuum_wavelength_m": 5.32e-07
+    }
+  },
+  "format_version": 3,
+  "kind": "holography_lab_project",
+  "name": "Lesson Template: H1/H2 Advanced",
+  "provenance": {
+    "origin": "lesson_template",
+    "source_id": "lesson_h1_h2_advanced",
+    "source_version": 1
+  }
+}

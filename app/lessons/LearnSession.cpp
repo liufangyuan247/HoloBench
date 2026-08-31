@@ -29,7 +29,9 @@ bool hasInteractiveLessonWorkflow(std::string_view lessonId) noexcept {
         || lessonId == "fourier_plane"
         || lessonId == "spatial_filtering"
         || lessonId == "na_psf"
-        || lessonId == "coherence_interference";
+        || lessonId == "coherence_interference"
+        || lessonId == "holography"
+        || lessonId == "h1_h2_advanced";
 }
 
 LearnSession::LearnSession()
@@ -62,6 +64,8 @@ void LearnSession::beginLesson(std::string_view lessonId) {
         = diffractionTemplateHalfWidthMetres_;
     FourierLessonTemplate nextFourierLessonTemplate = fourierLessonTemplate_;
     auto nextCoherenceLessonTemplate = coherenceLessonTemplate_;
+    auto nextHolographyLessonTemplate = holographyLessonTemplate_;
+    auto nextH1H2AdvancedLessonTemplate = h1H2AdvancedLessonTemplate_;
     if (nextActiveLessonId == "reflection_refraction") {
         nextReflectionResult = evaluateReflectionRefractionLesson(nextReflectionConfig);
     } else if (nextActiveLessonId == "thin_lens") {
@@ -77,8 +81,12 @@ void LearnSession::beginLesson(std::string_view lessonId) {
         || nextActiveLessonId == "spatial_filtering"
         || nextActiveLessonId == "na_psf") {
         nextFourierLessonTemplate = makeFourierLessonTemplate();
-    } else {
+    } else if (nextActiveLessonId == "coherence_interference") {
         nextCoherenceLessonTemplate = makeCoherenceLessonTemplate();
+    } else if (nextActiveLessonId == "holography") {
+        nextHolographyLessonTemplate = makeHolographyLessonTemplate();
+    } else {
+        nextH1H2AdvancedLessonTemplate = makeH1H2AdvancedLessonTemplate();
     }
 
     static_assert(std::is_nothrow_move_assignable_v<std::string>);
@@ -90,6 +98,8 @@ void LearnSession::beginLesson(std::string_view lessonId) {
     spatialFilteringObservation_.reset();
     naPsfObservation_.reset();
     coherenceObservation_.reset();
+    holographyObservation_.reset();
+    h1H2AdvancedObservation_.reset();
     diffractionBaselineHalfMaximumWidthMetres_.reset();
     spatialFilteringBaselineDetailMetric_.reset();
     naPsfBaselineNumericalAperture_.reset();
@@ -102,6 +112,9 @@ void LearnSession::beginLesson(std::string_view lessonId) {
         = nextDiffractionTemplateHalfWidthMetres;
     fourierLessonTemplate_ = std::move(nextFourierLessonTemplate);
     coherenceLessonTemplate_ = std::move(nextCoherenceLessonTemplate);
+    holographyLessonTemplate_ = std::move(nextHolographyLessonTemplate);
+    h1H2AdvancedLessonTemplate_
+        = std::move(nextH1H2AdvancedLessonTemplate);
     reflectionIncidenceChanged_ = false;
 }
 
@@ -114,6 +127,8 @@ void LearnSession::endLesson() noexcept {
     spatialFilteringObservation_.reset();
     naPsfObservation_.reset();
     coherenceObservation_.reset();
+    holographyObservation_.reset();
+    h1H2AdvancedObservation_.reset();
     diffractionBaselineHalfMaximumWidthMetres_.reset();
     spatialFilteringBaselineDetailMetric_.reset();
     naPsfBaselineNumericalAperture_.reset();
@@ -125,6 +140,10 @@ void LearnSession::endLesson() noexcept {
 void LearnSession::confirmTemplateLoaded() {
     if (activeLessonId_.empty()) {
         throw std::invalid_argument("no active lesson template to confirm");
+    }
+    if ((activeLessonId_ == "holography"
+            || activeLessonId_ == "h1_h2_advanced")) {
+        return;
     }
     if (isProgressStep(catalog_, progress_, activeLessonId_, 0U)) {
         completeLessonStep(
@@ -431,6 +450,84 @@ bool LearnSession::confirmFringeVisibilityChange(
     if (!coherenceObservation_.has_value()
         || !coherenceObservation_->visibilityReduced
         || change != FringeVisibilityChange::Lower
+        || !isProgressStep(catalog_, progress_, activeLessonId_, 2U)) {
+        return false;
+    }
+    completeLessonStep(
+        catalog_, progress_, activeLessonId_,
+        catalog_.lesson(activeLessonId_).steps[2].id);
+    return true;
+}
+
+void LearnSession::observeHolographyLab(
+    const holographylab::HolographyLabConfig& appliedConfig,
+    const holographylab::HolographyLabResult& result,
+    bool viewingH1RealImage) {
+    if (activeLessonId_ == "holography") {
+        auto observation = evaluateHolographyLessonObservation(
+            holographyLessonTemplate_, appliedConfig, result);
+        if (observation.h1Recorded
+            && isProgressStep(catalog_, progress_, activeLessonId_, 0U)) {
+            completeLessonStep(
+                catalog_, progress_, activeLessonId_,
+                catalog_.lesson(activeLessonId_).steps[0].id);
+        }
+        if (viewingH1RealImage && observation.realImageReplayed
+            && isProgressStep(catalog_, progress_, activeLessonId_, 1U)) {
+            completeLessonStep(
+                catalog_, progress_, activeLessonId_,
+                catalog_.lesson(activeLessonId_).steps[1].id);
+        }
+        holographyObservation_ = observation;
+        return;
+    }
+    if (activeLessonId_ != "h1_h2_advanced") {
+        return;
+    }
+    auto observation = evaluateH1H2AdvancedLessonObservation(
+        h1H2AdvancedLessonTemplate_, appliedConfig, result);
+    if (observation.h1Recorded
+        && isProgressStep(catalog_, progress_, activeLessonId_, 0U)) {
+        completeLessonStep(
+            catalog_, progress_, activeLessonId_,
+            catalog_.lesson(activeLessonId_).steps[0].id);
+    }
+    if (observation.h2PositionChanged
+        && isProgressStep(catalog_, progress_, activeLessonId_, 1U)) {
+        completeLessonStep(
+            catalog_, progress_, activeLessonId_,
+            catalog_.lesson(activeLessonId_).steps[1].id);
+    }
+    h1H2AdvancedObservation_ = observation;
+}
+
+bool LearnSession::confirmHolographyReplayContents(
+    HolographyReplayContents contents) {
+    if (activeLessonId_ != "holography") {
+        throw std::invalid_argument(
+            "replay-order confirmation requires the holography lesson");
+    }
+    if (!holographyObservation_.has_value()
+        || !holographyObservation_->orderDiagnosticsAvailable
+        || contents != HolographyReplayContents::ZeroDesiredAndTwinOrders
+        || !isProgressStep(catalog_, progress_, activeLessonId_, 2U)) {
+        return false;
+    }
+    completeLessonStep(
+        catalog_, progress_, activeLessonId_,
+        catalog_.lesson(activeLessonId_).steps[2].id);
+    return true;
+}
+
+bool LearnSession::confirmH1H2ImagePlacement(
+    holography::H2ImagePlacement placement) {
+    if (activeLessonId_ != "h1_h2_advanced") {
+        throw std::invalid_argument(
+            "transplane confirmation requires the H1/H2 lesson");
+    }
+    if (!h1H2AdvancedObservation_.has_value()
+        || !h1H2AdvancedObservation_->transplaneReached
+        || placement != holography::H2ImagePlacement::Transplane
         || !isProgressStep(catalog_, progress_, activeLessonId_, 2U)) {
         return false;
     }

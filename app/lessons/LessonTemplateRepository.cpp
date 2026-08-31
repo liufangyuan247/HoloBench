@@ -117,4 +117,27 @@ slmproject::SlmInterferenceProjectDocument loadSlmLessonTemplate(
     return loaded;
 }
 
+holographyproject::HolographyProjectDocument loadHolographyLessonTemplate(
+    const std::filesystem::path& templateRoot,
+    std::string_view projectTemplateId) {
+    if (projectTemplateId != "lesson_holography"
+        && projectTemplateId != "lesson_h1_h2_advanced") {
+        throw std::invalid_argument(
+            "project template is not a holography lesson template");
+    }
+    if (!project::isStableProjectSourceId(projectTemplateId)) {
+        throw std::invalid_argument("project template ID is not stable ASCII");
+    }
+    const auto path = templateRoot
+        / (std::string(projectTemplateId) + ".holography.json");
+    auto loaded = holographyproject::loadHolographyProject(path);
+    const auto expected = project::makeLessonTemplateProvenance(
+        std::string(projectTemplateId), kLessonTemplateVersion);
+    if (loaded.provenance != expected) {
+        throw std::invalid_argument(
+            "lesson template provenance does not match its requested identity");
+    }
+    return loaded;
+}
+
 } // namespace holobench::app::lessons
