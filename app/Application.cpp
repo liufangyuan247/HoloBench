@@ -454,6 +454,8 @@ LessonEditState Application::captureLessonEditState() const {
         .tracerOptions = tracerOptions_,
         .waveDetectorDraft = detectorUiState_.draftConfig(),
         .samplingDebugger = samplingDebuggerConfig_,
+        .waveProjectProvenance = waveProjectProvenance_,
+        .waveProjectName = waveProjectName_,
         .slmInterferenceDraft = slmInterferenceUiState_.draftConfig(),
         .slmCalibrationSource = slmInterferenceUiState_.draftCalibrationSource(),
     };
@@ -471,6 +473,7 @@ bool Application::restoreLessonEditState(const LessonEditState& state) {
         slmexperiment::validateSlmInterferenceExperimentConfig(
             state.slmInterferenceDraft);
         project::validateProjectProvenance(state.sceneProvenance);
+        project::validateProjectProvenance(state.waveProjectProvenance);
         if (!applySceneProject(
                 state.scene, state.tracerOptions, state.sceneProvenance)) {
             throw std::runtime_error(
@@ -478,6 +481,8 @@ bool Application::restoreLessonEditState(const LessonEditState& state) {
         }
         detectorUiState_.setDraftConfig(state.waveDetectorDraft);
         samplingDebuggerConfig_ = state.samplingDebugger;
+        waveProjectProvenance_ = state.waveProjectProvenance;
+        waveProjectName_ = state.waveProjectName;
         slmInterferenceUiState_.replaceDraftProject(
             state.slmInterferenceDraft, state.slmCalibrationSource);
         restoringLessonEdit_ = false;
@@ -724,6 +729,14 @@ bool Application::initialize(const RunOptions& options) {
             lessonTemplateRoot(), "lesson_thin_lens"));
         static_cast<void>(lessons::loadOpticalBenchLessonTemplate(
             lessonTemplateRoot(), "lesson_real_virtual_images"));
+        static_cast<void>(lessons::loadWaveWorkbenchLessonTemplate(
+            lessonTemplateRoot(), "lesson_diffraction"));
+        static_cast<void>(lessons::loadWaveWorkbenchLessonTemplate(
+            lessonTemplateRoot(), "lesson_fourier_plane"));
+        static_cast<void>(lessons::loadWaveWorkbenchLessonTemplate(
+            lessonTemplateRoot(), "lesson_spatial_filtering"));
+        static_cast<void>(lessons::loadWaveWorkbenchLessonTemplate(
+            lessonTemplateRoot(), "lesson_na_psf"));
     } catch (const std::exception& ex) {
         SDL_Log("Packaged lesson template validation failed: %s", ex.what());
         shutdown();
@@ -1092,6 +1105,53 @@ void Application::saveSlmExperimentProject() {
     }
 }
 
+void Application::loadWaveWorkbenchProject() {
+    try {
+        const std::filesystem::path path(waveProjectPathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument(
+                "wave workbench project path cannot be empty");
+        }
+        auto document = waveproject::loadWaveWorkbenchProject(path);
+        detectorUiState_.setDraftConfig(document.waveDetector);
+        samplingDebuggerConfig_ = document.samplingDebugger;
+        waveProjectProvenance_ = std::move(document.provenance);
+        waveProjectName_ = std::move(document.name);
+        samplingDebuggerResult_.reset();
+        recordLessonEdit();
+        detectorErrorMessage_.clear();
+        detectorStatusMessage_ = "Loaded wave workbench project from "
+            + path.string() + "; press Apply, then Refresh Sampling Debugger";
+    } catch (const std::exception& ex) {
+        detectorErrorMessage_ = "Wave workbench project load failed: "
+            + std::string(ex.what());
+        detectorStatusMessage_.clear();
+    }
+}
+
+void Application::saveWaveWorkbenchProject() {
+    try {
+        const std::filesystem::path path(waveProjectPathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument(
+                "wave workbench project path cannot be empty");
+        }
+        waveproject::WaveWorkbenchProjectDocument document;
+        document.name = waveProjectName_;
+        document.provenance = waveProjectProvenance_;
+        document.waveDetector = detectorUiState_.draftConfig();
+        document.samplingDebugger = samplingDebuggerConfig_;
+        waveproject::saveWaveWorkbenchProject(path, document);
+        detectorErrorMessage_.clear();
+        detectorStatusMessage_ = "Saved draft wave workbench project to "
+            + path.string();
+    } catch (const std::exception& ex) {
+        detectorErrorMessage_ = "Wave workbench project save failed: "
+            + std::string(ex.what());
+        detectorStatusMessage_.clear();
+    }
+}
+
 void Application::loadHolographyProject() {
     try {
         const std::filesystem::path path(holographyProjectPathBuffer_);
@@ -1258,6 +1318,33 @@ void Application::saveRealLensPrescription(bool csv) {
 
 void Application::drawWaveDetectorPanel() {
     ImGui::Begin(docking::DockLayoutConfig::kWaveDetectorWindowName);
+
+    if (ImGui::CollapsingHeader(
+            "Wave Workbench Project", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (waveProjectProvenance_.originKind
+            == project::ProjectOriginKind::LessonTemplate) {
+            ImGui::Text(
+                "Origin: lesson template %s v%d",
+                waveProjectProvenance_.sourceId.c_str(),
+                waveProjectProvenance_.sourceVersion);
+        } else {
+            ImGui::TextDisabled("Origin: user project");
+        }
+        ImGui::Text("Project: %s", waveProjectName_.c_str());
+        ImGui::InputText(
+            "Path##wave_project",
+            waveProjectPathBuffer_,
+            sizeof(waveProjectPathBuffer_));
+        if (ImGui::Button("Save Wave Project")) {
+            saveWaveWorkbenchProject();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Load Wave Project")) {
+            loadWaveWorkbenchProject();
+        }
+        ImGui::TextDisabled(
+            "Load replaces drafts only; Apply and Refresh remain explicit.");
+    }
 
     auto draft = detectorUiState_.draftConfig();
     bool physicsEdited = false;
@@ -3082,10 +3169,14 @@ void Application::loadLessonTemplate(std::string_view lessonId) {
         return;
     }
     if (lessonId == "diffraction") {
-        const auto lessonTemplate = lessons::makeDiffractionLessonTemplate();
-        detectorUiState_.setDraftConfig(lessonTemplate);
+        const auto lessonTemplate = lessons::loadWaveWorkbenchLessonTemplate(
+            lessonTemplateRoot(), "lesson_diffraction");
+        detectorUiState_.setDraftConfig(lessonTemplate.waveDetector);
         detectorUiState_.apply();
         detectorUiState_.setViewMode(field::FieldViewMode::DecibelIntensity);
+        samplingDebuggerConfig_ = lessonTemplate.samplingDebugger;
+        waveProjectProvenance_ = lessonTemplate.provenance;
+        waveProjectName_ = lessonTemplate.name;
         detectorResult_.reset();
         samplingDebuggerResult_.reset();
         detectorErrorMessage_.clear();
@@ -3097,11 +3188,14 @@ void Application::loadLessonTemplate(std::string_view lessonId) {
     if (lessonId == "fourier_plane"
         || lessonId == "spatial_filtering"
         || lessonId == "na_psf") {
-        const auto lessonTemplate = lessons::makeFourierLessonTemplate();
+        const auto lessonTemplate = lessons::loadWaveWorkbenchLessonTemplate(
+            lessonTemplateRoot(), "lesson_" + std::string(lessonId));
         detectorUiState_.setDraftConfig(lessonTemplate.waveDetector);
         detectorUiState_.apply();
         detectorUiState_.setViewMode(field::FieldViewMode::DecibelIntensity);
         samplingDebuggerConfig_ = lessonTemplate.samplingDebugger;
+        waveProjectProvenance_ = lessonTemplate.provenance;
+        waveProjectName_ = lessonTemplate.name;
         detectorResult_.reset();
         samplingDebuggerResult_.reset();
         detectorErrorMessage_.clear();

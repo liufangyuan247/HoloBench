@@ -137,11 +137,13 @@ Product Alpha)** is active development. For the current repository state and roa
   plus calibration provenance. Undo/redo restores editable inputs through the
   normal validation paths, leaves numerical Apply/Refresh explicit, and never
   stores or mutates lesson progress.
-- **Ordinary packaged templates (in progress)**: Thin Lens and Real / Virtual
-  Images now load packaged optical-bench format-v2 project files through the
-  normal Lab loader. Stable template ID/version provenance survives Lab edits,
-  undo/redo, Save As, and reload; legacy format-v1 scenes migrate to v2 as user
-  projects. Wave/SLM templates remain the next part of this gate.
+- **Ordinary packaged templates (in progress)**: Thin Lens, Real / Virtual
+  Images, Diffraction, Fourier Plane, Spatial Filtering, and NA / PSF now load
+  packaged projects through their normal Lab loaders. The Wave Detector and
+  Sampling Debugger share one strict, byte-stable workbench document with
+  explicit draft-only Load/Save. Stable template ID/version provenance survives
+  Lab edits, undo/redo, Save As, and reload; the SLM and Reflection / Refraction
+  templates remain open parts of this gate.
 - **Current scope**: The two advanced Holography lessons remain visible but
   cannot be started until their guided workflows and ordinary project
   templates are implemented and validated.

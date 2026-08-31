@@ -84,6 +84,10 @@
   Real-lens prescriptions use separate versioned JSON/CSV exchange and are not
   embedded in that scene document; the separate holography document is format
   v2 with its own narrowly scoped v1 migration.
+- Wave Detector and Sampling Debugger drafts share a strict format-v1
+  `wave_sampling_workbench` document. Loading is deliberately draft-only;
+  propagation and sampling refresh remain explicit operations, and numerical
+  results are not persisted.
 - Undo/redo currently covers lesson-relevant optical-bench, Wave Detector,
   Sampling Debugger, and SLM inputs. Real Lens and Holography Lab editing are
   not yet included. There is no autosave, crash recovery, release-complete CJK

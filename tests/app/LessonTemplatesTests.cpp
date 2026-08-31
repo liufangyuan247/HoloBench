@@ -2,16 +2,31 @@
 
 #include <cmath>
 #include <complex>
+#include <fstream>
+#include <iterator>
 #include <numbers>
 #include <stdexcept>
 
 #include "app/lessons/LessonTemplates.hpp"
 #include "app/lessons/LessonTemplateRepository.hpp"
+#include "app/WaveWorkbenchProject.hpp"
 #include "compute/fft/CpuFftBackend.hpp"
 #include "core/project/ProjectDocument.hpp"
 #include "optics/scene/SceneProjectAdapter.hpp"
 
 namespace lessons = holobench::app::lessons;
+
+namespace {
+
+[[nodiscard]] std::string readBytes(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary);
+    return {
+        std::istreambuf_iterator<char>(stream),
+        std::istreambuf_iterator<char>(),
+    };
+}
+
+} // namespace
 
 TEST_SUITE("LessonTemplates") {
 
@@ -31,6 +46,42 @@ TEST_CASE("packaged optical-bench templates match factories and provenance") {
     CHECK_THROWS_AS(
         static_cast<void>(lessons::loadOpticalBenchLessonTemplate(
             root, "lesson_diffraction")),
+        std::invalid_argument);
+}
+
+TEST_CASE("packaged wave-workbench templates match factories and canonical bytes") {
+    const std::filesystem::path root(HOLOBENCH_LESSON_TEMPLATE_DIR);
+    const auto diffraction = lessons::loadWaveWorkbenchLessonTemplate(
+        root, "lesson_diffraction");
+    CHECK(diffraction.waveDetector == lessons::makeDiffractionLessonTemplate());
+    CHECK(diffraction.samplingDebugger
+        == holobench::app::samplingdebug::SamplingDebuggerConfig {});
+    CHECK(diffraction.provenance
+        == holobench::project::makeLessonTemplateProvenance(
+            "lesson_diffraction", lessons::kLessonTemplateVersion));
+
+    const auto expectedFourier = lessons::makeFourierLessonTemplate();
+    for (const std::string id : {
+             "lesson_fourier_plane",
+             "lesson_spatial_filtering",
+             "lesson_na_psf",
+         }) {
+        const auto loaded = lessons::loadWaveWorkbenchLessonTemplate(root, id);
+        CHECK(loaded.waveDetector == expectedFourier.waveDetector);
+        CHECK(loaded.samplingDebugger == expectedFourier.samplingDebugger);
+        CHECK(loaded.provenance
+            == holobench::project::makeLessonTemplateProvenance(
+                id, lessons::kLessonTemplateVersion));
+        CHECK(holobench::app::waveproject::serializeWaveWorkbenchProjectJson(
+                  loaded)
+            == readBytes(root / (id + ".wave.json")));
+    }
+    CHECK(holobench::app::waveproject::serializeWaveWorkbenchProjectJson(
+              diffraction)
+        == readBytes(root / "lesson_diffraction.wave.json"));
+    CHECK_THROWS_AS(
+        static_cast<void>(lessons::loadWaveWorkbenchLessonTemplate(
+            root, "lesson_coherence_interference")),
         std::invalid_argument);
 }
 

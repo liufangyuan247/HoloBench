@@ -11,6 +11,7 @@
 #include <glm/glm.hpp>
 
 #include "app/WaveDetectorUiState.hpp"
+#include "app/WaveWorkbenchProject.hpp"
 #include "app/LessonEditHistory.hpp"
 #include "app/HolographyLabPipeline.hpp"
 #include "app/HolographyUiState.hpp"
@@ -295,6 +296,8 @@ private:
     void saveSlmCalibration();
     void loadSlmExperimentProject();
     void saveSlmExperimentProject();
+    void loadWaveWorkbenchProject();
+    void saveWaveWorkbenchProject();
     void loadHolographyProject();
     void saveHolographyProject();
     void loadLessonProgress();
@@ -352,6 +355,8 @@ private:
     std::unique_ptr<holographylab::HolographyLabResult> holographyResult_;
     waveui::WaveDetectorUiState detectorUiState_;
     samplingdebug::SamplingDebuggerConfig samplingDebuggerConfig_;
+    project::ProjectProvenance waveProjectProvenance_;
+    std::string waveProjectName_ = "Wave & Sampling Workbench";
     reallens::RealLensWorkbenchConfig realLensConfig_;
     slmui::SlmInterferenceUiState slmInterferenceUiState_;
     holographyui::HolographyUiState holographyUiState_;
@@ -404,6 +409,7 @@ private:
     char realLensPathBuffer_[512] = "holobench_lens.json";
     char slmCalibrationPathBuffer_[512] = "slm_response.json";
     char slmProjectPathBuffer_[512] = "slm_experiment.json";
+    char waveProjectPathBuffer_[512] = "wave_workbench.json";
     char holographyProjectPathBuffer_[512] = "holography_experiment.json";
     char lessonProgressPathBuffer_[512] = "holobench_lesson_progress.json";
 

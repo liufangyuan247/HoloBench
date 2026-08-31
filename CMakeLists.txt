@@ -123,6 +123,7 @@ add_library(holobench_app_logic STATIC
     app/SlmInterferenceUiState.cpp
     app/WaveDetectorPipeline.cpp
     app/WaveDetectorUiState.cpp
+    app/WaveWorkbenchProject.cpp
 )
 add_library(HoloBench::AppLogic ALIAS holobench_app_logic)
 target_include_directories(holobench_app_logic PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -363,6 +364,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/app/LessonTemplatesTests.cpp
         tests/app/LocalizationTests.cpp
         tests/app/SlmInterferenceProjectTests.cpp
+        tests/app/WaveWorkbenchProjectTests.cpp
         render/Camera.cpp
         tests/render/CameraTests.cpp
         tests/render/GizmoTests.cpp

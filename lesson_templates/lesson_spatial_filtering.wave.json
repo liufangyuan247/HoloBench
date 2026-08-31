@@ -1,0 +1,90 @@
+{
+  "format_version": 1,
+  "model": "wave_sampling_workbench",
+  "name": "Lesson Template: Spatial Filtering",
+  "provenance": {
+    "origin": "lesson_template",
+    "source_id": "lesson_spatial_filtering",
+    "source_version": 1
+  },
+  "sampling_debugger": {
+    "four_f": {
+      "display_floor_db": -60.0,
+      "filter_inner_radius_m": 0.00025,
+      "filter_kind": "pass_all",
+      "filter_outer_radius_m": 8e-05,
+      "first_focal_length_m": 0.05,
+      "second_focal_length_m": 0.05
+    },
+    "illuminated_extent_m": [
+      null,
+      null
+    ],
+    "minimum_boundary_guard_samples": 4,
+    "probe": {
+      "distances_m": [
+        0.0
+      ],
+      "x_index": 64,
+      "y_index": 64
+    },
+    "propagation_distance_m": 0.0,
+    "psf_mtf": {
+      "focal_length_m": 0.05,
+      "grid_resolution": 65,
+      "mtf_maximum_cutoff_multiple": 1.2,
+      "mtf_sample_count": 129,
+      "pupil_radius_m": 0.0005,
+      "samples_per_first_dark_radius": 8.0
+    },
+    "requested_half_angle_rad": [
+      0.0,
+      0.0
+    ],
+    "spectrum_floor_db": -60.0
+  },
+  "wave_detector": {
+    "aperture": {
+      "center_m": [
+        0.0,
+        0.0
+      ],
+      "circular_radius_m": 0.0004,
+      "double_slit_height_m": 0.0012,
+      "double_slit_separation_m": 0.0006,
+      "double_slit_width_m": 8e-05,
+      "kind": "double_slit",
+      "rectangular_half_height_m": 0.0004,
+      "rectangular_half_width_m": 0.0004
+    },
+    "propagation": {
+      "distance_m": 0.005,
+      "grid_resolution": 128,
+      "grid_span_m": 0.004,
+      "propagator": "angular_spectrum",
+      "refractive_index": 1.0
+    },
+    "source": {
+      "amplitude": [
+        1.0,
+        0.0
+      ],
+      "gaussian_waist_radius_m": 0.0005,
+      "kind": "plane_wave",
+      "phase_at_origin_rad": 0.0,
+      "plane_wave_direction_cosine": [
+        0.0,
+        0.0
+      ],
+      "vacuum_wavelength_m": 5.32e-07
+    },
+    "thin_lens": {
+      "center_m": [
+        0.0,
+        0.0
+      ],
+      "enabled": false,
+      "focal_length_m": 0.05
+    }
+  }
+}

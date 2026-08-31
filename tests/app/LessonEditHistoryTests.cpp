@@ -18,6 +18,10 @@ namespace {
         .tracerOptions = {},
         .waveDetectorDraft = lessons::makeDiffractionLessonTemplate(),
         .samplingDebugger = lessons::makeFourierLessonTemplate().samplingDebugger,
+        .waveProjectProvenance
+            = holobench::project::makeLessonTemplateProvenance(
+                "lesson_diffraction"),
+        .waveProjectName = "Lesson Template: Diffraction",
         .slmInterferenceDraft = lessons::makeCoherenceLessonTemplate(),
         .slmCalibrationSource = "No measured LUT loaded",
     };
@@ -73,6 +77,21 @@ TEST_CASE("undo redo and branch clearing are deterministic") {
     CHECK(history.record(branched));
     CHECK_FALSE(history.canRedo());
     CHECK(history.undoDepth() == 2U);
+}
+
+TEST_CASE("wave project provenance is a lesson-relevant history input") {
+    app::LessonEditHistory history;
+    const auto initial = makeState();
+    history.reset(initial);
+    auto derived = initial;
+    derived.waveProjectProvenance
+        = holobench::project::makeLessonTemplateProvenance(
+            "lesson_fourier_plane");
+    derived.waveProjectName = "Lesson Template: Fourier Plane";
+
+    CHECK(history.record(derived));
+    CHECK(app::sameLessonEditState(history.undo(), initial));
+    CHECK(app::sameLessonEditState(history.redo(), derived));
 }
 
 TEST_CASE("capacity evicts only the oldest states") {

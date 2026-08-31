@@ -30,6 +30,8 @@ bool sameLessonEditState(
         && sameTracerOptions(lhs.tracerOptions, rhs.tracerOptions)
         && lhs.waveDetectorDraft == rhs.waveDetectorDraft
         && lhs.samplingDebugger == rhs.samplingDebugger
+        && lhs.waveProjectProvenance == rhs.waveProjectProvenance
+        && lhs.waveProjectName == rhs.waveProjectName
         && slmui::sameExperimentPhysicsConfig(
             lhs.slmInterferenceDraft, rhs.slmInterferenceDraft)
         && lhs.slmCalibrationSource == rhs.slmCalibrationSource;

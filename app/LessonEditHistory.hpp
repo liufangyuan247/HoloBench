@@ -21,6 +21,8 @@ struct LessonEditState final {
     optics::ray::BenchTracerOptions tracerOptions;
     wave::WaveDetectorConfig waveDetectorDraft;
     samplingdebug::SamplingDebuggerConfig samplingDebugger;
+    project::ProjectProvenance waveProjectProvenance;
+    std::string waveProjectName;
     slmexperiment::SlmInterferenceExperimentConfig slmInterferenceDraft;
     std::string slmCalibrationSource;
 };
