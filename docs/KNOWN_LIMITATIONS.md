@@ -113,28 +113,32 @@
   prescription IDs can be resolved into sequential assemblies. Complete
   coherent field merging and detector intensity/phase views remain open. A
   plate can now sample source envelopes into local complex fields and record a
-  same-side thin transmission exposure over an explicit ROI. A centred,
-  normally incident chain now applies angular-spectrum propagation, ideal-lens
-  phase/aperture, circular/rectangular masks, explicit pinholes, and SLM finite
-  pixels/dead space. Aligned decentered masks, pinholes, and SLMs use their
-  traced physical hit coordinates. Tilted, folded, direction-changing,
-  decentered powered-lens, and real-prescription paths retain explicit
-  unrefined warnings; the placed SLM command is currently uniform zero phase.
+  same-side thin transmission exposure over an explicit ROI. A 2x-padded
+  beam-following envelope applies ASM per routed segment, finite mirror/splitter
+  clear areas, ideal-lens phase/aperture, circular/rectangular masks, explicit
+  pinholes, and SLM finite pixels/dead space. Ideal mirror/splitter folds carry
+  transverse parity; tilted zero-thickness masks use their ray-projected local
+  footprint; and an oblique plate restores the resolved centre carrier.
+  Tilted powered lenses, non-ideal direction changes, real prescriptions,
+  thickness, vector/polarization, and high-NA longitudinal effects remain
+  explicit. The placed SLM command is currently uniform zero phase.
 - Plate candidates currently infer object branches from an Object/Wavefront
   Source and reference branches from a Laser Source. They classify same-side
   transmission versus opposite-side reflection geometry and reject
   cross-wavelength/coherence pairs. Thin same-side exposure is now available as
   a revision-bound recomputable result. Reflection volume recording/replay and
   RGB independent-channel recording/replay are operational; branch-role
-  overrides and general tilted/folded spatial-image paths remain open. Recording
+  overrides and general spatial-image source models remain open. Recording
   recipes now persist stable path/wavelength/coherence selectors and physical
   parameters, but deliberately do not persist numerical field caches.
-- Thin/RGB and reflection-volume replay keep the recorded transverse grid and
-  accept a parallel, axis-aligned Screen/Detector or Field Probe that covers
-  the sampled ROI and lies on the physical output side. A decentered observer
-  within half the sampled extent uses a 2x zero-padded shifted ASM evaluation;
-  larger offsets reject before periodic wrap. Tilted observation still requires
-  a separately validated plane-rotation resampler.
+- Thin/RGB and reflection-volume replay keep the recorded transverse pitch and
+  accept a sufficiently large Screen/Detector or Field Probe on the physical
+  output side. Parallel decenter within half the sampled extent uses 2x-padded
+  shifted ASM. Non-grazing rotations use 2x-padded rotated angular-spectrum
+  interpolation and expose evanescent, source-band-rejected,
+  opposite-hemisphere, and interpolated bin counts. Larger offsets and grazing
+  planes reject; the scalar interpolation does not add polarization or vector
+  diffraction.
 - Plate-local source fields use scalar envelopes. A collimated source is a hard
   circular profile, an object source is rectangular, and the current Gaussian
   adapter uses the configured source radius at the observer without propagated

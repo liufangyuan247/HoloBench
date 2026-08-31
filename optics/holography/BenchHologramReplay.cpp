@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "compute/fft/IFftBackend.hpp"
+#include "compute/propagation/TiltedPlanePropagator.hpp"
 
 namespace holobench::optics::holography {
 namespace {
@@ -71,11 +72,15 @@ ThinPlateReplayResult replayThinTransmissionToObservation(
     const double normalAlignment = math::dot(
         plate->transform.localZAxisInWorld,
         observer.transform.localZAxisInWorld);
-    if (xAlignment < 1.0 - kParallelTolerance
-        || yAlignment < 1.0 - kParallelTolerance
-        || normalAlignment < 1.0 - kParallelTolerance) {
+    const bool parallelAxisAligned = xAlignment >= 1.0 - kParallelTolerance
+        && yAlignment >= 1.0 - kParallelTolerance
+        && normalAlignment >= 1.0 - kParallelTolerance;
+    if (!parallelAxisAligned
+        && std::abs(math::dot(
+            observer.transform.localZAxisInWorld,
+            plate->transform.localZAxisInWorld)) <= 1e-8) {
         throw std::invalid_argument(
-            "thin-plate replay currently requires a parallel axis-aligned observation plane");
+            "thin-plate replay observation plane is grazing the transmitted direction");
     }
     const auto observerCentre = math::transformPointWorldToLocal(
         plate->transform, observer.transform.translationMetres);
@@ -90,6 +95,19 @@ ThinPlateReplayResult replayThinTransmissionToObservation(
     if (observerCentre.z * forwardSign <= 0.0) {
         throw std::invalid_argument(
             "thin-plate replay screen/probe must lie on the transmitted output side");
+    }
+    const double extentWidth
+        = recording.objectIncident.diagnostics.sampledExtentWidthMetres;
+    const double extentHeight
+        = recording.objectIncident.diagnostics.sampledExtentHeightMetres;
+    const double samplingOffsetX = observerCentre.x
+        - recording.objectIncident.diagnostics.sampledCentreXMetres;
+    const double samplingOffsetY = observerCentre.y
+        - recording.objectIncident.diagnostics.sampledCentreYMetres;
+    if (std::abs(samplingOffsetX) > 0.5 * extentWidth
+        || std::abs(samplingOffsetY) > 0.5 * extentHeight) {
+        throw std::invalid_argument(
+            "thin-plate replay observation centre exceeds the padded sampling support");
     }
     const auto [observerWidth, observerHeight] = observerExtent(observer);
     if (observerWidth < recording.objectIncident.diagnostics.sampledExtentWidthMetres
@@ -120,29 +138,53 @@ ThinPlateReplayResult replayThinTransmissionToObservation(
     auto conjugateOrder = std::move(orders.conjugateOrderField);
 
     compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
-    const bool shifted = observerCentre.x != 0.0 || observerCentre.y != 0.0;
+    const bool tilted = !parallelAxisAligned;
+    const bool shifted = !tilted
+        && (samplingOffsetX != 0.0 || samplingOffsetY != 0.0);
     compute::propagation::AngularSpectrumDiagnostics diagnostics;
-    if (shifted) {
+    compute::propagation::TiltedPlaneDiagnostics tiltedDiagnostics;
+    if (tilted) {
+        auto inputPlane = plate->transform;
+        inputPlane.translationMetres = math::transformPointLocalToWorld(
+            plate->transform,
+            {
+                recording.objectIncident.diagnostics.sampledCentreXMetres,
+                recording.objectIncident.diagnostics.sampledCentreYMetres,
+                0.0,
+            });
+        const math::Vec3d preferredDirection
+            = plate->transform.localZAxisInWorld * forwardSign;
+        compute::propagation::TiltedPlanePropagator tiltedPropagator(
+            fftBackend);
+        tiltedDiagnostics = tiltedPropagator.propagatePaddedInPlace(
+            full, inputPlane, observer.transform, preferredDirection);
+        static_cast<void>(tiltedPropagator.propagatePaddedInPlace(
+            zero, inputPlane, observer.transform, preferredDirection));
+        static_cast<void>(tiltedPropagator.propagatePaddedInPlace(
+            objectOrder, inputPlane, observer.transform, preferredDirection));
+        static_cast<void>(tiltedPropagator.propagatePaddedInPlace(
+            conjugateOrder, inputPlane, observer.transform, preferredDirection));
+    } else if (shifted) {
         diagnostics = propagator.propagateShiftedPaddedInPlace(
             full,
             observerCentre.z,
-            observerCentre.x,
-            observerCentre.y);
+            samplingOffsetX,
+            samplingOffsetY);
         static_cast<void>(propagator.propagateShiftedPaddedInPlace(
             zero,
             observerCentre.z,
-            observerCentre.x,
-            observerCentre.y));
+            samplingOffsetX,
+            samplingOffsetY));
         static_cast<void>(propagator.propagateShiftedPaddedInPlace(
             objectOrder,
             observerCentre.z,
-            observerCentre.x,
-            observerCentre.y));
+            samplingOffsetX,
+            samplingOffsetY));
         static_cast<void>(propagator.propagateShiftedPaddedInPlace(
             conjugateOrder,
             observerCentre.z,
-            observerCentre.x,
-            observerCentre.y));
+            samplingOffsetX,
+            samplingOffsetY));
     } else {
         diagnostics = propagator.propagateInPlace(full, observerCentre.z);
         static_cast<void>(propagator.propagateInPlace(
@@ -161,12 +203,14 @@ ThinPlateReplayResult replayThinTransmissionToObservation(
         .observationOffsetXMetres = observerCentre.x,
         .observationOffsetYMetres = observerCentre.y,
         .usedShiftedPaddedPropagation = shifted,
+        .usedTiltedPlanePropagation = tilted,
         .replayAtPlate = std::move(replayAtPlate),
         .fullReplayAtObservation = std::move(full),
         .zeroOrderAtObservation = std::move(zero),
         .objectBearingOrderAtObservation = std::move(objectOrder),
         .conjugateOrderAtObservation = std::move(conjugateOrder),
         .propagation = diagnostics,
+        .tiltedPropagation = tiltedDiagnostics,
     };
 }
 

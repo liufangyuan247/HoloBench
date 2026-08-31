@@ -19,15 +19,17 @@ roadmap. For the current repository state and roadmap, see
 [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and
 [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
 
-For supported centred, normally incident paths, placed ideal lenses,
-apertures, pinholes, and SLM finite pixels/dead space now act on a propagated
-local complex field before plate recording. Tilted, folded, direction-changing,
-decentered powered-lens, and real-prescription paths remain visibly unrefined until validated plane
-resampling is implemented. On a straight aligned path, traced hit coordinates
-now place decentered apertures, pinholes, and SLM active areas at their physical
-transverse positions. Thin, RGB, and reflection-volume reconstruction also
-supports bounded decentered parallel Screen/Probe planes through explicit 2x
-zero-padded shifted angular-spectrum propagation.
+For supported ray-routed paths, placed ideal lenses, mirror/splitter clear
+areas, apertures, pinholes, and SLM finite pixels/dead space now act on a
+beam-following local complex field before plate recording. Ideal mirror and
+splitter folds transport the transverse frame explicitly; tilted zero-thickness
+masks use their projected physical footprint, and the final oblique plate
+restores the resolved centre carrier. Tilted powered lenses, real-prescription
+paths, and high-NA/vector effects remain explicit limitations. Thin, RGB, and
+reflection-volume reconstruction supports both bounded decentered parallel
+Screen/Probe planes and non-grazing rotated observation planes through explicit
+2x-padded shifted or rotated angular-spectrum propagation with rejected-band
+and interpolation diagnostics.
 
 Recording a placed thin, reflection-volume, or RGB hologram now writes a
 versioned recipe into the ordinary bench project. The recipe keeps stable
@@ -184,7 +186,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (491 deterministic CPU/application cases,
+Standard dev build and test suite (501 deterministic CPU/application cases,
 including the OpenGL GPU test executable):
 
 ```powershell
@@ -193,7 +195,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 489/489 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 499/499 tests passing):
 
 ```powershell
 cmake --preset core-ci

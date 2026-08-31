@@ -83,10 +83,11 @@ rebuilt on the shared bench.
   Field Probe through the validated angular-spectrum propagator. The physical
   full replay and separately labelled zero, object-bearing, and conjugate
   orders propagate to the same observation plane, retain the bench revision,
-  and are selectable in the plate Inspector. A parallel, axis-aligned,
-  sufficiently large plane may be offset by up to half the sampled extent on
-  the transmitted side; shifted replay uses a 2x zero-padded ASM window.
-  Tilted, out-of-support, backward, and undersized observers fail explicitly.
+  and are selectable in the plate Inspector. A parallel plane may be offset by
+  up to half the sampled extent using a 2x-padded shifted ASM window. A
+  non-grazing rotated observer uses padded rotated-spectrum interpolation with
+  explicit rejected-band diagnostics. Grazing, out-of-support, backward, and
+  undersized observers fail explicitly.
 - **Editable holography bench presets**: the Inspector can load ordinary unified
   projects for thin transmission, opposite-side reflection/Denisyuk, and RGB
   full-colour layouts. Every source, plate, and observation component remains
@@ -139,23 +140,19 @@ rebuilt on the shared bench.
   order; hop, branch, minimum-power, escape, clipping, absorption, and invalid
   interaction endings are explicit.
 - **Current verification**: Windows Clang 21 `core-ci` warnings-as-errors build
-  passes with 462/462 deterministic cases; the complete development build and
-  application link pass with 464/464 cases including the packaged-font and
+  passes with 499/499 deterministic cases; the complete development build and
+  application link pass with 501/501 cases including the packaged-font and
   hardware OpenGL tests. The development and warnings-as-errors application
-  smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Fifty M7/M8
-  cases cover all twelve
-  schemas, invalid IDs/transforms/physics, scene mutation/revision/staleness,
-  RGB and arbitrary-transform canonical persistence, strict parser rejection,
-  splitter power/spectral identity, wavelength/coherence separation, and trace
-  budget validation, plus arbitrary-pose mirror/lens paths, split-screen power,
-  aperture clipping, insertion-order determinism, RGB detector identity,
-  bounded mirror loops, rigid local-rotation stability, complete bench history,
-  branch clearing, bounded eviction, revision-safe restore, local source-field
-  power/phase/Nyquist, ROI flux, and thin placed-plate exposure. Full
-  path-dependent beam-envelope transforms, sampled screen/probe fields, the
-  resolved real-lens adapter, lens/filter/SLM wave transforms, off-axis replay,
-  volume reflection and RGB recording/replay remain open,
-  so M7 is not yet accepted even though the interactive M7.1 path is present.
+  smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Eighty-one
+  M7/M8 cases cover the typed scene, mutation/history/persistence, arbitrary-pose
+  branching routes, wavelength/coherence separation, plate-local recording,
+  thin/reflection/RGB replay, persisted recipes, beam-following fields through
+  aligned powered optics and ideal folds, projected tilted masks, bounded
+  decentered observation, and non-grazing rotated observation planes. Editable
+  SLM command provenance, the resolved real-lens wave adapter, vector/high-NA
+  physics, named M8 performance scenes, and remote cross-compiler validation
+  remain open, so M7/M8 are not yet accepted despite the operational sandbox
+  workflows.
 
 ## Completed
 
@@ -330,15 +327,19 @@ completion because it is primarily driven through fixed parameter panels:
   propagates the physical complete field and separately labelled zero,
   object-bearing, and conjugate orders to a physically placed parallel
   Screen/Detector or Field Probe, including bounded decentered observers.
-- **Placed local wave path**: Ordered trace lineage now drives an injected-FFT
-  angular-spectrum field through aligned, normally incident local planes.
-  Ideal lens clear aperture/quadratic phase, circular/elliptical or rectangular aperture,
-  explicit pinhole, and SLM finite bounds/pixel dead space affect the field
-  that reaches the plate. Applied component IDs, intercepted power, boundary
-  risk, and limitations are visible in the Inspector. Aligned decentered masks,
-  pinholes, and SLMs use their traced transverse position. Tilted, folded,
-  direction-changing, decentered powered-lens, and real-prescription paths retain explicit
-  unrefined evidence instead of being mislabeled as sampled propagation; see
+- **Placed local wave path**: Ordered trace lineage now drives a 2x-padded,
+  beam-following complex envelope through each free-space segment with injected-FFT ASM.
+  Ideal mirror/splitter folds explicitly transport transverse parity and frame;
+  their finite clear areas, ideal-lens aperture/quadratic phase,
+  circular/elliptical/rectangular apertures, explicit pinholes, and SLM finite
+  pixels/dead space affect the field that reaches the plate. Tilted
+  zero-thickness masks use ray-plane projected local coordinates. The final
+  plate tangent adapter restores the exact centre carrier and is exact for the
+  validated plane-wave oracle while labelling paraxial envelope evolution on an
+  oblique window. Applied/folded component IDs, intercepted power, boundary
+  risk, and limitations are visible in the Inspector. Tilted powered lenses,
+  direction changes outside ideal folds, real prescriptions, vector/polarization,
+  thickness, and high-NA longitudinal effects remain explicit limitations; see
   [ADR 0012](adr/0012-placed-local-wave-path-conventions.md).
 - **Placed volume workflow**: Counter-propagating reflection recording refracts
   both actual local branch directions into the configured material and records
@@ -349,9 +350,10 @@ completion because it is primarily driven through fixed parameter panels:
   equivalent symmetric Bragg angle and does not falsely claim arbitrary
   slanted-grating coupled-wave fidelity. The recorded reference branch can
   reconstruct a Bragg-weighted sampled complex field on the physical reflection
-  side and propagate it to a placed parallel Screen/Probe. Bounded decenter uses
-  shifted 2x zero-padded ASM; tilted planes, out-of-support offsets, and TIR
-  reject instead of wrapping the finite analysis window.
+  side and propagate it to a placed Screen/Probe. Bounded parallel decenter uses
+  shifted 2x zero-padded ASM; non-grazing rotations use a 2x-padded rotated
+  spectrum with explicit interpolation/source-band diagnostics. Out-of-support
+  offsets, grazing planes, and TIR reject instead of wrapping the window.
 - **Placed RGB workflow**: The RGB preset exposes exactly three unambiguous
   same-wavelength/coherence transmission pairs ordered red, green, and blue.
   Batch recording and replay invoke the validated single-channel path three
@@ -371,9 +373,9 @@ completion because it is primarily driven through fixed parameter panels:
 - **Revision provenance**: Plate incident evidence, thin recordings, thin
   replays, volume recordings, and volume replays carry the exact scene
   revision and visibly become stale after a bench edit.
-- **Current local validation**: Windows Clang development build passes 491/491
+- **Current local validation**: Windows Clang development build passes 501/501
   deterministic CPU, application, font, and OpenGL GPU cases after the placed
-  volume/RGB/local-wave-path/recipe increments; `core-ci` passes 489/489, `app-ci` compiles
+  volume/RGB/local-wave-path/recipe increments; `core-ci` passes 499/499, `app-ci` compiles
   warnings-as-errors, and the hidden OpenGL smoke exits successfully on AMD
   Radeon Pro 5300M. Remote cross-compiler CI remains required before the M8
   slice is closed.
@@ -388,12 +390,11 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Generalize local component and observation adapters with validated
-   tilted/folded-plane resampling and explicit finite-window support diagnostics.
-2. Add editable SLM command/pattern provenance so placed SLMs can carry more
+1. Add editable SLM command/pattern provenance so placed SLMs can carry more
    than the current explicit uniform zero-phase command.
-3. Add named M8 performance scenes and complete cross-compiler/application
+2. Add named M8 performance scenes and complete cross-compiler/application
    validation for transmission, reflection, and RGB workflows.
-4. Add corruption-safe autosave/recovery around unified bench documents.
-5. Compile a versioned M9 CHIMERA recipe into an editable bench, then simulate
-   hogel/angular data, RGB exposure events, and bounded reconstruction.
+3. Add corruption-safe autosave/recovery around unified bench documents.
+4. Compile a versioned M9 CHIMERA recipe into an editable bench.
+5. Simulate its hogel/angular data, SLM/RGB exposure events, and bounded
+   reconstruction.

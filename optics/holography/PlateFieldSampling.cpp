@@ -11,8 +11,6 @@
 
 #include "compute/fft/IFftBackend.hpp"
 #include "compute/propagation/AngularSpectrumPropagator.hpp"
-#include "optics/slm/SpatialLightModulator.hpp"
-#include "optics/wave/FieldElements.hpp"
 
 namespace holobench::optics::holography {
 namespace {
@@ -131,6 +129,8 @@ double sourceNormalizationAreaSquareMetres(
 
 bool requiresWaveRefinement(scene::BenchComponentKind kind) noexcept {
     switch (kind) {
+    case scene::BenchComponentKind::PlanarMirror:
+    case scene::BenchComponentKind::BeamSplitterCombiner:
     case scene::BenchComponentKind::IdealThinLens:
     case scene::BenchComponentKind::RealLensAssembly:
     case scene::BenchComponentKind::Aperture:
@@ -184,7 +184,13 @@ bool approximatelyAligned(math::Vec3d first, math::Vec3d second) {
         >= 1.0 - kAlignmentTolerance;
 }
 
-bool supportsCoaxialWavePath(
+bool approximatelyParallel(math::Vec3d first, math::Vec3d second) {
+    constexpr double kAlignmentTolerance = 1e-10;
+    return std::abs(math::dot(math::normalized(first), math::normalized(second)))
+        >= 1.0 - kAlignmentTolerance;
+}
+
+bool supportsLocalWavePath(
     const scene::BenchScene& bench,
     const scene::BenchComponent& source,
     const PlateIncidentBranch& branch,
@@ -193,7 +199,7 @@ bool supportsCoaxialWavePath(
         reason = "ordered source-to-plate interaction evidence is unavailable";
         return false;
     }
-    const math::Vec3d pathDirection = source.transform.localZAxisInWorld;
+    math::Vec3d pathDirection = source.transform.localZAxisInWorld;
     for (const auto& interaction : branch.pathInteractions) {
         const auto* component = bench.find(interaction.componentId);
         if (component == nullptr) {
@@ -204,121 +210,303 @@ bool supportsCoaxialWavePath(
             reason = "real-lens prescription wave propagation is not available";
             return false;
         }
-        if (!approximatelyAligned(
-                interaction.incidentBeam.direction, pathDirection)) {
-            reason = "folded or direction-changing paths require plane resampling";
+        if (!approximatelyAligned(interaction.incidentBeam.direction, pathDirection)) {
+            reason = "traced interaction directions are not connected in path order";
             return false;
         }
-        if (interaction.hasOutgoingBeam
-            && !approximatelyAligned(
-                interaction.outgoingBeam.direction, pathDirection)) {
-            reason = "a component changes the centre-ray direction";
-            return false;
+        if (requiresWaveRefinement(component->kind)) {
+            const double incidenceCosine = std::abs(math::dot(
+                math::normalized(pathDirection),
+                component->transform.localZAxisInWorld));
+            if (incidenceCosine <= 1e-6) {
+                reason = "a local optical plane is grazing the sampled path";
+                return false;
+            }
+            if (component->kind == scene::BenchComponentKind::IdealThinLens
+                && !approximatelyParallel(
+                    component->transform.localZAxisInWorld, pathDirection)) {
+                reason = "an ideal powered lens is tilted relative to its incident centre ray";
+                return false;
+            }
         }
-        if (!approximatelyAligned(
-                component->transform.localZAxisInWorld, pathDirection)
-            || !approximatelyAligned(
-                component->transform.localXAxisInWorld,
-                source.transform.localXAxisInWorld)
-            || !approximatelyAligned(
-                component->transform.localYAxisInWorld,
-                source.transform.localYAxisInWorld)) {
-            reason = "a local optical plane is tilted or rotated relative to the sampled path";
-            return false;
+        if (interaction.hasOutgoingBeam) {
+            const auto outgoing = math::normalized(
+                interaction.outgoingBeam.direction);
+            if (!approximatelyAligned(outgoing, pathDirection)
+                && component->kind != scene::BenchComponentKind::PlanarMirror
+                && component->kind
+                    != scene::BenchComponentKind::BeamSplitterCombiner) {
+                reason = "a powered or unsupported component changes the centre-ray direction";
+                return false;
+            }
+            pathDirection = outgoing;
         }
     }
     return true;
 }
 
-void applyCoaxialElement(
+math::Vec3d reflectVector(math::Vec3d value, math::Vec3d normal) {
+    return value - normal * (2.0 * math::dot(value, normal));
+}
+
+math::Vec3d projectedLocalPoint(
+    const math::RigidTransform3d& fieldFrame,
+    const scene::BenchComponent& component,
+    math::Vec3d propagationDirection,
+    double xMetres,
+    double yMetres) {
+    const math::Vec3d point = fieldFrame.translationMetres
+        + fieldFrame.localXAxisInWorld * xMetres
+        + fieldFrame.localYAxisInWorld * yMetres;
+    const double denominator = math::dot(
+        propagationDirection, component.transform.localZAxisInWorld);
+    if (!std::isfinite(denominator) || std::abs(denominator) <= 1e-6) {
+        throw std::invalid_argument(
+            "local field cannot be projected onto a grazing optical plane");
+    }
+    const double distance = math::dot(
+        component.transform.translationMetres - point,
+        component.transform.localZAxisInWorld) / denominator;
+    if (!std::isfinite(distance)) {
+        throw std::overflow_error(
+            "local field projection distance is not representable");
+    }
+    return math::transformPointWorldToLocal(
+        component.transform, point + propagationDirection * distance);
+}
+
+bool isInsideSlmActivePixel(
+    const scene::SpatialLightModulatorParameters& parameters,
+    double localXMetres,
+    double localYMetres) {
+    const double pitchX = parameters.widthMetres
+        / static_cast<double>(parameters.pixelWidth);
+    const double pitchY = parameters.heightMetres
+        / static_cast<double>(parameters.pixelHeight);
+    const double gridX = (localXMetres + 0.5 * parameters.widthMetres) / pitchX;
+    const double gridY = (localYMetres + 0.5 * parameters.heightMetres) / pitchY;
+    if (gridX < 0.0 || gridY < 0.0
+        || gridX >= static_cast<double>(parameters.pixelWidth)
+        || gridY >= static_cast<double>(parameters.pixelHeight)) {
+        return false;
+    }
+    const double pixelX = gridX - std::floor(gridX) - 0.5;
+    const double pixelY = gridY - std::floor(gridY) - 0.5;
+    return std::abs(pixelX) < 0.5 * parameters.fillFactor
+        && std::abs(pixelY) < 0.5 * parameters.fillFactor;
+}
+
+void applyProjectedElement(
     field::ComplexField2D& value,
     const scene::BenchComponent& component,
-    math::Vec3d hitPointMetres,
-    const PlateFieldSamplingOptions& options,
+    const math::RigidTransform3d& fieldFrame,
+    math::Vec3d propagationDirection,
     PlateFieldSamplingDiagnostics& diagnostics) {
-    const auto localHit = math::transformPointWorldToLocal(
-        component.transform, hitPointMetres);
-    const double centreX = -localHit.x - options.centreXMetres;
-    const double centreY = -localHit.y - options.centreYMetres;
-    switch (component.kind) {
-    case scene::BenchComponentKind::IdealThinLens: {
-        const auto& parameters = std::get<scene::IdealThinLensParameters>(
-            component.parameters);
-        static_cast<void>(wave::applyCircularAperture(value, {
-            .radiusMetres = 0.5 * parameters.clearApertureDiameterMetres,
-            .centerXMetres = centreX,
-            .centerYMetres = centreY,
-        }));
-        static_cast<void>(wave::applyIdealThinLensPhase(value, {
-            .focalLengthMetres = parameters.focalLengthMetres,
-            .centerXMetres = centreX,
-            .centerYMetres = centreY,
-        }));
-        break;
+    if (!requiresWaveRefinement(component.kind)
+        || component.kind == scene::BenchComponentKind::RealLensAssembly) {
+        return;
     }
-    case scene::BenchComponentKind::Aperture: {
-        const auto& parameters = std::get<scene::ApertureParameters>(
-            component.parameters);
-        if (parameters.shape == scene::ApertureShape::Circular) {
-            static_cast<void>(wave::applyEllipticalAperture(value, {
-                .halfWidthMetres = 0.5 * parameters.widthMetres,
-                .halfHeightMetres = 0.5 * parameters.heightMetres,
-                .centerXMetres = centreX,
-                .centerYMetres = centreY,
-            }));
-        } else {
-            static_cast<void>(wave::applyRectangularAperture(value, {
-                .halfWidthMetres = 0.5 * parameters.widthMetres,
-                .halfHeightMetres = 0.5 * parameters.heightMetres,
-                .centerXMetres = centreX,
-                .centerYMetres = centreY,
-            }));
+    const double incidenceCosine = std::abs(math::dot(
+        math::normalized(propagationDirection),
+        component.transform.localZAxisInWorld));
+    if (incidenceCosine < 1.0 - 1e-10) {
+        diagnostics.usedTiltedElementProjection = true;
+    }
+    auto transformed = value;
+    const double phaseCoefficient = component.kind
+            == scene::BenchComponentKind::IdealThinLens
+        ? (-0.5 * value.mediumWavenumberRadiansPerMetre())
+            / std::get<scene::IdealThinLensParameters>(component.parameters)
+                .focalLengthMetres
+        : 0.0;
+    for (std::size_t y = 0; y < transformed.height(); ++y) {
+        for (std::size_t x = 0; x < transformed.width(); ++x) {
+            const auto local = projectedLocalPoint(
+                fieldFrame,
+                component,
+                propagationDirection,
+                transformed.xCoordinateMetres(x),
+                transformed.yCoordinateMetres(y));
+            bool transmitted = true;
+            double phase = 0.0;
+            switch (component.kind) {
+            case scene::BenchComponentKind::PlanarMirror: {
+                const auto& p = std::get<scene::PlanarMirrorParameters>(
+                    component.parameters);
+                transmitted = std::abs(local.x) <= 0.5 * p.widthMetres
+                    && std::abs(local.y) <= 0.5 * p.heightMetres;
+                break;
+            }
+            case scene::BenchComponentKind::BeamSplitterCombiner: {
+                const auto& p = std::get<scene::BeamSplitterParameters>(
+                    component.parameters);
+                transmitted = std::abs(local.x) <= 0.5 * p.widthMetres
+                    && std::abs(local.y) <= 0.5 * p.heightMetres;
+                break;
+            }
+            case scene::BenchComponentKind::IdealThinLens: {
+                const auto& p = std::get<scene::IdealThinLensParameters>(
+                    component.parameters);
+                transmitted = std::hypot(local.x, local.y)
+                    <= 0.5 * p.clearApertureDiameterMetres;
+                phase = phaseCoefficient
+                    * (local.x * local.x + local.y * local.y);
+                break;
+            }
+            case scene::BenchComponentKind::Aperture: {
+                const auto& p = std::get<scene::ApertureParameters>(
+                    component.parameters);
+                if (p.shape == scene::ApertureShape::Circular) {
+                    const double nx = local.x / (0.5 * p.widthMetres);
+                    const double ny = local.y / (0.5 * p.heightMetres);
+                    transmitted = nx * nx + ny * ny <= 1.0;
+                } else {
+                    transmitted = std::abs(local.x) <= 0.5 * p.widthMetres
+                        && std::abs(local.y) <= 0.5 * p.heightMetres;
+                }
+                break;
+            }
+            case scene::BenchComponentKind::SpatialFilter: {
+                const auto& p = std::get<scene::SpatialFilterParameters>(
+                    component.parameters);
+                transmitted = std::hypot(local.x, local.y)
+                    <= 0.5 * p.pinholeDiameterMetres;
+                break;
+            }
+            case scene::BenchComponentKind::SpatialLightModulator:
+                transmitted = isInsideSlmActivePixel(
+                    std::get<scene::SpatialLightModulatorParameters>(
+                        component.parameters),
+                    local.x,
+                    local.y);
+                break;
+            default:
+                break;
+            }
+            if (!transmitted) {
+                transformed.at(x, y) = {0.0, 0.0};
+            } else if (phase != 0.0) {
+                if (!std::isfinite(phase)) {
+                    throw std::overflow_error(
+                        "projected thin-element phase is not representable");
+                }
+                transformed.at(x, y) *= finitePhasor(phase);
+            }
         }
-        break;
     }
-    case scene::BenchComponentKind::SpatialFilter: {
-        const auto& parameters = std::get<scene::SpatialFilterParameters>(
-            component.parameters);
-        static_cast<void>(wave::applyCircularAperture(value, {
-            .radiusMetres = 0.5 * parameters.pinholeDiameterMetres,
-            .centerXMetres = centreX,
-            .centerYMetres = centreY,
-        }));
+    value = std::move(transformed);
+    if (component.kind == scene::BenchComponentKind::SpatialFilter) {
         diagnostics.warnings.push_back(
             component.id
             + ": modeled as its explicit pinhole plane; the compound focusing objective requires separately placed lenses");
-        break;
-    }
-    case scene::BenchComponentKind::SpatialLightModulator: {
-        const auto& parameters
-            = std::get<scene::SpatialLightModulatorParameters>(
-                component.parameters);
-        slm::PixelatedSlmParameters slmParameters;
-        slmParameters.pixelColumns = parameters.pixelWidth;
-        slmParameters.pixelRows = parameters.pixelHeight;
-        slmParameters.pixelPitchXMetres = parameters.widthMetres
-            / static_cast<double>(parameters.pixelWidth);
-        slmParameters.pixelPitchYMetres = parameters.heightMetres
-            / static_cast<double>(parameters.pixelHeight);
-        slmParameters.fillFactorX = parameters.fillFactor;
-        slmParameters.fillFactorY = parameters.fillFactor;
-        slmParameters.centerXMetres = centreX;
-        slmParameters.centerYMetres = centreY;
-        slmParameters.mode = slm::ModulationMode::Phase;
-        static_cast<void>(slm::applyUniformPixelatedSlm(
-            value, slmParameters, 0.0));
+    } else if (component.kind
+        == scene::BenchComponentKind::SpatialLightModulator) {
         diagnostics.warnings.push_back(
             component.id
             + ": active-pixel bounds and dead space are applied with a uniform zero-phase command");
-        break;
-    }
-    default:
-        return;
     }
     diagnostics.appliedWaveComponentIds.push_back(component.id);
 }
 
-SampledPlateIncidentField sampleCoaxialWavePath(
+void reflectFieldFrameAtFold(
+    field::ComplexField2D& value,
+    math::RigidTransform3d& fieldFrame,
+    math::Vec3d mirrorNormal,
+    math::Vec3d outgoingDirection) {
+    auto reflected = value;
+    for (std::size_t y = 0; y < value.height(); ++y) {
+        for (std::size_t x = 0; x < value.width(); ++x) {
+            reflected.at(x, y) = value.at(
+                (value.width() - x) % value.width(), y);
+        }
+    }
+    value = std::move(reflected);
+    fieldFrame.localXAxisInWorld = -1.0 * reflectVector(
+        fieldFrame.localXAxisInWorld, mirrorNormal);
+    fieldFrame.localYAxisInWorld = reflectVector(
+        fieldFrame.localYAxisInWorld, mirrorNormal);
+    fieldFrame.localZAxisInWorld = math::normalized(outgoingDirection);
+    math::validateRigidTransform(fieldFrame);
+}
+
+std::complex<double> bilinearSample(
+    const field::ComplexField2D& value,
+    double xMetres,
+    double yMetres) {
+    const double xIndex = xMetres / value.pitchXMetres()
+        + static_cast<double>(value.width() / 2U);
+    const double yIndex = yMetres / value.pitchYMetres()
+        + static_cast<double>(value.height() / 2U);
+    if (!std::isfinite(xIndex) || !std::isfinite(yIndex)) {
+        throw std::overflow_error(
+            "plate tangent-plane sample coordinate is not representable");
+    }
+    const auto x0 = static_cast<long long>(std::floor(xIndex));
+    const auto y0 = static_cast<long long>(std::floor(yIndex));
+    const double tx = xIndex - static_cast<double>(x0);
+    const double ty = yIndex - static_cast<double>(y0);
+    const auto sample = [&](long long x, long long y) {
+        if (x < 0 || y < 0
+            || x >= static_cast<long long>(value.width())
+            || y >= static_cast<long long>(value.height())) {
+            return std::complex<double> {0.0, 0.0};
+        }
+        return value.at(static_cast<std::size_t>(x), static_cast<std::size_t>(y));
+    };
+    return (1.0 - tx) * (1.0 - ty) * sample(x0, y0)
+        + tx * (1.0 - ty) * sample(x0 + 1, y0)
+        + (1.0 - tx) * ty * sample(x0, y0 + 1)
+        + tx * ty * sample(x0 + 1, y0 + 1);
+}
+
+field::ComplexField2D sampleOnPlateTangentPlane(
+    const field::ComplexField2D& envelope,
+    const math::RigidTransform3d& fieldFrame,
+    math::Vec3d propagationDirection,
+    const scene::BenchComponent& plate,
+    const PlateFieldSamplingOptions& options,
+    double extentWidth,
+    double extentHeight,
+    PlateFieldSamplingDiagnostics& diagnostics) {
+    field::ComplexField2D result(
+        options.sampleWidth,
+        options.sampleHeight,
+        extentWidth / static_cast<double>(options.sampleWidth),
+        extentHeight / static_cast<double>(options.sampleHeight),
+        envelope.vacuumWavelengthMetres(),
+        envelope.refractiveIndex());
+    const double alignment = std::abs(math::dot(
+        math::normalized(propagationDirection),
+        plate.transform.localZAxisInWorld));
+    diagnostics.usedPlateTangentProjection = alignment < 1.0 - 1e-10;
+    for (std::size_t y = 0; y < result.height(); ++y) {
+        for (std::size_t x = 0; x < result.width(); ++x) {
+            const math::Vec3d localPoint {
+                result.xCoordinateMetres(x) + options.centreXMetres,
+                result.yCoordinateMetres(y) + options.centreYMetres,
+                0.0,
+            };
+            const math::Vec3d worldPoint = math::transformPointLocalToWorld(
+                plate.transform, localPoint);
+            const math::Vec3d displacement
+                = worldPoint - fieldFrame.translationMetres;
+            const double transverseX = math::dot(
+                displacement, fieldFrame.localXAxisInWorld);
+            const double transverseY = math::dot(
+                displacement, fieldFrame.localYAxisInWorld);
+            const double longitudinal = math::dot(
+                displacement, propagationDirection);
+            result.at(x, y) = bilinearSample(
+                envelope, transverseX, transverseY)
+                * finitePhasor(
+                    envelope.mediumWavenumberRadiansPerMetre()
+                    * longitudinal);
+        }
+    }
+    return result;
+}
+
+SampledPlateIncidentField sampleLocalWavePath(
     const scene::BenchScene& bench,
     const PlateIncidentBranch& branch,
     const PlateFieldSamplingOptions& options,
@@ -327,9 +515,14 @@ SampledPlateIncidentField sampleCoaxialWavePath(
     const auto& source = requireSource(bench, branch);
     const double extentWidth = baseline.diagnostics.sampledExtentWidthMetres;
     const double extentHeight = baseline.diagnostics.sampledExtentHeightMetres;
+    if (options.sampleWidth > kMaximumSamplesPerAxis / 2U
+        || options.sampleHeight > kMaximumSamplesPerAxis / 2U) {
+        throw std::invalid_argument(
+            "beam-following local path requires a 2x padded grid no larger than 4096 samples per axis");
+    }
     field::ComplexField2D propagated(
-        options.sampleWidth,
-        options.sampleHeight,
+        options.sampleWidth * 2U,
+        options.sampleHeight * 2U,
         extentWidth / static_cast<double>(options.sampleWidth),
         extentHeight / static_cast<double>(options.sampleHeight),
         branch.beam.wavelengthMetres,
@@ -342,8 +535,8 @@ SampledPlateIncidentField sampleCoaxialWavePath(
         for (std::size_t x = 0; x < propagated.width(); ++x) {
             const auto envelope = sourceEnvelope(
                 source,
-                propagated.xCoordinateMetres(x) + options.centreXMetres,
-                propagated.yCoordinateMetres(y) + options.centreYMetres);
+                propagated.xCoordinateMetres(x),
+                propagated.yCoordinateMetres(y));
             propagated.at(x, y) = envelope.amplitude
                 * amplitudeScale * sourcePhase;
         }
@@ -351,6 +544,9 @@ SampledPlateIncidentField sampleCoaxialWavePath(
 
     compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
     math::Vec3d previousPoint = source.transform.translationMetres;
+    math::Vec3d propagationDirection = source.transform.localZAxisInWorld;
+    math::RigidTransform3d fieldFrame = source.transform;
+    const scene::BenchComponent* plate = nullptr;
     for (const auto& interaction : branch.pathInteractions) {
         const double distance = math::length(
             interaction.hitPointMetres - previousPoint);
@@ -358,21 +554,51 @@ SampledPlateIncidentField sampleCoaxialWavePath(
         const auto* component = bench.find(interaction.componentId);
         if (component == nullptr) {
             throw std::logic_error(
-                "coaxial path component disappeared during sampling");
+                "local wave path component disappeared during sampling");
         }
+        fieldFrame.translationMetres = interaction.hitPointMetres;
         if (component->kind != scene::BenchComponentKind::HolographicPlate) {
-            applyCoaxialElement(
+            applyProjectedElement(
                 propagated,
                 *component,
-                interaction.hitPointMetres,
-                options,
+                fieldFrame,
+                propagationDirection,
                 baseline.diagnostics);
+        } else {
+            plate = component;
+        }
+        if (interaction.hasOutgoingBeam) {
+            const math::Vec3d outgoing = math::normalized(
+                interaction.outgoingBeam.direction);
+            if (!approximatelyAligned(outgoing, propagationDirection)) {
+                reflectFieldFrameAtFold(
+                    propagated,
+                    fieldFrame,
+                    component->transform.localZAxisInWorld,
+                    outgoing);
+                baseline.diagnostics.usedFoldedPath = true;
+                baseline.diagnostics.foldedWaveComponentIds.push_back(
+                    component->id);
+            }
+            propagationDirection = outgoing;
         }
         previousPoint = interaction.hitPointMetres;
     }
 
-    baseline.field = std::move(propagated);
-    baseline.diagnostics.appliedCoaxialWavePath = true;
+    if (plate == nullptr) {
+        throw std::logic_error(
+            "local wave path did not terminate on its holographic plate");
+    }
+    baseline.field = sampleOnPlateTangentPlane(
+        propagated,
+        fieldFrame,
+        propagationDirection,
+        *plate,
+        options,
+        extentWidth,
+        extentHeight,
+        baseline.diagnostics);
+    baseline.diagnostics.appliedLocalWavePath = true;
     baseline.diagnostics.usesApproximateSourceEnvelope = false;
     baseline.diagnostics.illuminatedSampleCount = 0U;
     baseline.diagnostics.integratedPowerWatts = 0.0;
@@ -417,6 +643,14 @@ SampledPlateIncidentField sampleCoaxialWavePath(
     if (baseline.diagnostics.supportTouchesPlateBoundary) {
         baseline.diagnostics.warnings.emplace_back(
             "propagated field reaches the sampled boundary; periodic FFT wrap may contaminate this window");
+    }
+    if (baseline.diagnostics.usedTiltedElementProjection) {
+        baseline.diagnostics.warnings.emplace_back(
+            "tilted zero-thickness element footprints use carrier-tracked beam-normal projection; vector, polarization, thickness, and high-NA longitudinal effects are not modeled");
+    }
+    if (baseline.diagnostics.usedPlateTangentProjection) {
+        baseline.diagnostics.warnings.emplace_back(
+            "the oblique plate tangent projection restores the exact centre carrier but treats envelope evolution across the tilted window paraxially");
     }
     return baseline;
 }
@@ -612,12 +846,12 @@ SampledPlateIncidentField samplePlateIncidentField(
     }
     const auto& source = requireSource(bench, branch);
     std::string reason;
-    if (!supportsCoaxialWavePath(bench, source, branch, reason)) {
+    if (!supportsLocalWavePath(bench, source, branch, reason)) {
         baseline.diagnostics.warnings.push_back(
-            "coaxial wave refinement skipped: " + reason);
+            "local wave refinement skipped: " + reason);
         return baseline;
     }
-    return sampleCoaxialWavePath(
+    return sampleLocalWavePath(
         bench,
         branch,
         options,

@@ -87,10 +87,11 @@ At the reflection critical boundary `|xi|=nu`, the continuous finite limit is
   the corresponding transverse `K` correction. The result is globally
   normalized so its plane-normal power equals incident replay power times the
   scalar Kogelnik efficiency.
-- No Fresnel boundary loss is applied. The first placed-observer adapter accepts
-  a parallel, coaxial Screen/Probe and an axis-aligned reconstructed order. It
-  rejects tilted, decentered, off-axis-resampled, unresolved-carrier, TIR, and
-  non-propagating cases instead of relying on periodic-window wraparound.
+- No Fresnel boundary loss is applied. The placed-observer adapter accepts
+  bounded parallel decenter through shifted padded ASM and non-grazing rotated
+  Screen/Probe planes through padded rotated-spectrum interpolation. It rejects
+  out-of-support, grazing, unresolved-carrier, TIR, and non-propagating cases
+  instead of relying on periodic-window wraparound.
 
 ## Validation
 

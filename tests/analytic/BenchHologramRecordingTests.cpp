@@ -251,7 +251,7 @@ TEST_CASE("placed screen receives physical full replay and separately propagated
     CHECK(maximumDecompositionResidual < 2e-12);
 }
 
-TEST_CASE("thin replay rejects tilted out-of-support backward and undersized observations") {
+TEST_CASE("thin replay rejects grazing out-of-support backward and undersized observations") {
     auto verifyRejected = [](scene::BenchScene bench, const char* observerId) {
         const auto fields = holography::collectPlateIncidentFields(
             bench, ray::traceDynamicBench(bench), "plate");
@@ -283,13 +283,6 @@ TEST_CASE("thin replay rejects tilted out-of-support backward and undersized obs
     tilted.replace(screen.id, screen);
     verifyRejected(std::move(tilted), "screen");
 
-    auto inPlaneRotated = recordingBench(false, true);
-    screen = *inPlaneRotated.find("screen");
-    screen.transform.localXAxisInWorld = {-1.0, 0.0, 0.0};
-    screen.transform.localYAxisInWorld = {0.0, -1.0, 0.0};
-    inPlaneRotated.replace(screen.id, screen);
-    verifyRejected(std::move(inPlaneRotated), "screen");
-
     auto undersized = recordingBench(false, true);
     screen = *undersized.find("screen");
     auto screenParameters = std::get<scene::ScreenDetectorParameters>(
@@ -305,6 +298,48 @@ TEST_CASE("thin replay rejects tilted out-of-support backward and undersized obs
     probe.transform.translationMetres = {0.0, 0.0, -0.01};
     backward.add(std::move(probe));
     verifyRejected(std::move(backward), "probe-behind");
+}
+
+TEST_CASE("thin replay samples a non-grazing rotated observation plane") {
+    auto bench = recordingBench(false, true);
+    auto screen = *bench.find("screen");
+    constexpr double angle = 0.005;
+    screen.transform.localXAxisInWorld = {
+        std::cos(angle), 0.0, -std::sin(angle)};
+    screen.transform.localYAxisInWorld = {0.0, 1.0, 0.0};
+    screen.transform.localZAxisInWorld = {
+        std::sin(angle), 0.0, std::cos(angle)};
+    bench.replace(screen.id, screen);
+    const auto fields = holography::collectPlateIncidentFields(
+        bench, ray::traceDynamicBench(bench), "plate");
+    const auto ids = pairIds(fields);
+    const auto recording = holography::recordThinTransmissionPlate(
+        bench, fields, ids.object, ids.reference, resolvedOptions());
+    holobench::compute::fft::CpuFftBackend backend;
+
+    const auto replay = holography::replayThinTransmissionToObservation(
+        bench,
+        recording,
+        "screen",
+        holography::ThinPlateReplayKind::OrdinaryReference,
+        backend);
+
+    CHECK(replay.usedTiltedPlanePropagation);
+    CHECK_FALSE(replay.usedShiftedPaddedPropagation);
+    CHECK(replay.tiltedPropagation.propagatingOutputBinCount > 0U);
+    CHECK(replay.tiltedPropagation.interpolatedOutputBinCount > 0U);
+    double maximumDecompositionResidual = 0.0;
+    for (std::size_t index = 0;
+         index < replay.fullReplayAtObservation.sampleCount(); ++index) {
+        maximumDecompositionResidual = std::max(
+            maximumDecompositionResidual,
+            std::abs(
+                replay.fullReplayAtObservation.samples()[index]
+                - replay.zeroOrderAtObservation.samples()[index]
+                - replay.objectBearingOrderAtObservation.samples()[index]
+                - replay.conjugateOrderAtObservation.samples()[index]));
+    }
+    CHECK(maximumDecompositionResidual < 3e-12);
 }
 
 TEST_CASE("thin replay samples a bounded decentered parallel observation plane") {
@@ -340,4 +375,33 @@ TEST_CASE("thin replay samples a bounded decentered parallel observation plane")
         CHECK(std::isfinite(sample.real()));
         CHECK(std::isfinite(sample.imag()));
     }
+}
+
+TEST_CASE("thin replay measures observer shift from the recorded sampling centre") {
+    auto bench = recordingBench(false, true);
+    auto screen = *bench.find("screen");
+    screen.transform.translationMetres.x = 0.25e-3;
+    screen.transform.translationMetres.y = -0.125e-3;
+    bench.replace(screen.id, screen);
+    const auto fields = holography::collectPlateIncidentFields(
+        bench, ray::traceDynamicBench(bench), "plate");
+    const auto ids = pairIds(fields);
+    auto options = resolvedOptions();
+    options.sampling.centreXMetres = 0.25e-3;
+    options.sampling.centreYMetres = -0.125e-3;
+    const auto recording = holography::recordThinTransmissionPlate(
+        bench, fields, ids.object, ids.reference, options);
+    holobench::compute::fft::CpuFftBackend backend;
+
+    const auto replay = holography::replayThinTransmissionToObservation(
+        bench,
+        recording,
+        "screen",
+        holography::ThinPlateReplayKind::OrdinaryReference,
+        backend);
+
+    CHECK_FALSE(replay.usedShiftedPaddedPropagation);
+    CHECK_FALSE(replay.usedTiltedPlanePropagation);
+    CHECK(replay.propagation.propagatingBinCount
+        == recording.relativeObjectField.sampleCount());
 }

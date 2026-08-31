@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "compute/fft/IFftBackend.hpp"
+#include "compute/propagation/TiltedPlanePropagator.hpp"
 #include "core/field/FieldObservables.hpp"
 
 namespace holobench::optics::holography {
@@ -200,18 +201,27 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
     const double normalAlignment = math::dot(
         plate->transform.localZAxisInWorld,
         observer.transform.localZAxisInWorld);
-    if (xAlignment < 1.0 - kParallelTolerance
-        || yAlignment < 1.0 - kParallelTolerance
-        || normalAlignment < 1.0 - kParallelTolerance) {
-        throw std::invalid_argument(
-            "volume replay currently requires a parallel axis-aligned observation plane");
-    }
+    const bool parallelAxisAligned = xAlignment >= 1.0 - kParallelTolerance
+        && yAlignment >= 1.0 - kParallelTolerance
+        && normalAlignment >= 1.0 - kParallelTolerance;
     const auto observerCentre = math::transformPointWorldToLocal(
         plate->transform, observer.transform.translationMetres);
-    if (observerCentre.z == 0.0
-        || observerCentre.z * reconstructedExternal.z <= 0.0) {
+    const math::Vec3d reconstructedDirectionWorld
+        = math::transformDirectionLocalToWorld(
+            plate->transform, reconstructedExternal);
+    const math::Vec3d plateToObserver
+        = observer.transform.translationMetres
+        - plate->transform.translationMetres;
+    if (math::dot(plateToObserver, reconstructedDirectionWorld) <= 0.0) {
         throw std::invalid_argument(
             "volume replay observation is not on the reconstructed reflection side");
+    }
+    if (!parallelAxisAligned
+        && std::abs(math::dot(
+            observer.transform.localZAxisInWorld,
+            reconstructedDirectionWorld)) <= 1e-8) {
+        throw std::invalid_argument(
+            "volume replay observation plane is grazing the reconstructed direction");
     }
 
     auto object = samplePlateIncidentField(
@@ -235,6 +245,17 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
         || observerHeight < object.diagnostics.sampledExtentHeightMetres) {
         throw std::invalid_argument(
             "volume replay observation plane is smaller than the sampled recording window");
+    }
+    const double samplingOffsetX
+        = observerCentre.x - sampling.centreXMetres;
+    const double samplingOffsetY
+        = observerCentre.y - sampling.centreYMetres;
+    if (std::abs(samplingOffsetX)
+            > 0.5 * object.diagnostics.sampledExtentWidthMetres
+        || std::abs(samplingOffsetY)
+            > 0.5 * object.diagnostics.sampledExtentHeightMetres) {
+        throw std::invalid_argument(
+            "volume replay observation centre exceeds the padded sampling support");
     }
     const double shrinkScale
         = 1.0 - recording.material.isotropicLinearShrinkageFraction;
@@ -283,15 +304,33 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
 
     auto reconstructedAtObservation = reconstructedAtPlate;
     compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
-    const bool shifted = observerCentre.x != 0.0 || observerCentre.y != 0.0;
-    const auto propagation = shifted
-        ? propagator.propagateShiftedPaddedInPlace(
+    const bool tilted = !parallelAxisAligned;
+    const bool shifted = !tilted
+        && (samplingOffsetX != 0.0 || samplingOffsetY != 0.0);
+    compute::propagation::AngularSpectrumDiagnostics propagation;
+    compute::propagation::TiltedPlaneDiagnostics tiltedPropagation;
+    if (tilted) {
+        auto inputPlane = plate->transform;
+        inputPlane.translationMetres = math::transformPointLocalToWorld(
+            plate->transform,
+            {sampling.centreXMetres, sampling.centreYMetres, 0.0});
+        compute::propagation::TiltedPlanePropagator tiltedPropagator(
+            fftBackend);
+        tiltedPropagation = tiltedPropagator.propagatePaddedInPlace(
+            reconstructedAtObservation,
+            inputPlane,
+            observer.transform,
+            reconstructedDirectionWorld);
+    } else if (shifted) {
+        propagation = propagator.propagateShiftedPaddedInPlace(
             reconstructedAtObservation,
             observerCentre.z,
-            observerCentre.x,
-            observerCentre.y)
-        : propagator.propagateInPlace(
+            samplingOffsetX,
+            samplingOffsetY);
+    } else {
+        propagation = propagator.propagateInPlace(
             reconstructedAtObservation, observerCentre.z);
+    }
     return {
         .plateComponentId = recording.plateComponentId,
         .observationComponentId = std::move(observationComponentId),
@@ -305,12 +344,14 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
         .observationOffsetXMetres = observerCentre.x,
         .observationOffsetYMetres = observerCentre.y,
         .usedShiftedPaddedPropagation = shifted,
+        .usedTiltedPlanePropagation = tilted,
         .replayPowerOnSampledWindowWatts
             = replay.diagnostics.integratedPowerWatts,
         .reconstructedPowerOnSampledWindowWatts = targetPower,
         .reconstructedAtPlate = std::move(reconstructedAtPlate),
         .reconstructedAtObservation = std::move(reconstructedAtObservation),
         .propagation = propagation,
+        .tiltedPropagation = tiltedPropagation,
     };
 }
 

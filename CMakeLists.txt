@@ -60,6 +60,7 @@ add_library(holobench_compute STATIC
     compute/propagation/AngularSpectrumPropagator.cpp
     compute/propagation/FraunhoferPropagator.cpp
     compute/propagation/FresnelPropagator.cpp
+    compute/propagation/TiltedPlanePropagator.cpp
     compute/sampling/AngularSpectrumAnalysis.cpp
     compute/sampling/PlaneProbe.cpp
     compute/sampling/SamplingDiagnostics.cpp
@@ -382,6 +383,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/compute/CpuFftBackendTests.cpp
         tests/compute/FraunhoferPropagatorTests.cpp
         tests/compute/FresnelPropagatorTests.cpp
+        tests/compute/TiltedPlanePropagatorTests.cpp
         tests/compute/FourFSystemTests.cpp
         tests/compute/FourierOpticsTests.cpp
         tests/compute/PsfMtfTests.cpp

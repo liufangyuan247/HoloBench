@@ -3,6 +3,7 @@
 #include <string>
 
 #include "compute/propagation/AngularSpectrumPropagator.hpp"
+#include "compute/propagation/TiltedPlanePropagator.hpp"
 #include "optics/holography/BenchHologramRecording.hpp"
 
 namespace holobench::compute::fft {
@@ -25,20 +26,22 @@ struct ThinPlateReplayResult final {
     double observationOffsetXMetres = 0.0;
     double observationOffsetYMetres = 0.0;
     bool usedShiftedPaddedPropagation = false;
+    bool usedTiltedPlanePropagation = false;
     field::ComplexField2D replayAtPlate;
     field::ComplexField2D fullReplayAtObservation;
     field::ComplexField2D zeroOrderAtObservation;
     field::ComplexField2D objectBearingOrderAtObservation;
     field::ComplexField2D conjugateOrderAtObservation;
     compute::propagation::AngularSpectrumDiagnostics propagation;
+    compute::propagation::TiltedPlaneDiagnostics tiltedPropagation;
 
     [[nodiscard]] bool isStaleFor(const scene::BenchScene& bench) const noexcept;
 };
 
 // Replays a current thin transmission recording onto a physically placed,
-// parallel and axis-aligned Screen/Detector or Field Probe. A bounded
-// decentered plane uses 2x zero-padding plus shifted angular-spectrum
-// propagation. Tilted planes remain explicitly unsupported.
+// Screen/Detector or Field Probe. A bounded decentered parallel plane uses
+// shifted ASM; a non-grazing rotated plane uses 2x-padded rotated angular-
+// spectrum interpolation with explicit rejected-band diagnostics.
 [[nodiscard]] ThinPlateReplayResult replayThinTransmissionToObservation(
     const scene::BenchScene& bench,
     const ThinPlateRecordingResult& recording,

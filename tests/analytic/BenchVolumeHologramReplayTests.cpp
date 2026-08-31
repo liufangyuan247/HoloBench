@@ -189,3 +189,40 @@ TEST_CASE("volume replay samples a bounded decentered reflection-side probe") {
         CHECK(std::isfinite(sample.imag()));
     }
 }
+
+TEST_CASE("volume replay samples a non-grazing rotated reflection-side probe") {
+    auto project = holobench::app::makeReflectionHolographyPreset();
+    auto probe = *project.scene.find("reflection-reconstruction-probe");
+    constexpr double angle = 0.005;
+    probe.transform.localXAxisInWorld = {
+        std::cos(angle), 0.0, -std::sin(angle)};
+    probe.transform.localYAxisInWorld = {0.0, 1.0, 0.0};
+    probe.transform.localZAxisInWorld = {
+        std::sin(angle), 0.0, std::cos(angle)};
+    project.scene.replace(probe.id, probe);
+    const auto input = reflectionInput(std::move(project));
+    const auto recording = holography::recordVolumePlate(
+        input.project.scene,
+        input.fields,
+        input.objectBranchId,
+        input.referenceBranchId);
+    holobench::compute::fft::CpuFftBackend fft;
+
+    const auto replay = holography::replayVolumeReflectionToObservation(
+        input.project.scene,
+        input.fields,
+        recording,
+        input.referenceBranchId,
+        "reflection-reconstruction-probe",
+        replaySampling(),
+        fft);
+
+    CHECK(replay.usedTiltedPlanePropagation);
+    CHECK_FALSE(replay.usedShiftedPaddedPropagation);
+    CHECK(replay.tiltedPropagation.propagatingOutputBinCount > 0U);
+    CHECK(replay.tiltedPropagation.interpolatedOutputBinCount > 0U);
+    for (const auto sample : replay.reconstructedAtObservation.samples()) {
+        CHECK(std::isfinite(sample.real()));
+        CHECK(std::isfinite(sample.imag()));
+    }
+}

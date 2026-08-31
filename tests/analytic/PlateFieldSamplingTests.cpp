@@ -87,6 +87,65 @@ scene::BenchScene coaxialElementBench(
     return bench;
 }
 
+scene::BenchScene foldedApertureBench() {
+    constexpr double inverseSqrtTwo = 0.7071067811865475244;
+    scene::BenchScene bench;
+    auto source = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource, "folded-reference");
+    source.transform.translationMetres.z = -0.1;
+    auto sourceParameters = std::get<scene::LaserSourceParameters>(
+        source.parameters);
+    sourceParameters.beamRadiusMetres = 0.003;
+    sourceParameters.channels = {{
+        .wavelengthMetres = 532e-9,
+        .powerWatts = 0.4,
+        .coherenceId = "folded-recording",
+    }};
+    source.parameters = sourceParameters;
+    bench.add(std::move(source));
+
+    auto mirror = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::PlanarMirror, "fold-mirror");
+    mirror.transform = {
+        .translationMetres = {0.0, 0.0, 0.0},
+        .localXAxisInWorld = {inverseSqrtTwo, 0.0, inverseSqrtTwo},
+        .localYAxisInWorld = {0.0, 1.0, 0.0},
+        .localZAxisInWorld = {-inverseSqrtTwo, 0.0, inverseSqrtTwo},
+    };
+    bench.add(std::move(mirror));
+
+    auto aperture = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::Aperture, "folded-aperture");
+    aperture.transform = {
+        .translationMetres = {0.05, 0.0, 0.0},
+        .localXAxisInWorld = {0.0, 0.0, -1.0},
+        .localYAxisInWorld = {0.0, 1.0, 0.0},
+        .localZAxisInWorld = {1.0, 0.0, 0.0},
+    };
+    auto apertureParameters = std::get<scene::ApertureParameters>(
+        aperture.parameters);
+    apertureParameters.widthMetres = 0.002;
+    apertureParameters.heightMetres = 0.002;
+    aperture.parameters = apertureParameters;
+    bench.add(std::move(aperture));
+
+    auto plate = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::HolographicPlate, "plate");
+    plate.transform = {
+        .translationMetres = {0.1, 0.0, 0.0},
+        .localXAxisInWorld = {0.0, 0.0, -1.0},
+        .localYAxisInWorld = {0.0, 1.0, 0.0},
+        .localZAxisInWorld = {1.0, 0.0, 0.0},
+    };
+    auto plateParameters = std::get<scene::HolographicPlateParameters>(
+        plate.parameters);
+    plateParameters.widthMetres = 0.012;
+    plateParameters.heightMetres = 0.012;
+    plate.parameters = plateParameters;
+    bench.add(std::move(plate));
+    return bench;
+}
+
 holography::PlateFieldSamplingOptions coaxialSampling(
     std::size_t samples = 128U) {
     return {
@@ -329,7 +388,7 @@ TEST_CASE("coaxial placed aperture clips the propagated plate field with analyti
     const auto sampled = holography::samplePlateIncidentField(
         bench, fields, branchId, coaxialSampling(), fft);
 
-    CHECK(sampled.diagnostics.appliedCoaxialWavePath);
+    CHECK(sampled.diagnostics.appliedLocalWavePath);
     CHECK(sampled.diagnostics.appliedWaveComponentIds
         == std::vector<std::string> {"aperture"});
     std::size_t transmitted = 0U;
@@ -371,7 +430,7 @@ TEST_CASE("decentered aligned aperture applies at its physical transverse positi
         coaxialSampling(),
         fft);
 
-    REQUIRE(sampled.diagnostics.appliedCoaxialWavePath);
+    REQUIRE(sampled.diagnostics.appliedLocalWavePath);
     const auto nearestIndex = [&](double coordinateMetres) {
         return static_cast<std::size_t>(std::llround(
             coordinateMetres / sampled.field.pitchXMetres()
@@ -414,7 +473,7 @@ TEST_CASE("coaxial placed thin lens creates a sampled focal-plane concentration"
     const auto focused = holography::samplePlateIncidentField(
         bench, fields, branchId, coaxialSampling(256U), fft);
 
-    REQUIRE(focused.diagnostics.appliedCoaxialWavePath);
+    REQUIRE(focused.diagnostics.appliedLocalWavePath);
     CHECK(std::find(
         focused.diagnostics.appliedWaveComponentIds.begin(),
         focused.diagnostics.appliedWaveComponentIds.end(),
@@ -445,7 +504,7 @@ TEST_CASE("coaxial placed SLM applies finite active pixels and dead space") {
         coaxialSampling(256U),
         fft);
 
-    REQUIRE(sampled.diagnostics.appliedCoaxialWavePath);
+    REQUIRE(sampled.diagnostics.appliedLocalWavePath);
     CHECK(sampled.diagnostics.appliedWaveComponentIds
         == std::vector<std::string> {"slm"});
     const double expectedPower = 0.4
@@ -455,9 +514,14 @@ TEST_CASE("coaxial placed SLM applies finite active pixels and dead space") {
         == doctest::Approx(expectedPower).epsilon(0.08));
 }
 
-TEST_CASE("tilted local element remains explicit unrefined evidence") {
+TEST_CASE("tilted zero-thickness aperture projects into the beam-following field") {
     auto aperture = scene::makeDefaultBenchComponent(
         scene::BenchComponentKind::Aperture, "tilted-aperture");
+    auto parameters = std::get<scene::ApertureParameters>(
+        aperture.parameters);
+    parameters.widthMetres = 0.002;
+    parameters.heightMetres = 0.002;
+    aperture.parameters = parameters;
     constexpr double angle = 0.1;
     aperture.transform.localXAxisInWorld = {
         std::cos(angle), 0.0, -std::sin(angle)};
@@ -474,11 +538,130 @@ TEST_CASE("tilted local element remains explicit unrefined evidence") {
         coaxialSampling(),
         fft);
 
-    CHECK_FALSE(sampled.diagnostics.appliedCoaxialWavePath);
-    CHECK(std::any_of(
-        sampled.diagnostics.warnings.begin(),
-        sampled.diagnostics.warnings.end(),
-        [](const std::string& warning) {
-            return warning.find("refinement skipped") != std::string::npos;
-        }));
+    CHECK(sampled.diagnostics.appliedLocalWavePath);
+    CHECK(sampled.diagnostics.usedTiltedElementProjection);
+    CHECK(sampled.diagnostics.appliedWaveComponentIds
+        == std::vector<std::string> {"tilted-aperture"});
+    const double expectedProjectedArea = std::numbers::pi
+        * 0.001 * std::cos(angle) * 0.001;
+    const double expectedPower = 0.4 * expectedProjectedArea
+        / (std::numbers::pi * 0.003 * 0.003);
+    CHECK(sampled.diagnostics.integratedPowerWatts
+        == doctest::Approx(expectedPower).epsilon(0.03));
+}
+
+TEST_CASE("folded mirror path transports a sampled field through a downstream aperture") {
+    const auto bench = foldedApertureBench();
+    const auto fields = incidentFields(bench);
+    REQUIRE(fields.branches.size() == 1U);
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto sampled = holography::samplePlateIncidentField(
+        bench,
+        fields,
+        fields.branches.front().beam.provenance.branchId,
+        coaxialSampling(),
+        fft);
+
+    CHECK(sampled.diagnostics.appliedLocalWavePath);
+    CHECK(sampled.diagnostics.usedFoldedPath);
+    CHECK(sampled.diagnostics.foldedWaveComponentIds
+        == std::vector<std::string> {"fold-mirror"});
+    CHECK(sampled.diagnostics.appliedWaveComponentIds
+        == std::vector<std::string> {"fold-mirror", "folded-aperture"});
+    CHECK_FALSE(sampled.diagnostics.usedPlateTangentProjection);
+    CHECK(sampled.diagnostics.integratedPowerWatts > 0.0);
+    CHECK(sampled.diagnostics.integratedPowerWatts < 0.4);
+}
+
+TEST_CASE("mirror fold transports transverse field parity into the outgoing local frame") {
+    auto bench = foldedApertureBench();
+    auto downstream = *bench.find("folded-aperture");
+    auto downstreamParameters = std::get<scene::ApertureParameters>(
+        downstream.parameters);
+    downstreamParameters.widthMetres = 0.012;
+    downstreamParameters.heightMetres = 0.012;
+    downstream.parameters = downstreamParameters;
+    bench.replace(downstream.id, downstream);
+
+    auto inputAperture = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::Aperture, "decentered-input-aperture");
+    inputAperture.transform.translationMetres = {0.00075, 0.0, -0.05};
+    auto inputParameters = std::get<scene::ApertureParameters>(
+        inputAperture.parameters);
+    inputParameters.widthMetres = 0.002;
+    inputParameters.heightMetres = 0.002;
+    inputAperture.parameters = inputParameters;
+    bench.add(std::move(inputAperture));
+
+    const auto fields = incidentFields(bench);
+    REQUIRE(fields.branches.size() == 1U);
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto sampled = holography::samplePlateIncidentField(
+        bench,
+        fields,
+        fields.branches.front().beam.provenance.branchId,
+        coaxialSampling(256U),
+        fft);
+
+    double weightedX = 0.0;
+    double intensitySum = 0.0;
+    for (std::size_t y = 0; y < sampled.field.height(); ++y) {
+        for (std::size_t x = 0; x < sampled.field.width(); ++x) {
+            const double intensity = std::norm(sampled.field.at(x, y));
+            weightedX += intensity * sampled.field.xCoordinateMetres(x);
+            intensitySum += intensity;
+        }
+    }
+    REQUIRE(intensitySum > 0.0);
+    CHECK(weightedX / intensitySum
+        == doctest::Approx(-0.00075).epsilon(0.08));
+    CHECK(sampled.diagnostics.usedFoldedPath);
+}
+
+TEST_CASE("oblique plate tangent projection restores the analytic plane-wave carrier") {
+    constexpr double wavelength = 1e-3;
+    constexpr double directionX = 0.2;
+    auto bench = singleBranchBench(wavelength, 0.25, directionX);
+    auto source = *bench.find("reference");
+    auto sourceParameters = std::get<scene::LaserSourceParameters>(
+        source.parameters);
+    sourceParameters.beamRadiusMetres = 0.1;
+    source.parameters = sourceParameters;
+    bench.replace(source.id, source);
+
+    auto aperture = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::Aperture, "wide-oblique-path-aperture");
+    aperture.transform = source.transform;
+    aperture.transform.translationMetres
+        = 0.5 * source.transform.translationMetres;
+    auto apertureParameters = std::get<scene::ApertureParameters>(
+        aperture.parameters);
+    apertureParameters.widthMetres = 0.08;
+    apertureParameters.heightMetres = 0.08;
+    aperture.parameters = apertureParameters;
+    bench.add(std::move(aperture));
+
+    const auto fields = incidentFields(bench);
+    const auto branchId = fields.branches.front().beam.provenance.branchId;
+    const holography::PlateFieldSamplingOptions options {
+        .sampleWidth = 64,
+        .sampleHeight = 64,
+        .refractiveIndex = 1.0,
+    };
+    const auto analytic = holography::samplePlateIncidentField(
+        bench, fields, branchId, options);
+    holobench::compute::fft::CpuFftBackend fft;
+    const auto refined = holography::samplePlateIncidentField(
+        bench, fields, branchId, options, fft);
+
+    REQUIRE(refined.diagnostics.appliedLocalWavePath);
+    CHECK(refined.diagnostics.usedPlateTangentProjection);
+    CHECK(refined.diagnostics.appliedWaveComponentIds
+        == std::vector<std::string> {"wide-oblique-path-aperture"});
+    for (std::size_t y = 0; y < refined.field.height(); ++y) {
+        for (std::size_t x = 0; x < refined.field.width(); ++x) {
+            CHECK(std::abs(refined.field.at(x, y) - analytic.field.at(x, y))
+                < 2e-11);
+        }
+    }
 }

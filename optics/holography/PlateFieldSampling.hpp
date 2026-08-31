@@ -44,8 +44,12 @@ struct PlateFieldSamplingDiagnostics final {
     bool carrierSampled = false;
     bool supportTouchesPlateBoundary = false;
     bool usesApproximateSourceEnvelope = false;
-    bool appliedCoaxialWavePath = false;
+    bool appliedLocalWavePath = false;
+    bool usedTiltedElementProjection = false;
+    bool usedFoldedPath = false;
+    bool usedPlateTangentProjection = false;
     std::vector<std::string> appliedWaveComponentIds;
+    std::vector<std::string> foldedWaveComponentIds;
     std::vector<std::string> warnings;
 };
 
@@ -75,10 +79,12 @@ struct SampledPlateIncidentField final {
     std::uint64_t branchId,
     const PlateFieldSamplingOptions& options = {});
 
-// Refines a supported coaxial, normally incident component path with sampled
-// propagation and local thin-element transforms. Unsupported tilted,
-// decentered, folded, or prescription-lens paths fall back to the explicit
-// centreline-envelope result and retain refinement warnings.
+// Refines a supported ray-routed path with a beam-following sampled envelope.
+// Free-space segments use ASM, tilted zero-thickness masks are projected into
+// the transverse field plane, and ideal mirror/splitter folds transport the
+// scalar field frame explicitly. The final carrier is restored on the plate
+// tangent plane. Unsupported powered-lens or prescription geometry falls back
+// to explicit centreline-envelope evidence and retains refinement warnings.
 [[nodiscard]] SampledPlateIncidentField samplePlateIncidentField(
     const scene::BenchScene& bench,
     const PlateIncidentFieldSet& fields,

@@ -5836,7 +5836,7 @@ void Application::drawSandboxInspector() {
                             ImGui::SeparatorText(
                                 "Reconstruct to Placed Observation");
                             ImGui::TextDisabled(
-                                "Uses recorded reference branch #%llu as the physical replay illumination. Parallel Screen/Probe planes may be offset within the 2x zero-padded support window.",
+                                "Uses recorded reference branch #%llu as the physical replay illumination. Parallel decenter and non-grazing rotated Screen/Probe planes use explicit padded spectrum transforms.",
                                 static_cast<unsigned long long>(
                                     recording.pair.referenceBranchId));
                             bool hasVolumeObservationComponent = false;
@@ -5963,18 +5963,29 @@ void Application::drawSandboxInspector() {
                                     observation.observationOffsetXMetres,
                                     observation.observationOffsetYMetres);
                                 ImGui::TextWrapped(
-                                    "Sampled replay %.6g W -> reconstructed %.6g W | efficiency %.3f%% | %zu propagating, %zu evanescent bins",
+                                    "Sampled replay %.6g W -> reconstructed %.6g W | efficiency %.3f%%",
                                     observation
                                         .replayPowerOnSampledWindowWatts,
                                     observation
                                         .reconstructedPowerOnSampledWindowWatts,
                                     observation.braggReplay.volume.kogelnik
                                             .diffractionEfficiency
-                                        * 100.0,
-                                    observation.propagation
-                                        .propagatingBinCount,
-                                    observation.propagation
-                                        .evanescentBinCount);
+                                        * 100.0);
+                                if (observation.usedTiltedPlanePropagation) {
+                                    ImGui::TextWrapped(
+                                        "Rotated spectrum: %zu propagated, %zu evanescent, %zu outside source band, %zu interpolated bins",
+                                        observation.tiltedPropagation.propagatingOutputBinCount,
+                                        observation.tiltedPropagation.evanescentOutputBinCount,
+                                        observation.tiltedPropagation.sourceBandRejectedBinCount,
+                                        observation.tiltedPropagation.interpolatedOutputBinCount);
+                                    ImGui::TextDisabled(
+                                        "This reconstruction used rotated angular-spectrum interpolation on a 2x zero-padded grid.");
+                                } else {
+                                    ImGui::TextWrapped(
+                                        "ASM: %zu propagating, %zu evanescent bins",
+                                        observation.propagation.propagatingBinCount,
+                                        observation.propagation.evanescentBinCount);
+                                }
                                 if (observation.usedShiftedPaddedPropagation) {
                                     ImGui::TextDisabled(
                                         "This reconstruction used shifted angular-spectrum propagation on a 2x zero-padded grid before cropping to the probe window.");
@@ -6041,9 +6052,22 @@ void Application::drawSandboxInspector() {
                                 ImGui::Text(
                                     "%s wave path: %s",
                                     label,
-                                    path.appliedCoaxialWavePath
+                                    path.appliedLocalWavePath
                                         ? "sampled propagation applied"
                                         : "centreline/source-envelope evidence");
+                                if (path.usedFoldedPath) {
+                                    ImGui::BulletText(
+                                        "Beam-following field transported through %zu fold(s)",
+                                        path.foldedWaveComponentIds.size());
+                                }
+                                if (path.usedTiltedElementProjection) {
+                                    ImGui::BulletText(
+                                        "Tilted zero-thickness element footprint projected into the transverse field plane");
+                                }
+                                if (path.usedPlateTangentProjection) {
+                                    ImGui::BulletText(
+                                        "Carrier restored on the oblique plate tangent plane");
+                                }
                                 for (const auto& componentId
                                      : path.appliedWaveComponentIds) {
                                     ImGui::BulletText(
@@ -6086,7 +6110,7 @@ void Application::drawSandboxInspector() {
                                 &sandboxPlateReplayKindIndex_,
                                 kReplayKinds);
                             ImGui::TextDisabled(
-                                "Parallel axis-aligned Screen/Probe planes may be offset by up to half the sampled window; shifted replay uses explicit 2x zero-padding.");
+                                "Screen/Probe planes may be offset by up to half the sampled window; non-grazing rotations use padded angular-spectrum interpolation.");
                             bool hasObservationComponent = false;
                             ImGui::BeginDisabled(stale);
                             for (const auto& component
@@ -6161,7 +6185,7 @@ void Application::drawSandboxInspector() {
                                         "STALE replay: bench revision changed.");
                                 }
                                 ImGui::TextWrapped(
-                                    "%s -> %s | signed distance %.6g m | local offset (%.6g, %.6g) m | %zu propagating, %zu evanescent bins",
+                                    "%s -> %s | signed distance %.6g m | local offset (%.6g, %.6g) m",
                                     sandboxPlateReplay_->replayKind
                                             == optics::holography::ThinPlateReplayKind::OrdinaryReference
                                         ? "Ordinary"
@@ -6169,11 +6193,23 @@ void Application::drawSandboxInspector() {
                                     sandboxPlateReplay_->observationComponentId.c_str(),
                                     sandboxPlateReplay_->signedObservationDistanceMetres,
                                     sandboxPlateReplay_->observationOffsetXMetres,
-                                    sandboxPlateReplay_->observationOffsetYMetres,
-                                    sandboxPlateReplay_->propagation
-                                        .propagatingBinCount,
-                                    sandboxPlateReplay_->propagation
-                                        .evanescentBinCount);
+                                    sandboxPlateReplay_->observationOffsetYMetres);
+                                if (sandboxPlateReplay_
+                                        ->usedTiltedPlanePropagation) {
+                                    ImGui::TextWrapped(
+                                        "Rotated spectrum: %zu propagated, %zu evanescent, %zu outside source band, %zu interpolated bins",
+                                        sandboxPlateReplay_->tiltedPropagation.propagatingOutputBinCount,
+                                        sandboxPlateReplay_->tiltedPropagation.evanescentOutputBinCount,
+                                        sandboxPlateReplay_->tiltedPropagation.sourceBandRejectedBinCount,
+                                        sandboxPlateReplay_->tiltedPropagation.interpolatedOutputBinCount);
+                                    ImGui::TextDisabled(
+                                        "This observation used rotated angular-spectrum interpolation on a 2x zero-padded grid.");
+                                } else {
+                                    ImGui::TextWrapped(
+                                        "ASM: %zu propagating, %zu evanescent bins",
+                                        sandboxPlateReplay_->propagation.propagatingBinCount,
+                                        sandboxPlateReplay_->propagation.evanescentBinCount);
+                                }
                                 if (sandboxPlateReplay_
                                         ->usedShiftedPaddedPropagation) {
                                     ImGui::TextDisabled(
