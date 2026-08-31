@@ -86,4 +86,3 @@ void validateSurfaceIntersectionOptions(const SurfaceIntersectionOptions& option
     const SurfaceIntersectionOptions& options);
 
 } // namespace holobench::optics::ray
-
