@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "core/math/RigidTransform.hpp"
@@ -16,6 +17,7 @@ enum class SpotRayRejectionReason {
 
 struct SpotSample final {
     std::size_t sourceRayIndex = 0;
+    std::string fieldId;
     double imageXMetres = 0.0;
     double imageYMetres = 0.0;
     std::optional<double> chiefRelativeXMetres;
@@ -28,6 +30,8 @@ struct RejectedSpotRay final {
     std::size_t sourceRayIndex = 0;
     SpotRayRejectionReason reason = SpotRayRejectionReason::PrescriptionTraceFailed;
     std::optional<ray::SequentialTraceStatus> traceStatus;
+    std::string fieldId;
+    double vacuumWavelengthMetres = 0.0;
 };
 
 struct SpotStatistics final {
@@ -44,14 +48,41 @@ struct WavelengthSpotGroup final {
     SpotStatistics statistics;
 };
 
+struct FieldSpotGroup final {
+    std::string fieldId;
+    std::vector<std::size_t> sampleIndices;
+    SpotStatistics statistics;
+};
+
+struct FieldWavelengthSpotGroup final {
+    std::string fieldId;
+    double vacuumWavelengthMetres = 0.0;
+    std::vector<std::size_t> sampleIndices;
+    SpotStatistics statistics;
+};
+
+struct FieldTaggedRay final {
+    ray::Ray ray;
+    std::string fieldId;
+};
+
 struct SpotDiagramResult final {
     std::vector<SpotSample> samples;
     std::vector<RejectedSpotRay> rejectedRays;
     SpotStatistics statistics;
     std::vector<WavelengthSpotGroup> wavelengthGroups;
+    std::vector<FieldSpotGroup> fieldGroups;
+    std::vector<FieldWavelengthSpotGroup> fieldWavelengthGroups;
     std::optional<double> chiefImageXMetres;
     std::optional<double> chiefImageYMetres;
 };
+
+[[nodiscard]] SpotDiagramResult computeSpotDiagram(
+    const std::vector<FieldTaggedRay>& incidentWorldRays,
+    const ray::SequentialLensPrescription& prescription,
+    const math::RigidTransform3d& imagePlaneLocalToWorld,
+    const ray::SurfaceIntersectionOptions& intersectionOptions,
+    std::optional<std::size_t> chiefRayIndex = std::nullopt);
 
 [[nodiscard]] SpotDiagramResult computeSpotDiagram(
     const std::vector<ray::Ray>& incidentWorldRays,

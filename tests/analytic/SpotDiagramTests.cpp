@@ -90,3 +90,42 @@ TEST_CASE("spot diagram validates empty bundles and chief index") {
     };
     CHECK_THROWS_AS(computeBadChief(), std::out_of_range);
 }
+
+TEST_CASE("spot diagram groups explicit fields and field wavelength pairs") {
+    const std::vector<analysis::FieldTaggedRay> rays {
+        {.ray = ray::makeRay({-0.001, 0, -0.01}, {0, 0, 1}, 486.1327e-9), .fieldId = "on_axis"},
+        {.ray = ray::makeRay({0.0, 0, -0.01}, {0, 0, 1}, 486.1327e-9), .fieldId = "on_axis"},
+        {.ray = ray::makeRay({0.001, 0, -0.01}, {0, 0, 1}, 656.2725e-9), .fieldId = "off_axis"},
+        {.ray = ray::makeRay({0.002, 0, -0.01}, {0, 0, 1}, 486.1327e-9), .fieldId = "off_axis"},
+        {.ray = ray::makeRay({0.02, 0, -0.01}, {0, 0, 1}, 656.2725e-9), .fieldId = "off_axis"},
+    };
+    const auto result = analysis::computeSpotDiagram(
+        rays, makeWindow(), {.translationMetres = {0, 0, 0.05}}, options());
+
+    REQUIRE(result.samples.size() == 4);
+    REQUIRE(result.rejectedRays.size() == 1);
+    CHECK(result.rejectedRays[0].fieldId == "off_axis");
+    CHECK(result.rejectedRays[0].vacuumWavelengthMetres == 656.2725e-9);
+    REQUIRE(result.fieldGroups.size() == 2);
+    CHECK(result.fieldGroups[0].fieldId == "on_axis");
+    CHECK(result.fieldGroups[0].sampleIndices.size() == 2);
+    CHECK(result.fieldGroups[0].statistics.centroidXMetres == doctest::Approx(-0.0005));
+    CHECK(result.fieldGroups[1].fieldId == "off_axis");
+    CHECK(result.fieldGroups[1].sampleIndices.size() == 2);
+    CHECK(result.wavelengthGroups.size() == 2);
+    REQUIRE(result.fieldWavelengthGroups.size() == 3);
+    CHECK(result.fieldWavelengthGroups[0].fieldId == "on_axis");
+    CHECK(result.fieldWavelengthGroups[0].sampleIndices.size() == 2);
+    CHECK(result.fieldWavelengthGroups[1].fieldId == "off_axis");
+    CHECK(result.fieldWavelengthGroups[1].vacuumWavelengthMetres == 656.2725e-9);
+    CHECK(result.fieldWavelengthGroups[2].vacuumWavelengthMetres == 486.1327e-9);
+
+    auto invalid = rays;
+    invalid[0].fieldId.clear();
+    const auto computeInvalid = [&] {
+        const auto invalidResult = analysis::computeSpotDiagram(
+            invalid, makeWindow(), {.translationMetres = {0, 0, 0.05}}, options());
+        static_cast<void>(invalidResult);
+    };
+    CHECK_THROWS_AS(computeInvalid(), std::invalid_argument);
+}

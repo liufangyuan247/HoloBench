@@ -20,7 +20,8 @@ against an independent optical-design implementation.
   analysis.
 - [x] Image-plane spot diagrams with centroid, chief-ray reference, RMS radius,
   geometric radius, wavelength grouping, and rejected-ray accounting.
-- [ ] Field-tagged ray bundles and field-grouped spot statistics.
+- [x] Field-tagged ray bundles and field-grouped spot statistics, including
+  combined field/wavelength groups and rejected-ray identity.
 - [x] Versioned prescription JSON plus deterministic CSV import/export with
   round-trip and malformed-input tests.
 - [ ] Interactive prescription editor, surface/ray visualization, spot diagram,

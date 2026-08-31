@@ -53,7 +53,7 @@ namespace {
 } // namespace
 
 SpotDiagramResult computeSpotDiagram(
-    const std::vector<ray::Ray>& incidentWorldRays,
+    const std::vector<FieldTaggedRay>& incidentWorldRays,
     const ray::SequentialLensPrescription& prescription,
     const math::RigidTransform3d& imagePlaneLocalToWorld,
     const ray::SurfaceIntersectionOptions& intersectionOptions,
@@ -67,17 +67,24 @@ SpotDiagramResult computeSpotDiagram(
     ray::validateSequentialLensPrescription(prescription);
     math::validateRigidTransform(imagePlaneLocalToWorld);
     ray::validateSurfaceIntersectionOptions(intersectionOptions);
+    for (const FieldTaggedRay& incident : incidentWorldRays) {
+        if (incident.fieldId.empty()) {
+            throw std::invalid_argument("spot diagram field ids must be non-empty");
+        }
+    }
 
     SpotDiagramResult result;
     result.samples.reserve(incidentWorldRays.size());
     for (std::size_t index = 0; index < incidentWorldRays.size(); ++index) {
         const ray::SequentialTraceResult trace = ray::traceSequentialLens(
-            incidentWorldRays[index], prescription, intersectionOptions);
+            incidentWorldRays[index].ray, prescription, intersectionOptions);
         if (trace.status != ray::SequentialTraceStatus::Completed || !trace.finalRay.has_value()) {
             result.rejectedRays.push_back({
                 .sourceRayIndex = index,
                 .reason = SpotRayRejectionReason::PrescriptionTraceFailed,
                 .traceStatus = trace.status,
+                .fieldId = incidentWorldRays[index].fieldId,
+                .vacuumWavelengthMetres = incidentWorldRays[index].ray.wavelengthMetres,
             });
             continue;
         }
@@ -86,17 +93,30 @@ SpotDiagramResult computeSpotDiagram(
         const math::Vec3d localDirection = math::transformDirectionWorldToLocal(
             imagePlaneLocalToWorld, trace.finalRay->direction);
         if (std::abs(localDirection.z) <= 64.0 * std::numeric_limits<double>::epsilon()) {
-            result.rejectedRays.push_back({index, SpotRayRejectionReason::ImagePlaneMiss, std::nullopt});
+            result.rejectedRays.push_back({
+                .sourceRayIndex = index,
+                .reason = SpotRayRejectionReason::ImagePlaneMiss,
+                .traceStatus = std::nullopt,
+                .fieldId = incidentWorldRays[index].fieldId,
+                .vacuumWavelengthMetres = incidentWorldRays[index].ray.wavelengthMetres,
+            });
             continue;
         }
         const double distance = -localOrigin.z / localDirection.z;
         if (!std::isfinite(distance) || distance <= intersectionOptions.intersectionEpsilonMetres) {
-            result.rejectedRays.push_back({index, SpotRayRejectionReason::ImagePlaneMiss, std::nullopt});
+            result.rejectedRays.push_back({
+                .sourceRayIndex = index,
+                .reason = SpotRayRejectionReason::ImagePlaneMiss,
+                .traceStatus = std::nullopt,
+                .fieldId = incidentWorldRays[index].fieldId,
+                .vacuumWavelengthMetres = incidentWorldRays[index].ray.wavelengthMetres,
+            });
             continue;
         }
         const math::Vec3d imagePoint = localOrigin + localDirection * distance;
         result.samples.push_back({
             .sourceRayIndex = index,
+            .fieldId = incidentWorldRays[index].fieldId,
             .imageXMetres = imagePoint.x,
             .imageYMetres = imagePoint.y,
             .chiefRelativeXMetres = std::nullopt,
@@ -127,6 +147,7 @@ SpotDiagramResult computeSpotDiagram(
     }
 
     for (std::size_t sampleIndex = 0; sampleIndex < result.samples.size(); ++sampleIndex) {
+        const std::string& fieldId = result.samples[sampleIndex].fieldId;
         const double wavelength = result.samples[sampleIndex].vacuumWavelengthMetres;
         auto group = std::find_if(result.wavelengthGroups.begin(), result.wavelengthGroups.end(), [&](const WavelengthSpotGroup& value) {
             return value.vacuumWavelengthMetres == wavelength;
@@ -136,11 +157,62 @@ SpotDiagramResult computeSpotDiagram(
             group = std::prev(result.wavelengthGroups.end());
         }
         group->sampleIndices.push_back(sampleIndex);
+
+        auto fieldGroup = std::find_if(result.fieldGroups.begin(), result.fieldGroups.end(), [&](const FieldSpotGroup& value) {
+            return value.fieldId == fieldId;
+        });
+        if (fieldGroup == result.fieldGroups.end()) {
+            result.fieldGroups.push_back({.fieldId = fieldId, .sampleIndices = {}, .statistics = {}});
+            fieldGroup = std::prev(result.fieldGroups.end());
+        }
+        fieldGroup->sampleIndices.push_back(sampleIndex);
+
+        auto combinedGroup = std::find_if(
+            result.fieldWavelengthGroups.begin(),
+            result.fieldWavelengthGroups.end(),
+            [&](const FieldWavelengthSpotGroup& value) {
+                return value.fieldId == fieldId && value.vacuumWavelengthMetres == wavelength;
+            });
+        if (combinedGroup == result.fieldWavelengthGroups.end()) {
+            result.fieldWavelengthGroups.push_back({
+                .fieldId = fieldId,
+                .vacuumWavelengthMetres = wavelength,
+                .sampleIndices = {},
+                .statistics = {},
+            });
+            combinedGroup = std::prev(result.fieldWavelengthGroups.end());
+        }
+        combinedGroup->sampleIndices.push_back(sampleIndex);
     }
     for (WavelengthSpotGroup& group : result.wavelengthGroups) {
         group.statistics = computeStatistics(result.samples, group.sampleIndices);
     }
+    for (FieldSpotGroup& group : result.fieldGroups) {
+        group.statistics = computeStatistics(result.samples, group.sampleIndices);
+    }
+    for (FieldWavelengthSpotGroup& group : result.fieldWavelengthGroups) {
+        group.statistics = computeStatistics(result.samples, group.sampleIndices);
+    }
     return result;
+}
+
+SpotDiagramResult computeSpotDiagram(
+    const std::vector<ray::Ray>& incidentWorldRays,
+    const ray::SequentialLensPrescription& prescription,
+    const math::RigidTransform3d& imagePlaneLocalToWorld,
+    const ray::SurfaceIntersectionOptions& intersectionOptions,
+    std::optional<std::size_t> chiefRayIndex) {
+    std::vector<FieldTaggedRay> tagged;
+    tagged.reserve(incidentWorldRays.size());
+    for (const ray::Ray& incident : incidentWorldRays) {
+        tagged.push_back({.ray = incident, .fieldId = "default"});
+    }
+    return computeSpotDiagram(
+        tagged,
+        prescription,
+        imagePlaneLocalToWorld,
+        intersectionOptions,
+        chiefRayIndex);
 }
 
 } // namespace holobench::optics::analysis
