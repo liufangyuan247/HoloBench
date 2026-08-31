@@ -141,6 +141,19 @@ if(HOLOBENCH_BUILD_APP)
 
     find_package(OpenGL REQUIRED)
 
+    add_library(holobench_compute_gl STATIC
+        compute/fft/OpenGlComputeFftBackend.cpp
+        compute/propagation/OpenGlAngularSpectrumPropagator.cpp
+    )
+    add_library(HoloBench::ComputeGl ALIAS holobench_compute_gl)
+    target_include_directories(holobench_compute_gl PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(holobench_compute_gl
+        PUBLIC HoloBench::Compute
+        PRIVATE holobench_glad OpenGL::GL
+    )
+    target_compile_features(holobench_compute_gl PUBLIC cxx_std_20)
+    holobench_set_warnings(holobench_compute_gl)
+
     add_library(holobench_imgui STATIC
         ${imgui_SOURCE_DIR}/imgui.cpp
         ${imgui_SOURCE_DIR}/imgui_demo.cpp
@@ -181,6 +194,20 @@ if(HOLOBENCH_BUILD_APP)
         OpenGL::GL
     )
     holobench_set_warnings(holobench_app)
+
+    add_executable(holobench_gpu_benchmark
+        benchmarks/OpenGlWaveBenchmark.cpp
+    )
+    target_include_directories(holobench_gpu_benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(holobench_gpu_benchmark PRIVATE
+        HoloBench::ComputeGl
+        HoloBench::Compute
+        HoloBench::Core
+        holobench_glad
+        SDL3::SDL3-static
+        OpenGL::GL
+    )
+    holobench_set_warnings(holobench_gpu_benchmark)
 endif()
 
 if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
@@ -232,4 +259,26 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
 
     include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
     doctest_discover_tests(holobench_tests)
+
+    if(HOLOBENCH_BUILD_APP)
+        add_executable(holobench_gpu_tests
+            tests/compute/OpenGlComputeFftBackendTests.cpp
+        )
+        target_link_libraries(holobench_gpu_tests PRIVATE
+            HoloBench::ComputeGl
+            HoloBench::Compute
+            HoloBench::Core
+            doctest::doctest
+            holobench_glad
+            SDL3::SDL3-static
+            OpenGL::GL
+        )
+        holobench_set_warnings(holobench_gpu_tests)
+
+        add_test(NAME holobench_gpu_tests COMMAND holobench_gpu_tests)
+        set_tests_properties(holobench_gpu_tests PROPERTIES
+            LABELS "gpu;opengl"
+            SKIP_RETURN_CODE 77
+        )
+    endif()
 endif()
