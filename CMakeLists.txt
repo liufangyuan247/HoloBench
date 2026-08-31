@@ -41,6 +41,7 @@ add_library(holobench_core STATIC
     core/field/FieldObservables.cpp
     core/field/FieldVisualization.cpp
     core/field/ScalarField2D.cpp
+    core/math/RigidTransform.cpp
     core/project/ProjectDocument.cpp
 )
 add_library(HoloBench::Core ALIAS holobench_core)
@@ -74,6 +75,7 @@ add_library(holobench_optics STATIC
     optics/ray/Interface.cpp
     optics/ray/Ray.cpp
     optics/ray/RotationalSurface.cpp
+    optics/ray/SequentialLens.cpp
     optics/ray/ThinLens.cpp
     optics/scene/GeometricComponents.cpp
     optics/scene/NumericalAperture.cpp
@@ -245,6 +247,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/core/ComplexFieldTests.cpp
         tests/core/FieldObservablesTests.cpp
         tests/core/FieldVisualizationTests.cpp
+        tests/core/RigidTransformTests.cpp
         tests/compute/AngularSpectrumPropagatorTests.cpp
         tests/compute/CpuFftBackendTests.cpp
         tests/compute/FraunhoferPropagatorTests.cpp
@@ -262,6 +265,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/NumericalApertureTests.cpp
         tests/analytic/OpticalMaterialTests.cpp
         tests/analytic/RotationalSurfaceTests.cpp
+        tests/analytic/SequentialLensTests.cpp
         tests/analytic/SnellTests.cpp
         tests/analytic/ThinLensTests.cpp
         tests/analytic/WaveDetectorPipelineTests.cpp
