@@ -8,7 +8,7 @@
 | Geometric optics (M1) | Validated | 92/92 deterministic tests across `dev` and `core-ci` presets (`ThinLensTests.cpp`, `SnellTests.cpp`, `GeometricElementsTests.cpp`, `NumericalApertureTests.cpp`, `BenchTracerTests.cpp`) | Interactive ray tracing |
 | Wave optics (M2 CPU/GPU & detector) | Validated | 203 deterministic CPU/application cases; OpenGL executable 7/7 cases and 720/720 assertions; analytic oracles and three external full-field `waveprop 0.0.12` cross-validation cases | CPU reference, interactive GPU propagation, detector UI |
 | Fourier optics and Sampling Debugger (M3) | Validated | 229/229 deterministic cases; 4-f direct-DFT/inversion/filter/Airy oracles; 8/8 GPU cases and 1121/1121 assertions; seven-texture OpenGL smoke; named CPU debugger and GPU 4-f budgets pass; four-job release CI passes | Interactive 4-f filtering and sampling diagnostics |
-| Real-lens engineering (M4) | Foundation validation | Real surfaces, SI dispersion, rigid poses, sequential assemblies, wavelength/field/combined spot statistics, longitudinal chromatic focus, and versioned JSON/CSV prescription exchange; independent roots/normals/catalog lines plus analytic focal fits and deterministic malformed-input/round-trip coverage; 262/262 tests on Clang/MSVC | Sequential engineering, headless analysis, and persistence foundation; editor/UI pending |
+| Real-lens engineering (M4) | Integrated local validation | Real surfaces, SI dispersion, rigid poses, sequential assemblies, wavelength/field/combined spot statistics, longitudinal chromatic focus, versioned JSON/CSV exchange, and interactive editor/plots; independent roots/normals/catalog lines plus analytic focal fits, pipeline, malformed-input, and smoke coverage; 265/265 tests on Clang/MSVC | Interactive engineering workflow locally enabled; external five-lens and release gates pending |
 | Holography (M6) | Not implemented | None | Prohibited |
 
 ## M1 Validation Breakdown
@@ -81,11 +81,13 @@
 ## Build and CI Execution Status
 
 - **M4 Local Foundation Gate**:
-  - Windows Clang 21.1.8: warnings-as-errors core/application builds pass; all 262 deterministic headless cases pass.
-  - Windows MSVC 19.44: `/W4 /WX` headless build passes; all 262 deterministic cases pass.
+  - Windows Clang 21.1.8: warnings-as-errors core/application builds pass; all 265 deterministic headless cases pass.
+  - Windows MSVC 19.44: `/W4 /WX` headless build passes all 265 deterministic cases; a separate strict configuration builds the complete SDL/OpenGL/ImGui application.
   - M4 spot and chromatic cases retain rejected-ray evidence, verify spectral power conservation, recover an exact synthetic axial focus, distinguish bounded/collimated/insufficient fits, and demonstrate the expected blue-before-red N-BK7 longitudinal focus ordering.
   - Prescription JSON/CSV cases preserve all supported dispersion/surface/pose data, quoted CSV text, and byte-stable reserialization; version drift, unknown schema fields, malformed quoting, term-count/index errors, non-finite values, and invalid geometry fail explicitly.
   - Field-tagged spot cases verify independent field, wavelength, and field/wavelength grouping while retaining field and wavelength identity for rejected rays; the legacy untagged API maps explicitly to the `default` field.
+  - Real Lens Workbench pipeline cases verify the default 729-ray three-field F/d/C workload, total input power, group counts, off-axis centroids, blue-before-red focus, drawable polylines, repeated-refresh determinism, and bounded sampling/configuration rejection.
+  - Hidden OpenGL smoke passes with exit 0 for both Clang and MSVC application builds on AMD Radeon Pro 5300M; the smoke gate now requires non-empty real-lens spot and ray visualization data in addition to the existing detector/debugger textures.
 - **M3 Local Cross-platform Gate**:
   - Windows Clang 21.1.8: warnings-as-errors core/application and benchmark targets compile; 229/229 deterministic headless cases pass.
   - Windows MSVC 19.44: `/W4 /WX` builds all application, benchmark, CPU-test, and GPU-test targets; 230/230 registered tests pass, including the 8/8-case OpenGL executable.

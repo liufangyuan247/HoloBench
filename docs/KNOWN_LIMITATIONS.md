@@ -1,6 +1,6 @@
 # Known limitations
 
-## Optical models (M1/M2)
+## Optical models (M1–M4)
 
 - **Geometric optics (M1)**: M1 supports paraxial thin-lens imaging, deterministic ray-plane intersections, specular reflection, Snell's law refraction, Total Internal Reflection (TIR), and Numerical Aperture (NA) cone analysis.
 - **Wave optics far-field Fraunhofer regime (M2)**: The Fraunhofer propagator is an approximate paraxial far-field solver, not an exact Helmholtz solver (`isExact = false`). Far-field, paraxial, and sampling approximations are distinct and governed by three independent validity criteria:
@@ -14,6 +14,7 @@
 - **Paraxial approximation**: Thin-lens direction deflection and image conjugate equations assume small incident angles and paraxial proximity. Off-axis validity and rear-aperture clipping warnings are emitted when breached.
 - **Unmodeled physical effects**: Wave solvers and the legacy M1 scene remain monochromatic; M4 material dispersion exists as an explicit prescription model but is not silently applied to either path. Fresnel transmission/reflection coefficients, polarization/Stokes tracking, absorption, and full-volume 3D non-homogeneous wave equations remain unmodeled.
 - **Interface media specification**: For planar dielectric interfaces, `nIncident` and `nTransmitted` are supplied by the caller according to the propagation side and are not automatically swapped for reverse-incident rays.
+- **Real-lens scope (M4)**: The sequential prescription tracer models rotational plane/sphere/conic/even-asphere surfaces, rigid pose, wavelength-dependent phase index, clipping, refraction, and TIR. It does not yet model Fresnel reflected/transmitted power, coatings, polarization, absorption, gradient-index media, freeform surfaces, ghost paths, or recursive non-sequential ray splitting. Workbench XZ curves are an engineering cross-section of rotational surfaces; the physical solver remains fully 3D.
 
 ## Wave optics & observables (M2)
 
@@ -38,6 +39,6 @@
 ## Architecture & data
 
 - The current GPU propagation backend covers fused ASM-style spectral transfer; arbitrary non-power-of-two FFTs, automatic padding, and CUDA-specific acceleration are not implemented.
-- JSON project document format v1 is intentionally minimal, with strict version rejection and no migration framework yet.
+- JSON project document format v1 is intentionally minimal, with strict version rejection and no migration framework yet. Real-lens prescriptions use separate versioned JSON/CSV exchange formats and are not yet embedded in the legacy M1 scene document.
 - There is no undo/redo, autosave, crash recovery, localization, accessibility layer, or Steam integration.
 - Hardware control and digital-twin calibration are long-term roadmap modules.

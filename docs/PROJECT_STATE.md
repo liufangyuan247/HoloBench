@@ -88,7 +88,9 @@ Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 - **Spot analysis**: Image-plane samples retain source-ray identity, field identity, wavelength, and power; reports include centroid, RMS radius, geometric radius, optional chief-ray-relative coordinates, wavelength groups, field groups, field/wavelength groups, and explicit per-ray trace/image-plane rejection evidence.
 - **Chromatic analysis**: Fraunhofer F/d/C spectral expansion conserves source power, while the analytic axial variance fit reports best focus, bounded focus, collimation, or insufficient evidence. Sequential wavelength groups produce longitudinal focal shift without paraxial thin-lens substitution.
 - **Prescription persistence**: [Versioned JSON and normalized CSV](LENS_PRESCRIPTION_FORMAT.md) preserve complete material, surface, asphere, and rigid-pose state. CSV supports quoted editable text plus explicit Sellmeier/asphere child rows. Both formats validate the complete prescription after import and provide deterministic, lossless reserialization and file APIs.
-- **Local toolchain gate**: Windows Clang 21 warnings-as-errors core and application builds pass with 262/262 headless tests. MSVC 19.44 `/W4 /WX` also builds the complete headless target and passes 262/262.
+- **Interactive Real Lens Workbench**: A dedicated dockable editor imports/exports JSON or CSV; edits fields, pupil sampling, material coefficients, surface curvature/conic/aspheres/aperture, material transitions, decenter, and rigid tilt; and uses explicit dirty/refresh semantics. The analysis view renders wavelength-coloured XZ sequential rays, real surface profiles, image plane, physical XY spots, per-field statistics, rejected counts, and longitudinal chromatic focus with limitations kept visible.
+- **Workbench orchestration**: A headless pipeline deterministically generates 729 rays for the default three-field Fraunhofer F/d/C example, preserves total power, runs sequential trace/spot/chromatic analysis, and emits render-neutral polylines. Sampling and total-ray safety limits fail explicitly rather than allocating unbounded work.
+- **Local toolchain gate**: Windows Clang 21 warnings-as-errors core and application builds pass with 265/265 headless tests. MSVC 19.44 `/W4 /WX` passes 265/265 and separately builds the complete SDL/OpenGL/ImGui application. Hidden OpenGL smoke passes for both Clang and MSVC builds on the available AMD device and now requires drawable Real Lens Workbench output.
 
 ## Known limitations (M1/M2)
 
@@ -100,8 +102,8 @@ Previous: **M2 — Scalar Wave Optics & Propagation Solvers: complete**
 
 ## Next five tasks
 
-1. Build the interactive prescription editor and surface/ray/spot visualization.
-2. Add explicit editor validation/limitation displays and import/export workflow.
-3. Build the pinned Optiland/prysm generator and commit hashed golden prescriptions.
-4. Validate at least five benchmark lenses against independent focal/spot/chromatic results.
-5. Run named performance, smoke, cross-platform CI, and the `m4-real-lens` release gate.
+1. Build the pinned Optiland/prysm generator and commit hashed golden prescriptions.
+2. Validate at least five benchmark lenses against independent surface-hit/focal/spot/chromatic results.
+3. Add a named Real Lens Workbench refresh performance budget and benchmark executable.
+4. Run Ubuntu warnings-as-errors and application compilation gates.
+5. Run final smoke/release CI and publish the `m4-real-lens` tag.

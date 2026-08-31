@@ -10,6 +10,7 @@
 #include <glm/glm.hpp>
 
 #include "app/WaveDetectorUiState.hpp"
+#include "app/RealLensWorkbenchPipeline.hpp"
 #include "app/SamplingDebuggerPipeline.hpp"
 #include "optics/ray/BenchTracer.hpp"
 #include "optics/scene/NumericalAperture.hpp"
@@ -179,6 +180,7 @@ struct DockLayoutConfig {
     static constexpr const char* kValidationWindowName = "Validation";
     static constexpr const char* kWaveDetectorWindowName = "Wave Detector / Screen";
     static constexpr const char* kSamplingDebuggerWindowName = "Sampling Debugger";
+    static constexpr const char* kRealLensWindowName = "Real Lens Workbench";
     static constexpr const char* kDockSpaceIdStr = "HoloBenchDockSpace";
 };
 
@@ -267,8 +269,12 @@ private:
     void drawWorkspace();
     void drawWaveDetectorPanel();
     void drawSamplingDebuggerPanel();
+    void drawRealLensPanel();
     void updateWaveDetector();
     void refreshSamplingDebugger();
+    void refreshRealLensWorkbench();
+    void loadRealLensPrescription(bool csv);
+    void saveRealLensPrescription(bool csv);
     bool applyScene(
         const optics::scene::OpticalBenchScene& candidateScene,
         const optics::ray::BenchTracerOptions& candidateOptions);
@@ -305,8 +311,10 @@ private:
     std::unique_ptr<render::gl::Texture2D> fourFImageTexture_;
     std::unique_ptr<wave::WaveDetectorResult> detectorResult_;
     std::unique_ptr<samplingdebug::SamplingDebuggerResult> samplingDebuggerResult_;
+    std::unique_ptr<reallens::RealLensWorkbenchResult> realLensResult_;
     waveui::WaveDetectorUiState detectorUiState_;
     samplingdebug::SamplingDebuggerConfig samplingDebuggerConfig_;
+    reallens::RealLensWorkbenchConfig realLensConfig_;
     waveui::DetectorPixel detectorProbe_;
     bool hasDetectorProbe_ = false;
     bool detectorProbeLocked_ = false;
@@ -314,6 +322,10 @@ private:
     std::string detectorStatusMessage_;
     std::string samplingDebuggerErrorMessage_;
     std::string samplingDebuggerStatusMessage_;
+    std::string realLensErrorMessage_;
+    std::string realLensStatusMessage_;
+    bool realLensDirty_ = true;
+    std::size_t selectedRealLensSurface_ = 0;
 
     optics::scene::OpticalBenchScene scene_;
     optics::scene::ThinLensImagePrediction prediction_;
@@ -325,6 +337,7 @@ private:
     std::string errorMessage_;
     std::string statusMessage_;
     char projectPathBuffer_[512] = "holobench_scene.json";
+    char realLensPathBuffer_[512] = "holobench_lens.json";
 
     bool isBenchmark_ = false;
     int vsyncInterval_ = 1;

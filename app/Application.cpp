@@ -25,6 +25,7 @@
 
 #include "compute/fft/CpuFftBackend.hpp"
 #include "core/field/FieldVisualization.hpp"
+#include "optics/io/LensPrescriptionIO.hpp"
 #include "optics/ray/BenchTracer.hpp"
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
@@ -157,6 +158,185 @@ void drawViewportHud(
     drawList->AddText(hudPos, isGizmoDragging ? IM_COL32(125, 211, 252, 255) : IM_COL32(226, 232, 240, 240), statusBuf);
 }
 
+[[nodiscard]] ImU32 wavelengthColor(double wavelengthMetres, int alpha = 210) {
+    if (wavelengthMetres < 540e-9) {
+        return IM_COL32(96, 165, 250, alpha);
+    }
+    if (wavelengthMetres < 620e-9) {
+        return IM_COL32(74, 222, 128, alpha);
+    }
+    return IM_COL32(248, 113, 113, alpha);
+}
+
+[[nodiscard]] math::Vec3d rotateAroundAxis(
+    math::Vec3d value,
+    math::Vec3d unitAxis,
+    double angleRadians) {
+    return value * std::cos(angleRadians)
+        + math::cross(unitAxis, value) * std::sin(angleRadians)
+        + unitAxis * math::dot(unitAxis, value) * (1.0 - std::cos(angleRadians));
+}
+
+void tiltSurfaceFrame(
+    optics::ray::PrescriptionSurface& surface,
+    std::size_t localAxisIndex,
+    double angleRadians) {
+    auto& frame = surface.localToWorld;
+    const std::array<math::Vec3d, 3> original {
+        frame.localXAxisInWorld,
+        frame.localYAxisInWorld,
+        frame.localZAxisInWorld,
+    };
+    const math::Vec3d axis = original.at(localAxisIndex);
+    frame.localXAxisInWorld = math::normalized(rotateAroundAxis(original[0], axis, angleRadians));
+    frame.localYAxisInWorld = math::normalized(rotateAroundAxis(original[1], axis, angleRadians));
+    frame.localZAxisInWorld = math::normalized(rotateAroundAxis(original[2], axis, angleRadians));
+}
+
+void drawRealLensSystemPlot(
+    const reallens::RealLensWorkbenchConfig& config,
+    const reallens::RealLensWorkbenchResult& result,
+    const ImVec2& requestedSize) {
+    const ImVec2 size(std::max(requestedSize.x, 160.0F), std::max(requestedSize.y, 180.0F));
+    ImGui::InvisibleButton("##real_lens_system_plot", size);
+    const ImVec2 minimum = ImGui::GetItemRectMin();
+    const ImVec2 maximum = ImGui::GetItemRectMax();
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    drawList->AddRectFilled(minimum, maximum, IM_COL32(10, 15, 26, 255), 4.0F);
+    drawList->AddRect(minimum, maximum, IM_COL32(71, 85, 105, 255), 4.0F);
+
+    std::vector<std::vector<math::Vec3d>> surfaceProfiles;
+    surfaceProfiles.reserve(config.prescription.surfaces.size());
+    double minimumZ = std::numeric_limits<double>::infinity();
+    double maximumZ = -std::numeric_limits<double>::infinity();
+    double minimumX = std::numeric_limits<double>::infinity();
+    double maximumX = -std::numeric_limits<double>::infinity();
+    const auto includePoint = [&](math::Vec3d point) {
+        minimumZ = std::min(minimumZ, point.z);
+        maximumZ = std::max(maximumZ, point.z);
+        minimumX = std::min(minimumX, point.x);
+        maximumX = std::max(maximumX, point.x);
+    };
+    for (const reallens::TracePolyline& polyline : result.tracePolylines) {
+        for (const math::Vec3d point : polyline.worldPointsMetres) {
+            includePoint(point);
+        }
+    }
+    try {
+        for (const optics::ray::PrescriptionSurface& surface : config.prescription.surfaces) {
+            auto& profile = surfaceProfiles.emplace_back();
+            constexpr std::size_t kSamples = 65;
+            profile.reserve(kSamples);
+            for (std::size_t index = 0; index < kSamples; ++index) {
+                const double localX = -surface.geometry.clearSemiDiameterMetres
+                    + 2.0 * surface.geometry.clearSemiDiameterMetres
+                        * static_cast<double>(index) / static_cast<double>(kSamples - 1);
+                const auto sag = optics::ray::evaluateSurfaceSag(
+                    surface.geometry, std::abs(localX));
+                const math::Vec3d world = math::transformPointLocalToWorld(
+                    surface.localToWorld, {localX, 0.0, sag.sagMetres});
+                profile.push_back(world);
+                includePoint(world);
+            }
+        }
+    } catch (const std::exception&) {
+        surfaceProfiles.clear();
+    }
+    includePoint(config.imagePlaneLocalToWorld.translationMetres);
+    if (!std::isfinite(minimumZ) || !std::isfinite(minimumX)) {
+        return;
+    }
+    const double zPadding = std::max((maximumZ - minimumZ) * 0.04, 1e-4);
+    const double xExtent = std::max({std::abs(minimumX), std::abs(maximumX), 1e-4}) * 1.15;
+    minimumZ -= zPadding;
+    maximumZ += zPadding;
+    minimumX = -xExtent;
+    maximumX = xExtent;
+    const auto project = [&](math::Vec3d point) {
+        const float u = static_cast<float>((point.z - minimumZ) / (maximumZ - minimumZ));
+        const float v = static_cast<float>((point.x - minimumX) / (maximumX - minimumX));
+        return ImVec2(
+            minimum.x + 8.0F + u * (size.x - 16.0F),
+            maximum.y - 8.0F - v * (size.y - 16.0F));
+    };
+    const ImVec2 axisStart = project({0.0, 0.0, minimumZ});
+    const ImVec2 axisEnd = project({0.0, 0.0, maximumZ});
+    drawList->AddLine(axisStart, axisEnd, IM_COL32(100, 116, 139, 150), 1.0F);
+
+    for (const reallens::TracePolyline& polyline : result.tracePolylines) {
+        for (std::size_t index = 1; index < polyline.worldPointsMetres.size(); ++index) {
+            drawList->AddLine(
+                project(polyline.worldPointsMetres[index - 1]),
+                project(polyline.worldPointsMetres[index]),
+                wavelengthColor(polyline.vacuumWavelengthMetres, 45),
+                1.0F);
+        }
+    }
+    for (const auto& profile : surfaceProfiles) {
+        for (std::size_t index = 1; index < profile.size(); ++index) {
+            drawList->AddLine(
+                project(profile[index - 1]),
+                project(profile[index]),
+                IM_COL32(226, 232, 240, 255),
+                2.0F);
+        }
+    }
+    const double imageZ = config.imagePlaneLocalToWorld.translationMetres.z;
+    drawList->AddLine(
+        project({-xExtent, 0.0, imageZ}),
+        project({xExtent, 0.0, imageZ}),
+        IM_COL32(251, 191, 36, 220),
+        1.5F);
+    drawList->AddText(
+        ImVec2(minimum.x + 8.0F, minimum.y + 6.0F),
+        IM_COL32(203, 213, 225, 255),
+        "XZ sequential trace (SI geometry)");
+}
+
+void drawRealLensSpotPlot(
+    const optics::analysis::SpotDiagramResult& spot,
+    const ImVec2& requestedSize) {
+    const ImVec2 size(std::max(requestedSize.x, 160.0F), std::max(requestedSize.y, 180.0F));
+    ImGui::InvisibleButton("##real_lens_spot_plot", size);
+    const ImVec2 minimum = ImGui::GetItemRectMin();
+    const ImVec2 maximum = ImGui::GetItemRectMax();
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    drawList->AddRectFilled(minimum, maximum, IM_COL32(10, 15, 26, 255), 4.0F);
+    drawList->AddRect(minimum, maximum, IM_COL32(71, 85, 105, 255), 4.0F);
+    const double centerX = spot.statistics.centroidXMetres;
+    const double centerY = spot.statistics.centroidYMetres;
+    double extent = 1e-6;
+    for (const optics::analysis::SpotSample& sample : spot.samples) {
+        extent = std::max({
+            extent,
+            std::abs(sample.imageXMetres - centerX),
+            std::abs(sample.imageYMetres - centerY),
+        });
+    }
+    extent *= 1.10;
+    const ImVec2 center((minimum.x + maximum.x) * 0.5F, (minimum.y + maximum.y) * 0.5F);
+    const float scale = 0.45F * std::min(size.x, size.y) / static_cast<float>(extent);
+    drawList->AddLine(
+        ImVec2(minimum.x + 6.0F, center.y), ImVec2(maximum.x - 6.0F, center.y),
+        IM_COL32(100, 116, 139, 130));
+    drawList->AddLine(
+        ImVec2(center.x, minimum.y + 6.0F), ImVec2(center.x, maximum.y - 6.0F),
+        IM_COL32(100, 116, 139, 130));
+    for (const optics::analysis::SpotSample& sample : spot.samples) {
+        const float x = center.x + static_cast<float>(sample.imageXMetres - centerX) * scale;
+        const float y = center.y - static_cast<float>(sample.imageYMetres - centerY) * scale;
+        drawList->AddCircleFilled(
+            ImVec2(x, y), 1.8F, wavelengthColor(sample.vacuumWavelengthMetres), 8);
+    }
+    char label[128];
+    std::snprintf(
+        label, sizeof(label), "Spot: RMS %.2f um | scale +/- %.2f um",
+        spot.statistics.rmsRadiusMetres * 1e6, extent * 1e6);
+    drawList->AddText(
+        ImVec2(minimum.x + 8.0F, minimum.y + 6.0F),
+        IM_COL32(203, 213, 225, 255), label);
+}
+
 } // namespace
 
 Application::Application()
@@ -168,6 +348,7 @@ Application::Application()
     , fourFBeforeFilterTexture_(std::make_unique<render::gl::Texture2D>())
     , fourFAfterFilterTexture_(std::make_unique<render::gl::Texture2D>())
     , fourFImageTexture_(std::make_unique<render::gl::Texture2D>())
+    , realLensConfig_(reallens::makeDefaultRealLensWorkbenchConfig())
     , scene_(optics::scene::createDefaultRealImageScene())
     , naResult_(optics::scene::computeObjectSideNumericalAperture(scene_)) {
     tracerOptions_.rayCount = 64;
@@ -299,7 +480,7 @@ bool Application::initialize(const RunOptions& options) {
     isBenchmark_ = options.benchmarkFrames > 0;
     const int requestedWidth = isBenchmark_ ? 1920 : 1440;
     const int requestedHeight = isBenchmark_ ? 1080 : 900;
-    window_ = SDL_CreateWindow("HoloBench — M1 3D Optical Bench", requestedWidth, requestedHeight, windowFlags);
+    window_ = SDL_CreateWindow("HoloBench — Optical Engineering Workbench", requestedWidth, requestedHeight, windowFlags);
     if (window_ == nullptr) {
         SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
         shutdown();
@@ -371,6 +552,7 @@ bool Application::initialize(const RunOptions& options) {
         shutdown();
         return false;
     }
+    refreshRealLensWorkbench();
 
     initialized_ = true;
     return true;
@@ -403,6 +585,7 @@ void Application::shutdown() noexcept {
     }
     detectorResult_.reset();
     samplingDebuggerResult_.reset();
+    realLensResult_.reset();
     if (imguiGlInitialized_) {
         ImGui_ImplOpenGL3_Shutdown();
         imguiGlInitialized_ = false;
@@ -567,6 +750,66 @@ void Application::refreshSamplingDebugger() {
         if (fourFImageTexture_) {
             fourFImageTexture_->destroy();
         }
+    }
+}
+
+void Application::refreshRealLensWorkbench() {
+    try {
+        auto result = reallens::runRealLensWorkbench(realLensConfig_);
+        const std::size_t accepted = result.spotDiagram.samples.size();
+        const std::size_t rejected = result.spotDiagram.rejectedRays.size();
+        realLensResult_ = std::make_unique<reallens::RealLensWorkbenchResult>(
+            std::move(result));
+        realLensErrorMessage_.clear();
+        realLensStatusMessage_ = "Real-lens analysis refreshed: "
+            + std::to_string(accepted) + " accepted, "
+            + std::to_string(rejected) + " rejected rays";
+        realLensDirty_ = false;
+    } catch (const std::exception& ex) {
+        realLensErrorMessage_ = "Real-lens analysis failed: " + std::string(ex.what());
+        realLensStatusMessage_.clear();
+    }
+}
+
+void Application::loadRealLensPrescription(bool csv) {
+    try {
+        const std::filesystem::path path(realLensPathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument("prescription path cannot be empty");
+        }
+        realLensConfig_.prescription = csv
+            ? optics::io::loadLensPrescriptionCsv(path)
+            : optics::io::loadLensPrescriptionJson(path);
+        selectedRealLensSurface_ = 0;
+        realLensDirty_ = true;
+        refreshRealLensWorkbench();
+        if (realLensErrorMessage_.empty()) {
+            realLensStatusMessage_ = "Loaded " + std::string(csv ? "CSV" : "JSON")
+                + " prescription from " + path.string();
+        }
+    } catch (const std::exception& ex) {
+        realLensErrorMessage_ = "Prescription load failed: " + std::string(ex.what());
+        realLensStatusMessage_.clear();
+    }
+}
+
+void Application::saveRealLensPrescription(bool csv) {
+    try {
+        const std::filesystem::path path(realLensPathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument("prescription path cannot be empty");
+        }
+        if (csv) {
+            optics::io::saveLensPrescriptionCsv(realLensConfig_.prescription, path);
+        } else {
+            optics::io::saveLensPrescriptionJson(realLensConfig_.prescription, path);
+        }
+        realLensErrorMessage_.clear();
+        realLensStatusMessage_ = "Saved " + std::string(csv ? "CSV" : "JSON")
+            + " prescription to " + path.string();
+    } catch (const std::exception& ex) {
+        realLensErrorMessage_ = "Prescription save failed: " + std::string(ex.what());
+        realLensStatusMessage_.clear();
     }
 }
 
@@ -1031,6 +1274,454 @@ void Application::drawSamplingDebuggerPanel() {
     ImGui::End();
 }
 
+void Application::drawRealLensPanel() {
+    ImGui::Begin(docking::DockLayoutConfig::kRealLensWindowName);
+
+    if (realLensDirty_) {
+        ImGui::TextColored(
+            ImVec4(0.98F, 0.73F, 0.20F, 1.0F),
+            "Edited values are not applied; analysis shows the last successful refresh.");
+    } else {
+        ImGui::TextDisabled("Applied prescription: %s", realLensConfig_.prescription.id.c_str());
+    }
+    if (ImGui::Button("Refresh Real-Lens Analysis")) {
+        refreshRealLensWorkbench();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset N-BK7 Biconvex Example")) {
+        realLensConfig_ = reallens::makeDefaultRealLensWorkbenchConfig();
+        selectedRealLensSurface_ = 0;
+        realLensDirty_ = true;
+        refreshRealLensWorkbench();
+    }
+
+    ImGui::SeparatorText("Prescription import/export");
+    ImGui::SetNextItemWidth(std::max(220.0F, ImGui::GetContentRegionAvail().x * 0.45F));
+    ImGui::InputText("Path##real_lens_path", realLensPathBuffer_, sizeof(realLensPathBuffer_));
+    if (ImGui::Button("Load JSON")) {
+        loadRealLensPrescription(false);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Save JSON")) {
+        saveRealLensPrescription(false);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Load CSV")) {
+        loadRealLensPrescription(true);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Save CSV")) {
+        saveRealLensPrescription(true);
+    }
+
+    if (ImGui::BeginTabBar("real_lens_tabs")) {
+        if (ImGui::BeginTabItem("Prescription Editor")) {
+            if (ImGui::CollapsingHeader("Analysis setup", ImGuiTreeNodeFlags_DefaultOpen)) {
+                double pupilMm = realLensConfig_.entrancePupilSemiDiameterMetres * 1e3;
+                if (ImGui::InputDouble("Entrance pupil semi-diameter (mm)", &pupilMm, 0.1, 1.0, "%.6f")) {
+                    realLensConfig_.entrancePupilSemiDiameterMetres = pupilMm * 1e-3;
+                    realLensDirty_ = true;
+                }
+                double launchMm = realLensConfig_.objectSpaceDistanceMetres * 1e3;
+                if (ImGui::InputDouble("Launch distance before first surface (mm)", &launchMm, 0.5, 5.0, "%.6f")) {
+                    realLensConfig_.objectSpaceDistanceMetres = launchMm * 1e-3;
+                    realLensDirty_ = true;
+                }
+                int rings = static_cast<int>(realLensConfig_.pupilRingCount);
+                if (ImGui::InputInt("Pupil ring count", &rings) && rings >= 0) {
+                    realLensConfig_.pupilRingCount = static_cast<std::size_t>(rings);
+                    realLensDirty_ = true;
+                }
+                int firstRingSamples = static_cast<int>(realLensConfig_.pupilSamplesPerFirstRing);
+                if (ImGui::InputInt("Samples on first ring", &firstRingSamples)
+                    && firstRingSamples >= 0) {
+                    realLensConfig_.pupilSamplesPerFirstRing = static_cast<std::size_t>(firstRingSamples);
+                    realLensDirty_ = true;
+                }
+                double imagePlaneZMm = realLensConfig_.imagePlaneLocalToWorld.translationMetres.z * 1e3;
+                if (ImGui::InputDouble("Image plane world Z (mm)", &imagePlaneZMm, 0.1, 1.0, "%.6f")) {
+                    realLensConfig_.imagePlaneLocalToWorld.translationMetres.z = imagePlaneZMm * 1e-3;
+                    realLensDirty_ = true;
+                }
+            }
+
+            if (ImGui::CollapsingHeader("Fields", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::BeginTable(
+                        "real_lens_fields", 4,
+                        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Field ID");
+                    ImGui::TableSetupColumn("Angle X (deg)");
+                    ImGui::TableSetupColumn("Angle Y (deg)");
+                    ImGui::TableSetupColumn("Power fraction");
+                    ImGui::TableHeadersRow();
+                    for (std::size_t index = 0; index < realLensConfig_.fields.size(); ++index) {
+                        auto& field = realLensConfig_.fields[index];
+                        ImGui::PushID(static_cast<int>(index));
+                        ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::TextUnformatted(field.id.c_str());
+                        ImGui::TableSetColumnIndex(1);
+                        double angleX = field.angleXRadians * 180.0 / std::numbers::pi;
+                        ImGui::SetNextItemWidth(-1.0F);
+                        if (ImGui::InputDouble("##field_x", &angleX, 0.1, 1.0, "%.6f")) {
+                            field.angleXRadians = angleX * std::numbers::pi / 180.0;
+                            realLensDirty_ = true;
+                        }
+                        ImGui::TableSetColumnIndex(2);
+                        double angleY = field.angleYRadians * 180.0 / std::numbers::pi;
+                        ImGui::SetNextItemWidth(-1.0F);
+                        if (ImGui::InputDouble("##field_y", &angleY, 0.1, 1.0, "%.6f")) {
+                            field.angleYRadians = angleY * std::numbers::pi / 180.0;
+                            realLensDirty_ = true;
+                        }
+                        ImGui::TableSetColumnIndex(3);
+                        ImGui::SetNextItemWidth(-1.0F);
+                        if (ImGui::InputDouble("##field_power", &field.powerFraction, 0.01, 0.1, "%.9f")) {
+                            realLensDirty_ = true;
+                        }
+                        ImGui::PopID();
+                    }
+                    ImGui::EndTable();
+                }
+                if (ImGui::Button("Add zero-power field")) {
+                    realLensConfig_.fields.push_back({
+                        .id = "field_" + std::to_string(realLensConfig_.fields.size()),
+                        .angleXRadians = 0.0,
+                        .angleYRadians = 0.0,
+                        .powerFraction = 0.0,
+                    });
+                    realLensDirty_ = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Remove last field") && realLensConfig_.fields.size() > 1) {
+                    const std::string removedId = realLensConfig_.fields.back().id;
+                    realLensConfig_.fields.pop_back();
+                    if (realLensConfig_.chromaticReferenceFieldId == removedId) {
+                        realLensConfig_.chromaticReferenceFieldId = realLensConfig_.fields.front().id;
+                    }
+                    realLensDirty_ = true;
+                }
+                if (ImGui::BeginCombo(
+                        "Chromatic reference field",
+                        realLensConfig_.chromaticReferenceFieldId.c_str())) {
+                    for (const auto& field : realLensConfig_.fields) {
+                        const bool selected = field.id == realLensConfig_.chromaticReferenceFieldId;
+                        if (ImGui::Selectable(field.id.c_str(), selected)) {
+                            realLensConfig_.chromaticReferenceFieldId = field.id;
+                            realLensDirty_ = true;
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+                ImGui::TextDisabled("Field power fractions must sum to 1; angles are limited to |80 deg|.");
+            }
+
+            if (ImGui::CollapsingHeader("Sequential surfaces", ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (selectedRealLensSurface_ >= realLensConfig_.prescription.surfaces.size()) {
+                    selectedRealLensSurface_ = 0;
+                }
+                if (ImGui::BeginListBox("##surface_list", ImVec2(220.0F, 110.0F))) {
+                    for (std::size_t index = 0;
+                         index < realLensConfig_.prescription.surfaces.size(); ++index) {
+                        const bool selected = index == selectedRealLensSurface_;
+                        if (ImGui::Selectable(
+                                realLensConfig_.prescription.surfaces[index].id.c_str(), selected)) {
+                            selectedRealLensSurface_ = index;
+                        }
+                    }
+                    ImGui::EndListBox();
+                }
+                if (!realLensConfig_.prescription.surfaces.empty()) {
+                    auto& surface = realLensConfig_.prescription.surfaces[selectedRealLensSurface_];
+                    ImGui::Text("Editing: %s", surface.id.c_str());
+                    if (ImGui::InputDouble(
+                            "Curvature (1/m)", &surface.geometry.curvaturePerMetre,
+                            0.1, 1.0, "%.12g")) {
+                        realLensDirty_ = true;
+                    }
+                    if (ImGui::InputDouble(
+                            "Conic constant", &surface.geometry.conicConstant,
+                            0.01, 0.1, "%.12g")) {
+                        realLensDirty_ = true;
+                    }
+                    double apertureMm = surface.geometry.clearSemiDiameterMetres * 1e3;
+                    if (ImGui::InputDouble(
+                            "Clear semi-diameter (mm)", &apertureMm,
+                            0.1, 1.0, "%.9g")) {
+                        surface.geometry.clearSemiDiameterMetres = apertureMm * 1e-3;
+                        realLensDirty_ = true;
+                    }
+                    if (ImGui::TreeNode("Even asphere coefficients (SI)")) {
+                        for (std::size_t termIndex = 0;
+                             termIndex < surface.geometry.evenAsphereTerms.size(); ++termIndex) {
+                            auto& term = surface.geometry.evenAsphereTerms[termIndex];
+                            ImGui::PushID(static_cast<int>(termIndex));
+                            int radialOrder = static_cast<int>(term.radialOrder);
+                            if (ImGui::InputInt("Radial order", &radialOrder)
+                                && radialOrder >= 0) {
+                                term.radialOrder = static_cast<unsigned>(radialOrder);
+                                realLensDirty_ = true;
+                            }
+                            if (ImGui::InputDouble(
+                                    "Coefficient", &term.coefficientSi,
+                                    0.0, 0.0, "%.12e")) {
+                                realLensDirty_ = true;
+                            }
+                            ImGui::Separator();
+                            ImGui::PopID();
+                        }
+                        if (ImGui::Button("Append even-asphere term")) {
+                            const unsigned nextOrder = surface.geometry.evenAsphereTerms.empty()
+                                ? 4U
+                                : surface.geometry.evenAsphereTerms.back().radialOrder + 2U;
+                            surface.geometry.evenAsphereTerms.push_back({
+                                .radialOrder = nextOrder,
+                                .coefficientSi = 0.0,
+                            });
+                            realLensDirty_ = true;
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Remove last asphere term")
+                            && !surface.geometry.evenAsphereTerms.empty()) {
+                            surface.geometry.evenAsphereTerms.pop_back();
+                            realLensDirty_ = true;
+                        }
+                        ImGui::TextDisabled("Orders must be strictly increasing even integers >= 4.");
+                        ImGui::TreePop();
+                    }
+                    std::array<double*, 3> translations {
+                        &surface.localToWorld.translationMetres.x,
+                        &surface.localToWorld.translationMetres.y,
+                        &surface.localToWorld.translationMetres.z,
+                    };
+                    constexpr std::array<const char*, 3> translationLabels {
+                        "Decenter X (mm)", "Decenter Y (mm)", "Vertex Z (mm)"};
+                    for (std::size_t axis = 0; axis < translations.size(); ++axis) {
+                        double millimetres = *translations[axis] * 1e3;
+                        if (ImGui::InputDouble(
+                                translationLabels[axis], &millimetres,
+                                0.01, 0.1, "%.9g")) {
+                            *translations[axis] = millimetres * 1e-3;
+                            realLensDirty_ = true;
+                        }
+                    }
+
+                    const auto materialCombo = [&](const char* label, std::string& selectedId) {
+                        if (ImGui::BeginCombo(label, selectedId.c_str())) {
+                            for (const auto& material : realLensConfig_.prescription.materials) {
+                                const bool selected = selectedId == material.id;
+                                if (ImGui::Selectable(material.id.c_str(), selected)) {
+                                    selectedId = material.id;
+                                    realLensDirty_ = true;
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+                    };
+                    materialCombo("Material before", surface.materialBeforeId);
+                    materialCombo("Material after", surface.materialAfterId);
+
+                    constexpr double kTiltStep = 0.1 * std::numbers::pi / 180.0;
+                    if (ImGui::Button("Tilt local X +0.1 deg")) {
+                        tiltSurfaceFrame(surface, 0, kTiltStep);
+                        realLensDirty_ = true;
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Tilt local X -0.1 deg")) {
+                        tiltSurfaceFrame(surface, 0, -kTiltStep);
+                        realLensDirty_ = true;
+                    }
+                    if (ImGui::Button("Tilt local Y +0.1 deg")) {
+                        tiltSurfaceFrame(surface, 1, kTiltStep);
+                        realLensDirty_ = true;
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Tilt local Y -0.1 deg")) {
+                        tiltSurfaceFrame(surface, 1, -kTiltStep);
+                        realLensDirty_ = true;
+                    }
+                    ImGui::TextDisabled(
+                        "Tilt buttons rotate the rigid basis; scale, shear, and reflection remain prohibited.");
+                }
+                if (ImGui::Button("Append planar surface")) {
+                    const auto& previous = realLensConfig_.prescription.surfaces.back();
+                    realLensConfig_.prescription.surfaces.push_back({
+                        .id = "surface_" + std::to_string(realLensConfig_.prescription.surfaces.size()),
+                        .geometry = {
+                            .curvaturePerMetre = 0.0,
+                            .conicConstant = 0.0,
+                            .evenAsphereTerms = {},
+                            .clearSemiDiameterMetres = previous.geometry.clearSemiDiameterMetres,
+                        },
+                        .localToWorld = {
+                            .translationMetres = {
+                                previous.localToWorld.translationMetres.x,
+                                previous.localToWorld.translationMetres.y,
+                                previous.localToWorld.translationMetres.z + 0.005,
+                            },
+                        },
+                        .materialBeforeId = previous.materialAfterId,
+                        .materialAfterId = previous.materialAfterId,
+                    });
+                    selectedRealLensSurface_ = realLensConfig_.prescription.surfaces.size() - 1;
+                    realLensDirty_ = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Remove selected surface")
+                    && realLensConfig_.prescription.surfaces.size() > 1) {
+                    realLensConfig_.prescription.surfaces.erase(
+                        realLensConfig_.prescription.surfaces.begin()
+                        + static_cast<std::ptrdiff_t>(selectedRealLensSurface_));
+                    selectedRealLensSurface_ = std::min(
+                        selectedRealLensSurface_,
+                        realLensConfig_.prescription.surfaces.size() - 1);
+                    realLensDirty_ = true;
+                }
+            }
+
+            if (ImGui::CollapsingHeader("Optical materials", ImGuiTreeNodeFlags_DefaultOpen)) {
+                for (std::size_t materialIndex = 0;
+                     materialIndex < realLensConfig_.prescription.materials.size(); ++materialIndex) {
+                    auto& material = realLensConfig_.prescription.materials[materialIndex];
+                    ImGui::PushID(static_cast<int>(materialIndex));
+                    if (ImGui::TreeNode(material.displayName.c_str())) {
+                        ImGui::TextDisabled("ID: %s", material.id.c_str());
+                        double minimumNm = material.wavelengthDomain.minimumMetres * 1e9;
+                        double maximumNm = material.wavelengthDomain.maximumMetres * 1e9;
+                        if (ImGui::InputDouble("Minimum wavelength (nm)", &minimumNm, 1.0, 10.0, "%.9g")) {
+                            material.wavelengthDomain.minimumMetres = minimumNm * 1e-9;
+                            realLensDirty_ = true;
+                        }
+                        if (ImGui::InputDouble("Maximum wavelength (nm)", &maximumNm, 1.0, 10.0, "%.9g")) {
+                            material.wavelengthDomain.maximumMetres = maximumNm * 1e-9;
+                            realLensDirty_ = true;
+                        }
+                        std::visit([&](auto& model) {
+                            using Model = std::decay_t<decltype(model)>;
+                            if constexpr (std::is_same_v<Model, optics::material::ConstantIndexModel>) {
+                                ImGui::TextUnformatted("Model: constant index");
+                                if (ImGui::InputDouble(
+                                        "Refractive index", &model.refractiveIndex,
+                                        0.001, 0.01, "%.12g")) {
+                                    realLensDirty_ = true;
+                                }
+                            } else if constexpr (std::is_same_v<Model, optics::material::CauchyModelSi>) {
+                                ImGui::TextUnformatted("Model: SI Cauchy");
+                                realLensDirty_ = ImGui::InputDouble("A", &model.aDimensionless, 0.001, 0.01, "%.12g") || realLensDirty_;
+                                realLensDirty_ = ImGui::InputDouble("B (m^2)", &model.bSquareMetres, 0.0, 0.0, "%.12e") || realLensDirty_;
+                                realLensDirty_ = ImGui::InputDouble("C (m^4)", &model.cFourthMetres, 0.0, 0.0, "%.12e") || realLensDirty_;
+                            } else {
+                                ImGui::TextUnformatted("Model: SI Sellmeier");
+                                for (std::size_t termIndex = 0; termIndex < model.terms.size(); ++termIndex) {
+                                    ImGui::PushID(static_cast<int>(termIndex));
+                                    ImGui::Text("Term %zu", termIndex);
+                                    realLensDirty_ = ImGui::InputDouble("B", &model.terms[termIndex].bDimensionless, 0.0, 0.0, "%.12g") || realLensDirty_;
+                                    realLensDirty_ = ImGui::InputDouble("C (m^2)", &model.terms[termIndex].cSquareMetres, 0.0, 0.0, "%.12e") || realLensDirty_;
+                                    ImGui::PopID();
+                                }
+                            }
+                        }, material.dispersion);
+                        ImGui::TreePop();
+                    }
+                    ImGui::PopID();
+                }
+                if (ImGui::Button("Add constant-index material")) {
+                    const std::string id = "material_"
+                        + std::to_string(realLensConfig_.prescription.materials.size());
+                    realLensConfig_.prescription.materials.push_back({
+                        .id = id,
+                        .displayName = id,
+                        .wavelengthDomain = {.minimumMetres = 380e-9, .maximumMetres = 780e-9},
+                        .dispersion = optics::material::ConstantIndexModel {.refractiveIndex = 1.5},
+                    });
+                    realLensDirty_ = true;
+                }
+            }
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Ray / Spot Analysis")) {
+            if (realLensResult_) {
+                const float available = ImGui::GetContentRegionAvail().x;
+                if (ImGui::BeginTable("real_lens_plots", 2, ImGuiTableFlags_SizingStretchSame)) {
+                    ImGui::TableNextColumn();
+                    drawRealLensSystemPlot(
+                        realLensConfig_, *realLensResult_, ImVec2(available * 0.60F, 280.0F));
+                    ImGui::TableNextColumn();
+                    drawRealLensSpotPlot(
+                        realLensResult_->spotDiagram, ImVec2(available * 0.38F, 280.0F));
+                    ImGui::EndTable();
+                }
+
+                const auto& spot = realLensResult_->spotDiagram;
+                ImGui::Text(
+                    "Accepted: %zu | Rejected: %zu | RMS: %.3f um | Geometric radius: %.3f um",
+                    spot.samples.size(), spot.rejectedRays.size(),
+                    spot.statistics.rmsRadiusMetres * 1e6,
+                    spot.statistics.geometricRadiusMetres * 1e6);
+                if (ImGui::BeginTable(
+                        "real_lens_field_stats", 5,
+                        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+                    ImGui::TableSetupColumn("Field");
+                    ImGui::TableSetupColumn("Samples");
+                    ImGui::TableSetupColumn("Centroid X (mm)");
+                    ImGui::TableSetupColumn("Centroid Y (mm)");
+                    ImGui::TableSetupColumn("RMS (um)");
+                    ImGui::TableHeadersRow();
+                    for (const auto& group : spot.fieldGroups) {
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+                        ImGui::TextUnformatted(group.fieldId.c_str());
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%zu", group.sampleIndices.size());
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%.6f", group.statistics.centroidXMetres * 1e3);
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%.6f", group.statistics.centroidYMetres * 1e3);
+                        ImGui::TableNextColumn();
+                        ImGui::Text("%.3f", group.statistics.rmsRadiusMetres * 1e6);
+                    }
+                    ImGui::EndTable();
+                }
+
+                ImGui::SeparatorText("Longitudinal chromatic focus");
+                for (const auto& wavelength : realLensResult_->chromaticFocus.wavelengthResults) {
+                    ImGui::BulletText(
+                        "%.3f nm: local focus offset %.6f mm, RMS %.3f um (%zu rays)",
+                        wavelength.vacuumWavelengthMetres * 1e9,
+                        wavelength.focus.planeZMetres * 1e3,
+                        wavelength.focus.rmsRadiusMetres * 1e6,
+                        wavelength.focus.rayCount);
+                }
+                ImGui::Text(
+                    "Total longitudinal focal shift: %.3f um",
+                    realLensResult_->chromaticFocus.focalShiftMetres * 1e6);
+            } else {
+                ImGui::TextDisabled("No successful real-lens analysis is available.");
+            }
+
+            ImGui::SeparatorText("Model scope / limitations");
+            ImGui::BulletText("Sequential geometric rays; CPU double precision is the correctness path.");
+            ImGui::BulletText("Scalar phase index only: no Fresnel power splitting, coatings, polarization, or absorption.");
+            ImGui::BulletText("Spot coordinates are physical image-plane metres; colours identify vacuum wavelength.");
+            ImGui::BulletText("Field and wavelength failures remain explicit; rejected rays are never dropped silently.");
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+
+    if (!realLensErrorMessage_.empty()) {
+        ImGui::Separator();
+        ImGui::TextColored(
+            ImVec4(1.0F, 0.3F, 0.3F, 1.0F), "%s", realLensErrorMessage_.c_str());
+    } else if (!realLensStatusMessage_.empty()) {
+        ImGui::Separator();
+        ImGui::TextColored(
+            ImVec4(0.4F, 0.9F, 0.5F, 1.0F), "%s", realLensStatusMessage_.c_str());
+    }
+    ImGui::End();
+}
+
 void Application::drawWorkspace() {
     updateWaveDetector();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -1084,6 +1775,7 @@ void Application::drawWorkspace() {
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kValidationWindowName, dockBottomId);
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kWaveDetectorWindowName, dockBottomId);
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kSamplingDebuggerWindowName, dockBottomId);
+            ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kRealLensWindowName, dockBottomId);
 
             ImGui::DockBuilderFinish(dockspaceId);
         }
@@ -1707,6 +2399,7 @@ void Application::drawWorkspace() {
 
     drawWaveDetectorPanel();
     drawSamplingDebuggerPanel();
+    drawRealLensPanel();
 }
 
 int Application::run(const RunOptions& options) {
@@ -1847,6 +2540,13 @@ int Application::run(const RunOptions& options) {
             || !fourFAfterFilterTexture_ || !fourFAfterFilterTexture_->isValid()
             || !fourFImageTexture_ || !fourFImageTexture_->isValid())) {
         SDL_Log("OpenGL smoke check failed: one or more 4-f plane textures were never uploaded");
+        rawGlError = true;
+    }
+    if (glSmokeMode_
+        && (!realLensResult_ || realLensResult_->spotDiagram.samples.empty()
+            || realLensResult_->tracePolylines.empty()
+            || !realLensErrorMessage_.empty())) {
+        SDL_Log("OpenGL smoke check failed: Real Lens Workbench did not produce drawable analysis");
         rawGlError = true;
     }
 

@@ -2,7 +2,7 @@
 
 HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator, and a long-term R&D tool for CHIMERA-like holographic printing.
 
-**Milestone status**: **M0–M3** are complete through Fourier optics and the Sampling Debugger. **M4 (Real Lens Engineering Model)** is in progress. For the current repository state and roadmap, see [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
+**Milestone status**: **M0–M3** are complete through Fourier optics and the Sampling Debugger. **M4 (Real Lens Engineering Model)** has an integrated local editor/analysis workflow; independent five-lens and release gates remain. For the current repository state and roadmap, see [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
 
 ## M1 Features
 
@@ -22,6 +22,17 @@ HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator
 - **Interactive GPU Propagation**: Fused OpenGL 4.6 compute path for upload, FP32 FFT, spectral transfer, inverse FFT, and download, with no silent CPU fallback and CPU-reference parity tests.
 - **Wave Detector UI**: Apply-gated source/aperture/lens/propagation controls plus intensity, log-intensity, and wrapped-phase views with hover and click-lock complex-sample probes.
 
+## M3 Features
+
+- **Fourier Optics**: Ideal Fourier lenses, 4-f relays, coherent spatial filters, sampled Airy PSF, and explicitly incoherent MTF.
+- **Sampling Debugger**: Angular-spectrum classification, Nyquist/padding/wrap warnings, arbitrary-plane probes, and four-plane 4-f visualization.
+
+## M4 Features in Progress
+
+- **Engineering prescription tracer**: Plane, sphere, conic, and even-asphere surfaces; rigid decenter/tilt; SI Cauchy/Sellmeier materials; sequential wavelength-aware refraction, clipping, TIR, and optical path evidence.
+- **Spot and chromatic analysis**: Physical image-plane samples grouped by field and wavelength, rejected-ray evidence, RMS/geometric radii, best axial focus, and longitudinal colour shift.
+- **Real Lens Workbench**: Versioned JSON/CSV import/export, interactive surface/material/field editing, wavelength-coloured XZ ray/surface visualization, XY spot plot, per-field statistics, and explicit limitations.
+
 ## Physical Assumptions & Limitations (M1)
 
 - **Paraxial Approximation**: Thin lenses and ray propagation assume small angles relative to the optical axis ($+Z$).
@@ -40,7 +51,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (229 deterministic CPU/application cases plus one OpenGL GPU test executable):
+Standard dev build and test suite (265 deterministic CPU/application cases plus one OpenGL GPU test executable):
 
 ```powershell
 cmake --preset dev
@@ -48,7 +59,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 229/229 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 265/265 tests passing):
 
 ```powershell
 cmake --preset core-ci

@@ -24,7 +24,7 @@ against an independent optical-design implementation.
   combined field/wavelength groups and rejected-ray identity.
 - [x] Versioned prescription JSON plus deterministic CSV import/export with
   round-trip and malformed-input tests.
-- [ ] Interactive prescription editor, surface/ray visualization, spot diagram,
+- [x] Interactive prescription editor, surface/ray visualization, spot diagram,
   and validation/limitation displays.
 - [ ] Pinned Optiland/prysm validation bridge and committed, hashed golden data;
   no Python runtime dependency.
