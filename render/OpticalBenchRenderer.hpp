@@ -3,12 +3,15 @@
 #include <cstddef>
 #include <limits>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include <glad/gl.h>
 #include <glm/glm.hpp>
 
 #include "optics/ray/BenchTracer.hpp"
+#include "optics/scene/BenchInteraction.hpp"
+#include "optics/scene/BenchScene.hpp"
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
 #include "render/Camera.hpp"
@@ -39,6 +42,11 @@ public:
         const optics::scene::OpticalBenchScene& scene,
         const optics::scene::ThinLensImagePrediction& prediction,
         std::span<const optics::ray::RaySegment> raySegments);
+
+    [[nodiscard]] bool updateDynamicScene(
+        const optics::scene::BenchScene& scene,
+        const optics::scene::BenchTraceGraph& traceGraph,
+        std::string_view selectedComponentId = {});
 
     void render(int width, int height, const OrbitCamera& camera);
 

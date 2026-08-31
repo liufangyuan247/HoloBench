@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -935,6 +936,242 @@ bool OpticalBenchRenderer::updateScene(
     }
 
     // 5. Update CPU buffer via swap (guaranteeing buffer capacity reuse) and mark dirty
+    cpuSceneVertices_.swap(stagingVertices_);
+    sceneDirty_ = true;
+    return true;
+}
+
+bool OpticalBenchRenderer::updateDynamicScene(
+    const optics::scene::BenchScene& scene,
+    const optics::scene::BenchTraceGraph& traceGraph,
+    std::string_view selectedComponentId) {
+    namespace bench = optics::scene;
+    if (traceGraph.sourceRevision != scene.revision()) {
+        return false;
+    }
+    static_cast<void>(bench::BenchScene(scene.components(), scene.revision()));
+    if (!selectedComponentId.empty() && scene.find(selectedComponentId) == nullptr) {
+        return false;
+    }
+
+    constexpr std::size_t kMaximumRenderedComponents = 100'000;
+    constexpr std::size_t kMaximumRenderedSegments = 1'000'000;
+    constexpr std::size_t kVerticesPerComponentBudget = 256;
+    if (scene.components().size() > kMaximumRenderedComponents
+        || traceGraph.segments.size() > kMaximumRenderedSegments) {
+        return false;
+    }
+    if (scene.components().size()
+        > (std::numeric_limits<std::size_t>::max() - traceGraph.segments.size() * 2)
+            / kVerticesPerComponentBudget) {
+        return false;
+    }
+    const std::size_t estimate = scene.components().size() * kVerticesPerComponentBudget
+        + traceGraph.segments.size() * 2;
+    stagingVertices_.clear();
+    if (stagingVertices_.capacity() < estimate) {
+        stagingVertices_.reserve(estimate);
+    }
+
+    const auto addLine = [this](math::Vec3d start, math::Vec3d end, const glm::vec4& color) {
+        glm::vec3 convertedStart {};
+        glm::vec3 convertedEnd {};
+        if (!toFiniteVec3(start, convertedStart) || !toFiniteVec3(end, convertedEnd)) {
+            return false;
+        }
+        stagingVertices_.push_back(BenchVertex {convertedStart, color});
+        stagingVertices_.push_back(BenchVertex {convertedEnd, color});
+        return true;
+    };
+    const auto componentColor = [](bench::BenchComponentKind kind) {
+        switch (kind) {
+        case bench::BenchComponentKind::LaserSource: return glm::vec4(1.00F, 0.28F, 0.18F, 1.00F);
+        case bench::BenchComponentKind::ObjectWavefrontSource: return glm::vec4(0.82F, 0.38F, 0.94F, 0.95F);
+        case bench::BenchComponentKind::PlanarMirror: return glm::vec4(0.72F, 0.82F, 0.94F, 0.95F);
+        case bench::BenchComponentKind::BeamSplitterCombiner: return glm::vec4(0.30F, 0.82F, 0.96F, 0.90F);
+        case bench::BenchComponentKind::IdealThinLens: return glm::vec4(0.24F, 0.92F, 0.98F, 0.95F);
+        case bench::BenchComponentKind::RealLensAssembly: return glm::vec4(0.20F, 0.68F, 0.92F, 0.95F);
+        case bench::BenchComponentKind::Aperture: return glm::vec4(0.96F, 0.58F, 0.16F, 0.95F);
+        case bench::BenchComponentKind::SpatialFilter: return glm::vec4(0.94F, 0.72F, 0.22F, 0.95F);
+        case bench::BenchComponentKind::SpatialLightModulator: return glm::vec4(0.62F, 0.38F, 0.94F, 0.95F);
+        case bench::BenchComponentKind::ScreenDetector: return glm::vec4(0.90F, 0.94F, 1.00F, 0.95F);
+        case bench::BenchComponentKind::FieldProbe: return glm::vec4(0.35F, 0.96F, 0.62F, 0.95F);
+        case bench::BenchComponentKind::HolographicPlate: return glm::vec4(1.00F, 0.34F, 0.72F, 0.95F);
+        }
+        return glm::vec4(0.75F, 0.75F, 0.75F, 1.00F);
+    };
+    const auto spectralColor = [](double wavelengthMetres, double powerWatts) {
+        const double wavelengthNm = wavelengthMetres * 1e9;
+        glm::vec3 rgb(1.0F, 0.2F, 0.2F);
+        if (wavelengthNm < 485.0) {
+            rgb = {0.24F, 0.44F, 1.00F};
+        } else if (wavelengthNm < 565.0) {
+            rgb = {0.18F, 1.00F, 0.32F};
+        } else if (wavelengthNm < 590.0) {
+            rgb = {1.00F, 0.88F, 0.18F};
+        } else if (wavelengthNm < 625.0) {
+            rgb = {1.00F, 0.48F, 0.12F};
+        }
+        const float alpha = static_cast<float>(std::clamp(0.35 + std::sqrt(powerWatts) * 0.65, 0.35, 1.0));
+        return glm::vec4(rgb, alpha);
+    };
+
+    for (const auto& component : scene.components()) {
+        const auto world = [&component](math::Vec3d local) {
+            return math::transformPointLocalToWorld(component.transform, local);
+        };
+        const glm::vec4 color = componentColor(component.kind);
+        double width = 0.03;
+        double height = 0.03;
+        bool circular = false;
+        switch (component.kind) {
+        case bench::BenchComponentKind::LaserSource:
+            width = 0.025;
+            height = 0.018;
+            break;
+        case bench::BenchComponentKind::ObjectWavefrontSource: {
+            const auto& value = std::get<bench::ObjectWavefrontSourceParameters>(component.parameters);
+            width = value.widthMetres;
+            height = value.heightMetres;
+            break;
+        }
+        case bench::BenchComponentKind::PlanarMirror: {
+            const auto& value = std::get<bench::PlanarMirrorParameters>(component.parameters);
+            width = value.widthMetres;
+            height = value.heightMetres;
+            break;
+        }
+        case bench::BenchComponentKind::BeamSplitterCombiner: {
+            const auto& value = std::get<bench::BeamSplitterParameters>(component.parameters);
+            width = value.widthMetres;
+            height = value.heightMetres;
+            break;
+        }
+        case bench::BenchComponentKind::IdealThinLens: {
+            width = std::get<bench::IdealThinLensParameters>(component.parameters)
+                .clearApertureDiameterMetres;
+            height = width;
+            circular = true;
+            break;
+        }
+        case bench::BenchComponentKind::RealLensAssembly: {
+            width = std::get<bench::RealLensAssemblyParameters>(component.parameters)
+                .clearApertureDiameterMetres;
+            height = width;
+            circular = true;
+            break;
+        }
+        case bench::BenchComponentKind::Aperture: {
+            const auto& value = std::get<bench::ApertureParameters>(component.parameters);
+            width = value.widthMetres;
+            height = value.heightMetres;
+            circular = value.shape == bench::ApertureShape::Circular;
+            break;
+        }
+        case bench::BenchComponentKind::SpatialFilter: {
+            width = std::get<bench::SpatialFilterParameters>(component.parameters)
+                .clearApertureDiameterMetres;
+            height = width;
+            circular = true;
+            break;
+        }
+        case bench::BenchComponentKind::SpatialLightModulator: {
+            const auto& value = std::get<bench::SpatialLightModulatorParameters>(component.parameters);
+            width = value.widthMetres;
+            height = value.heightMetres;
+            break;
+        }
+        case bench::BenchComponentKind::ScreenDetector: {
+            const auto& value = std::get<bench::ScreenDetectorParameters>(component.parameters);
+            width = value.widthMetres;
+            height = value.heightMetres;
+            break;
+        }
+        case bench::BenchComponentKind::FieldProbe: {
+            const auto& value = std::get<bench::FieldProbeParameters>(component.parameters);
+            width = value.widthMetres;
+            height = value.heightMetres;
+            break;
+        }
+        case bench::BenchComponentKind::HolographicPlate: {
+            const auto& value = std::get<bench::HolographicPlateParameters>(component.parameters);
+            width = value.widthMetres;
+            height = value.heightMetres;
+            break;
+        }
+        }
+
+        const double halfWidth = width * 0.5;
+        const double halfHeight = height * 0.5;
+        if (circular) {
+            constexpr int segmentCount = 40;
+            for (int index = 0; index < segmentCount; ++index) {
+                const double angle0 = 2.0 * std::numbers::pi_v<double>
+                    * static_cast<double>(index) / static_cast<double>(segmentCount);
+                const double angle1 = 2.0 * std::numbers::pi_v<double>
+                    * static_cast<double>(index + 1) / static_cast<double>(segmentCount);
+                if (!addLine(
+                        world({halfWidth * std::cos(angle0), halfHeight * std::sin(angle0), 0.0}),
+                        world({halfWidth * std::cos(angle1), halfHeight * std::sin(angle1), 0.0}),
+                        color)) {
+                    return false;
+                }
+            }
+        } else {
+            const std::array<math::Vec3d, 4> corners {
+                math::Vec3d {-halfWidth, -halfHeight, 0.0},
+                math::Vec3d {halfWidth, -halfHeight, 0.0},
+                math::Vec3d {halfWidth, halfHeight, 0.0},
+                math::Vec3d {-halfWidth, halfHeight, 0.0},
+            };
+            for (std::size_t index = 0; index < corners.size(); ++index) {
+                if (!addLine(world(corners[index]), world(corners[(index + 1) % corners.size()]), color)) {
+                    return false;
+                }
+            }
+        }
+
+        if (component.kind == bench::BenchComponentKind::LaserSource) {
+            if (!addLine(world({0.0, 0.0, -0.012}), world({0.0, 0.0, 0.035}), color)
+                || !addLine(world({0.0, 0.0, 0.035}), world({-0.004, 0.0, 0.027}), color)
+                || !addLine(world({0.0, 0.0, 0.035}), world({0.004, 0.0, 0.027}), color)) {
+                return false;
+            }
+        } else {
+            if (!addLine(world({-halfWidth, 0.0, 0.0}), world({halfWidth, 0.0, 0.0}), color)
+                || !addLine(world({0.0, -halfHeight, 0.0}), world({0.0, halfHeight, 0.0}), color)) {
+                return false;
+            }
+        }
+
+        if (component.id == selectedComponentId) {
+            const double axisLength = std::max({width, height, 0.03}) * 0.8;
+            if (!addLine(world({0.0, 0.0, 0.0}), world({axisLength, 0.0, 0.0}), {1.0F, 0.2F, 0.2F, 1.0F})
+                || !addLine(world({0.0, 0.0, 0.0}), world({0.0, axisLength, 0.0}), {0.2F, 1.0F, 0.2F, 1.0F})
+                || !addLine(world({0.0, 0.0, 0.0}), world({0.0, 0.0, axisLength}), {0.2F, 0.5F, 1.0F, 1.0F})) {
+                return false;
+            }
+        }
+    }
+
+    for (const auto& segment : traceGraph.segments) {
+        if (!std::isfinite(segment.wavelengthMetres) || segment.wavelengthMetres <= 0.0
+            || !std::isfinite(segment.powerWatts) || segment.powerWatts < 0.0
+            || !addLine(
+                segment.startMetres,
+                segment.endMetres,
+                spectralColor(segment.wavelengthMetres, segment.powerWatts))) {
+            return false;
+        }
+    }
+
+    constexpr std::size_t kMaxAllowedVertices = static_cast<std::size_t>(
+        std::numeric_limits<GLsizei>::max());
+    if (stagingVertices_.size() > kMaxAllowedVertices
+        || stagingVertices_.size() > static_cast<std::size_t>(std::numeric_limits<GLsizeiptr>::max()) / sizeof(BenchVertex)) {
+        stagingVertices_.clear();
+        return false;
+    }
     cpuSceneVertices_.swap(stagingVertices_);
     sceneDirty_ = true;
     return true;

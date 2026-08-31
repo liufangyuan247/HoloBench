@@ -30,6 +30,24 @@ rebuilt on the shared bench.
 
 ## M7 implementation progress
 
+- **Default interactive sandbox**: the application now opens on the unified
+  dynamic bench instead of the fixed-axis reference scene. The starter project
+  contains an RGB laser, splitter, two routed arms, an ideal lens, two screens,
+  and a component shelf covering all twelve required kinds. The fixed scene is
+  still available under an explicitly labelled reference mode, but is no longer
+  presented as the product workspace.
+- **Viewport and Inspector editing**: every required component kind can be
+  created from the library, selected from the viewport or Inspector, translated,
+  locally rotated around X/Y/Z, duplicated, deleted, and edited through typed
+  physical controls. Empty-bench and RGB-branch presets, W/E transform modes,
+  orbit/pan/zoom controls, selection labels/axes, exact SI position entry, and
+  unified bench load/save are wired to the same `BenchScene` state.
+- **Generic dynamic rendering**: all twelve component kinds render at their
+  arbitrary rigid transforms and traced branches are coloured by wavelength.
+  The OpenGL smoke now requires all kinds, a current non-empty trace graph,
+  canonical bench persistence, drawable vertices, and actual red, green, and
+  blue framebuffer evidence.
+
 - **Dynamic scene foundation (headless)**: `BenchScene` is now the first shared
   scene truth source for the new product path. It owns a dynamic component
   vector with stable IDs, arbitrary right-handed rigid transforms, monotonic
@@ -65,18 +83,20 @@ rebuilt on the shared bench.
   makes results independent of insertion order; hop, branch, minimum-power,
   escape, clipping, and absorption endings are explicit.
 - **Current verification**: Windows Clang 21 `core-ci` warnings-as-errors build
-  passes with 429/429 deterministic cases; the complete development build and
-  application link pass with 431/431 cases including the packaged-font and
-  hardware OpenGL tests. The hidden application smoke exits 0 with no reported
-  GL errors on AMD Radeon Pro 5300M. Seventeen new M7 cases cover all twelve
+  passes with 432/432 deterministic cases; the complete development build and
+  application link pass with 434/434 cases including the packaged-font and
+  hardware OpenGL tests. The development and warnings-as-errors application
+  smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Twenty M7
+  cases cover all twelve
   schemas, invalid IDs/transforms/physics, scene mutation/revision/staleness,
   RGB and arbitrary-transform canonical persistence, strict parser rejection,
   splitter power/spectral identity, wavelength/coherence separation, and trace
   budget validation, plus arbitrary-pose mirror/lens paths, split-screen power,
-  aperture clipping, insertion-order determinism, RGB detector identity, and
-  bounded mirror loops. Multi-ray beam envelopes, generic rendering, viewport
-  editing, remaining component interactions, and local wave-plane adapters
-  remain open, so M7 and the interactive part of M7.1 are not yet accepted.
+  aperture clipping, insertion-order determinism, RGB detector identity,
+  bounded mirror loops, and rigid local-rotation stability. Multi-ray beam
+  envelopes, scene-wide undo/redo, richer detector observation surfaces,
+  remaining component interactions, and local wave-plane adapters remain open,
+  so M7 is not yet accepted even though the interactive M7.1 path is present.
 
 ## Completed
 

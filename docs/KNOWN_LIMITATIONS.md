@@ -100,19 +100,20 @@
   stores incidence angle, refractive indices, name, and provenance, but not
   recomputable rays/results; it does not model Fresnel power, polarization,
   roughness, absorption, dispersion, or multilayer coatings.
-- The current “Optical Bench” is a fixed point-source/lens/aperture/screen
-  reference scene. The headless M7 foundation now provides one strict unified
-  project, twelve typed component kinds, arbitrary rigid transforms, scene
+- The default “Optical Bench” is now the interactive M7 dynamic workspace; the
+  former point-source/lens/aperture/screen scene is explicitly a fixed
+  reference mode. The sandbox provides one strict unified project, twelve
+  placeable and rendered component kinds, arbitrary rigid transforms,
+  selection/translation/local rotation, typed Inspector editing, scene
   revision/staleness, and deterministic centreline routing through placed
-  mirrors, splitters, ideal thin lenses, apertures, and screens, but it is not
-  yet connected to the viewport. That layout tracer emits one centre ray per
-  laser spectral channel; it does not yet sample the full beam envelope or
-  route real-lens, spatial-filter, SLM, Probe, or Plate interactions. Complete
-  coherent branch merging, freely manipulated observations, and local
-  wave-plane adapters remain open; therefore the product is not yet a usable
-  free-form bench.
-- Undo/redo currently covers lesson-relevant optical-bench, Wave Detector,
-  Sampling Debugger, and SLM inputs. Real Lens, Holography Lab, and the planned
-  dynamic bench scene are not yet included. There is no autosave, crash
+  mirrors, splitters, ideal thin lenses, apertures, and screens. The current
+  tracer still emits only one centre ray per laser spectral channel; it does
+  not yet sample the full beam envelope or route real-lens, spatial-filter,
+  SLM, Probe, or Plate field interactions. Complete coherent branch merging,
+  detector field views, and local wave-plane adapters remain open, so this is a
+  functional layout sandbox rather than a completed holography experiment.
+- Undo/redo currently covers lesson-relevant legacy optical-bench, Wave
+  Detector, Sampling Debugger, and SLM inputs. Real Lens, Holography Lab, and
+  the dynamic bench scene are not yet included. There is no autosave, crash
   recovery, or complete accessibility layer.
 - Hardware control and digital-twin calibration are long-term roadmap modules.

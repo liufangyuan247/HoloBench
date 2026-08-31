@@ -1,6 +1,9 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <limits>
+#include <numbers>
+#include <stdexcept>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -188,6 +191,44 @@ TEST_CASE("projectWorldToViewport correctly aligns with renderer FBO projection 
 
     CHECK(projFbo.screenPos.x == doctest::Approx(expectedScreenPos.x));
     CHECK(projFbo.screenPos.y == doctest::Approx(expectedScreenPos.y));
+}
+
+TEST_CASE("local rotation gizmo preserves a right-handed rigid transform") {
+    namespace gizmo = holobench::app::gizmo;
+    const auto rotated = gizmo::rotateRigidTransformLocally(
+        {}, gizmo::LocalRotationAxis::Y, std::numbers::pi_v<double> * 0.5);
+    CHECK_NOTHROW(holobench::math::validateRigidTransform(rotated));
+    CHECK(rotated.translationMetres == holobench::math::Vec3d {});
+    CHECK(rotated.localZAxisInWorld.x == doctest::Approx(1.0).epsilon(1e-14));
+    CHECK(rotated.localZAxisInWorld.z == doctest::Approx(0.0).epsilon(1e-14));
+    CHECK(rotated.localXAxisInWorld.z == doctest::Approx(-1.0).epsilon(1e-14));
+
+    const auto restored = gizmo::rotateRigidTransformLocally(
+        rotated, gizmo::LocalRotationAxis::Y, -std::numbers::pi_v<double> * 0.5);
+    CHECK(restored.localXAxisInWorld.x == doctest::Approx(1.0).epsilon(1e-14));
+    CHECK(restored.localYAxisInWorld.y == doctest::Approx(1.0).epsilon(1e-14));
+    CHECK(restored.localZAxisInWorld.z == doctest::Approx(1.0).epsilon(1e-14));
+}
+
+TEST_CASE("local rotation gizmo rejects non-finite input") {
+    namespace gizmo = holobench::app::gizmo;
+    CHECK_THROWS_AS(
+        static_cast<void>(gizmo::rotateRigidTransformLocally(
+            {}, gizmo::LocalRotationAxis::Z,
+            std::numeric_limits<double>::quiet_NaN())),
+        std::invalid_argument);
+}
+
+TEST_CASE("repeated local gizmo rotations remain orthonormal") {
+    namespace gizmo = holobench::app::gizmo;
+    holobench::math::RigidTransform3d transform;
+    for (int index = 0; index < 2000; ++index) {
+        transform = gizmo::rotateRigidTransformLocally(
+            transform,
+            static_cast<gizmo::LocalRotationAxis>(index % 3),
+            0.001 * static_cast<double>((index % 5) - 2));
+    }
+    CHECK_NOTHROW(holobench::math::validateRigidTransform(transform));
 }
 
 } // TEST_SUITE("render::Gizmo")

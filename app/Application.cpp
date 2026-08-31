@@ -384,6 +384,83 @@ void drawRealLensSpotPlot(
         IM_COL32(203, 213, 225, 255), label);
 }
 
+BenchProject makeDefaultSandboxProject() {
+    namespace bench = optics::scene;
+    BenchProject project;
+    project.projectId = "starter-rgb-branch-bench";
+    project.name = "Starter RGB Branch Bench";
+
+    auto laser = bench::makeDefaultBenchComponent(
+        bench::BenchComponentKind::LaserSource, "laser-rgb");
+    laser.transform.translationMetres = {0.0, 0.0, 0.15};
+    auto laserParameters = std::get<bench::LaserSourceParameters>(laser.parameters);
+    laserParameters.channels = {
+        {.wavelengthMetres = 638e-9, .powerWatts = 0.30, .coherenceId = "rgb-red"},
+        {.wavelengthMetres = 532e-9, .powerWatts = 0.30, .coherenceId = "rgb-green"},
+        {.wavelengthMetres = 450e-9, .powerWatts = 0.30, .coherenceId = "rgb-blue"},
+    };
+    laser.parameters = laserParameters;
+    project.scene.add(std::move(laser));
+
+    constexpr double inverseSqrtTwo = 0.7071067811865475244;
+    auto splitter = bench::makeDefaultBenchComponent(
+        bench::BenchComponentKind::BeamSplitterCombiner, "splitter-main");
+    splitter.transform = {
+        .translationMetres = {0.0, 0.0, 0.45},
+        .localXAxisInWorld = {inverseSqrtTwo, 0.0, inverseSqrtTwo},
+        .localYAxisInWorld = {0.0, 1.0, 0.0},
+        .localZAxisInWorld = {-inverseSqrtTwo, 0.0, inverseSqrtTwo},
+    };
+    project.scene.add(std::move(splitter));
+
+    auto mirror = bench::makeDefaultBenchComponent(
+        bench::BenchComponentKind::PlanarMirror, "mirror-object-arm");
+    mirror.transform = {
+        .translationMetres = {0.25, 0.0, 0.45},
+        .localXAxisInWorld = {-inverseSqrtTwo, 0.0, -inverseSqrtTwo},
+        .localYAxisInWorld = {0.0, 1.0, 0.0},
+        .localZAxisInWorld = {inverseSqrtTwo, 0.0, -inverseSqrtTwo},
+    };
+    project.scene.add(std::move(mirror));
+
+    auto lens = bench::makeDefaultBenchComponent(
+        bench::BenchComponentKind::IdealThinLens, "lens-reference-arm");
+    lens.transform.translationMetres = {0.0, 0.0, 0.62};
+    project.scene.add(std::move(lens));
+
+    auto transmittedScreen = bench::makeDefaultBenchComponent(
+        bench::BenchComponentKind::ScreenDetector, "screen-reference-arm");
+    transmittedScreen.transform.translationMetres = {0.0, 0.0, 0.85};
+    project.scene.add(std::move(transmittedScreen));
+
+    auto reflectedScreen = bench::makeDefaultBenchComponent(
+        bench::BenchComponentKind::ScreenDetector, "screen-object-arm");
+    reflectedScreen.transform.translationMetres = {0.25, 0.0, 0.75};
+    project.scene.add(std::move(reflectedScreen));
+
+    const std::array<bench::BenchComponentKind, 7> shelfKinds {
+        bench::BenchComponentKind::ObjectWavefrontSource,
+        bench::BenchComponentKind::RealLensAssembly,
+        bench::BenchComponentKind::Aperture,
+        bench::BenchComponentKind::SpatialFilter,
+        bench::BenchComponentKind::SpatialLightModulator,
+        bench::BenchComponentKind::FieldProbe,
+        bench::BenchComponentKind::HolographicPlate,
+    };
+    for (std::size_t index = 0; index < shelfKinds.size(); ++index) {
+        const auto kind = shelfKinds[index];
+        auto component = bench::makeDefaultBenchComponent(
+            kind, "shelf-" + std::string(bench::benchComponentKindName(kind)));
+        component.transform.translationMetres = {
+            -0.35,
+            0.10,
+            0.22 + static_cast<double>(index) * 0.105,
+        };
+        project.scene.add(std::move(component));
+    }
+    return project;
+}
+
 } // namespace
 
 Application::Application()
@@ -403,7 +480,8 @@ Application::Application()
     , realLensConfig_(reallens::makeDefaultRealLensWorkbenchConfig())
     , lessonLocalization_(lessons::makeDefaultLessonLocalization())
     , scene_(optics::scene::createDefaultRealImageScene())
-    , naResult_(optics::scene::computeObjectSideNumericalAperture(scene_)) {
+    , naResult_(optics::scene::computeObjectSideNumericalAperture(scene_))
+    , benchProject_(makeDefaultSandboxProject()) {
     tracerOptions_.rayCount = 64;
     tracerOptions_.pattern = optics::ray::RaySamplingPattern::FibonacciDisk;
     tracerOptions_.maxPropagationDistanceMetres = 2.0;
@@ -435,7 +513,8 @@ bool Application::applyScene(
         optics::ray::traceBench(sceneCopy, candidateOptions, stagingRaySegments_);
         std::string newStatus = "Scene updated (" + std::to_string(stagingRaySegments_.size()) + " displayed segments)";
 
-        if (!renderer_ || !renderer_->updateScene(sceneCopy, pred, stagingRaySegments_)) {
+        if (viewportMode_ == ViewportMode::LegacyReference
+            && (!renderer_ || !renderer_->updateScene(sceneCopy, pred, stagingRaySegments_))) {
             throw std::runtime_error("Renderer rejected scene geometry update");
         }
 
@@ -455,6 +534,95 @@ bool Application::applyScene(
         errorMessage_ = ex.what();
         statusMessage_.clear();
         return false;
+    }
+}
+
+bool Application::applyBenchScene(
+    optics::scene::BenchScene candidateScene,
+    std::string newStatusMessage) {
+    try {
+        const std::string selection = candidateScene.find(selectedBenchComponentId_) != nullptr
+            ? selectedBenchComponentId_ : std::string {};
+        const auto traceGraph = optics::ray::traceDynamicBench(
+            candidateScene, benchTraceBudget_);
+        if (!renderer_ || !renderer_->updateDynamicScene(
+                candidateScene, traceGraph, selection)) {
+            throw std::runtime_error("renderer rejected dynamic bench geometry");
+        }
+        benchProject_.scene = std::move(candidateScene);
+        benchTraceGraph_ = traceGraph;
+        selectedBenchComponentId_ = selection;
+        viewportMode_ = ViewportMode::Sandbox;
+        errorMessage_.clear();
+        statusMessage_ = std::move(newStatusMessage);
+        return true;
+    } catch (const std::exception& error) {
+        errorMessage_ = error.what();
+        statusMessage_.clear();
+        return false;
+    }
+}
+
+bool Application::showSandboxViewport() {
+    try {
+        const auto traceGraph = optics::ray::traceDynamicBench(
+            benchProject_.scene, benchTraceBudget_);
+        if (!renderer_ || !renderer_->updateDynamicScene(
+                benchProject_.scene, traceGraph, selectedBenchComponentId_)) {
+            throw std::runtime_error("renderer rejected dynamic bench geometry");
+        }
+        benchTraceGraph_ = traceGraph;
+        viewportMode_ = ViewportMode::Sandbox;
+        errorMessage_.clear();
+        statusMessage_ = "Free-form optical sandbox active";
+        return true;
+    } catch (const std::exception& error) {
+        errorMessage_ = error.what();
+        statusMessage_.clear();
+        return false;
+    }
+}
+
+bool Application::showLegacyViewport() {
+    if (!renderer_ || !renderer_->updateScene(scene_, prediction_, raySegments_)) {
+        errorMessage_ = "renderer rejected legacy reference geometry";
+        statusMessage_.clear();
+        return false;
+    }
+    viewportMode_ = ViewportMode::LegacyReference;
+    errorMessage_.clear();
+    statusMessage_ = "Fixed-axis reference scene active";
+    return true;
+}
+
+void Application::loadBenchProjectFromPath() {
+    try {
+        BenchProject loaded = loadBenchProject(benchProjectPathBuffer_);
+        const std::string loadedName = loaded.name;
+        if (!applyBenchScene(std::move(loaded.scene),
+                "Loaded optical bench: " + loadedName)) {
+            return;
+        }
+        benchProject_.formatVersion = loaded.formatVersion;
+        benchProject_.projectId = std::move(loaded.projectId);
+        benchProject_.name = std::move(loaded.name);
+        benchProject_.provenance = std::move(loaded.provenance);
+        selectedBenchComponentId_.clear();
+        static_cast<void>(showSandboxViewport());
+    } catch (const std::exception& error) {
+        errorMessage_ = error.what();
+        statusMessage_.clear();
+    }
+}
+
+void Application::saveBenchProjectToPath() {
+    try {
+        saveBenchProject(benchProject_, benchProjectPathBuffer_);
+        errorMessage_.clear();
+        statusMessage_ = "Saved optical bench: " + std::string(benchProjectPathBuffer_);
+    } catch (const std::exception& error) {
+        errorMessage_ = error.what();
+        statusMessage_.clear();
     }
 }
 
@@ -823,6 +991,11 @@ bool Application::initialize(const RunOptions& options) {
         shutdown();
         return false;
     }
+    if (!showSandboxViewport()) {
+        SDL_Log("Initial dynamic sandbox setup failed: %s", errorMessage_.c_str());
+        shutdown();
+        return false;
+    }
     refreshRealLensWorkbench();
     lessonEditHistory_.reset(captureLessonEditState());
     lessonEditHistoryReady_ = true;
@@ -884,6 +1057,8 @@ void Application::shutdown() noexcept {
     dockLayoutInitialized_ = false;
     isOrbiting_ = false;
     isPanning_ = false;
+    sandboxGizmoDragging_ = false;
+    sandboxGizmoChanged_ = false;
     isGizmoDragging_ = false;
     draggedTarget_ = GizmoTarget::None;
     selectedTarget_ = GizmoTarget::None;
@@ -4194,6 +4369,413 @@ void Application::drawLearnPanel() {
     ImGui::End();
 }
 
+void Application::drawSandboxInspector() {
+    namespace bench = optics::scene;
+    if (!ImGui::CollapsingHeader("3D Optical Sandbox", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    try {
+
+    ImGui::TextWrapped(
+        "Place and orient physical components. Rays are derived from 3D geometry; "
+        "RGB channels remain separate until a coherent observation combines them.");
+    if (viewportMode_ == ViewportMode::Sandbox) {
+        ImGui::TextColored(ImVec4(0.28F, 0.92F, 0.62F, 1.0F), "Viewport: Free-form Sandbox");
+    } else if (ImGui::Button("Return to Sandbox")) {
+        static_cast<void>(showSandboxViewport());
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Open Fixed Reference")) {
+        static_cast<void>(showLegacyViewport());
+    }
+
+    ImGui::SeparatorText("Component Library");
+    const auto& kinds = bench::requiredBenchComponentKinds();
+    sandboxLibraryKindIndex_ = std::clamp(
+        sandboxLibraryKindIndex_, 0, static_cast<int>(kinds.size()) - 1);
+    const char* preview = bench::benchComponentDisplayName(
+        kinds[static_cast<std::size_t>(sandboxLibraryKindIndex_)]).data();
+    if (ImGui::BeginCombo("Place Component", preview)) {
+        for (std::size_t index = 0; index < kinds.size(); ++index) {
+            const bool selected = static_cast<int>(index) == sandboxLibraryKindIndex_;
+            if (ImGui::Selectable(
+                    bench::benchComponentDisplayName(kinds[index]).data(), selected)) {
+                sandboxLibraryKindIndex_ = static_cast<int>(index);
+            }
+            if (selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    if (ImGui::Button("Add to Bench")) {
+        auto candidate = benchProject_.scene;
+        const auto kind = kinds[static_cast<std::size_t>(sandboxLibraryKindIndex_)];
+        std::string newId;
+        do {
+            newId = std::string(bench::benchComponentKindName(kind))
+                + "-" + std::to_string(sandboxNextComponentOrdinal_++);
+        } while (candidate.find(newId) != nullptr);
+        auto component = bench::makeDefaultBenchComponent(kind, newId);
+        const glm::vec3 target = camera_.target();
+        component.transform.translationMetres = {
+            static_cast<double>(target.x),
+            static_cast<double>(target.y),
+            static_cast<double>(target.z),
+        };
+        candidate.add(component);
+        const std::string previousSelection = selectedBenchComponentId_;
+        selectedBenchComponentId_ = newId;
+        if (!applyBenchScene(std::move(candidate),
+                "Placed " + std::string(bench::benchComponentDisplayName(kind)))) {
+            selectedBenchComponentId_ = previousSelection;
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Empty Bench")) {
+        selectedBenchComponentId_.clear();
+        if (applyBenchScene({}, "Created an empty optical bench")) {
+            benchProject_.projectId = "untitled-bench";
+            benchProject_.name = "Untitled Optical Bench";
+            benchProject_.provenance = {};
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("RGB Branch Preset")) {
+        BenchProject preset = makeDefaultSandboxProject();
+        selectedBenchComponentId_.clear();
+        if (applyBenchScene(std::move(preset.scene), "Loaded RGB branch preset")) {
+            benchProject_.projectId = std::move(preset.projectId);
+            benchProject_.name = std::move(preset.name);
+            benchProject_.provenance = std::move(preset.provenance);
+        }
+    }
+
+    ImGui::SeparatorText("Bench Components");
+    ImGui::BeginChild("##sandbox_component_list", ImVec2(0.0F, 150.0F), ImGuiChildFlags_Borders);
+    for (const auto& component : benchProject_.scene.components()) {
+        const std::string label = component.id + "  ["
+            + std::string(bench::benchComponentDisplayName(component.kind)) + "]";
+        if (ImGui::Selectable(
+                label.c_str(), selectedBenchComponentId_ == component.id)) {
+            selectedBenchComponentId_ = component.id;
+            static_cast<void>(showSandboxViewport());
+        }
+    }
+    ImGui::EndChild();
+
+    const auto* selected = benchProject_.scene.find(selectedBenchComponentId_);
+    if (selected != nullptr) {
+        ImGui::Text("Selected: %s", selected->id.c_str());
+        ImGui::TextDisabled("Kind: %s", bench::benchComponentDisplayName(selected->kind).data());
+        if (ImGui::Button("Duplicate")) {
+            auto candidate = benchProject_.scene;
+            std::string newId;
+            do {
+                newId = selected->id + "-copy-" + std::to_string(sandboxNextComponentOrdinal_++);
+            } while (candidate.find(newId) != nullptr);
+            candidate.duplicate(selected->id, newId);
+            selectedBenchComponentId_ = newId;
+            static_cast<void>(applyBenchScene(std::move(candidate), "Duplicated component"));
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Delete")) {
+            auto candidate = benchProject_.scene;
+            static_cast<void>(candidate.remove(selected->id));
+            selectedBenchComponentId_.clear();
+            static_cast<void>(applyBenchScene(std::move(candidate), "Deleted component"));
+        }
+
+        selected = benchProject_.scene.find(selectedBenchComponentId_);
+        if (selected != nullptr) {
+            ImGui::SeparatorText("Transform");
+            float translationMm[3] {
+                static_cast<float>(selected->transform.translationMetres.x * 1000.0),
+                static_cast<float>(selected->transform.translationMetres.y * 1000.0),
+                static_cast<float>(selected->transform.translationMetres.z * 1000.0),
+            };
+            if (ImGui::DragFloat3(
+                    "Position (mm)", translationMm, 0.25F, -5000.0F, 5000.0F, "%.2f")) {
+                auto candidate = benchProject_.scene;
+                auto edited = *candidate.find(selectedBenchComponentId_);
+                edited.transform.translationMetres = {
+                    static_cast<double>(translationMm[0]) * 1e-3,
+                    static_cast<double>(translationMm[1]) * 1e-3,
+                    static_cast<double>(translationMm[2]) * 1e-3,
+                };
+                candidate.replace(edited.id, edited);
+                static_cast<void>(applyBenchScene(std::move(candidate), "Moved component"));
+            }
+
+            ImGui::DragFloat(
+                "Rotation step (deg)", &sandboxRotationStepDegrees_, 0.25F, 0.1F, 90.0F, "%.2f");
+            const auto rotateSelected = [this](int axis, double sign) {
+                auto candidate = benchProject_.scene;
+                auto edited = *candidate.find(selectedBenchComponentId_);
+                const double radians = sign * static_cast<double>(sandboxRotationStepDegrees_)
+                    * std::numbers::pi_v<double> / 180.0;
+                edited.transform = gizmo::rotateRigidTransformLocally(
+                    edited.transform,
+                    static_cast<gizmo::LocalRotationAxis>(axis),
+                    radians);
+                candidate.replace(edited.id, edited);
+                static_cast<void>(applyBenchScene(std::move(candidate), "Rotated component"));
+            };
+            if (ImGui::Button("-X##rotate")) rotateSelected(0, -1.0);
+            ImGui::SameLine();
+            if (ImGui::Button("+X##rotate")) rotateSelected(0, 1.0);
+            ImGui::SameLine();
+            if (ImGui::Button("-Y##rotate")) rotateSelected(1, -1.0);
+            ImGui::SameLine();
+            if (ImGui::Button("+Y##rotate")) rotateSelected(1, 1.0);
+            ImGui::SameLine();
+            if (ImGui::Button("-Z##rotate")) rotateSelected(2, -1.0);
+            ImGui::SameLine();
+            if (ImGui::Button("+Z##rotate")) rotateSelected(2, 1.0);
+
+            selected = benchProject_.scene.find(selectedBenchComponentId_);
+            if (selected != nullptr) {
+                ImGui::TextDisabled(
+                    "Local +Z optical axis: (%.4f, %.4f, %.4f)",
+                    selected->transform.localZAxisInWorld.x,
+                    selected->transform.localZAxisInWorld.y,
+                    selected->transform.localZAxisInWorld.z);
+
+                ImGui::SeparatorText("Physical Parameters");
+                const auto commitParameters = [this](bench::BenchComponent edited) {
+                    try {
+                        auto candidate = benchProject_.scene;
+                        candidate.replace(edited.id, edited);
+                        static_cast<void>(applyBenchScene(
+                            std::move(candidate), "Updated component parameters"));
+                    } catch (const std::exception& error) {
+                        errorMessage_ = error.what();
+                        statusMessage_.clear();
+                    }
+                };
+                auto edited = *selected;
+                bool changed = false;
+                switch (edited.kind) {
+                case bench::BenchComponentKind::LaserSource: {
+                    auto value = std::get<bench::LaserSourceParameters>(edited.parameters);
+                    float radiusMm = static_cast<float>(value.beamRadiusMetres * 1000.0);
+                    changed |= ImGui::DragFloat("Beam radius (mm)", &radiusMm, 0.05F, 0.001F, 500.0F);
+                    value.beamRadiusMetres = static_cast<double>(radiusMm) * 1e-3;
+                    for (std::size_t index = 0; index < value.channels.size(); ++index) {
+                        ImGui::PushID(static_cast<int>(index));
+                        float wavelengthNm = static_cast<float>(value.channels[index].wavelengthMetres * 1e9);
+                        float powerWatts = static_cast<float>(value.channels[index].powerWatts);
+                        changed |= ImGui::DragFloat("Wavelength (nm)", &wavelengthNm, 1.0F, 200.0F, 2000.0F);
+                        changed |= ImGui::DragFloat("Power (W)", &powerWatts, 0.01F, 0.0F, 1000.0F);
+                        value.channels[index].wavelengthMetres = static_cast<double>(wavelengthNm) * 1e-9;
+                        value.channels[index].powerWatts = static_cast<double>(powerWatts);
+                        ImGui::TextDisabled("Coherence: %s", value.channels[index].coherenceId.c_str());
+                        ImGui::PopID();
+                    }
+                    if (ImGui::Button("Set RGB channels")) {
+                        value.channels = {
+                            {.wavelengthMetres = 638e-9, .powerWatts = 0.30, .coherenceId = edited.id + "-red"},
+                            {.wavelengthMetres = 532e-9, .powerWatts = 0.30, .coherenceId = edited.id + "-green"},
+                            {.wavelengthMetres = 450e-9, .powerWatts = 0.30, .coherenceId = edited.id + "-blue"},
+                        };
+                        changed = true;
+                    }
+                    edited.parameters = std::move(value);
+                    break;
+                }
+                case bench::BenchComponentKind::ObjectWavefrontSource: {
+                    auto value = std::get<bench::ObjectWavefrontSourceParameters>(edited.parameters);
+                    float sizeMm[2] {static_cast<float>(value.widthMetres * 1000.0), static_cast<float>(value.heightMetres * 1000.0)};
+                    float wavelengthNm = static_cast<float>(value.channel.wavelengthMetres * 1e9);
+                    float powerWatts = static_cast<float>(value.channel.powerWatts);
+                    changed |= ImGui::DragFloat2("Source size (mm)", sizeMm, 0.1F, 0.001F, 5000.0F);
+                    changed |= ImGui::DragFloat("Object wavelength (nm)", &wavelengthNm, 1.0F, 200.0F, 2000.0F);
+                    changed |= ImGui::DragFloat("Object power (W)", &powerWatts, 0.01F, 0.0F, 1000.0F);
+                    value.widthMetres = static_cast<double>(sizeMm[0]) * 1e-3;
+                    value.heightMetres = static_cast<double>(sizeMm[1]) * 1e-3;
+                    value.channel.wavelengthMetres = static_cast<double>(wavelengthNm) * 1e-9;
+                    value.channel.powerWatts = static_cast<double>(powerWatts);
+                    edited.parameters = value;
+                    break;
+                }
+                case bench::BenchComponentKind::PlanarMirror: {
+                    auto value = std::get<bench::PlanarMirrorParameters>(edited.parameters);
+                    float sizeMm[2] {static_cast<float>(value.widthMetres * 1000.0), static_cast<float>(value.heightMetres * 1000.0)};
+                    float reflectivity = static_cast<float>(value.powerReflectivity);
+                    changed |= ImGui::DragFloat2("Mirror size (mm)", sizeMm, 0.1F, 0.001F, 5000.0F);
+                    changed |= ImGui::SliderFloat("Power reflectivity", &reflectivity, 0.0F, 1.0F);
+                    value.widthMetres = static_cast<double>(sizeMm[0]) * 1e-3;
+                    value.heightMetres = static_cast<double>(sizeMm[1]) * 1e-3;
+                    value.powerReflectivity = reflectivity;
+                    edited.parameters = value;
+                    break;
+                }
+                case bench::BenchComponentKind::BeamSplitterCombiner: {
+                    auto value = std::get<bench::BeamSplitterParameters>(edited.parameters);
+                    float sizeMm[2] {static_cast<float>(value.widthMetres * 1000.0), static_cast<float>(value.heightMetres * 1000.0)};
+                    float reflectivity = static_cast<float>(value.powerReflectivity);
+                    float transmissivity = static_cast<float>(value.powerTransmissivity);
+                    changed |= ImGui::DragFloat2("Splitter size (mm)", sizeMm, 0.1F, 0.001F, 5000.0F);
+                    changed |= ImGui::SliderFloat("Reflected power", &reflectivity, 0.0F, 1.0F);
+                    changed |= ImGui::SliderFloat("Transmitted power", &transmissivity, 0.0F, 1.0F);
+                    value.widthMetres = static_cast<double>(sizeMm[0]) * 1e-3;
+                    value.heightMetres = static_cast<double>(sizeMm[1]) * 1e-3;
+                    value.powerReflectivity = reflectivity;
+                    value.powerTransmissivity = transmissivity;
+                    edited.parameters = value;
+                    ImGui::TextDisabled("Configured loss: %.3f", 1.0 - reflectivity - transmissivity);
+                    break;
+                }
+                case bench::BenchComponentKind::IdealThinLens: {
+                    auto value = std::get<bench::IdealThinLensParameters>(edited.parameters);
+                    float focalMm = static_cast<float>(value.focalLengthMetres * 1000.0);
+                    float apertureMm = static_cast<float>(value.clearApertureDiameterMetres * 1000.0);
+                    changed |= ImGui::DragFloat("Focal length (mm)", &focalMm, 0.25F, -5000.0F, 5000.0F);
+                    changed |= ImGui::DragFloat("Clear diameter (mm)", &apertureMm, 0.1F, 0.001F, 5000.0F);
+                    value.focalLengthMetres = static_cast<double>(focalMm) * 1e-3;
+                    value.clearApertureDiameterMetres = static_cast<double>(apertureMm) * 1e-3;
+                    edited.parameters = value;
+                    break;
+                }
+                case bench::BenchComponentKind::RealLensAssembly: {
+                    auto value = std::get<bench::RealLensAssemblyParameters>(edited.parameters);
+                    float apertureMm = static_cast<float>(value.clearApertureDiameterMetres * 1000.0);
+                    changed |= ImGui::DragFloat("Assembly clear diameter (mm)", &apertureMm, 0.1F, 0.001F, 5000.0F);
+                    value.clearApertureDiameterMetres = static_cast<double>(apertureMm) * 1e-3;
+                    ImGui::TextDisabled("Prescription ID: %s", value.prescriptionId.c_str());
+                    ImGui::TextDisabled("Sequential routing adapter is pending.");
+                    edited.parameters = value;
+                    break;
+                }
+                case bench::BenchComponentKind::Aperture: {
+                    auto value = std::get<bench::ApertureParameters>(edited.parameters);
+                    int shape = value.shape == bench::ApertureShape::Circular ? 0 : 1;
+                    changed |= ImGui::RadioButton("Circular", &shape, 0);
+                    ImGui::SameLine();
+                    changed |= ImGui::RadioButton("Rectangular", &shape, 1);
+                    value.shape = shape == 0 ? bench::ApertureShape::Circular : bench::ApertureShape::Rectangular;
+                    float sizeMm[2] {static_cast<float>(value.widthMetres * 1000.0), static_cast<float>(value.heightMetres * 1000.0)};
+                    changed |= ImGui::DragFloat2("Opening size (mm)", sizeMm, 0.1F, 0.001F, 5000.0F);
+                    value.widthMetres = static_cast<double>(sizeMm[0]) * 1e-3;
+                    value.heightMetres = static_cast<double>(sizeMm[1]) * 1e-3;
+                    edited.parameters = value;
+                    break;
+                }
+                case bench::BenchComponentKind::SpatialFilter: {
+                    auto value = std::get<bench::SpatialFilterParameters>(edited.parameters);
+                    float focalMm = static_cast<float>(value.focalLengthMetres * 1000.0);
+                    float pinholeUm = static_cast<float>(value.pinholeDiameterMetres * 1e6);
+                    float apertureMm = static_cast<float>(value.clearApertureDiameterMetres * 1000.0);
+                    changed |= ImGui::DragFloat("Filter focal length (mm)", &focalMm, 0.1F, 0.001F, 5000.0F);
+                    changed |= ImGui::DragFloat("Pinhole diameter (um)", &pinholeUm, 0.5F, 0.001F, 100000.0F);
+                    changed |= ImGui::DragFloat("Filter clear diameter (mm)", &apertureMm, 0.1F, 0.001F, 5000.0F);
+                    value.focalLengthMetres = static_cast<double>(focalMm) * 1e-3;
+                    value.pinholeDiameterMetres = static_cast<double>(pinholeUm) * 1e-6;
+                    value.clearApertureDiameterMetres = static_cast<double>(apertureMm) * 1e-3;
+                    edited.parameters = value;
+                    break;
+                }
+                case bench::BenchComponentKind::SpatialLightModulator: {
+                    auto value = std::get<bench::SpatialLightModulatorParameters>(edited.parameters);
+                    float sizeMm[2] {static_cast<float>(value.widthMetres * 1000.0), static_cast<float>(value.heightMetres * 1000.0)};
+                    int pixels[2] {static_cast<int>(value.pixelWidth), static_cast<int>(value.pixelHeight)};
+                    float fill = static_cast<float>(value.fillFactor);
+                    changed |= ImGui::DragFloat2("SLM size (mm)", sizeMm, 0.1F, 0.001F, 5000.0F);
+                    changed |= ImGui::InputInt2("SLM pixels", pixels);
+                    changed |= ImGui::SliderFloat("SLM fill factor", &fill, 0.001F, 1.0F);
+                    value.widthMetres = static_cast<double>(sizeMm[0]) * 1e-3;
+                    value.heightMetres = static_cast<double>(sizeMm[1]) * 1e-3;
+                    value.pixelWidth = static_cast<std::size_t>(std::max(pixels[0], 0));
+                    value.pixelHeight = static_cast<std::size_t>(std::max(pixels[1], 0));
+                    value.fillFactor = fill;
+                    edited.parameters = value;
+                    break;
+                }
+                case bench::BenchComponentKind::ScreenDetector:
+                case bench::BenchComponentKind::FieldProbe: {
+                    double width = 0.0;
+                    double height = 0.0;
+                    std::size_t samplesX = 0;
+                    std::size_t samplesY = 0;
+                    if (edited.kind == bench::BenchComponentKind::ScreenDetector) {
+                        const auto& value = std::get<bench::ScreenDetectorParameters>(edited.parameters);
+                        width = value.widthMetres; height = value.heightMetres;
+                        samplesX = value.sampleWidth; samplesY = value.sampleHeight;
+                    } else {
+                        const auto& value = std::get<bench::FieldProbeParameters>(edited.parameters);
+                        width = value.widthMetres; height = value.heightMetres;
+                        samplesX = value.sampleWidth; samplesY = value.sampleHeight;
+                    }
+                    float sizeMm[2] {static_cast<float>(width * 1000.0), static_cast<float>(height * 1000.0)};
+                    int samples[2] {static_cast<int>(samplesX), static_cast<int>(samplesY)};
+                    changed |= ImGui::DragFloat2("Plane size (mm)", sizeMm, 0.1F, 0.001F, 5000.0F);
+                    changed |= ImGui::InputInt2("Samples", samples);
+                    if (edited.kind == bench::BenchComponentKind::ScreenDetector) {
+                        edited.parameters = bench::ScreenDetectorParameters {
+                            .widthMetres = static_cast<double>(sizeMm[0]) * 1e-3,
+                            .heightMetres = static_cast<double>(sizeMm[1]) * 1e-3,
+                            .sampleWidth = static_cast<std::size_t>(std::max(samples[0], 0)),
+                            .sampleHeight = static_cast<std::size_t>(std::max(samples[1], 0)),
+                        };
+                    } else {
+                        edited.parameters = bench::FieldProbeParameters {
+                            .widthMetres = static_cast<double>(sizeMm[0]) * 1e-3,
+                            .heightMetres = static_cast<double>(sizeMm[1]) * 1e-3,
+                            .sampleWidth = static_cast<std::size_t>(std::max(samples[0], 0)),
+                            .sampleHeight = static_cast<std::size_t>(std::max(samples[1], 0)),
+                        };
+                    }
+                    break;
+                }
+                case bench::BenchComponentKind::HolographicPlate: {
+                    auto value = std::get<bench::HolographicPlateParameters>(edited.parameters);
+                    float sizeMm[2] {static_cast<float>(value.widthMetres * 1000.0), static_cast<float>(value.heightMetres * 1000.0)};
+                    float thicknessUm = static_cast<float>(value.thicknessMetres * 1e6);
+                    int role = value.role == bench::HolographicPlateRole::H1 ? 0 : 1;
+                    changed |= ImGui::DragFloat2("Plate size (mm)", sizeMm, 0.1F, 0.001F, 5000.0F);
+                    changed |= ImGui::DragFloat("Plate thickness (um)", &thicknessUm, 0.1F, 0.001F, 1000000.0F);
+                    changed |= ImGui::RadioButton("H1 role", &role, 0);
+                    ImGui::SameLine();
+                    changed |= ImGui::RadioButton("H2 role", &role, 1);
+                    value.widthMetres = static_cast<double>(sizeMm[0]) * 1e-3;
+                    value.heightMetres = static_cast<double>(sizeMm[1]) * 1e-3;
+                    value.thicknessMetres = static_cast<double>(thicknessUm) * 1e-6;
+                    value.role = role == 0 ? bench::HolographicPlateRole::H1 : bench::HolographicPlateRole::H2;
+                    edited.parameters = value;
+                    break;
+                }
+                }
+                if (changed) {
+                    commitParameters(std::move(edited));
+                }
+            }
+        }
+    } else {
+        ImGui::TextDisabled("Select a component in the list or 3D viewport.");
+    }
+
+    ImGui::SeparatorText("Unified Bench Project");
+    ImGui::InputText("Bench JSON", benchProjectPathBuffer_, sizeof(benchProjectPathBuffer_));
+    if (ImGui::Button("Load Bench")) {
+        loadBenchProjectFromPath();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Save Bench")) {
+        saveBenchProjectToPath();
+    }
+    ImGui::TextDisabled(
+        "revision %llu | %zu components | %zu segments | %zu interactions",
+        static_cast<unsigned long long>(benchProject_.scene.revision()),
+        benchProject_.scene.components().size(),
+        benchTraceGraph_.segments.size(),
+        benchTraceGraph_.interactions.size());
+    } catch (const std::exception& error) {
+        errorMessage_ = error.what();
+        statusMessage_.clear();
+    }
+}
+
 void Application::drawWorkspace() {
     updateWaveDetector();
     updateSlmInterference();
@@ -4260,7 +4842,8 @@ void Application::drawWorkspace() {
     }
 
     const ImGuiIO& io = ImGui::GetIO();
-    if (!io.WantTextInput && io.KeyCtrl) {
+    if (viewportMode_ == ViewportMode::LegacyReference
+        && !io.WantTextInput && io.KeyCtrl) {
         if (ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
             if (io.KeyShift) {
                 redoLessonEdit();
@@ -4312,6 +4895,172 @@ void Application::drawWorkspace() {
         const bool noActiveWidget = !ImGui::IsAnyItemActive();
         const glm::vec2 rectMin(imagePosMin.x, imagePosMin.y);
         const glm::vec2 rectSize(imageSize.x, imageSize.y);
+
+        if (viewportMode_ == ViewportMode::Sandbox) {
+            const float aspect = (fboHeight > 0)
+                ? (static_cast<float>(fboWidth) / static_cast<float>(fboHeight))
+                : (16.0F / 9.0F);
+            const glm::mat4 viewProj = camera_.projectionMatrix(aspect) * camera_.viewMatrix();
+            const glm::vec2 mousePosition(io.MousePos.x, io.MousePos.y);
+
+            std::string hoveredComponentId;
+            float hoveredDepth = std::numeric_limits<float>::max();
+            constexpr float kComponentHitRadius = 16.0F;
+            for (const auto& component : benchProject_.scene.components()) {
+                const glm::vec3 center(
+                    static_cast<float>(component.transform.translationMetres.x),
+                    static_cast<float>(component.transform.translationMetres.y),
+                    static_cast<float>(component.transform.translationMetres.z));
+                const auto projected = gizmo::projectWorldToViewport(
+                    center, viewProj, rectMin, rectSize);
+                if (gizmo::hitTestHandle(mousePosition, projected, kComponentHitRadius)
+                    && projected.depth < hoveredDepth) {
+                    hoveredComponentId = component.id;
+                    hoveredDepth = projected.depth;
+                }
+            }
+
+            if (sandboxGizmoDragging_) {
+                if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                    auto candidate = benchProject_.scene;
+                    if (const auto* component = candidate.find(selectedBenchComponentId_)) {
+                        auto restored = *component;
+                        restored.transform = sandboxDragInitialTransform_;
+                        candidate.replace(restored.id, restored);
+                        static_cast<void>(applyBenchScene(
+                            std::move(candidate), "Cancelled sandbox gizmo edit"));
+                    }
+                    sandboxGizmoDragging_ = false;
+                    sandboxGizmoChanged_ = false;
+                } else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                    sandboxGizmoDragging_ = false;
+                    sandboxGizmoChanged_ = false;
+                } else if (const auto* component = benchProject_.scene.find(selectedBenchComponentId_)) {
+                    auto candidate = benchProject_.scene;
+                    auto edited = *component;
+                    if (sandboxGizmoMode_ == SandboxGizmoMode::Translate) {
+                        const double metresPerPixel = 0.00045
+                            * static_cast<double>(camera_.distance());
+                        const glm::vec3 deltaWorld = camera_.rightVector()
+                                * (io.MouseDelta.x * static_cast<float>(metresPerPixel))
+                            + camera_.upVector()
+                                * (-io.MouseDelta.y * static_cast<float>(metresPerPixel));
+                        edited.transform.translationMetres = edited.transform.translationMetres
+                            + math::Vec3d {
+                                static_cast<double>(deltaWorld.x),
+                                static_cast<double>(deltaWorld.y),
+                                static_cast<double>(deltaWorld.z),
+                            };
+                    } else {
+                        edited.transform = gizmo::rotateRigidTransformLocally(
+                            edited.transform,
+                            gizmo::LocalRotationAxis::Y,
+                            static_cast<double>(io.MouseDelta.x) * 0.01);
+                        edited.transform = gizmo::rotateRigidTransformLocally(
+                            edited.transform,
+                            gizmo::LocalRotationAxis::X,
+                            static_cast<double>(-io.MouseDelta.y) * 0.01);
+                    }
+                    candidate.replace(edited.id, edited);
+                    sandboxGizmoChanged_ = applyBenchScene(
+                        std::move(candidate),
+                        sandboxGizmoMode_ == SandboxGizmoMode::Translate
+                            ? "Moved component in viewport"
+                            : "Rotated component in viewport")
+                        || sandboxGizmoChanged_;
+                }
+            }
+
+            if (isHovered && noActiveWidget && !sandboxGizmoDragging_) {
+                if (std::abs(io.MouseWheel) > 0.0F) {
+                    camera_.zoom(io.MouseWheel);
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_W, false)) {
+                    sandboxGizmoMode_ = SandboxGizmoMode::Translate;
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_E, false)) {
+                    sandboxGizmoMode_ = SandboxGizmoMode::Rotate;
+                }
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+                    isOrbiting_ = true;
+                }
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) {
+                    isPanning_ = true;
+                }
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                    selectedBenchComponentId_ = hoveredComponentId;
+                    if (!selectedBenchComponentId_.empty()) {
+                        sandboxDragInitialTransform_ = benchProject_.scene
+                            .find(selectedBenchComponentId_)->transform;
+                        sandboxGizmoDragging_ = true;
+                        sandboxGizmoChanged_ = false;
+                    }
+                    static_cast<void>(showSandboxViewport());
+                }
+            }
+
+            if (isOrbiting_) {
+                if (ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+                    camera_.orbit(io.MouseDelta.x * 0.005F, -io.MouseDelta.y * 0.005F);
+                } else {
+                    isOrbiting_ = false;
+                }
+            }
+            if (isPanning_) {
+                if (ImGui::IsMouseDown(ImGuiMouseButton_Middle)) {
+                    const float panFactor = 0.0015F * camera_.distance();
+                    camera_.pan(-io.MouseDelta.x * panFactor, io.MouseDelta.y * panFactor);
+                } else {
+                    isPanning_ = false;
+                }
+            }
+
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            if (drawList != nullptr) {
+                drawList->PushClipRect(
+                    imagePosMin,
+                    ImVec2(imagePosMin.x + imageSize.x, imagePosMin.y + imageSize.y),
+                    true);
+                for (const auto& component : benchProject_.scene.components()) {
+                    const glm::vec3 center(
+                        static_cast<float>(component.transform.translationMetres.x),
+                        static_cast<float>(component.transform.translationMetres.y),
+                        static_cast<float>(component.transform.translationMetres.z));
+                    const auto projected = gizmo::projectWorldToViewport(
+                        center, viewProj, rectMin, rectSize);
+                    if (!projected.visible) {
+                        continue;
+                    }
+                    const bool selected = component.id == selectedBenchComponentId_;
+                    const bool hovered = component.id == hoveredComponentId;
+                    const ImU32 color = selected
+                        ? IM_COL32(255, 220, 80, 255)
+                        : hovered ? IM_COL32(120, 220, 255, 255)
+                                  : IM_COL32(180, 195, 215, 170);
+                    drawList->AddCircle(
+                        ImVec2(projected.screenPos.x, projected.screenPos.y),
+                        selected ? 10.0F : 7.0F, color, 24, selected ? 2.5F : 1.5F);
+                    if (selected || hovered) {
+                        drawList->AddText(
+                            ImVec2(projected.screenPos.x + 12.0F, projected.screenPos.y - 8.0F),
+                            color,
+                            component.id.c_str());
+                    }
+                }
+                const char* modeName = sandboxGizmoMode_ == SandboxGizmoMode::Translate
+                    ? "Translate" : "Rotate";
+                const std::string hud = std::string("SANDBOX | ") + modeName
+                    + " [W/E] | LMB component/edit | RMB orbit | MMB pan | wheel zoom";
+                drawList->AddRectFilled(
+                    ImVec2(imagePosMin.x + 10.0F, imagePosMin.y + 10.0F),
+                    ImVec2(imagePosMin.x + 570.0F, imagePosMin.y + 34.0F),
+                    IM_COL32(8, 15, 25, 205), 4.0F);
+                drawList->AddText(
+                    ImVec2(imagePosMin.x + 17.0F, imagePosMin.y + 15.0F),
+                    IM_COL32(210, 230, 245, 255), hud.c_str());
+                drawList->PopClipRect();
+            }
+        } else {
 
         // Aspect ratio corresponds to actual offscreen FBO size
         const float aspect = (fboHeight > 0)
@@ -4523,11 +5272,14 @@ void Application::drawWorkspace() {
 
             drawList->PopClipRect();
         }
+        }
     } else {
         const bool shouldCommitGizmoDrag
             = isGizmoDragging_ && gizmoDragChanged_;
         isOrbiting_ = false;
         isPanning_ = false;
+        sandboxGizmoDragging_ = false;
+        sandboxGizmoChanged_ = false;
         isGizmoDragging_ = false;
         draggedTarget_ = GizmoTarget::None;
         if (shouldCommitGizmoDrag) {
@@ -4538,6 +5290,9 @@ void Application::drawWorkspace() {
     ImGui::End();
 
     ImGui::Begin(docking::DockLayoutConfig::kInspectorWindowName);
+
+    drawSandboxInspector();
+    ImGui::SeparatorText("Legacy Reference Workbenches");
 
     ImGui::SeparatorText("Edit History");
     ImGui::BeginDisabled(!lessonEditHistory_.canUndo());
@@ -5091,6 +5846,73 @@ int Application::run(const RunOptions& options) {
             SDL_Log(
                 "OpenGL smoke check failed: packaged UI font: %s",
                 ex.what());
+            rawGlError = true;
+        }
+    }
+    if (glSmokeMode_) {
+        try {
+            const auto& requiredKinds = optics::scene::requiredBenchComponentKinds();
+            const bool hasEveryKind = std::all_of(
+                requiredKinds.begin(), requiredKinds.end(), [this](const auto kind) {
+                    return std::any_of(
+                        benchProject_.scene.components().begin(),
+                        benchProject_.scene.components().end(),
+                        [kind](const auto& component) { return component.kind == kind; });
+                });
+            const std::string serialized = serializeBenchProject(benchProject_);
+            const auto restored = parseBenchProject(serialized);
+            bool redEvidence = false;
+            bool greenEvidence = false;
+            bool blueEvidence = false;
+            if (renderer_ && renderer_->framebuffer().isValid()) {
+                const int width = renderer_->framebuffer().width();
+                const int height = renderer_->framebuffer().height();
+                if (width <= 0 || height <= 0
+                    || width > 4096 || height > 4096) {
+                    throw std::runtime_error("dynamic sandbox framebuffer dimensions are invalid");
+                }
+                std::vector<std::uint8_t> pixels(
+                    static_cast<std::size_t>(width)
+                        * static_cast<std::size_t>(height) * 4);
+                GLint previousReadFramebuffer = 0;
+                GLint previousPackAlignment = 0;
+                glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &previousReadFramebuffer);
+                glGetIntegerv(GL_PACK_ALIGNMENT, &previousPackAlignment);
+                glBindFramebuffer(
+                    GL_READ_FRAMEBUFFER, renderer_->framebuffer().handle());
+                glPixelStorei(GL_PACK_ALIGNMENT, 1);
+                glReadPixels(
+                    0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+                glPixelStorei(GL_PACK_ALIGNMENT, previousPackAlignment);
+                glBindFramebuffer(
+                    GL_READ_FRAMEBUFFER,
+                    static_cast<GLuint>(previousReadFramebuffer));
+                for (std::size_t offset = 0; offset < pixels.size(); offset += 4) {
+                    const auto red = pixels[offset];
+                    const auto green = pixels[offset + 1];
+                    const auto blue = pixels[offset + 2];
+                    redEvidence = redEvidence
+                        || (red > 150 && green < 130 && blue < 130);
+                    greenEvidence = greenEvidence
+                        || (green > 150 && red < 130 && blue < 150);
+                    blueEvidence = blueEvidence
+                        || (blue > 150 && red < 150 && green < 170);
+                }
+            }
+            if (viewportMode_ != ViewportMode::Sandbox
+                || !hasEveryKind
+                || benchTraceGraph_.sourceRevision != benchProject_.scene.revision()
+                || benchTraceGraph_.segments.empty()
+                || benchTraceGraph_.interactions.empty()
+                || !renderer_
+                || renderer_->sceneVertexCount() <= 0
+                || !redEvidence || !greenEvidence || !blueEvidence
+                || serializeBenchProject(restored) != serialized) {
+                throw std::runtime_error(
+                    "dynamic sandbox did not retain all component, trace, render, and persistence evidence");
+            }
+        } catch (const std::exception& ex) {
+            SDL_Log("OpenGL smoke check failed: dynamic sandbox: %s", ex.what());
             rawGlError = true;
         }
     }

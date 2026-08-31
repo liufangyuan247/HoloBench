@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstddef>
 #include <memory>
+#include <numbers>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -12,6 +14,7 @@
 
 #include "app/WaveDetectorUiState.hpp"
 #include "app/WaveWorkbenchProject.hpp"
+#include "app/BenchProject.hpp"
 #include "app/LessonEditHistory.hpp"
 #include "app/HolographyLabPipeline.hpp"
 #include "app/HolographyUiState.hpp"
@@ -22,6 +25,7 @@
 #include "app/lessons/LearnSession.hpp"
 #include "app/lessons/Localization.hpp"
 #include "optics/ray/BenchTracer.hpp"
+#include "optics/ray/DynamicBenchTracer.hpp"
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
 #include "render/Camera.hpp"
@@ -179,6 +183,44 @@ struct AxisProjection {
     return initialApertureZ;
 }
 
+enum class LocalRotationAxis {
+    X,
+    Y,
+    Z,
+};
+
+[[nodiscard]] inline math::RigidTransform3d rotateRigidTransformLocally(
+    const math::RigidTransform3d& transform,
+    LocalRotationAxis localAxis,
+    double angleRadians) {
+    if (!std::isfinite(angleRadians)) {
+        throw std::invalid_argument("gizmo rotation angle must be finite");
+    }
+    math::validateRigidTransform(transform);
+    math::Vec3d worldAxis = transform.localZAxisInWorld;
+    if (localAxis == LocalRotationAxis::X) {
+        worldAxis = transform.localXAxisInWorld;
+    } else if (localAxis == LocalRotationAxis::Y) {
+        worldAxis = transform.localYAxisInWorld;
+    }
+    const auto rotateVector = [worldAxis, angleRadians](math::Vec3d vector) {
+        return vector * std::cos(angleRadians)
+            + math::cross(worldAxis, vector) * std::sin(angleRadians)
+            + worldAxis * (math::dot(worldAxis, vector) * (1.0 - std::cos(angleRadians)));
+    };
+    math::RigidTransform3d result = transform;
+    result.localXAxisInWorld = math::normalized(
+        rotateVector(result.localXAxisInWorld));
+    const math::Vec3d rotatedY = rotateVector(result.localYAxisInWorld);
+    result.localYAxisInWorld = math::normalized(
+        rotatedY - result.localXAxisInWorld
+            * math::dot(rotatedY, result.localXAxisInWorld));
+    result.localZAxisInWorld = math::cross(
+        result.localXAxisInWorld, result.localYAxisInWorld);
+    math::validateRigidTransform(result);
+    return result;
+}
+
 } // namespace gizmo
 
 namespace docking {
@@ -259,6 +301,16 @@ enum class GizmoTarget {
     Screen
 };
 
+enum class ViewportMode {
+    Sandbox,
+    LegacyReference,
+};
+
+enum class SandboxGizmoMode {
+    Translate,
+    Rotate,
+};
+
 struct RunOptions {
     int smokeFrameLimit = 0;
     int benchmarkFrames = 0;
@@ -322,6 +374,14 @@ private:
     bool applyScene(
         const optics::scene::OpticalBenchScene& candidateScene,
         const optics::ray::BenchTracerOptions& candidateOptions);
+    bool applyBenchScene(
+        optics::scene::BenchScene candidateScene,
+        std::string statusMessage);
+    bool showSandboxViewport();
+    bool showLegacyViewport();
+    void drawSandboxInspector();
+    void loadBenchProjectFromPath();
+    void saveBenchProjectToPath();
     void loadSceneFromPath(const char* pathStr);
     void saveSceneToPath(const char* pathStr);
 
@@ -335,6 +395,16 @@ private:
     bool dockLayoutInitialized_ = false;
     bool isOrbiting_ = false;
     bool isPanning_ = false;
+
+    ViewportMode viewportMode_ = ViewportMode::Sandbox;
+    SandboxGizmoMode sandboxGizmoMode_ = SandboxGizmoMode::Translate;
+    bool sandboxGizmoDragging_ = false;
+    bool sandboxGizmoChanged_ = false;
+    math::RigidTransform3d sandboxDragInitialTransform_ {};
+    std::string selectedBenchComponentId_;
+    std::size_t sandboxNextComponentOrdinal_ = 1;
+    int sandboxLibraryKindIndex_ = 0;
+    float sandboxRotationStepDegrees_ = 5.0F;
 
     GizmoTarget selectedTarget_ = GizmoTarget::None;
     GizmoTarget draggedTarget_ = GizmoTarget::None;
@@ -427,9 +497,14 @@ private:
     std::vector<optics::ray::RaySegment> stagingRaySegments_;
     optics::ray::BenchTracerOptions tracerOptions_;
 
+    BenchProject benchProject_;
+    optics::scene::BenchTraceGraph benchTraceGraph_;
+    optics::scene::TraceBudget benchTraceBudget_;
+
     std::string errorMessage_;
     std::string statusMessage_;
     char projectPathBuffer_[512] = "holobench_scene.json";
+    char benchProjectPathBuffer_[512] = "holobench_bench.json";
     char reflectionProjectPathBuffer_[512] = "reflection_workbench.json";
     char realLensPathBuffer_[512] = "holobench_lens.json";
     char slmCalibrationPathBuffer_[512] = "slm_response.json";
