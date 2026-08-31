@@ -13,7 +13,9 @@ numerically false.
   physical SI output sampling.
 - [x] 4-f compute orchestration with circular Fourier-plane low-pass,
   high-pass, and band-pass filters; interactive UI controls remain pending.
-- [ ] Angular-spectrum visualizer with propagating/evanescent identification.
+- [ ] Angular-spectrum visualizer UI with propagating/evanescent identification;
+  centred physical-frequency data, energy fractions, and arbitrary-plane probe
+  backend are complete.
 - [x] Circular-pupil coherent amplitude/intensity PSF and explicitly
   incoherent MTF computation with independent diffraction oracles.
 - [x] Sampling diagnostics data model for aliasing, angular bandwidth,

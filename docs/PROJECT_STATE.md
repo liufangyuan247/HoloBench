@@ -66,8 +66,9 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 - **4-f numerical foundation**: Two transforms reproduce periodic-grid inversion, `M=-f2/f1`, `f1/f2` complex-amplitude magnitude, and integrated-intensity conservation. Large axial phase is range-reduced before centred-index phase to prevent spatially varying cancellation.
 - **4-f spatial filtering**: Orchestration preserves the unfiltered Fourier plane, hard-edged circular low/high/band-pass filtered plane, and image plane. Known discrete harmonics independently verify filter selection and demonstrate that closing the low-pass aperture removes high-frequency image contrast.
 - **Circular-pupil PSF/MTF**: Computes normalized coherent amplitude/Airy intensity PSF and explicitly incoherent MTF with cutoffs `a/(lambda f)` and `2a/(lambda f)`. Independent J1 references, discrete pupil overlap, and a real 4-f point-source/circular-stop result validate the model without relying on optional standard-library special functions.
+- **Angular spectrum and plane probes**: A centred, physical-frequency angular-spectrum map exposes complex coefficients, propagating/evanescent classification, longitudinal/decay frequency, and independent spectral-energy fractions. Fixed-grid probes evaluate arbitrary positive/negative ASM distances while preserving the exact source field at `z=0`.
 - **Sampling diagnostics foundation**: Reports physical extent, Nyquist angles, requested-band aliasing, periodic wrap-around, required padding factor, aperture/support boundary clearance, and sampled evanescent bins. Caller support claims are checked against every non-zero sample.
-- **Local gate**: Windows Clang warnings-as-errors core and application builds pass with 219/219 headless tests, including sixteen new M3 cases.
+- **Local gate**: Windows Clang warnings-as-errors core and application builds pass with 225/225 headless tests, including twenty-two new M3 cases.
 
 ## Known limitations (M1/M2)
 
@@ -80,7 +81,7 @@ Previous: **M1 — 3D Optical Bench + Geometric Optics: complete**
 ## Next five tasks
 
 1. Run and record GPU parity plus `wave/asm_1024_square_gpu_recompute` on the target NVIDIA card.
-2. Add the angular-spectrum propagating/evanescent visualizer and arbitrary-plane probe data path.
-3. Connect Fourier filtering, PSF/MTF, and sampling diagnostics to the Sampling Debugger UI.
-4. Define and pass named M3 CPU/GPU performance budgets without applying device-wide caps.
-5. Pass the M3 Windows/Linux warnings-as-errors, UI smoke, documentation, and release-integration gates.
+2. Connect angular-spectrum classification, plane probes, Fourier filtering, PSF/MTF, and sampling diagnostics to the Sampling Debugger UI.
+3. Define and pass named M3 CPU/GPU performance budgets without applying device-wide caps.
+4. Pass the M3 Windows/Linux warnings-as-errors and UI smoke gates.
+5. Complete M3 documentation, release-integration review, and tag only after every gate is green.

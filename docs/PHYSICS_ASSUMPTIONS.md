@@ -102,4 +102,6 @@ This file records active physical assumptions, sign conventions, and validity do
 - Axis Nyquist half-angle is $\theta_N=\arcsin(\min(1,\lambda/(2\Delta x)))$. Angular requests beyond this limit are reported as aliased; the solver is not silently restricted or modified.
 - Periodic wrap-around and required padding use the conservative centred-support envelope $D_\text{required}=D+2|z|\tan\theta$. Caller-provided support must contain every non-zero field sample.
 - The maximum sampled radial frequency uses the exact discrete FFT bins, including the smaller maximum positive/negative magnitude on odd grids, and is compared with $1/\lambda$ to report sampled evanescent content.
+- Angular-spectrum maps use centred physical frequency coordinates. Bins at or below $1/\lambda$ are propagating; bins strictly above it are evanescent and report the positive decay frequency $\sqrt{f_x^2+f_y^2-1/\lambda^2}$.
+- Arbitrary-plane probes preserve a fixed discrete transverse sample across requested positive or negative ASM distances. At exactly $z=0$ the source field is returned without applying the solver's evanescent cutoff.
 - Sampling diagnostics report risks only. They never silently pad, suppress spectral bins, change propagation settings, or introduce device-specific performance limits.

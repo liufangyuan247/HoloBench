@@ -57,6 +57,8 @@ add_library(holobench_compute STATIC
     compute/propagation/AngularSpectrumPropagator.cpp
     compute/propagation/FraunhoferPropagator.cpp
     compute/propagation/FresnelPropagator.cpp
+    compute/sampling/AngularSpectrumAnalysis.cpp
+    compute/sampling/PlaneProbe.cpp
     compute/sampling/SamplingDiagnostics.cpp
 )
 add_library(HoloBench::Compute ALIAS holobench_compute)
@@ -236,6 +238,8 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/compute/FourFSystemTests.cpp
         tests/compute/FourierOpticsTests.cpp
         tests/compute/PsfMtfTests.cpp
+        tests/compute/AngularSpectrumAnalysisTests.cpp
+        tests/compute/PlaneProbeTests.cpp
         tests/compute/SamplingDiagnosticsTests.cpp
         tests/analytic/BenchTracerTests.cpp
         tests/analytic/GeometricElementsTests.cpp

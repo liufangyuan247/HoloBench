@@ -119,6 +119,20 @@ every non-zero discrete field sample; understated support is rejected.
 These diagnostics expose risks and required padding factors. They do not
 silently pad, resample, suppress evanescent bins, or change solver behaviour.
 
+The angular-spectrum visualization data is stored in centred frequency order
+with physical `fx`, `fy`, radial frequency, the original complex FFT
+coefficient, and peak-normalized spectral intensity. Bins satisfying
+`sqrt(fx^2+fy^2) <= 1/lambda` are propagating and report real longitudinal
+frequency; bins above the cutoff are evanescent and report their positive
+decay frequency. Propagating and evanescent spectral-energy fractions are
+computed independently from the displayed normalization.
+
+An arbitrary-plane probe holds a fixed discrete `(x,y)` sample coordinate and
+evaluates requested positive or negative ASM `z` planes. The exact `z=0` plane
+returns the source sample without applying the evanescent cutoff, while its bin
+counts still reflect the Helmholtz classification. Probe phase uses the same
+unique `[-pi,+pi)` convention and validity mask as the field observables.
+
 ## Validation
 
 - A test-only centred direct DFT independently checks every complex sample of a
@@ -139,3 +153,9 @@ silently pad, resample, suppress evanescent bins, or change solver behaviour.
 - Separate cases cover safe/unsafe padding, periodic wrap-around, boundary
   proximity, evanescent sampled bandwidth, invalid options, and understated
   support.
+- A centred angular-spectrum map matches an independent rectangular direct
+  DFT. A field containing only known DC and Nyquist components independently
+  validates propagating/evanescent classification and energy fractions.
+- Multi-plane probes match the analytic positive/negative-z phase of a normal
+  plane wave; zero fields and the exact source plane validate phase validity
+  and non-destructive `z=0` behaviour.
