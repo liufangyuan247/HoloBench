@@ -120,8 +120,9 @@ geometry stays explicit.
 The local M8 performance gate now runs the real placed transmission,
 reflection, and RGB 256x256 record/replay paths, with p95 budgets of
 750/500/2000 ms respectively. Windows/Linux CI integration is present;
-cross-compiler evidence and corruption-safe project recovery remain before
-M8.5 acceptance.
+cross-compiler evidence remains before M8.5 acceptance. Unified primary and
+`.autosave` bench files now use flushed atomic replacement and tested fallback
+for corrupt primary/autosave cases.
 
 Recipe selectors use stable component paths, wavelength, and coherence identity
 instead of transient branch IDs. Sampling, thin response, and volume material

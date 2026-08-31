@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <fstream>
 #include <initializer_list>
 #include <iterator>
@@ -9,7 +10,19 @@
 #include <set>
 #include <stdexcept>
 #include <string_view>
+#include <system_error>
 #include <utility>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <io.h>
+#include <windows.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 #include <nlohmann/json.hpp>
 
@@ -18,6 +31,119 @@ namespace {
 
 using Json = nlohmann::json;
 namespace scene = optics::scene;
+
+std::filesystem::path temporaryWritePath(
+    const std::filesystem::path& destination) {
+    auto result = destination;
+    result += ".write.tmp";
+    return result;
+}
+
+void removeTemporaryWrite(const std::filesystem::path& path) noexcept {
+    std::error_code ignored;
+    static_cast<void>(std::filesystem::remove(path, ignored));
+}
+
+void writeFlushedFile(
+    const std::filesystem::path& path,
+    std::string_view contents) {
+    std::FILE* output = nullptr;
+#ifdef _WIN32
+    if (_wfopen_s(&output, path.c_str(), L"wb") != 0 || output == nullptr) {
+#else
+    output = std::fopen(path.c_str(), "wb");
+    if (output == nullptr) {
+#endif
+        throw std::runtime_error(
+            "unable to open temporary bench project for writing: "
+            + path.string());
+    }
+
+    const auto closeOutput = [&output]() noexcept {
+        if (output != nullptr) {
+            static_cast<void>(std::fclose(output));
+            output = nullptr;
+        }
+    };
+    try {
+        const std::size_t written
+            = std::fwrite(contents.data(), 1U, contents.size(), output);
+        if (written != contents.size() || std::fflush(output) != 0) {
+            throw std::runtime_error(
+                "failed while writing temporary bench project: "
+                + path.string());
+        }
+#ifdef _WIN32
+        if (_commit(_fileno(output)) != 0) {
+#else
+        if (::fsync(fileno(output)) != 0) {
+#endif
+            throw std::runtime_error(
+                "failed while flushing temporary bench project: "
+                + path.string());
+        }
+        if (std::fclose(output) != 0) {
+            output = nullptr;
+            throw std::runtime_error(
+                "failed while closing temporary bench project: "
+                + path.string());
+        }
+        output = nullptr;
+    } catch (...) {
+        closeOutput();
+        throw;
+    }
+}
+
+void atomicReplace(
+    const std::filesystem::path& temporary,
+    const std::filesystem::path& destination) {
+#ifdef _WIN32
+    if (!MoveFileExW(
+            temporary.c_str(),
+            destination.c_str(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        const auto error = static_cast<int>(GetLastError());
+        throw std::runtime_error(
+            "unable to replace bench project atomically: "
+            + destination.string() + ": "
+            + std::system_category().message(error));
+    }
+#else
+    std::error_code error;
+    std::filesystem::rename(temporary, destination, error);
+    if (error) {
+        throw std::runtime_error(
+            "unable to replace bench project atomically: "
+            + destination.string() + ": " + error.message());
+    }
+    const auto parent = destination.has_parent_path()
+        ? destination.parent_path() : std::filesystem::path(".");
+    const int directory = ::open(parent.c_str(), O_RDONLY | O_DIRECTORY);
+    if (directory >= 0) {
+        static_cast<void>(::fsync(directory));
+        static_cast<void>(::close(directory));
+    }
+#endif
+}
+
+void writeBenchProjectAtomically(
+    const BenchProject& project,
+    const std::filesystem::path& path) {
+    if (path.empty()) {
+        throw std::invalid_argument("bench project path must not be empty");
+    }
+    const std::string contents = serializeBenchProject(project);
+    const auto temporary = temporaryWritePath(path);
+    removeTemporaryWrite(temporary);
+    try {
+        writeFlushedFile(temporary, contents);
+        atomicReplace(temporary, path);
+    } catch (...) {
+        removeTemporaryWrite(temporary);
+        throw;
+    }
+}
 
 void requireKeys(
     const Json& object,
@@ -1019,15 +1145,7 @@ BenchProject parseBenchProject(std::string_view jsonText) {
 }
 
 void saveBenchProject(const BenchProject& project, const std::filesystem::path& path) {
-    const std::string contents = serializeBenchProject(project);
-    std::ofstream output(path, std::ios::binary | std::ios::trunc);
-    if (!output) {
-        throw std::runtime_error("unable to open bench project for writing: " + path.string());
-    }
-    output.write(contents.data(), static_cast<std::streamsize>(contents.size()));
-    if (!output) {
-        throw std::runtime_error("failed while writing bench project: " + path.string());
-    }
+    writeBenchProjectAtomically(project, path);
 }
 
 BenchProject loadBenchProject(const std::filesystem::path& path) {
@@ -1039,6 +1157,74 @@ BenchProject loadBenchProject(const std::filesystem::path& path) {
         (std::istreambuf_iterator<char>(input)),
         std::istreambuf_iterator<char>());
     return parseBenchProject(contents);
+}
+
+std::filesystem::path benchProjectAutosavePath(
+    const std::filesystem::path& primaryPath) {
+    if (primaryPath.empty()) {
+        throw std::invalid_argument("bench project path must not be empty");
+    }
+    auto result = primaryPath;
+    result += ".autosave";
+    return result;
+}
+
+void saveBenchProjectAutosave(
+    const BenchProject& project,
+    const std::filesystem::path& primaryPath) {
+    writeBenchProjectAtomically(project, benchProjectAutosavePath(primaryPath));
+}
+
+void discardBenchProjectAutosave(
+    const std::filesystem::path& primaryPath) noexcept {
+    if (primaryPath.empty()) {
+        return;
+    }
+    auto autosave = primaryPath;
+    autosave += ".autosave";
+    std::error_code ignored;
+    static_cast<void>(std::filesystem::remove(autosave, ignored));
+    removeTemporaryWrite(temporaryWritePath(autosave));
+}
+
+BenchProjectRecoveryResult loadBenchProjectWithRecovery(
+    const std::filesystem::path& primaryPath) {
+    const auto autosave = benchProjectAutosavePath(primaryPath);
+    std::string autosaveError;
+    std::error_code existsError;
+    const bool hasAutosave = std::filesystem::exists(autosave, existsError);
+    if (existsError) {
+        throw std::runtime_error(
+            "unable to inspect bench autosave: " + autosave.string()
+            + ": " + existsError.message());
+    }
+    if (hasAutosave) {
+        try {
+            return {
+                .project = loadBenchProject(autosave),
+                .source = BenchProjectRecoverySource::Autosave,
+                .ignoredInvalidAutosave = false,
+            };
+        } catch (const std::exception& error) {
+            autosaveError = error.what();
+        }
+    }
+
+    try {
+        return {
+            .project = loadBenchProject(primaryPath),
+            .source = BenchProjectRecoverySource::Primary,
+            .ignoredInvalidAutosave = !autosaveError.empty(),
+        };
+    } catch (const std::exception& primaryError) {
+        if (!autosaveError.empty()) {
+            throw std::runtime_error(
+                "unable to recover bench project; autosave is invalid ("
+                + autosaveError + ") and primary is invalid ("
+                + primaryError.what() + ")");
+        }
+        throw;
+    }
 }
 
 } // namespace holobench::app

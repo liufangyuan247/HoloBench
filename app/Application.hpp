@@ -397,6 +397,7 @@ private:
     void drawSandboxInspector();
     void loadBenchProjectFromPath();
     void saveBenchProjectToPath();
+    void autosaveBenchProjectAfterEdit();
     void recomputeRecordingRecipe(
         const optics::holography::PlateIncidentFieldSet& fields,
         const HologramRecordingRecipe& recipe);

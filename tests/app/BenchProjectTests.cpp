@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -11,6 +13,49 @@
 
 namespace app = holobench::app;
 namespace scene = holobench::optics::scene;
+
+namespace {
+
+class TemporaryBenchFile final {
+public:
+    TemporaryBenchFile() {
+        static std::atomic<unsigned long long> sequence {0U};
+        const auto nonce = std::chrono::steady_clock::now()
+            .time_since_epoch().count();
+        path_ = std::filesystem::temp_directory_path()
+            / ("holobench-bench-recovery-" + std::to_string(nonce) + "-"
+                + std::to_string(sequence.fetch_add(1U)) + ".json");
+    }
+
+    ~TemporaryBenchFile() {
+        std::error_code ignored;
+        static_cast<void>(std::filesystem::remove(path_, ignored));
+        const auto autosave = app::benchProjectAutosavePath(path_);
+        static_cast<void>(std::filesystem::remove(autosave, ignored));
+        auto primaryTemporary = path_;
+        primaryTemporary += ".write.tmp";
+        static_cast<void>(std::filesystem::remove(primaryTemporary, ignored));
+        auto autosaveTemporary = autosave;
+        autosaveTemporary += ".write.tmp";
+        static_cast<void>(std::filesystem::remove(autosaveTemporary, ignored));
+    }
+
+    [[nodiscard]] const std::filesystem::path& path() const noexcept {
+        return path_;
+    }
+
+private:
+    std::filesystem::path path_;
+};
+
+void writeInvalidJson(const std::filesystem::path& path) {
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    REQUIRE(output.good());
+    output << "{truncated";
+    REQUIRE(output.good());
+}
+
+} // namespace
 
 TEST_CASE("unified bench project round trips every kind arbitrary transforms and RGB channels byte-stably") {
     app::BenchProject project;
@@ -127,14 +172,79 @@ TEST_CASE("bench project parser rejects unknown keys duplicate IDs and invalid p
 }
 
 TEST_CASE("bench project file persistence uses the same canonical representation") {
-    const auto path = std::filesystem::temp_directory_path() / "holobench_m7_bench_project_test.json";
+    const TemporaryBenchFile file;
     app::BenchProject project;
     project.projectId = "file-round-trip";
     project.scene.add(scene::makeDefaultBenchComponent(
         scene::BenchComponentKind::HolographicPlate, "plate-h1"));
 
-    app::saveBenchProject(project, path);
-    const auto loaded = app::loadBenchProject(path);
+    app::saveBenchProject(project, file.path());
+    const auto loaded = app::loadBenchProject(file.path());
     CHECK(app::serializeBenchProject(loaded) == app::serializeBenchProject(project));
-    std::filesystem::remove(path);
+    auto temporary = file.path();
+    temporary += ".write.tmp";
+    CHECK_FALSE(std::filesystem::exists(temporary));
+}
+
+TEST_CASE("valid autosave is preferred and can recover a corrupt primary") {
+    const TemporaryBenchFile file;
+    app::BenchProject primary;
+    primary.projectId = "primary";
+    primary.name = "Explicit save";
+    app::saveBenchProject(primary, file.path());
+
+    auto edited = primary;
+    edited.name = "Recovered unsaved edit";
+    edited.scene.add(scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::HolographicPlate, "recovered-plate"));
+    app::saveBenchProjectAutosave(edited, file.path());
+
+    auto recovery = app::loadBenchProjectWithRecovery(file.path());
+    CHECK(recovery.source == app::BenchProjectRecoverySource::Autosave);
+    CHECK_FALSE(recovery.ignoredInvalidAutosave);
+    CHECK(app::serializeBenchProject(recovery.project)
+        == app::serializeBenchProject(edited));
+
+    writeInvalidJson(file.path());
+    recovery = app::loadBenchProjectWithRecovery(file.path());
+    CHECK(recovery.source == app::BenchProjectRecoverySource::Autosave);
+    CHECK(app::serializeBenchProject(recovery.project)
+        == app::serializeBenchProject(edited));
+}
+
+TEST_CASE("invalid autosave falls back to a valid primary and is reported") {
+    const TemporaryBenchFile file;
+    app::BenchProject primary;
+    primary.projectId = "valid-primary";
+    primary.name = "Valid primary";
+    app::saveBenchProject(primary, file.path());
+    writeInvalidJson(app::benchProjectAutosavePath(file.path()));
+
+    const auto recovery = app::loadBenchProjectWithRecovery(file.path());
+    CHECK(recovery.source == app::BenchProjectRecoverySource::Primary);
+    CHECK(recovery.ignoredInvalidAutosave);
+    CHECK(app::serializeBenchProject(recovery.project)
+        == app::serializeBenchProject(primary));
+
+    app::discardBenchProjectAutosave(file.path());
+    CHECK_FALSE(std::filesystem::exists(
+        app::benchProjectAutosavePath(file.path())));
+}
+
+TEST_CASE("recovery rejects corrupt primary and autosave without deleting evidence") {
+    const TemporaryBenchFile file;
+    writeInvalidJson(file.path());
+    const auto autosave = app::benchProjectAutosavePath(file.path());
+    writeInvalidJson(autosave);
+
+    try {
+        static_cast<void>(app::loadBenchProjectWithRecovery(file.path()));
+        FAIL("corrupt primary and autosave should not be recoverable");
+    } catch (const std::runtime_error& error) {
+        const std::string message = error.what();
+        CHECK(message.find("autosave is invalid") != std::string::npos);
+        CHECK(message.find("primary is invalid") != std::string::npos);
+    }
+    CHECK(std::filesystem::exists(file.path()));
+    CHECK(std::filesystem::exists(autosave));
 }

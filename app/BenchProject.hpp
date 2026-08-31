@@ -65,6 +65,17 @@ struct BenchProject final {
     std::vector<HologramRecordingRecipe> recordingRecipes;
 };
 
+enum class BenchProjectRecoverySource {
+    Primary,
+    Autosave,
+};
+
+struct BenchProjectRecoveryResult final {
+    BenchProject project;
+    BenchProjectRecoverySource source = BenchProjectRecoverySource::Primary;
+    bool ignoredInvalidAutosave = false;
+};
+
 void validateBenchProject(const BenchProject& project);
 
 [[nodiscard]] std::string serializeBenchProject(const BenchProject& project);
@@ -72,5 +83,18 @@ void validateBenchProject(const BenchProject& project);
 
 void saveBenchProject(const BenchProject& project, const std::filesystem::path& path);
 [[nodiscard]] BenchProject loadBenchProject(const std::filesystem::path& path);
+
+// Primary and autosave writes use a flushed sibling temporary followed by an
+// atomic same-directory replacement. The autosave's existence means it was
+// produced after the last explicit save and should be offered first.
+[[nodiscard]] std::filesystem::path benchProjectAutosavePath(
+    const std::filesystem::path& primaryPath);
+void saveBenchProjectAutosave(
+    const BenchProject& project,
+    const std::filesystem::path& primaryPath);
+void discardBenchProjectAutosave(
+    const std::filesystem::path& primaryPath) noexcept;
+[[nodiscard]] BenchProjectRecoveryResult loadBenchProjectWithRecovery(
+    const std::filesystem::path& primaryPath);
 
 } // namespace holobench::app

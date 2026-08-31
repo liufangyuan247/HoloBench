@@ -384,9 +384,17 @@ completion because it is primarily driven through fixed parameter panels:
   p95 is **78.915/84.668/239.419 ms** against platform-neutral
   **750/500/2000 ms** budgets. Each scene rejects stale, unresolved,
   zero-power, or non-finite output and is registered in Windows/Linux core CI.
-- **Current local validation**: Windows Clang development build passes 504/504
+- **Crash-safe bench persistence**: Primary and `.autosave` unified bench files
+  now use flushed same-directory temporary files and atomic replacement. Edits,
+  completed gizmo drags, recipe changes, undo, and redo update recovery state;
+  explicit save clears it only after success. Loading prefers a valid autosave,
+  falls back from a corrupt autosave to a valid primary, recovers a corrupt
+  primary from a valid autosave, and preserves both files when neither parses.
+  See [ADR 0015](adr/0015-atomic-bench-autosave-recovery.md).
+- **Current local validation**: Windows Clang development build passes 507/507
   deterministic CPU, application, font, and OpenGL GPU cases after the placed
-  volume/RGB/local-wave-path/recipe/SLM increments; `core-ci` passes 502/502, `app-ci` compiles
+  volume/RGB/local-wave-path/recipe/SLM/recovery increments; `core-ci` passes
+  505/505, `app-ci` compiles
   warnings-as-errors, and the hidden OpenGL smoke exits successfully on AMD
   Radeon Pro 5300M. Remote cross-compiler CI remains required before the M8
   slice is closed.
@@ -403,7 +411,7 @@ completion because it is primarily driven through fixed parameter panels:
 
 1. Complete remote cross-compiler/application validation for the named M8
    transmission, reflection, and RGB performance scenes.
-2. Add corruption-safe autosave/recovery around unified bench documents.
-3. Compile a versioned M9 CHIMERA recipe into an editable bench.
-4. Simulate its hogel/angular data and SLM/RGB exposure events.
-5. Add bounded CHIMERA reconstruction and deterministic parameter sweeps.
+2. Compile a versioned M9 CHIMERA recipe into an editable bench.
+3. Simulate its hogel/angular data and SLM/RGB exposure events.
+4. Add bounded CHIMERA reconstruction and deterministic parameter sweeps.
+5. Add resumable CHIMERA batch execution and cross-platform acceptance gates.

@@ -585,6 +585,9 @@ bool Application::applyDynamicBenchProject(
         }
         errorMessage_.clear();
         statusMessage_ = std::move(newStatusMessage);
+        if (recordHistory && benchEditHistoryReady_) {
+            autosaveBenchProjectAfterEdit();
+        }
         return true;
     } catch (const std::exception& error) {
         errorMessage_ = error.what();
@@ -627,11 +630,25 @@ bool Application::showLegacyViewport() {
 
 void Application::loadBenchProjectFromPath() {
     try {
-        BenchProject loaded = loadBenchProject(benchProjectPathBuffer_);
-        const std::string loadedName = loaded.name;
+        auto recovered = loadBenchProjectWithRecovery(benchProjectPathBuffer_);
+        const std::string loadedName = recovered.project.name;
+        const auto source = recovered.source;
+        const bool ignoredInvalidAutosave = recovered.ignoredInvalidAutosave;
         selectedBenchComponentId_.clear();
-        static_cast<void>(applyDynamicBenchProject(
-            std::move(loaded), "Loaded optical bench: " + loadedName));
+        if (applyDynamicBenchProject(
+                std::move(recovered.project),
+                "Loaded optical bench: " + loadedName)) {
+            if (source == BenchProjectRecoverySource::Primary) {
+                discardBenchProjectAutosave(benchProjectPathBuffer_);
+                statusMessage_ = ignoredInvalidAutosave
+                    ? "Loaded optical bench; ignored an invalid autosave: "
+                        + loadedName
+                    : "Loaded optical bench: " + loadedName;
+            } else {
+                statusMessage_ = "Recovered unsaved optical bench edits: "
+                    + loadedName;
+            }
+        }
     } catch (const std::exception& error) {
         errorMessage_ = error.what();
         statusMessage_.clear();
@@ -644,6 +661,7 @@ void Application::recordBenchEdit() {
     }
     try {
         static_cast<void>(benchEditHistory_.record(benchProject_));
+        autosaveBenchProjectAfterEdit();
     } catch (const std::exception& error) {
         errorMessage_ = error.what();
         statusMessage_.clear();
@@ -670,6 +688,8 @@ void Application::undoBenchEdit() {
     const BenchProject state = benchEditHistory_.undo();
     if (!restoreBenchEditState(state)) {
         static_cast<void>(benchEditHistory_.redo());
+    } else {
+        autosaveBenchProjectAfterEdit();
     }
 }
 
@@ -680,17 +700,31 @@ void Application::redoBenchEdit() {
     const BenchProject state = benchEditHistory_.redo();
     if (!restoreBenchEditState(state)) {
         static_cast<void>(benchEditHistory_.undo());
+    } else {
+        autosaveBenchProjectAfterEdit();
     }
 }
 
 void Application::saveBenchProjectToPath() {
     try {
         saveBenchProject(benchProject_, benchProjectPathBuffer_);
+        discardBenchProjectAutosave(benchProjectPathBuffer_);
         errorMessage_.clear();
         statusMessage_ = "Saved optical bench: " + std::string(benchProjectPathBuffer_);
     } catch (const std::exception& error) {
         errorMessage_ = error.what();
         statusMessage_.clear();
+    }
+}
+
+void Application::autosaveBenchProjectAfterEdit() {
+    try {
+        saveBenchProjectAutosave(benchProject_, benchProjectPathBuffer_);
+    } catch (const std::exception& error) {
+        errorMessage_ = std::string("Bench autosave failed: ") + error.what();
+        if (!statusMessage_.empty()) {
+            statusMessage_ += " (autosave unavailable)";
+        }
     }
 }
 
