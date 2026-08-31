@@ -25,7 +25,7 @@ clearly separate first volume-hologram model.
 - [x] Apply-gated Holography Lab state and strict byte-stable project persistence.
 - [x] Dockable interactive Holography Lab controls, views, and diagnostics.
 - [x] Separate volume-hologram data model and first Kogelnik coupled-wave path.
-- [ ] Named CPU performance profile and cross-platform compiler/CI gates.
+- [x] Named CPU performance profile and cross-platform compiler/CI gates.
 
 ## Numerical gate
 

@@ -24,6 +24,12 @@ jobs:
         run: cmake --build --preset core-ci
       - name: Test
         run: ctest --preset core-ci
+      - name: Run M6 CPU performance gate (Windows)
+        if: runner.os == 'Windows'
+        run: .\out\build\core-ci\holobench_m6_benchmark.exe
+      - name: Run M6 CPU performance gate (Linux)
+        if: runner.os == 'Linux'
+        run: ./out/build/core-ci/holobench_m6_benchmark
 
   app-compile:
     name: Application Compile (${{ matrix.os }})

@@ -122,6 +122,7 @@ Previous: **M4 — Real Lens Engineering Model: complete**
 - **Holography Lab foundation**: A headless product pipeline generates a deterministic two-feature complex object for independent RGB channels and runs the complete H1/H2 workflow plus the separate volume model. Draft/applied UI state keeps physics changes dirty until explicit Apply, while plane/channel display changes request visualization only. The strict format-v2 `holography_lab_project` preserves the full grid, RGB wavelengths/indices, object features, H1/H2 geometry, references, thin responses, tolerance, and volume-grating state with semantic validation, file APIs, and byte-stable round trips. Format-v1 projects migrate to explicit default volume state on load and remain apply-gated.
 - **Interactive Holography Lab**: A dedicated dock edits 32/64/128 grids, pitch, three wavelength/index pairs, both complex Gaussian features, H1/H2 axial geometry, reference waves, thin-plate bias/gain, and independent transmission/reflection volume thickness, indices, wavelengths, angles, and shrinkage. Apply is the sole physics refresh gate; RGB channel and H1-exposure/H1-real-image/H2-exposure/H2-replay selection only refresh visualization. The result surface reports signed image placement, complex reconstruction errors, zero/twin sampled/propagating/window status, plus volume grating period, coupling, detuning, mismatch, order propagation, and efficiency.
 - **Volume/Kogelnik CPU reference**: [ADR 0010](adr/0010-volume-hologram-and-kogelnik-conventions.md) defines a separate uniform sinusoidal phase-grating model for transmission and reflection geometries. It derives post-shrink grating period, propagating-order state, longitudinal phase mismatch, coupling, detuning, and scalar-TE diffraction efficiency from thickness, index modulation, record/replay wavelength, and internal angle. It never passes through the thin-mask API or claims calibrated photopolymer/Maxwell fidelity.
+- **Named M6 performance gate**: `holography/rgb_h1_h2_32_64_cpu_full_refresh` fixes complete 32x32 and 64x64 RGB H1/H2 refreshes plus a detuned/shrunk volume result. On Intel Core i7-9750H, Clang/MSVC/GCC p95 values are **38.675/51.780/43.410 ms**, all below the platform-neutral 150 ms budget with identical checksum `1512.57504282`. The executable returns nonzero on budget failure and is included in both core CI jobs.
 - **Current validation**: Windows Clang 21, MSVC 19.44 `/W4 /WX`, and Ubuntu/WSL GCC 15.2 warnings-as-errors pass 347/347 deterministic cases; the Clang development preset passes 348/348 including the GPU executable. Complete Clang/MSVC applications build and both pass the 120-frame hidden-window smoke, which requires a valid Holography Lab texture, no Lab error, and a semantic format-v2 holography-project round trip. Forty-six M6 cases add exact `sin^2(nu)` transmission and `tanh^2(nu)` reflection Bragg limits, detuning symmetry, the reflection critical limit, wavelength/shrinkage detuning, evanescent-order classification, v1-to-v2 project migration, plus the prior thin/phase/H1/H2/Lab gates.
 
 ## Known limitations (M1/M2)
@@ -134,10 +135,10 @@ Previous: **M4 — Real Lens Engineering Model: complete**
 
 ## Next five tasks
 
-1. Add a named M6 CPU benchmark and cross-platform release gate.
-2. Complete the M6 product acceptance checklist and annotated release tag.
-3. Start the M7 teaching-product acceptance flows and lesson structure.
-4. Add guided learning overlays without weakening the engineering diagnostics.
+1. Complete the M6 product acceptance checklist and annotated release tag.
+2. Start the M7 teaching-product acceptance flows and lesson structure.
+3. Add guided learning overlays without weakening the engineering diagnostics.
+4. Add lesson progress persistence separately from physics project state.
 5. Consider GPU
    acceleration only after the CPU/product model is stable, retaining runtime
    capability dispatch and the default path on untested devices.

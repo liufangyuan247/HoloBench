@@ -1,5 +1,24 @@
 # Known limitations
 
+## M6 holography scope
+
+- Thin H1/H2 recording is scalar, fully coherent, and a zero-thickness real
+  amplitude response driven by relative exposure. It is not a calibrated
+  radiometric emulsion, a reflection hologram, or a material-processing model.
+- Isolated image orders are explicitly labelled analytic teaching
+  decompositions. Physical full replay retains zero, desired, and twin orders;
+  the application does not silently filter or spatially select them.
+- Phase-only commands are wavelength-specific ideal phase, not fixed optical
+  path difference or an achromatic device response. RGB channels are evaluated
+  independently and no artificial colour registration offset is applied.
+- The volume path is a uniform lossless sinusoidal phase grating under scalar
+  TE two-wave Kogelnik theory. It omits absorption, Fresnel boundary loss,
+  polarization coupling, multiplexed gratings, nonlinear recording, scattering,
+  chirp, slanted reflection fringes, anisotropic shrinkage, and rigorous Maxwell
+  multi-order effects. Shrinkage is an explicit first isotropic approximation.
+- Holography project v2 migrates v1 files by adding documented default volume
+  parameters. It does not reinterpret legacy optical-bench or M5 documents.
+
 ## M5 SLM and interference scope
 
 - The ideal and calibrated SLM propagation result is scalar. Measured complex-
@@ -60,6 +79,6 @@
 ## Architecture & data
 
 - The current GPU propagation backend covers fused ASM-style spectral transfer; arbitrary non-power-of-two FFTs, automatic padding, and CUDA-specific acceleration are not implemented.
-- JSON project document format v1 is intentionally minimal, with strict version rejection and no migration framework yet. Real-lens prescriptions use separate versioned JSON/CSV exchange formats and are not yet embedded in the legacy M1 scene document.
+- The legacy optical-bench scene document remains format v1 and intentionally minimal. Real-lens prescriptions use separate versioned JSON/CSV exchange and are not embedded in that scene document; the separate holography document is format v2 with a narrowly scoped v1 migration.
 - There is no undo/redo, autosave, crash recovery, localization, accessibility layer, or Steam integration.
 - Hardware control and digital-twin calibration are long-term roadmap modules.

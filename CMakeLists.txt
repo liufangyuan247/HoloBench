@@ -158,6 +158,17 @@ target_link_libraries(holobench_m5_benchmark PRIVATE
 )
 holobench_set_warnings(holobench_m5_benchmark)
 
+add_executable(holobench_m6_benchmark
+    benchmarks/HolographyLabBenchmark.cpp
+)
+target_include_directories(holobench_m6_benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(holobench_m6_benchmark PRIVATE
+    HoloBench::AppLogic
+    HoloBench::Compute
+    HoloBench::Optics
+)
+holobench_set_warnings(holobench_m6_benchmark)
+
 set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(

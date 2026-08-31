@@ -121,3 +121,31 @@ MSVC 19.44 `/O2` independently records p50 **9.935 ms**, p95 **10.857 ms**, and 
 | GCC 15.2 | **123.826 ms** | **175.544 ms** | **< 350 ms** | Met |
 
 M5 currently has no GPU execution path: the CPU reference is the product correctness and performance gate. No vendor/model dispatch, speculative GPU workaround, precision reduction, or performance cap is introduced. Future acceleration must use runtime capabilities and preserve this workload's numerical evidence.
+
+## M6 Verified Holography Lab Benchmark
+
+### Benchmark Profile: `holography/rgb_h1_h2_32_64_cpu_full_refresh`
+
+- **Hardware Profile**: Intel Core i7-9750H (6 cores / 12 logical processors),
+  Windows 10 10.0.19045 and Ubuntu/WSL, Release builds.
+- **Workload**: One 32x32 and one 64x64 complete Holography Lab refresh. Each
+  grid constructs the two-feature complex object independently for 638/532/450
+  nm, performs H1 recording plus conjugate real-image reconstruction, transfers
+  to positioned H2, records/replays H2, evaluates order placement and image
+  quality, and evaluates the separate reflection-volume Kogelnik result. The
+  64x64 case includes replay wavelength detuning and 2% isotropic shrinkage.
+- **Execution Parameters**: Deterministic CPU double-precision backend, 3
+  warmups and 20 measured two-grid refreshes. Checksum is `1512.57504282` on
+  all three compilers.
+
+| Compiler | p50 refresh | p95 refresh | Target Budget | Status |
+|---|---:|---:|---:|---|
+| Clang 21.1.8 | **33.618 ms** | **38.675 ms** | **< 150 ms** | Met |
+| MSVC 19.44 `/O2` | **47.874 ms** | **51.780 ms** | **< 150 ms** | Met |
+| GCC 15.2 | **42.037 ms** | **43.410 ms** | **< 150 ms** | Met |
+
+This Apply-gated CPU reference is the M6 correctness and performance baseline;
+it is not a per-frame rendering target. The executable returns nonzero when the
+p95 budget is missed and runs in both Windows and Ubuntu core CI jobs. It has no
+GPU dispatch, vendor/model branch, speculative workaround, precision reduction,
+or device-specific performance cap.

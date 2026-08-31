@@ -111,6 +111,11 @@ development. For the current repository state and roadmap, see
   scalar-TE coupled-wave solution exposes coupling, detuning, grating period,
   propagating-order state, and efficiency without reusing or relabelling the
   thin-mask pipeline.
+- **Named CPU performance gate**:
+  `holography/rgb_h1_h2_32_64_cpu_full_refresh` runs complete 32x32 and
+  64x64 RGB H1/H2 refreshes plus volume diagnostics. Reference Clang/MSVC/GCC
+  p95 values are **38.675 / 51.780 / 43.410 ms**, all below the platform-neutral
+  150 ms budget with identical checksum `1512.57504282`.
 
 ## Physical Assumptions & Limitations (M1)
 
@@ -165,6 +170,12 @@ Automated local OpenGL smoke test (renders 120 frames, verifies 0 GL errors, and
 
 ```powershell
 ./out/build/dev/HoloBench.exe --smoke-frames 120
+```
+
+Named M6 CPU full-refresh performance gate:
+
+```powershell
+./out/build/dev/holobench_m6_benchmark.exe
 ```
 
 Automated 3D viewport throughput benchmark (disables VSync, forces per-frame `glFinish`):
