@@ -83,16 +83,23 @@ rebuilt on the shared bench.
   `+Z` axis. The dynamic tracer selects the nearest finite component in actual
   3D geometry and supports reciprocal planar mirrors/splitters, arbitrary-pose
   paraxial thin lenses, circular/rectangular apertures, and intercepting
-  screens. Every detector hit retains the complete incident beam state at the
-  plane, including wavelength, coherence identity, power, accumulated optical
-  path, local frame, and component provenance. Stable component/source ordering
-  makes results independent of insertion order; hop, branch, minimum-power,
-  escape, clipping, and absorption endings are explicit.
+  screens. Object/wavefront sources now emit their own centre branches;
+  spatial filters clip against the pinhole, SLMs expose an explicit
+  layout-only pass-through, probes observe non-destructively, and holographic
+  plates collect incident branches as future recording inputs. An unresolved
+  real-lens prescription stops with `InvalidInteraction` instead of silently
+  passing through. Every screen/probe/plate hit retains the complete incident
+  beam state at the plane, including wavelength, coherence identity, power,
+  accumulated optical path, local frame, and component provenance; selecting
+  one of those planes shows the actual incident branches in the Inspector.
+  Stable component/source ordering makes results independent of insertion
+  order; hop, branch, minimum-power, escape, clipping, absorption, and invalid
+  interaction endings are explicit.
 - **Current verification**: Windows Clang 21 `core-ci` warnings-as-errors build
-  passes with 438/438 deterministic cases; the complete development build and
-  application link pass with 440/440 cases including the packaged-font and
+  passes with 443/443 deterministic cases; the complete development build and
+  application link pass with 445/445 cases including the packaged-font and
   hardware OpenGL tests. The development and warnings-as-errors application
-  smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Twenty M7
+  smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Thirty-one M7
   cases cover all twelve
   schemas, invalid IDs/transforms/physics, scene mutation/revision/staleness,
   RGB and arbitrary-transform canonical persistence, strict parser rejection,
@@ -101,8 +108,8 @@ rebuilt on the shared bench.
   aperture clipping, insertion-order determinism, RGB detector identity,
   bounded mirror loops, rigid local-rotation stability, complete bench history,
   branch clearing, bounded eviction, and revision-safe restore. Multi-ray beam
-  envelopes, richer detector observation surfaces, remaining component
-  interactions, and local wave-plane adapters remain open,
+  envelopes, sampled detector fields, the resolved real-lens adapter, and local
+  wave-plane propagation/modulation adapters remain open,
   so M7 is not yet accepted even though the interactive M7.1 path is present.
 
 ## Completed

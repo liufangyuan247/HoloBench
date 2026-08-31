@@ -4827,6 +4827,68 @@ void Application::drawSandboxInspector() {
                     commitParameters(std::move(edited));
                 }
             }
+
+            selected = benchProject_.scene.find(selectedBenchComponentId_);
+            if (selected != nullptr
+                && (selected->kind == bench::BenchComponentKind::ScreenDetector
+                    || selected->kind == bench::BenchComponentKind::FieldProbe
+                    || selected->kind == bench::BenchComponentKind::HolographicPlate)) {
+                ImGui::SeparatorText("Incident Branches");
+                std::size_t incidentCount = 0;
+                double totalIncidentPowerWatts = 0.0;
+                for (const auto& interaction : benchTraceGraph_.interactions) {
+                    if (interaction.componentId == selected->id) {
+                        ++incidentCount;
+                        totalIncidentPowerWatts += interaction.incidentBeam.powerWatts;
+                    }
+                }
+                ImGui::Text(
+                    "%zu branch(es), %.6g W total | trace revision %llu",
+                    incidentCount,
+                    totalIncidentPowerWatts,
+                    static_cast<unsigned long long>(benchTraceGraph_.sourceRevision));
+                if (incidentCount == 0U) {
+                    ImGui::TextDisabled(
+                        "No traced centre branch currently reaches this plane.");
+                } else {
+                    constexpr std::size_t kMaximumDisplayedIncidentBranches = 16U;
+                    std::size_t displayedCount = 0;
+                    for (const auto& interaction : benchTraceGraph_.interactions) {
+                        if (interaction.componentId != selected->id) {
+                            continue;
+                        }
+                        const auto& beam = interaction.incidentBeam;
+                        const std::string sourceId
+                            = beam.provenance.componentPath.empty()
+                            ? std::string("unknown")
+                            : beam.provenance.componentPath.front();
+                        const auto* source = benchProject_.scene.find(sourceId);
+                        const char* sourceRole = source != nullptr
+                                && source->kind
+                                    == bench::BenchComponentKind::ObjectWavefrontSource
+                            ? "object source"
+                            : "laser source";
+                        ImGui::TextWrapped(
+                            "#%llu | %.3f nm | %.6g W | path %.6g m | %s | coherence %s",
+                            static_cast<unsigned long long>(beam.provenance.branchId),
+                            beam.wavelengthMetres * 1e9,
+                            beam.powerWatts,
+                            beam.accumulatedOpticalPathMetres,
+                            sourceRole,
+                            beam.coherenceId.c_str());
+                        if (++displayedCount == kMaximumDisplayedIncidentBranches) {
+                            if (displayedCount < incidentCount) {
+                                ImGui::TextDisabled(
+                                    "%zu additional branches hidden",
+                                    incidentCount - displayedCount);
+                            }
+                            break;
+                        }
+                    }
+                    ImGui::TextDisabled(
+                        "Centreline evidence only; intensity/phase fields require local wave refinement.");
+                }
+            }
         }
     } else {
         ImGui::TextDisabled("Select a component in the list or 3D viewport.");

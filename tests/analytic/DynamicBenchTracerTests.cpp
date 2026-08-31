@@ -234,3 +234,125 @@ TEST_CASE("RGB source channels retain wavelength identity at one detector") {
         graph.interactions[0].incidentBeam,
         graph.interactions[1].incidentBeam));
 }
+
+TEST_CASE("object wavefront source reaches a holographic plate with complete identity") {
+    scene::BenchScene bench;
+    auto source = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::ObjectWavefrontSource, "object-source");
+    auto sourceParameters
+        = std::get<scene::ObjectWavefrontSourceParameters>(source.parameters);
+    sourceParameters.channel = {
+        .wavelengthMetres = 633e-9,
+        .powerWatts = 0.25,
+        .coherenceId = "recording-red",
+    };
+    source.parameters = sourceParameters;
+    bench.add(source);
+    bench.add(placed(
+        scene::BenchComponentKind::HolographicPlate,
+        "plate-h1",
+        {.translationMetres = {0.0, 0.0, 0.5}}));
+
+    const auto graph = ray::traceDynamicBench(bench);
+    REQUIRE(graph.interactions.size() == 1);
+    const auto& incident = graph.interactions[0].incidentBeam;
+    CHECK(graph.interactions[0].componentId == "plate-h1");
+    CHECK(incident.wavelengthMetres == 633e-9);
+    CHECK(incident.powerWatts == 0.25);
+    CHECK(incident.coherenceId == "recording-red");
+    CHECK(incident.provenance.componentPath
+        == std::vector<std::string> {"object-source", "plate-h1"});
+    REQUIRE(graph.terminations.size() == 1);
+    CHECK(graph.terminations[0].reason == scene::TraceTerminationReason::Absorbed);
+}
+
+TEST_CASE("field probe observes non-destructively before a downstream screen") {
+    scene::BenchScene bench;
+    bench.add(scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource, "probe-laser"));
+    bench.add(placed(
+        scene::BenchComponentKind::FieldProbe,
+        "probe",
+        {.translationMetres = {0.0, 0.0, 0.4}}));
+    bench.add(placed(
+        scene::BenchComponentKind::ScreenDetector,
+        "screen",
+        {.translationMetres = {0.0, 0.0, 1.0}}));
+
+    const auto graph = ray::traceDynamicBench(bench);
+    REQUIRE(graph.interactions.size() == 2);
+    CHECK(graph.interactions[0].componentId == "probe");
+    REQUIRE(graph.interactions[0].outgoing.size() == 1);
+    CHECK(graph.interactions[0].outgoing[0].beam.powerWatts == 1.0);
+    CHECK(graph.interactions[1].componentId == "screen");
+    CHECK(graph.interactions[1].incidentBeam.accumulatedOpticalPathMetres
+        == doctest::Approx(1.0).epsilon(1e-14));
+    CHECK(graph.interactions[1].incidentBeam.provenance.componentPath
+        == std::vector<std::string> {"probe-laser", "probe", "screen"});
+}
+
+TEST_CASE("spatial filter pinhole clips off-axis centre rays") {
+    scene::BenchScene bench;
+    auto source = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource, "filter-laser");
+    source.transform.translationMetres = {20e-6, 0.0, 0.0};
+    bench.add(source);
+    auto filter = placed(
+        scene::BenchComponentKind::SpatialFilter,
+        "filter",
+        {.translationMetres = {0.0, 0.0, 0.5}});
+    auto parameters = std::get<scene::SpatialFilterParameters>(filter.parameters);
+    parameters.pinholeDiameterMetres = 25e-6;
+    filter.parameters = parameters;
+    bench.add(filter);
+
+    const auto graph = ray::traceDynamicBench(bench);
+    REQUIRE(graph.interactions.size() == 1);
+    CHECK(graph.interactions[0].componentId == "filter");
+    CHECK(graph.interactions[0].outgoing.empty());
+    REQUIRE(graph.terminations.size() == 1);
+    CHECK(graph.terminations[0].reason == scene::TraceTerminationReason::Absorbed);
+}
+
+TEST_CASE("SLM centreline pass-through preserves branch state explicitly") {
+    scene::BenchScene bench;
+    bench.add(scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource, "slm-laser"));
+    bench.add(placed(
+        scene::BenchComponentKind::SpatialLightModulator,
+        "slm",
+        {.translationMetres = {0.0, 0.0, 0.25}}));
+    bench.add(placed(
+        scene::BenchComponentKind::ScreenDetector,
+        "slm-screen",
+        {.translationMetres = {0.0, 0.0, 0.75}}));
+
+    const auto graph = ray::traceDynamicBench(bench);
+    REQUIRE(graph.interactions.size() == 2);
+    REQUIRE(graph.interactions[0].outgoing.size() == 1);
+    CHECK(graph.interactions[0].componentId == "slm");
+    CHECK(graph.interactions[0].outgoing[0].beam.powerWatts == 1.0);
+    CHECK_FALSE(graph.interactions[0].diagnostics.empty());
+    CHECK(graph.interactions[1].componentId == "slm-screen");
+}
+
+TEST_CASE("real lens without a resolved prescription fails visibly") {
+    scene::BenchScene bench;
+    bench.add(scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource, "real-lens-laser"));
+    bench.add(placed(
+        scene::BenchComponentKind::RealLensAssembly,
+        "unresolved-lens",
+        {.translationMetres = {0.0, 0.0, 0.5}}));
+    bench.add(placed(
+        scene::BenchComponentKind::ScreenDetector,
+        "hidden-screen",
+        {.translationMetres = {0.0, 0.0, 1.0}}));
+
+    const auto graph = ray::traceDynamicBench(bench);
+    REQUIRE(graph.interactions.size() == 1);
+    CHECK(graph.interactions[0].componentId == "unresolved-lens");
+    REQUIRE(graph.terminations.size() == 1);
+    CHECK(graph.terminations[0].reason
+        == scene::TraceTerminationReason::InvalidInteraction);
+}

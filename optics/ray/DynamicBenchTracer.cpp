@@ -74,15 +74,15 @@ bool isTraceablePlaneKind(scene::BenchComponentKind kind) noexcept {
     case scene::BenchComponentKind::BeamSplitterCombiner:
     case scene::BenchComponentKind::IdealThinLens:
     case scene::BenchComponentKind::Aperture:
-    case scene::BenchComponentKind::ScreenDetector:
-        return true;
-    case scene::BenchComponentKind::LaserSource:
-    case scene::BenchComponentKind::ObjectWavefrontSource:
     case scene::BenchComponentKind::RealLensAssembly:
     case scene::BenchComponentKind::SpatialFilter:
     case scene::BenchComponentKind::SpatialLightModulator:
+    case scene::BenchComponentKind::ScreenDetector:
     case scene::BenchComponentKind::FieldProbe:
     case scene::BenchComponentKind::HolographicPlate:
+        return true;
+    case scene::BenchComponentKind::LaserSource:
+    case scene::BenchComponentKind::ObjectWavefrontSource:
         return false;
     }
     return false;
@@ -110,18 +110,38 @@ bool isWithinFootprint(const scene::BenchComponent& component, math::Vec3d local
         return std::abs(localPoint.x) <= value.widthMetres * 0.5
             && std::abs(localPoint.y) <= value.heightMetres * 0.5;
     }
+    case scene::BenchComponentKind::RealLensAssembly: {
+        const auto radius = std::get<scene::RealLensAssemblyParameters>(component.parameters)
+            .clearApertureDiameterMetres * 0.5;
+        return localPoint.x * localPoint.x + localPoint.y * localPoint.y <= radius * radius;
+    }
+    case scene::BenchComponentKind::SpatialFilter: {
+        const auto radius = std::get<scene::SpatialFilterParameters>(component.parameters)
+            .clearApertureDiameterMetres * 0.5;
+        return localPoint.x * localPoint.x + localPoint.y * localPoint.y <= radius * radius;
+    }
+    case scene::BenchComponentKind::SpatialLightModulator: {
+        const auto& value = std::get<scene::SpatialLightModulatorParameters>(component.parameters);
+        return std::abs(localPoint.x) <= value.widthMetres * 0.5
+            && std::abs(localPoint.y) <= value.heightMetres * 0.5;
+    }
     case scene::BenchComponentKind::ScreenDetector: {
         const auto& value = std::get<scene::ScreenDetectorParameters>(component.parameters);
         return std::abs(localPoint.x) <= value.widthMetres * 0.5
             && std::abs(localPoint.y) <= value.heightMetres * 0.5;
     }
+    case scene::BenchComponentKind::FieldProbe: {
+        const auto& value = std::get<scene::FieldProbeParameters>(component.parameters);
+        return std::abs(localPoint.x) <= value.widthMetres * 0.5
+            && std::abs(localPoint.y) <= value.heightMetres * 0.5;
+    }
+    case scene::BenchComponentKind::HolographicPlate: {
+        const auto& value = std::get<scene::HolographicPlateParameters>(component.parameters);
+        return std::abs(localPoint.x) <= value.widthMetres * 0.5
+            && std::abs(localPoint.y) <= value.heightMetres * 0.5;
+    }
     case scene::BenchComponentKind::LaserSource:
     case scene::BenchComponentKind::ObjectWavefrontSource:
-    case scene::BenchComponentKind::RealLensAssembly:
-    case scene::BenchComponentKind::SpatialFilter:
-    case scene::BenchComponentKind::SpatialLightModulator:
-    case scene::BenchComponentKind::FieldProbe:
-    case scene::BenchComponentKind::HolographicPlate:
         return false;
     }
     return false;
@@ -174,6 +194,14 @@ bool apertureTransmits(const scene::ApertureParameters& aperture, math::Vec3d lo
     const double normalizedX = localPoint.x / (aperture.widthMetres * 0.5);
     const double normalizedY = localPoint.y / (aperture.heightMetres * 0.5);
     return normalizedX * normalizedX + normalizedY * normalizedY <= 1.0;
+}
+
+bool spatialFilterTransmits(
+    const scene::SpatialFilterParameters& filter,
+    math::Vec3d localPoint) {
+    const double pinholeRadius = filter.pinholeDiameterMetres * 0.5;
+    return localPoint.x * localPoint.x + localPoint.y * localPoint.y
+        <= pinholeRadius * pinholeRadius;
 }
 
 scene::OpticalInteraction singleOutputInteraction(
@@ -287,7 +315,8 @@ scene::BenchTraceGraph traceDynamicBench(
     };
     std::vector<const scene::BenchComponent*> sources;
     for (const auto& component : bench.components()) {
-        if (component.kind == scene::BenchComponentKind::LaserSource) {
+        if (component.kind == scene::BenchComponentKind::LaserSource
+            || component.kind == scene::BenchComponentKind::ObjectWavefrontSource) {
             sources.push_back(&component);
         }
     }
@@ -299,8 +328,14 @@ scene::BenchTraceGraph traceDynamicBench(
     std::uint64_t nextBranchId = 1;
     std::size_t createdBranchCount = 0;
     for (const auto* source : sources) {
-        const auto& parameters = std::get<scene::LaserSourceParameters>(source->parameters);
-        for (const auto& channel : parameters.channels) {
+        std::vector<scene::SpectralChannel> channels;
+        if (source->kind == scene::BenchComponentKind::LaserSource) {
+            channels = std::get<scene::LaserSourceParameters>(source->parameters).channels;
+        } else {
+            channels.push_back(
+                std::get<scene::ObjectWavefrontSourceParameters>(source->parameters).channel);
+        }
+        for (const auto& channel : channels) {
             if (createdBranchCount >= budget.maximumBranches) {
                 graph.terminations.push_back({
                     .branchId = 0,
@@ -457,6 +492,67 @@ scene::BenchTraceGraph traceDynamicBench(
             }
             break;
         }
+        case scene::BenchComponentKind::SpatialFilter: {
+            const auto& parameters
+                = std::get<scene::SpatialFilterParameters>(hit->component->parameters);
+            if (!spatialFilterTransmits(parameters, hit->localPointMetres)) {
+                graph.interactions.push_back({
+                    .componentId = hit->component->id,
+                    .hitPointMetres = hit->pointMetres,
+                    .distanceMetres = hit->distanceMetres,
+                    .incidentBeam = incidentAtHit(current.beam, *hit),
+                    .outgoing = {},
+                    .diagnostics = {"centre ray was clipped by the spatial-filter pinhole"},
+                });
+                appendTermination(graph, current.beam,
+                    scene::TraceTerminationReason::Absorbed,
+                    "centre ray was clipped by the spatial-filter pinhole");
+            } else {
+                auto interaction = singleOutputInteraction(
+                    current.beam,
+                    *hit,
+                    current.beam.direction,
+                    1.0,
+                    scene::BranchInteractionKind::Transmitted,
+                    "centreline pass-through only; pinhole diffraction belongs to local wave refinement");
+                pending.push_back({
+                    .beam = interaction.outgoing.front().beam,
+                    .hopCount = current.hopCount + 1,
+                });
+                graph.interactions.push_back(std::move(interaction));
+            }
+            break;
+        }
+        case scene::BenchComponentKind::SpatialLightModulator: {
+            auto interaction = singleOutputInteraction(
+                current.beam,
+                *hit,
+                current.beam.direction,
+                1.0,
+                scene::BranchInteractionKind::Transmitted,
+                "centreline pass-through only; SLM amplitude and phase require local wave refinement");
+            pending.push_back({
+                .beam = interaction.outgoing.front().beam,
+                .hopCount = current.hopCount + 1,
+            });
+            graph.interactions.push_back(std::move(interaction));
+            break;
+        }
+        case scene::BenchComponentKind::FieldProbe: {
+            auto interaction = singleOutputInteraction(
+                current.beam,
+                *hit,
+                current.beam.direction,
+                1.0,
+                scene::BranchInteractionKind::Transmitted,
+                "field probe observed the branch without absorbing it");
+            pending.push_back({
+                .beam = interaction.outgoing.front().beam,
+                .hopCount = current.hopCount + 1,
+            });
+            graph.interactions.push_back(std::move(interaction));
+            break;
+        }
         case scene::BenchComponentKind::ScreenDetector:
             graph.interactions.push_back({
                 .componentId = hit->component->id,
@@ -470,13 +566,36 @@ scene::BenchTraceGraph traceDynamicBench(
                 scene::TraceTerminationReason::Absorbed,
                 "screen detector intercepted the branch");
             break;
+        case scene::BenchComponentKind::HolographicPlate:
+            graph.interactions.push_back({
+                .componentId = hit->component->id,
+                .hitPointMetres = hit->pointMetres,
+                .distanceMetres = hit->distanceMetres,
+                .incidentBeam = incidentAtHit(current.beam, *hit),
+                .outgoing = {},
+                .diagnostics = {
+                    "holographic plate collected the incident branch; recording is an explicit M8 operation"},
+            });
+            appendTermination(graph, current.beam,
+                scene::TraceTerminationReason::Absorbed,
+                "holographic plate intercepted the branch for recording input");
+            break;
+        case scene::BenchComponentKind::RealLensAssembly:
+            graph.interactions.push_back({
+                .componentId = hit->component->id,
+                .hitPointMetres = hit->pointMetres,
+                .distanceMetres = hit->distanceMetres,
+                .incidentBeam = incidentAtHit(current.beam, *hit),
+                .outgoing = {},
+                .diagnostics = {
+                    "real-lens prescription adapter is unavailable for this dynamic scene"},
+            });
+            appendTermination(graph, current.beam,
+                scene::TraceTerminationReason::InvalidInteraction,
+                "real-lens prescription adapter is unavailable for this dynamic scene");
+            break;
         case scene::BenchComponentKind::LaserSource:
         case scene::BenchComponentKind::ObjectWavefrontSource:
-        case scene::BenchComponentKind::RealLensAssembly:
-        case scene::BenchComponentKind::SpatialFilter:
-        case scene::BenchComponentKind::SpatialLightModulator:
-        case scene::BenchComponentKind::FieldProbe:
-        case scene::BenchComponentKind::HolographicPlate:
             throw std::logic_error("unsupported component escaped traceable-plane filtering");
         }
     }

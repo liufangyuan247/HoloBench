@@ -107,11 +107,15 @@
   selection/translation/local rotation, typed Inspector editing, scene
   revision/staleness, and deterministic centreline routing through placed
   mirrors, splitters, ideal thin lenses, apertures, and screens. The current
-  tracer still emits only one centre ray per laser spectral channel; it does
-  not yet sample the full beam envelope or route real-lens, spatial-filter,
-  SLM, Probe, or Plate field interactions. Complete coherent branch merging,
-  detector field views, and local wave-plane adapters remain open, so this is a
-  functional layout sandbox rather than a completed holography experiment.
+  tracer still emits only one centre ray per laser/object-source spectral
+  channel; it does not yet sample the full beam envelope. Spatial filters clip
+  that centreline against the pinhole, SLMs preserve it without applying a
+  sampled mask, probes observe it non-destructively, and plates collect it as
+  recording input. Real-lens components stop explicitly until their persisted
+  prescription IDs can be resolved into sequential assemblies. Complete
+  coherent field merging, detector intensity/phase views, and local wave-plane
+  adapters remain open, so this is a functional layout sandbox rather than a
+  completed holography experiment.
 - The dynamic bench has its own bounded scene-wide undo/redo timeline. The
   separate legacy history still covers lesson-relevant fixed optical-bench,
   Wave Detector, Sampling Debugger, and SLM inputs, but not Real Lens or the
