@@ -95,6 +95,13 @@ development. For the current repository state and roadmap, see
   prevents recomputation before Apply, display-only plane/channel changes avoid
   physics work, and a strict format-v1 JSON project preserves every grid,
   spectral, object, reference, response, and placement parameter byte-stably.
+- **Interactive Holography Lab**: A docked workflow edits the grid, independent
+  RGB media, complex Gaussian object, H1/H2 positions, recording references,
+  and thin-plate responses. It renders H1 exposure/real-image and H2
+  exposure/replay planes, exposes signed transplane placement and zero/twin
+  sampling diagnostics, and keeps all FFT work behind explicit Apply. The
+  OpenGL smoke gate requires a drawable holography texture and a semantic
+  experiment-project round trip.
 
 ## Physical Assumptions & Limitations (M1)
 

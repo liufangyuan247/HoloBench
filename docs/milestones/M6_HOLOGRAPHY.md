@@ -23,7 +23,7 @@ clearly separate first volume-hologram model.
   traversal diagnostics, plus zero/twin carrier placement, sampling, and
   periodic-window diagnostics without hidden order filtering.
 - [x] Apply-gated Holography Lab state and strict byte-stable project persistence.
-- [ ] Dockable interactive Holography Lab controls, views, and diagnostics.
+- [x] Dockable interactive Holography Lab controls, views, and diagnostics.
 - [ ] Separate volume-hologram data model and first Kogelnik coupled-wave path.
 - [ ] Named CPU performance profile and cross-platform compiler/CI gates.
 

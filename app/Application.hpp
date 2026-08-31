@@ -10,6 +10,8 @@
 #include <glm/glm.hpp>
 
 #include "app/WaveDetectorUiState.hpp"
+#include "app/HolographyLabPipeline.hpp"
+#include "app/HolographyUiState.hpp"
 #include "app/RealLensWorkbenchPipeline.hpp"
 #include "app/SamplingDebuggerPipeline.hpp"
 #include "app/SlmInterferenceUiState.hpp"
@@ -183,6 +185,7 @@ struct DockLayoutConfig {
     static constexpr const char* kSamplingDebuggerWindowName = "Sampling Debugger";
     static constexpr const char* kRealLensWindowName = "Real Lens Workbench";
     static constexpr const char* kSlmInterferenceWindowName = "SLM & Interference Lab";
+    static constexpr const char* kHolographyWindowName = "Holography Lab";
     static constexpr const char* kDockSpaceIdStr = "HoloBenchDockSpace";
 };
 
@@ -273,8 +276,10 @@ private:
     void drawSamplingDebuggerPanel();
     void drawRealLensPanel();
     void drawSlmInterferencePanel();
+    void drawHolographyPanel();
     void updateWaveDetector();
     void updateSlmInterference();
+    void updateHolography();
     void refreshSamplingDebugger();
     void refreshRealLensWorkbench();
     void loadRealLensPrescription(bool csv);
@@ -283,6 +288,8 @@ private:
     void saveSlmCalibration();
     void loadSlmExperimentProject();
     void saveSlmExperimentProject();
+    void loadHolographyProject();
+    void saveHolographyProject();
     bool applyScene(
         const optics::scene::OpticalBenchScene& candidateScene,
         const optics::ray::BenchTracerOptions& candidateOptions);
@@ -318,14 +325,17 @@ private:
     std::unique_ptr<render::gl::Texture2D> fourFAfterFilterTexture_;
     std::unique_ptr<render::gl::Texture2D> fourFImageTexture_;
     std::unique_ptr<render::gl::Texture2D> slmInterferenceTexture_;
+    std::unique_ptr<render::gl::Texture2D> holographyTexture_;
     std::unique_ptr<wave::WaveDetectorResult> detectorResult_;
     std::unique_ptr<samplingdebug::SamplingDebuggerResult> samplingDebuggerResult_;
     std::unique_ptr<reallens::RealLensWorkbenchResult> realLensResult_;
     std::unique_ptr<slmexperiment::SlmInterferenceExperimentResult> slmInterferenceResult_;
+    std::unique_ptr<holographylab::HolographyLabResult> holographyResult_;
     waveui::WaveDetectorUiState detectorUiState_;
     samplingdebug::SamplingDebuggerConfig samplingDebuggerConfig_;
     reallens::RealLensWorkbenchConfig realLensConfig_;
     slmui::SlmInterferenceUiState slmInterferenceUiState_;
+    holographyui::HolographyUiState holographyUiState_;
     waveui::DetectorPixel detectorProbe_;
     bool hasDetectorProbe_ = false;
     bool detectorProbeLocked_ = false;
@@ -337,6 +347,8 @@ private:
     std::string realLensStatusMessage_;
     std::string slmInterferenceErrorMessage_;
     std::string slmInterferenceStatusMessage_;
+    std::string holographyErrorMessage_;
+    std::string holographyStatusMessage_;
     bool realLensDirty_ = true;
     std::size_t selectedRealLensSurface_ = 0;
 
@@ -353,6 +365,7 @@ private:
     char realLensPathBuffer_[512] = "holobench_lens.json";
     char slmCalibrationPathBuffer_[512] = "slm_response.json";
     char slmProjectPathBuffer_[512] = "slm_experiment.json";
+    char holographyProjectPathBuffer_[512] = "holography_experiment.json";
 
     bool isBenchmark_ = false;
     int vsyncInterval_ = 1;

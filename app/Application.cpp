@@ -27,6 +27,7 @@
 #include "core/field/FieldVisualization.hpp"
 #include "optics/io/LensPrescriptionIO.hpp"
 #include "optics/slm/SlmResponseIO.hpp"
+#include "app/HolographyProject.hpp"
 #include "app/SlmInterferenceProject.hpp"
 #include "optics/ray/BenchTracer.hpp"
 #include "optics/scene/NumericalAperture.hpp"
@@ -351,6 +352,7 @@ Application::Application()
     , fourFAfterFilterTexture_(std::make_unique<render::gl::Texture2D>())
     , fourFImageTexture_(std::make_unique<render::gl::Texture2D>())
     , slmInterferenceTexture_(std::make_unique<render::gl::Texture2D>())
+    , holographyTexture_(std::make_unique<render::gl::Texture2D>())
     , realLensConfig_(reallens::makeDefaultRealLensWorkbenchConfig())
     , scene_(optics::scene::createDefaultRealImageScene())
     , naResult_(optics::scene::computeObjectSideNumericalAperture(scene_)) {
@@ -589,10 +591,14 @@ void Application::shutdown() noexcept {
     if (slmInterferenceTexture_) {
         slmInterferenceTexture_->destroy();
     }
+    if (holographyTexture_) {
+        holographyTexture_->destroy();
+    }
     detectorResult_.reset();
     samplingDebuggerResult_.reset();
     realLensResult_.reset();
     slmInterferenceResult_.reset();
+    holographyResult_.reset();
     if (imguiGlInitialized_) {
         ImGui_ImplOpenGL3_Shutdown();
         imguiGlInitialized_ = false;
@@ -755,6 +761,74 @@ void Application::updateSlmInterference() {
     }
 }
 
+void Application::updateHolography() {
+    if (holographyUiState_.consumeSimulationRequest()) {
+        try {
+            if (!detectorFftBackend_) {
+                throw std::runtime_error("CPU FFT backend is unavailable");
+            }
+            auto result = holographylab::runHolographyLab(
+                holographyUiState_.appliedConfig(), *detectorFftBackend_);
+            holographyResult_
+                = std::make_unique<holographylab::HolographyLabResult>(
+                    std::move(result));
+            holographyUiState_.simulationSucceeded();
+            holographyErrorMessage_.clear();
+            holographyStatusMessage_
+                = "RGB H1/H2 holography recomputed on the deterministic CPU reference backend";
+        } catch (const std::exception& ex) {
+            holographyErrorMessage_ = "Holography simulation failed: "
+                + std::string(ex.what());
+            holographyStatusMessage_.clear();
+            holographyResult_.reset();
+            if (holographyTexture_) {
+                holographyTexture_->destroy();
+            }
+        }
+    }
+
+    if (holographyResult_ && holographyUiState_.consumeVisualizationRequest()) {
+        try {
+            const std::size_t channelIndex = std::min(
+                holographyUiState_.displayedChannel(), std::size_t {2});
+            const auto& channel
+                = holographyResult_->rgbTransfer.channels[channelIndex];
+            field::FieldVisualizationOptions options;
+            options.colormap = field::ColormapKind::Inferno;
+            field::RgbaImage image = [&]() {
+                switch (holographyUiState_.displayPlane()) {
+                case holographyui::DisplayPlane::H1Exposure:
+                    return field::renderLinearIntensity(
+                        channel.h1.hologram.recordedRelativeIntensity, options);
+                case holographyui::DisplayPlane::H1RealImage:
+                    return field::renderFieldView(
+                        channel.h1.isolatedRealImageOrder,
+                        field::FieldViewMode::Intensity,
+                        options);
+                case holographyui::DisplayPlane::H2Exposure:
+                    return field::renderLinearIntensity(
+                        channel.h2.recordedRelativeIntensity, options);
+                case holographyui::DisplayPlane::H2ReplayImage:
+                    return field::renderFieldView(
+                        channel.h2IsolatedImageAtH1ImagePlane,
+                        field::FieldViewMode::Intensity,
+                        options);
+                }
+                throw std::invalid_argument("unsupported holography display plane");
+            }();
+            if (!holographyTexture_ || !holographyTexture_->uploadImage(image)) {
+                throw std::runtime_error(
+                    "OpenGL rejected the holography texture upload");
+            }
+            holographyErrorMessage_.clear();
+        } catch (const std::exception& ex) {
+            holographyErrorMessage_ = "Holography visualization failed: "
+                + std::string(ex.what());
+            holographyStatusMessage_.clear();
+        }
+    }
+}
+
 void Application::loadSlmCalibration() {
     try {
         const std::filesystem::path path(slmCalibrationPathBuffer_);
@@ -831,6 +905,45 @@ void Application::saveSlmExperimentProject() {
         slmInterferenceErrorMessage_ = "SLM experiment project save failed: "
             + std::string(ex.what());
         slmInterferenceStatusMessage_.clear();
+    }
+}
+
+void Application::loadHolographyProject() {
+    try {
+        const std::filesystem::path path(holographyProjectPathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument(
+                "holography experiment project path cannot be empty");
+        }
+        auto document = holographyproject::loadHolographyProject(path);
+        holographyUiState_.replaceDraftProject(std::move(document.config));
+        holographyErrorMessage_.clear();
+        holographyStatusMessage_ = "Loaded holography experiment from "
+            + path.string() + "; press Apply to recompute";
+    } catch (const std::exception& ex) {
+        holographyErrorMessage_ = "Holography project load failed: "
+            + std::string(ex.what());
+        holographyStatusMessage_.clear();
+    }
+}
+
+void Application::saveHolographyProject() {
+    try {
+        const std::filesystem::path path(holographyProjectPathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument(
+                "holography experiment project path cannot be empty");
+        }
+        holographyproject::HolographyProjectDocument document;
+        document.config = holographyUiState_.draftConfig();
+        holographyproject::saveHolographyProject(path, document);
+        holographyErrorMessage_.clear();
+        holographyStatusMessage_ = "Saved draft holography experiment to "
+            + path.string();
+    } catch (const std::exception& ex) {
+        holographyErrorMessage_ = "Holography project save failed: "
+            + std::string(ex.what());
+        holographyStatusMessage_.clear();
     }
 }
 
@@ -2270,9 +2383,366 @@ void Application::drawSlmInterferencePanel() {
     ImGui::End();
 }
 
+void Application::drawHolographyPanel() {
+    ImGui::Begin(docking::DockLayoutConfig::kHolographyWindowName);
+    ImGui::TextDisabled(
+        "Complex object -> H1 conjugate replay -> positioned H2 -> RGB image replay");
+
+    if (ImGui::CollapsingHeader(
+            "Experiment project", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::InputText(
+            "Holography JSON path",
+            holographyProjectPathBuffer_,
+            sizeof(holographyProjectPathBuffer_));
+        if (ImGui::Button("Load holography experiment")) {
+            loadHolographyProject();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Save holography draft")) {
+            saveHolographyProject();
+        }
+        ImGui::TextDisabled(
+            "Separate strict format-v1 document; loading replaces draft state only.");
+    }
+
+    auto draft = holographyUiState_.draftConfig();
+    bool physicsEdited = false;
+    const auto inputMicrometres = [&physicsEdited](
+                                       const char* label, double& metres) {
+        double micrometres = metres * 1e6;
+        if (ImGui::InputDouble(
+                label,
+                &micrometres,
+                0.1,
+                1.0,
+                "%.7g um",
+                ImGuiInputTextFlags_CharsScientific)) {
+            metres = micrometres * 1e-6;
+            physicsEdited = true;
+        }
+    };
+    const auto inputNanometres = [&physicsEdited](
+                                      const char* label, double& metres) {
+        double nanometres = metres * 1e9;
+        if (ImGui::InputDouble(
+                label,
+                &nanometres,
+                0.1,
+                1.0,
+                "%.7g nm",
+                ImGuiInputTextFlags_CharsScientific)) {
+            metres = nanometres * 1e-9;
+            physicsEdited = true;
+        }
+    };
+    const auto inputMillimetres = [&physicsEdited](
+                                       const char* label, double& metres) {
+        double millimetres = metres * 1e3;
+        if (ImGui::InputDouble(
+                label,
+                &millimetres,
+                0.05,
+                0.5,
+                "%.7g mm",
+                ImGuiInputTextFlags_CharsScientific)) {
+            metres = millimetres * 1e-3;
+            physicsEdited = true;
+        }
+    };
+
+    if (ImGui::CollapsingHeader(
+            "Grid and RGB media", ImGuiTreeNodeFlags_DefaultOpen)) {
+        constexpr std::array<int, 3> resolutions {32, 64, 128};
+        constexpr std::array<const char*, 3> resolutionNames {
+            "32 x 32", "64 x 64", "128 x 128"};
+        int resolutionIndex = 0;
+        for (std::size_t index = 0; index < resolutions.size(); ++index) {
+            if (draft.fieldWidth
+                    == static_cast<std::size_t>(resolutions[index])
+                && draft.fieldHeight
+                    == static_cast<std::size_t>(resolutions[index])) {
+                resolutionIndex = static_cast<int>(index);
+            }
+        }
+        if (ImGui::Combo(
+                "Field grid",
+                &resolutionIndex,
+                resolutionNames.data(),
+                static_cast<int>(resolutionNames.size()))) {
+            draft.fieldWidth = static_cast<std::size_t>(
+                resolutions[static_cast<std::size_t>(resolutionIndex)]);
+            draft.fieldHeight = draft.fieldWidth;
+            physicsEdited = true;
+        }
+        inputMicrometres("Field pitch X", draft.fieldPitchXMetres);
+        inputMicrometres("Field pitch Y", draft.fieldPitchYMetres);
+        constexpr std::array<const char*, 3> channelNames {"Red", "Green", "Blue"};
+        for (std::size_t channel = 0; channel < channelNames.size(); ++channel) {
+            ImGui::PushID(static_cast<int>(channel));
+            ImGui::SeparatorText(channelNames[channel]);
+            inputNanometres("Vacuum wavelength", draft.vacuumWavelengthsMetres[channel]);
+            if (ImGui::InputDouble(
+                    "Refractive index",
+                    &draft.refractiveIndices[channel],
+                    0.001,
+                    0.01,
+                    "%.8g")) {
+                physicsEdited = true;
+            }
+            ImGui::PopID();
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Complex Gaussian object")) {
+        for (std::size_t index = 0; index < draft.objectFeatures.size(); ++index) {
+            auto& feature = draft.objectFeatures[index];
+            ImGui::PushID(static_cast<int>(index));
+            const char* featureLabel = index == 0U ? "Feature A" : "Feature B";
+            ImGui::SeparatorText(featureLabel);
+            if (ImGui::InputDouble(
+                    "Amplitude", &feature.amplitude, 0.01, 0.1, "%.7g")) {
+                physicsEdited = true;
+            }
+            if (ImGui::InputDouble(
+                    "Phase", &feature.phaseRadians, 0.05, 0.2, "%.7g rad")) {
+                physicsEdited = true;
+            }
+            inputMicrometres("Centre X", feature.centerXMetres);
+            inputMicrometres("Centre Y", feature.centerYMetres);
+            inputMicrometres("Sigma X", feature.sigmaXMetres);
+            inputMicrometres("Sigma Y", feature.sigmaYMetres);
+            ImGui::PopID();
+        }
+    }
+
+    if (ImGui::CollapsingHeader(
+            "H1 / H2 recording geometry", ImGuiTreeNodeFlags_DefaultOpen)) {
+        inputMillimetres(
+            "Object to H1", draft.transfer.h1.objectToPlateDistanceMetres);
+        inputMillimetres("H2 axial position", draft.transfer.h2AxialPositionMetres);
+        inputMicrometres(
+            "Transplane tolerance", draft.transfer.transplaneToleranceMetres);
+        ImGui::TextDisabled(
+            "The signed image distance is z(image) - z(H2); zero is an explicit transplane case.");
+
+        const auto editReference = [&physicsEdited](
+                                       const char* label,
+                                       optics::wave::PlaneWaveParameters& reference) {
+            if (!ImGui::TreeNode(label)) {
+                return;
+            }
+            double magnitude = std::abs(reference.amplitude);
+            double phase = std::arg(reference.amplitude);
+            if (ImGui::InputDouble(
+                    "Amplitude magnitude", &magnitude, 0.01, 0.1, "%.7g")) {
+                reference.amplitude = std::polar(magnitude, phase);
+                physicsEdited = true;
+            }
+            if (ImGui::InputDouble(
+                    "Amplitude phase", &phase, 0.05, 0.2, "%.7g rad")) {
+                reference.amplitude = std::polar(magnitude, phase);
+                physicsEdited = true;
+            }
+            if (ImGui::InputDouble(
+                    "Direction cosine X",
+                    &reference.directionCosineX,
+                    0.001,
+                    0.01,
+                    "%.8g")) {
+                physicsEdited = true;
+            }
+            if (ImGui::InputDouble(
+                    "Direction cosine Y",
+                    &reference.directionCosineY,
+                    0.001,
+                    0.01,
+                    "%.8g")) {
+                physicsEdited = true;
+            }
+            ImGui::TreePop();
+        };
+        editReference("H1 reference", draft.transfer.h1.recordingReference);
+        editReference("H2 reference", draft.transfer.h2RecordingReference);
+
+        const auto editResponse = [&physicsEdited](
+                                      const char* label,
+                                      optics::holography::ThinHologramResponseParameters& response) {
+            if (!ImGui::TreeNode(label)) {
+                return;
+            }
+            if (ImGui::InputDouble(
+                    "Amplitude bias", &response.amplitudeBias, 0.01, 0.1, "%.7g")) {
+                physicsEdited = true;
+            }
+            if (ImGui::InputDouble(
+                    "Exposure gain",
+                    &response.intensityToAmplitudeGain,
+                    0.01,
+                    0.1,
+                    "%.7g")) {
+                physicsEdited = true;
+            }
+            ImGui::TextDisabled(
+                "Transmission bounds %.3g .. %.3g (fixed teaching medium)",
+                response.minimumAmplitudeTransmission,
+                response.maximumAmplitudeTransmission);
+            ImGui::TreePop();
+        };
+        editResponse("H1 thin-plate response", draft.transfer.h1.response);
+        editResponse("H2 thin-plate response", draft.transfer.h2Response);
+    }
+
+    if (physicsEdited) {
+        holographyUiState_.setDraftConfig(draft);
+    }
+    if (holographyUiState_.isDirty()) {
+        ImGui::TextColored(
+            ImVec4(1.0F, 0.75F, 0.2F, 1.0F),
+            "Draft differs from the displayed result - press Apply to recompute");
+    }
+    if (ImGui::Button("Apply Holography Experiment")) {
+        try {
+            holographyUiState_.apply();
+            holographyStatusMessage_ = "Holography recompute queued";
+            holographyErrorMessage_.clear();
+        } catch (const std::exception& ex) {
+            holographyErrorMessage_ = "Holography draft is invalid: "
+                + std::string(ex.what());
+            holographyStatusMessage_.clear();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset holography defaults")) {
+        holographyUiState_.setDraftConfig(
+            holographylab::makeDefaultHolographyLabConfig());
+        holographyStatusMessage_ = "Holography defaults restored in draft; press Apply";
+        holographyErrorMessage_.clear();
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("FFT work runs only on Apply.");
+
+    if (!holographyErrorMessage_.empty()) {
+        ImGui::TextColored(
+            ImVec4(1.0F, 0.35F, 0.35F, 1.0F),
+            "%s",
+            holographyErrorMessage_.c_str());
+    } else if (!holographyStatusMessage_.empty()) {
+        ImGui::TextColored(
+            ImVec4(0.4F, 0.9F, 0.5F, 1.0F),
+            "%s",
+            holographyStatusMessage_.c_str());
+    }
+
+    ImGui::SeparatorText("Result and diagnostics");
+    if (holographyResult_) {
+        int channelIndex = static_cast<int>(holographyUiState_.displayedChannel());
+        constexpr std::array<const char*, 3> channelNames {
+            "Red", "Green", "Blue"};
+        if (ImGui::Combo(
+                "Displayed RGB channel",
+                &channelIndex,
+                channelNames.data(),
+                static_cast<int>(channelNames.size()))) {
+            holographyUiState_.setDisplayedChannel(
+                static_cast<std::size_t>(channelIndex));
+        }
+        int displayPlane = static_cast<int>(holographyUiState_.displayPlane());
+        constexpr std::array<const char*, 4> planeNames {
+            "H1 exposure",
+            "H1 isolated real image",
+            "H2 exposure",
+            "H2 isolated replay image"};
+        if (ImGui::Combo(
+                "Displayed plane",
+                &displayPlane,
+                planeNames.data(),
+                static_cast<int>(planeNames.size()))) {
+            holographyUiState_.setDisplayPlane(
+                static_cast<holographyui::DisplayPlane>(displayPlane));
+        }
+
+        const auto& result = holographyResult_->rgbTransfer.channels[
+            std::min(holographyUiState_.displayedChannel(), std::size_t {2})];
+        const char* placement = "transplane";
+        if (result.imagePlacement == holography::H2ImagePlacement::NegativeSide) {
+            placement = "negative side";
+        } else if (result.imagePlacement
+                   == holography::H2ImagePlacement::PositiveSide) {
+            placement = "positive side";
+        }
+        ImGui::Text(
+            "H1 image z %.6g mm | H2 z %.6g mm | signed image distance %.6g mm (%s)",
+            result.h1ImageAxialPositionMetres * 1e3,
+            holographyUiState_.appliedConfig().transfer.h2AxialPositionMetres * 1e3,
+            result.imageDistanceFromH2Metres * 1e3,
+            placement);
+        ImGui::Text(
+            "H1 real-image normalized / peak errors: %.3e / %.3e",
+            result.h1.realImageQuality.normalizedComplexL2Error,
+            result.h1.realImageQuality.peakNormalizedMaximumComplexError);
+        ImGui::Text(
+            "H2 replay normalized / peak errors: %.3e / %.3e",
+            result.h2ImageQuality.normalizedComplexL2Error,
+            result.h2ImageQuality.peakNormalizedMaximumComplexError);
+        const auto& h1Order = result.h1.conjugateRealImageOrderPlacement;
+        const auto& h2Order = result.h2ReplayOrderPlacement;
+        ImGui::Text(
+            "H1 zero/twin separation: %.4g / %.4g mm | H2: %.4g / %.4g mm",
+            h1Order.desiredToZeroOrderSeparationMetres * 1e3,
+            h1Order.desiredToTwinOrderSeparationMetres * 1e3,
+            h2Order.desiredToZeroOrderSeparationMetres * 1e3,
+            h2Order.desiredToTwinOrderSeparationMetres * 1e3);
+        ImGui::Text(
+            "H1 zero sampled/propagating/in-window: %s / %s / %s",
+            h1Order.zeroOrderCarrierSampled ? "yes" : "no",
+            h1Order.zeroOrderCarrierPropagating ? "yes" : "no",
+            h1Order.zeroOrderCentreInsidePeriodicWindow ? "yes" : "no");
+        ImGui::Text(
+            "H1 twin sampled/propagating/in-window: %s / %s / %s",
+            h1Order.twinOrderCarrierSampled ? "yes" : "no",
+            h1Order.twinOrderCarrierPropagating ? "yes" : "no",
+            h1Order.twinOrderCentreInsidePeriodicWindow ? "yes" : "no");
+        ImGui::Text(
+            "H2 zero sampled/propagating/in-window: %s / %s / %s",
+            h2Order.zeroOrderCarrierSampled ? "yes" : "no",
+            h2Order.zeroOrderCarrierPropagating ? "yes" : "no",
+            h2Order.zeroOrderCentreInsidePeriodicWindow ? "yes" : "no");
+        ImGui::Text(
+            "H2 twin sampled/propagating/in-window: %s / %s / %s",
+            h2Order.twinOrderCarrierSampled ? "yes" : "no",
+            h2Order.twinOrderCarrierPropagating ? "yes" : "no",
+            h2Order.twinOrderCentreInsidePeriodicWindow ? "yes" : "no");
+
+        if (holographyTexture_ && holographyTexture_->isValid()) {
+            const ImVec2 available = ImGui::GetContentRegionAvail();
+            const auto layout = waveui::fitDetectorImage(
+                available.x,
+                std::max(220.0F, available.y - 80.0F),
+                static_cast<std::size_t>(holographyTexture_->width()),
+                static_cast<std::size_t>(holographyTexture_->height()));
+            if (layout.width > 0.0F && layout.height > 0.0F) {
+                ImGui::Image(
+                    toImTextureID(holographyTexture_->handle()),
+                    ImVec2(layout.width, layout.height),
+                    ImVec2(0.0F, 1.0F),
+                    ImVec2(1.0F, 0.0F));
+            }
+        }
+    } else {
+        ImGui::TextDisabled("No holography experiment result is available.");
+    }
+
+    ImGui::SeparatorText("Model boundary");
+    ImGui::TextWrapped(
+        "CPU double-precision scalar, coherent, thin-transmission teaching model. "
+        "The H2 plate here is not a reflection/Denisyuk volume hologram; volume coupling and Bragg selectivity use the separate Kogelnik model.");
+    ImGui::End();
+}
+
 void Application::drawWorkspace() {
     updateWaveDetector();
     updateSlmInterference();
+    updateHolography();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     const ImGuiID dockspaceId = ImGui::DockSpaceOverViewport(
         ImGui::GetID(docking::DockLayoutConfig::kDockSpaceIdStr),
@@ -2326,6 +2796,7 @@ void Application::drawWorkspace() {
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kSamplingDebuggerWindowName, dockBottomId);
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kRealLensWindowName, dockBottomId);
             ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kSlmInterferenceWindowName, dockBottomId);
+            ImGui::DockBuilderDockWindow(docking::DockLayoutConfig::kHolographyWindowName, dockBottomId);
 
             ImGui::DockBuilderFinish(dockspaceId);
         }
@@ -2951,6 +3422,7 @@ void Application::drawWorkspace() {
     drawSamplingDebuggerPanel();
     drawRealLensPanel();
     drawSlmInterferencePanel();
+    drawHolographyPanel();
 }
 
 int Application::run(const RunOptions& options) {
@@ -3109,6 +3581,14 @@ int Application::run(const RunOptions& options) {
         SDL_Log("OpenGL smoke check failed: SLM Interference Lab did not produce drawable analysis");
         rawGlError = true;
     }
+    if (glSmokeMode_
+        && (!holographyResult_
+            || !holographyTexture_
+            || !holographyTexture_->isValid()
+            || !holographyErrorMessage_.empty())) {
+        SDL_Log("OpenGL smoke check failed: Holography Lab did not produce drawable analysis");
+        rawGlError = true;
+    }
     if (glSmokeMode_) {
         try {
             slmproject::SlmInterferenceProjectDocument document;
@@ -3124,6 +3604,25 @@ int Application::run(const RunOptions& options) {
             }
         } catch (const std::exception& ex) {
             SDL_Log("OpenGL smoke check failed: SLM project round trip: %s", ex.what());
+            rawGlError = true;
+        }
+    }
+    if (glSmokeMode_) {
+        try {
+            holographyproject::HolographyProjectDocument document;
+            document.config = holographyUiState_.appliedConfig();
+            const auto restored
+                = holographyproject::deserializeHolographyProjectJson(
+                    holographyproject::serializeHolographyProjectJson(document));
+            if (!holographyui::sameHolographyLabConfig(
+                    document.config, restored.config)) {
+                SDL_Log("OpenGL smoke check failed: Holography project semantic round trip changed state");
+                rawGlError = true;
+            }
+        } catch (const std::exception& ex) {
+            SDL_Log(
+                "OpenGL smoke check failed: Holography project round trip: %s",
+                ex.what());
             rawGlError = true;
         }
     }
