@@ -73,8 +73,9 @@ The required interaction is now explicit:
   Degenerate, off-radius, or equally-near ambiguous beam snapping rejects
   explicitly and creates no hidden connection. Hardware OpenGL smoke now uses
   real ImGui mouse events to click Empty Bench and drag a laser plus plate from
-  the shelf onto camera-derived table points. Transform-handle and alignment
-  mouse sequences remain open.
+  the shelf onto camera-derived table points, drag a constrained world-axis
+  handle, and click the Bench Aim +Z action with exact frame verification.
+  Local-axis rotation and beam-snap mouse sequences remain open.
 - **Default interactive sandbox**: the application now opens on the unified
   dynamic bench instead of the fixed-axis reference scene. The starter project
   contains an RGB laser, splitter, two routed arms, an ideal lens, two screens,
@@ -422,6 +423,14 @@ completion because it is primarily driven through fixed parameter panels:
   mouse press/release events to select every example and execute all three
   Record-to-placed-Reconstruct paths, then performs a shelf drag edit and
   requires the RGB replay to become stale and disappear.
+- **Contextual alignment bar**: Selecting any component in a multi-component
+  Bench exposes target selection, Aim +Z, Coaxial, Same height, signed
+  target-axis placement, and nearest-beam snap directly above the 3D viewport.
+  The Inspector mirrors the same application actions for precision work; both
+  surfaces write only ordinary rigid transforms through history, autosave,
+  retrace, and stale-result invalidation. OpenGL smoke drags a real constrained
+  handle, clicks Aim +Z, and verifies the resulting local optical axis against
+  the selected target position.
 - **Placed reconstruction surface**: A current thin, reflection/Denisyuk, or
   RGB replay texture is projected onto the actual observation component's
   physical four corners in the 3D viewport. Arbitrary Screen/Probe transforms
@@ -618,8 +627,8 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Extend the passing shelf/Record/Reconstruct input smoke to constrained
-   transform handles and target/beam alignment gestures.
+1. Extend the passing shelf/move-handle/Aim/Record/Reconstruct input smoke to
+   local-axis rotation and nearest-beam alignment gestures.
 2. Use those gestures to close user-facing empty-bench assembly acceptance for
    transmission, reflection/Denisyuk, and RGB full-colour experiments.
 3. Integrate the retained CHIMERA recipe, image/dataset, exposure,

@@ -34,11 +34,12 @@ shows colour-coded X/Y/Z handles: Move constrains to world axes, Rotate uses
 the component's local axes, and configurable translation/rotation snapping
 supports repeatable optical alignment.
 
-The Inspector's alignment section operates on those same ordinary transforms:
-aim local +Z at another component, project onto and copy a target optical axis,
-match height, place at a signed target-axis spacing, or snap to the nearest
-finite visible beam segment. Each action retraces the bench and participates in
-history/autosave; it creates no hidden optical connection.
+A compact alignment bar beside the Bench, mirrored by precision controls in the
+Inspector, operates on those same ordinary transforms: aim local +Z at another
+component, project onto and copy a target optical axis, match height, place at a
+signed target-axis spacing, or snap to the nearest finite visible beam segment.
+Each action retraces the bench and participates in history/autosave; it creates
+no hidden optical connection.
 
 Selecting a holographic plate now opens a compact experiment bar in the
 Optical Bench itself. It reports the object/reference incidence and available
@@ -52,9 +53,10 @@ never suppress clipping or mix wavelengths.
 
 The hardware OpenGL smoke drives these controls with real ImGui mouse events:
 it clears the Bench, drags a laser and plate from the shelf onto camera-derived
-table positions, clicks Record and Reconstruct for all three holography
-examples, then performs another shelf edit and requires the reconstruction to
-become stale and disappear.
+table positions, drags a constrained world-axis handle, clicks Aim +Z and
+checks the resulting physical frame, clicks Record and Reconstruct for all
+three holography examples, then performs another shelf edit and requires the
+reconstruction to become stale and disappear.
 
 A current reconstruction is drawn back onto the actual placed Screen/Probe as
 a corner-projected texture quad using that component's physical extent and rigid

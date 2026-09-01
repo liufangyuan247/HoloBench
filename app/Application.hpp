@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <memory>
@@ -410,6 +411,13 @@ enum class SandboxRecordedExperiment {
     RgbFullColour,
 };
 
+enum class SandboxAlignmentAction {
+    AimAtTarget,
+    MakeCoaxial,
+    MatchHeight,
+    PlaceAlongTargetAxis,
+};
+
 struct RunOptions {
     int smokeFrameLimit = 0;
     int benchmarkFrames = 0;
@@ -437,7 +445,11 @@ struct SandboxUiEvidence final {
     UiItemBounds plateShelf;
     UiItemBounds record;
     UiItemBounds reconstruct;
+    UiItemBounds aimAtTarget;
     UiItemBounds viewport;
+    gizmo::ProjectedPoint selectedComponent;
+    std::array<gizmo::ProjectedPoint, 3> gizmoEndpoints {};
+    std::array<gizmo::AxisProjection, 3> gizmoProjections {};
 };
 
 class Application final {
@@ -515,8 +527,11 @@ private:
         const math::Vec3d& positionMetres,
         std::string statusMessage);
     void drawSandboxComponentShelf();
+    void drawSandboxAlignmentBar();
     void drawSandboxExperimentBar();
     void drawSandboxInspector();
+    void applySandboxTargetAlignment(SandboxAlignmentAction action);
+    void snapSandboxSelectedToNearestBeam();
     void runSandboxInteractionSmoke();
     void loadBenchProjectFromPath();
     void saveBenchProjectToPath();

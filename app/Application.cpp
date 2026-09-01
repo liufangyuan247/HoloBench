@@ -5206,6 +5206,85 @@ void Application::drawLearnPanel() {
     ImGui::End();
 }
 
+void Application::applySandboxTargetAlignment(
+    SandboxAlignmentAction action) {
+    try {
+        const auto* current = benchProject_.scene.find(
+            selectedBenchComponentId_);
+        const auto* target = benchProject_.scene.find(
+            sandboxAlignmentTargetComponentId_);
+        if (current == nullptr || target == nullptr
+            || current->id == target->id) {
+            throw std::invalid_argument(
+                "choose a different alignment target");
+        }
+
+        auto edited = *current;
+        std::string message;
+        switch (action) {
+        case SandboxAlignmentAction::AimAtTarget:
+            edited.transform = alignment::aimAt(
+                current->transform, target->transform.translationMetres);
+            message = "Aimed component at alignment target";
+            break;
+        case SandboxAlignmentAction::MakeCoaxial:
+            edited.transform = alignment::makeCoaxialWith(
+                current->transform, target->transform);
+            message = "Aligned component to target optical axis";
+            break;
+        case SandboxAlignmentAction::MatchHeight:
+            edited.transform = alignment::matchHeight(
+                current->transform, target->transform);
+            message = "Matched component height to target";
+            break;
+        case SandboxAlignmentAction::PlaceAlongTargetAxis:
+            edited.transform = alignment::placeAlongTargetAxis(
+                current->transform,
+                target->transform,
+                static_cast<double>(sandboxAlignmentSpacingMillimetres_)
+                    * 1e-3);
+            message = "Placed component at target-axis spacing";
+            break;
+        }
+
+        auto candidate = benchProject_.scene;
+        candidate.replace(edited.id, edited);
+        static_cast<void>(applyBenchScene(
+            std::move(candidate), std::move(message)));
+    } catch (const std::exception& error) {
+        errorMessage_ = "Optical alignment failed: "
+            + std::string(error.what());
+        statusMessage_.clear();
+    }
+}
+
+void Application::snapSandboxSelectedToNearestBeam() {
+    try {
+        const auto* current = benchProject_.scene.find(
+            selectedBenchComponentId_);
+        if (current == nullptr) {
+            throw std::invalid_argument(
+                "select a component before beam snapping");
+        }
+        const auto snapped = alignment::snapToNearestBeam(
+            current->transform,
+            benchTraceGraph_.segments,
+            static_cast<double>(sandboxBeamSnapDistanceMillimetres_) * 1e-3);
+        auto candidate = benchProject_.scene;
+        auto edited = *current;
+        edited.transform = snapped.transform;
+        candidate.replace(edited.id, edited);
+        static_cast<void>(applyBenchScene(
+            std::move(candidate),
+            "Snapped component to beam branch #"
+                + std::to_string(snapped.branchId)));
+    } catch (const std::exception& error) {
+        errorMessage_ = "Beam alignment failed: "
+            + std::string(error.what());
+        statusMessage_.clear();
+    }
+}
+
 void Application::drawSandboxComponentShelf() {
     namespace bench = optics::scene;
     ImGui::BeginChild(
@@ -5317,6 +5396,96 @@ void Application::drawSandboxComponentShelf() {
             ImGui::TextDisabled("No matching components");
         }
         ImGui::EndTable();
+    }
+    ImGui::EndChild();
+}
+
+void Application::drawSandboxAlignmentBar() {
+    namespace bench = optics::scene;
+    const auto* selected = benchProject_.scene.find(
+        selectedBenchComponentId_);
+    if (selected == nullptr || benchProject_.scene.components().size() < 2U) {
+        return;
+    }
+
+    const auto* target = benchProject_.scene.find(
+        sandboxAlignmentTargetComponentId_);
+    if (target == nullptr || target->id == selected->id) {
+        sandboxAlignmentTargetComponentId_.clear();
+        for (const auto& component : benchProject_.scene.components()) {
+            if (component.id != selected->id) {
+                sandboxAlignmentTargetComponentId_ = component.id;
+                target = &component;
+                break;
+            }
+        }
+    }
+
+    ImGui::BeginChild(
+        "##sandbox_alignment_bar",
+        ImVec2(0.0F, 68.0F),
+        ImGuiChildFlags_Borders,
+        ImGuiWindowFlags_NoScrollbar);
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Align %s to", selected->id.c_str());
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(230.0F);
+    const char* targetPreview = target == nullptr
+        ? "No target component" : target->id.c_str();
+    if (ImGui::BeginCombo("##bench-alignment-target", targetPreview)) {
+        for (const auto& component : benchProject_.scene.components()) {
+            if (component.id == selected->id) {
+                continue;
+            }
+            const bool isTarget
+                = sandboxAlignmentTargetComponentId_ == component.id;
+            const std::string label = component.id + "  ["
+                + std::string(bench::benchComponentDisplayName(component.kind))
+                + "]";
+            if (ImGui::Selectable(label.c_str(), isTarget)) {
+                sandboxAlignmentTargetComponentId_ = component.id;
+            }
+            if (isTarget) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled(
+        "ordinary transforms; no hidden optical connection");
+
+    ImGui::BeginDisabled(target == nullptr);
+    if (ImGui::Button("Aim +Z")) {
+        applySandboxTargetAlignment(SandboxAlignmentAction::AimAtTarget);
+    }
+    captureLastItemBounds(sandboxUiEvidence_.aimAtTarget);
+    ImGui::SameLine();
+    if (ImGui::Button("Coaxial")) {
+        applySandboxTargetAlignment(SandboxAlignmentAction::MakeCoaxial);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Same height")) {
+        applySandboxTargetAlignment(SandboxAlignmentAction::MatchHeight);
+    }
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(92.0F);
+    ImGui::DragFloat(
+        "##bench-axis-spacing-mm",
+        &sandboxAlignmentSpacingMillimetres_,
+        1.0F,
+        -5000.0F,
+        5000.0F,
+        "%.1f mm");
+    ImGui::SameLine();
+    if (ImGui::Button("Place on target +Z")) {
+        applySandboxTargetAlignment(
+            SandboxAlignmentAction::PlaceAlongTargetAxis);
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ImGui::Button("Snap to beam")) {
+        snapSandboxSelectedToNearestBeam();
     }
     ImGui::EndChild();
 }
@@ -5888,56 +6057,20 @@ void Application::drawSandboxInspector() {
                     }
                     ImGui::EndCombo();
                 }
-                const auto applyTargetAlignment
-                    = [this](auto makeTransform, std::string message) {
-                        try {
-                            const auto* current = benchProject_.scene.find(
-                                selectedBenchComponentId_);
-                            const auto* target = benchProject_.scene.find(
-                                sandboxAlignmentTargetComponentId_);
-                            if (current == nullptr || target == nullptr
-                                || current->id == target->id) {
-                                throw std::invalid_argument(
-                                    "choose a different alignment target");
-                            }
-                            auto candidate = benchProject_.scene;
-                            auto edited = *current;
-                            edited.transform = makeTransform(
-                                current->transform, target->transform);
-                            candidate.replace(edited.id, edited);
-                            static_cast<void>(applyBenchScene(
-                                std::move(candidate), std::move(message)));
-                        } catch (const std::exception& error) {
-                            errorMessage_ = "Optical alignment failed: "
-                                + std::string(error.what());
-                            statusMessage_.clear();
-                        }
-                    };
                 ImGui::BeginDisabled(alignmentTarget == nullptr);
                 if (ImGui::Button("Aim +Z at target")) {
-                    applyTargetAlignment(
-                        [](const auto& current, const auto& target) {
-                            return alignment::aimAt(
-                                current, target.translationMetres);
-                        },
-                        "Aimed component at alignment target");
+                    applySandboxTargetAlignment(
+                        SandboxAlignmentAction::AimAtTarget);
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Make coaxial")) {
-                    applyTargetAlignment(
-                        [](const auto& current, const auto& target) {
-                            return alignment::makeCoaxialWith(
-                                current, target);
-                        },
-                        "Aligned component to target optical axis");
+                    applySandboxTargetAlignment(
+                        SandboxAlignmentAction::MakeCoaxial);
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Match height")) {
-                    applyTargetAlignment(
-                        [](const auto& current, const auto& target) {
-                            return alignment::matchHeight(current, target);
-                        },
-                        "Matched component height to target");
+                    applySandboxTargetAlignment(
+                        SandboxAlignmentAction::MatchHeight);
                 }
                 ImGui::DragFloat(
                     "Target-axis spacing (mm)",
@@ -5947,15 +6080,8 @@ void Application::drawSandboxInspector() {
                     5000.0F,
                     "%.2f");
                 if (ImGui::Button("Place at target-axis spacing")) {
-                    const double spacingMetres = static_cast<double>(
-                        sandboxAlignmentSpacingMillimetres_) * 1e-3;
-                    applyTargetAlignment(
-                        [spacingMetres](
-                            const auto& current, const auto& target) {
-                            return alignment::placeAlongTargetAxis(
-                                current, target, spacingMetres);
-                        },
-                        "Placed component at target-axis spacing");
+                    applySandboxTargetAlignment(
+                        SandboxAlignmentAction::PlaceAlongTargetAxis);
                 }
                 ImGui::EndDisabled();
                 ImGui::DragFloat(
@@ -5966,31 +6092,7 @@ void Application::drawSandboxInspector() {
                     5000.0F,
                     "%.2f");
                 if (ImGui::Button("Snap to nearest visible beam")) {
-                    try {
-                        const auto* current = benchProject_.scene.find(
-                            selectedBenchComponentId_);
-                        if (current == nullptr) {
-                            throw std::invalid_argument(
-                                "select a component before beam snapping");
-                        }
-                        const auto snapped = alignment::snapToNearestBeam(
-                            current->transform,
-                            benchTraceGraph_.segments,
-                            static_cast<double>(
-                                sandboxBeamSnapDistanceMillimetres_) * 1e-3);
-                        auto candidate = benchProject_.scene;
-                        auto edited = *current;
-                        edited.transform = snapped.transform;
-                        candidate.replace(edited.id, edited);
-                        static_cast<void>(applyBenchScene(
-                            std::move(candidate),
-                            "Snapped component to beam branch #"
-                                + std::to_string(snapped.branchId)));
-                    } catch (const std::exception& error) {
-                        errorMessage_ = "Beam alignment failed: "
-                            + std::string(error.what());
-                        statusMessage_.clear();
-                    }
+                    snapSandboxSelectedToNearestBeam();
                 }
                 ImGui::TextDisabled(
                     "Alignment writes ordinary position/orientation edits; no hidden connection is created.");
@@ -7731,6 +7833,7 @@ void Application::drawWorkspace() {
     ImGui::Begin(docking::DockLayoutConfig::kOpticalBenchWindowName);
     if (viewportMode_ == ViewportMode::Sandbox && !isBenchmark_) {
         drawSandboxComponentShelf();
+        drawSandboxAlignmentBar();
         drawSandboxExperimentBar();
     }
     const ImVec2 contentSize = ImGui::GetContentRegionAvail();
@@ -7919,6 +8022,10 @@ void Application::drawWorkspace() {
                     }
                 }
             }
+            sandboxUiEvidence_.selectedComponent
+                = selectedComponentProjection;
+            sandboxUiEvidence_.gizmoEndpoints = gizmoAxisEndpoints;
+            sandboxUiEvidence_.gizmoProjections = gizmoAxisProjections;
 
             if (sandboxGizmoDragging_) {
                 if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
@@ -8925,11 +9032,9 @@ void Application::runSandboxInteractionSmoke() {
         drawInputFrame(point, 1);
         drawInputFrame(point, 0);
     };
-    const auto drag = [&](UiItemBounds source,
-                          const glm::vec2& destination,
-                          std::string_view name) {
-        requireBounds(source, name);
-        const glm::vec2 origin = source.centre();
+    const auto dragPoints = [&](const glm::vec2& origin,
+                                const glm::vec2& destination,
+                                std::string_view name) {
         const glm::vec2 delta = destination - origin;
         const float length = glm::length(delta);
         if (!std::isfinite(length) || length < 20.0F) {
@@ -8942,6 +9047,12 @@ void Application::runSandboxInteractionSmoke() {
         drawInputFrame(firstMove, -1);
         drawInputFrame(destination, -1);
         drawInputFrame(destination, 0);
+    };
+    const auto drag = [&](UiItemBounds source,
+                          const glm::vec2& destination,
+                          std::string_view name) {
+        requireBounds(source, name);
+        dragPoints(source.centre(), destination, name);
     };
 
     drawInputFrame({-1000.0F, -1000.0F}, 0);
@@ -8956,12 +9067,14 @@ void Application::runSandboxInteractionSmoke() {
             "Empty Bench click did not clear the ordinary scene");
     }
 
-    const UiItemBounds viewport = sandboxUiEvidence_.viewport;
-    const glm::vec2 viewportExtent = viewport.maximum - viewport.minimum;
-    const glm::mat4 viewProjection
-        = camera_.projectionMatrix(viewportExtent.x / viewportExtent.y)
-        * camera_.viewMatrix();
     const auto tableDropAt = [&](float horizontalFraction) {
+        const UiItemBounds viewport = sandboxUiEvidence_.viewport;
+        requireBounds(viewport, "3D Bench viewport");
+        const glm::vec2 viewportExtent
+            = viewport.maximum - viewport.minimum;
+        const glm::mat4 viewProjection
+            = camera_.projectionMatrix(viewportExtent.x / viewportExtent.y)
+            * camera_.viewMatrix();
         for (int row = 4; row <= 18; ++row) {
             const float verticalFraction = static_cast<float>(row) * 0.05F;
             const glm::vec2 point = viewport.minimum
@@ -9003,6 +9116,80 @@ void Application::runSandboxInteractionSmoke() {
             })) {
         throw std::runtime_error(
             "shelf-to-table plate drag did not add an ordinary plate");
+    }
+
+    // The selected plate adds the contextual experiment bar on the following
+    // frame, so sample handle coordinates only after that layout transition.
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    sandboxGizmoMode_ = SandboxGizmoMode::Translate;
+    const auto* selectedBeforeGizmo
+        = benchProject_.scene.find(selectedBenchComponentId_);
+    if (selectedBeforeGizmo == nullptr
+        || selectedBeforeGizmo->kind
+            != bench::BenchComponentKind::HolographicPlate) {
+        throw std::runtime_error(
+            "placed plate was not selected for constrained manipulation");
+    }
+    const std::string gizmoComponentId = selectedBeforeGizmo->id;
+    const math::Vec3d translationBeforeGizmo
+        = selectedBeforeGizmo->transform.translationMetres;
+    std::size_t dragAxis = sandboxUiEvidence_.gizmoEndpoints.size();
+    for (std::size_t axis = 0;
+         axis < sandboxUiEvidence_.gizmoEndpoints.size(); ++axis) {
+        if (sandboxUiEvidence_.gizmoEndpoints[axis].visible
+            && !sandboxUiEvidence_.gizmoProjections[axis].isDegenerate) {
+            dragAxis = axis;
+            break;
+        }
+    }
+    if (dragAxis == sandboxUiEvidence_.gizmoEndpoints.size()) {
+        throw std::runtime_error(
+            "selected plate exposes no usable constrained transform handle");
+    }
+    const glm::vec2 handleOrigin
+        = sandboxUiEvidence_.gizmoEndpoints[dragAxis].screenPos;
+    const glm::vec2 handleDestination = handleOrigin
+        + sandboxUiEvidence_.gizmoProjections[dragAxis].screenDir * 36.0F;
+    dragPoints(
+        handleOrigin,
+        handleDestination,
+        "selected plate constrained transform handle");
+    const auto* selectedAfterGizmo
+        = benchProject_.scene.find(gizmoComponentId);
+    if (selectedAfterGizmo == nullptr
+        || selectedAfterGizmo->transform.translationMetres
+            == translationBeforeGizmo) {
+        throw std::runtime_error(
+            "constrained transform-handle drag did not move the selected plate (axis="
+            + std::to_string(dragAxis) + ", metres_per_pixel="
+            + std::to_string(
+                sandboxUiEvidence_.gizmoProjections[dragAxis].metresPerPixel)
+            + ", selected=" + selectedBenchComponentId_ + ", status="
+            + statusMessage_ + ", error=" + errorMessage_ + ")");
+    }
+
+    const auto* alignmentTarget = benchProject_.scene.find(
+        sandboxAlignmentTargetComponentId_);
+    if (alignmentTarget == nullptr
+        || alignmentTarget->id == gizmoComponentId) {
+        throw std::runtime_error(
+            "Bench alignment bar did not expose a distinct target");
+    }
+    const math::Vec3d alignedPosition
+        = selectedAfterGizmo->transform.translationMetres;
+    const math::Vec3d expectedAim = math::normalized(
+        alignmentTarget->transform.translationMetres - alignedPosition);
+    click(sandboxUiEvidence_.aimAtTarget, "Aim +Z action");
+    const auto* selectedAfterAlignment
+        = benchProject_.scene.find(gizmoComponentId);
+    if (selectedAfterAlignment == nullptr
+        || selectedAfterAlignment->transform.translationMetres
+            != alignedPosition
+        || math::dot(
+            selectedAfterAlignment->transform.localZAxisInWorld,
+            expectedAim) < 1.0 - 1e-12) {
+        throw std::runtime_error(
+            "Aim +Z UI click did not align the ordinary component transform");
     }
 
     click(sandboxUiEvidence_.transmissionPreset, "Transmission action");
