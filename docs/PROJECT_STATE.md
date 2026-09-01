@@ -84,6 +84,14 @@ The required interaction is now explicit:
   and a component shelf covering all twelve required kinds. The fixed scene is
   still available under an explicitly labelled reference mode, but is no longer
   presented as the product workspace.
+- **Placed source spectrum presets**: Selecting a Laser Source or Object /
+  Wavefront Source exposes red 638 nm, green 532 nm, and blue 450 nm actions
+  directly above the Bench. A laser additionally supports a three-channel RGB
+  preset that preserves total source power and splits it equally across
+  independent wavelength/coherence identities. Object sources deliberately
+  stay single-channel, so a full-colour setup uses three visible placed object
+  sources. Exact channel values remain editable in the Inspector; presets only
+  write ordinary typed component parameters through history/autosave/retrace.
 - **Viewport and Inspector editing**: every required component kind can be
   created from the library, selected from the viewport or Inspector, translated,
   locally rotated around X/Y/Z, duplicated, deleted, and edited through typed
@@ -186,8 +194,8 @@ The required interaction is now explicit:
   order; hop, branch, minimum-power, escape, clipping, absorption, and invalid
   interaction endings are explicit.
 - **M7/M8 acceptance verification**: Windows Clang 21 `core-ci`
-  warnings-as-errors build passes with 551/551 deterministic cases; the
-  complete development build and application link pass with 553/553 cases
+  warnings-as-errors build passes with 553/553 deterministic cases; the
+  complete development build and application link pass with 555/555 cases
   including the packaged-font and
   hardware OpenGL tests. The development and warnings-as-errors application
   smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Eighty-four
@@ -410,6 +418,10 @@ completion because it is primarily driven through fixed parameter panels:
   propagated intensities with explicit display gains/gamma and is labelled as
   an uncalibrated visualization; no cross-wavelength complex-field addition is
   possible.
+  The same identities are now available as contextual source-spectrum actions,
+  enabling an RGB reference laser plus three separately placed R/G/B object
+  sources to be assembled from an empty Bench without manually copying
+  wavelength or coherence strings.
 - **Contextual plate experiment bar**: Selecting a placed plate exposes current
   object/reference incidence counts, compatible transmission/reflection pairs,
   strict RGB readiness, experiment mode, Record, ordinary/conjugate replay,
@@ -474,10 +486,10 @@ completion because it is primarily driven through fixed parameter panels:
   falls back from a corrupt autosave to a valid primary, recovers a corrupt
   primary from a valid autosave, and preserves both files when neither parses.
   See [ADR 0015](adr/0015-atomic-bench-autosave-recovery.md).
-- **Current local validation**: Windows Clang development build passes 553/553
+- **Current local validation**: Windows Clang development build passes 555/555
   deterministic CPU, application, font, and OpenGL GPU cases after the placed
   volume/RGB/local-wave-path/recipe/SLM/recovery increments; `core-ci` passes
-  551/551, `app-ci` compiles
+  553/553, `app-ci` compiles
   warnings-as-errors, and the hidden OpenGL smoke, including real shelf
   drag/drop and experiment-button input, exits successfully on AMD Radeon Pro
   5300M. The accepted remote cross-compiler evidence is recorded
@@ -595,7 +607,7 @@ completion because it is primarily driven through fixed parameter panels:
   selection evidence. See
   [ADR 0020](adr/0020-chimera-deterministic-parameter-sweep.md).
 - **Current M9 validation**: Windows Clang warnings-as-errors core/application
-  builds pass; `core-ci` passes 551/551 and `dev` passes 553/553. The updated
+  builds pass; `core-ci` passes 553/553 and `dev` passes 555/555. The updated
   development build, targeted gizmo/alignment tests, and OpenGL smoke pass. The
   development gate includes GPU and font executables. Hidden OpenGL smoke
   drives the compact Bench actions with real ImGui mouse events for

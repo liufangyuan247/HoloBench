@@ -181,6 +181,8 @@ propagation used to compute the image.
 ### M8.4 — RGB full-colour record/reconstruct bench
 
 - Three spectral source paths and sequential/multiplexed recording recipe.
+- Contextual source presets provide the exact independent wavelength/coherence
+  identities needed to assemble those paths from ordinary empty-Bench sources.
 - Per-channel replay and combined display with explicit uncalibrated-colour
   limitation.
 - Ordinary saved full-colour preset built from the same component library.

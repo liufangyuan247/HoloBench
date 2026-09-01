@@ -35,6 +35,7 @@
 #include "app/BenchHolographyPresets.hpp"
 #include "app/BenchObservationOverlay.hpp"
 #include "app/BenchRecordingRecipe.hpp"
+#include "app/BenchSourceSpectrum.hpp"
 #include "app/SlmInterferenceProject.hpp"
 #include "app/UiFont.hpp"
 #include "app/lessons/LessonProgress.hpp"
@@ -5308,6 +5309,7 @@ void Application::drawSandboxComponentShelf() {
         BenchProject empty;
         empty.projectId = "untitled-bench";
         empty.name = "Untitled Optical Bench";
+        sandboxExperimentMode_ = SandboxExperimentMode::Auto;
         selectedBenchComponentId_.clear();
         static_cast<void>(applyDynamicBenchProject(
             std::move(empty), "Created an empty optical bench"));
@@ -5397,6 +5399,74 @@ void Application::drawSandboxComponentShelf() {
         }
         ImGui::EndTable();
     }
+    ImGui::EndChild();
+}
+
+void Application::drawSandboxSourceBar() {
+    namespace bench = optics::scene;
+    const auto* selected = benchProject_.scene.find(
+        selectedBenchComponentId_);
+    if (selected == nullptr
+        || (selected->kind != bench::BenchComponentKind::LaserSource
+            && selected->kind
+                != bench::BenchComponentKind::ObjectWavefrontSource)) {
+        return;
+    }
+
+    const auto applyPreset = [this](BenchSourceSpectrumPreset preset) {
+        try {
+            const auto* current = benchProject_.scene.find(
+                selectedBenchComponentId_);
+            if (current == nullptr) {
+                throw std::invalid_argument(
+                    "select a source before applying a spectral preset");
+            }
+            auto candidate = benchProject_.scene;
+            const auto edited = applySourceSpectrumPreset(*current, preset);
+            candidate.replace(edited.id, edited);
+            static_cast<void>(applyBenchScene(
+                std::move(candidate),
+                "Applied source spectrum preset"));
+        } catch (const std::exception& error) {
+            errorMessage_ = "Source spectrum preset failed: "
+                + std::string(error.what());
+            statusMessage_.clear();
+        }
+    };
+
+    ImGui::BeginChild(
+        "##sandbox_source_spectrum_bar",
+        ImVec2(0.0F, 48.0F),
+        ImGuiChildFlags_Borders,
+        ImGuiWindowFlags_NoScrollbar);
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Source spectrum: %s", selected->id.c_str());
+    ImGui::SameLine();
+    if (ImGui::Button("Red 638 nm")) {
+        applyPreset(BenchSourceSpectrumPreset::Red);
+    }
+    captureLastItemBounds(sandboxUiEvidence_.sourceRed);
+    ImGui::SameLine();
+    if (ImGui::Button("Green 532 nm")) {
+        applyPreset(BenchSourceSpectrumPreset::Green);
+    }
+    captureLastItemBounds(sandboxUiEvidence_.sourceGreen);
+    ImGui::SameLine();
+    if (ImGui::Button("Blue 450 nm")) {
+        applyPreset(BenchSourceSpectrumPreset::Blue);
+    }
+    captureLastItemBounds(sandboxUiEvidence_.sourceBlue);
+    ImGui::SameLine();
+    ImGui::BeginDisabled(
+        selected->kind != bench::BenchComponentKind::LaserSource);
+    if (ImGui::Button("RGB laser")) {
+        applyPreset(BenchSourceSpectrumPreset::Rgb);
+    }
+    captureLastItemBounds(sandboxUiEvidence_.sourceRgb);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::TextDisabled(
+        "presets keep total power; exact channels remain editable in Inspector");
     ImGui::EndChild();
 }
 
@@ -5842,6 +5912,7 @@ void Application::drawSandboxInspector() {
         BenchProject empty;
         empty.projectId = "untitled-bench";
         empty.name = "Untitled Optical Bench";
+        sandboxExperimentMode_ = SandboxExperimentMode::Auto;
         selectedBenchComponentId_.clear();
         static_cast<void>(applyDynamicBenchProject(
             std::move(empty), "Created an empty optical bench"));
@@ -7834,6 +7905,7 @@ void Application::drawWorkspace() {
     ImGui::Begin(docking::DockLayoutConfig::kOpticalBenchWindowName);
     if (viewportMode_ == ViewportMode::Sandbox && !isBenchmark_) {
         drawSandboxComponentShelf();
+        drawSandboxSourceBar();
         drawSandboxAlignmentBar();
         drawSandboxExperimentBar();
     }

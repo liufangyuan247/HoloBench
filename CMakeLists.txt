@@ -125,6 +125,7 @@ add_library(holobench_app_logic STATIC
     app/BenchAlignment.cpp
     app/BenchEditHistory.cpp
     app/BenchHolographyPresets.cpp
+    app/BenchSourceSpectrum.cpp
     app/BenchProject.cpp
     app/BenchRecordingRecipe.cpp
     app/ChimeraExposurePlan.cpp
@@ -457,6 +458,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/app/BenchObservationOverlayTests.cpp
         tests/app/BenchEditHistoryTests.cpp
         tests/app/BenchHolographyPresetsTests.cpp
+        tests/app/BenchSourceSpectrumTests.cpp
         tests/app/BenchProjectTests.cpp
         tests/app/BenchRecordingRecipeTests.cpp
         tests/app/ChimeraExposurePlanTests.cpp

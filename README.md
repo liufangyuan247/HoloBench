@@ -41,6 +41,13 @@ signed target-axis spacing, or snap to the nearest finite visible beam segment.
 Each action retraces the bench and participates in history/autosave; it creates
 no hidden optical connection.
 
+Selecting a laser or object/wavefront source exposes R/G/B spectrum presets;
+lasers also expose an RGB preset with three independent channels. A
+single-colour preset preserves the source power, while RGB divides the laser's
+existing total power equally and assigns matching per-colour coherence IDs.
+Object sources remain explicitly single-channel, so a full-colour object is
+built from three ordinary placed sources rather than hidden wavelength mixing.
+
 Selecting a holographic plate now opens a compact experiment bar in the
 Optical Bench itself. It reports the object/reference incidence and available
 transmission, reflection, and strict RGB pairings, then provides Record,

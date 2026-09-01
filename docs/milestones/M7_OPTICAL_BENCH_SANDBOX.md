@@ -134,6 +134,9 @@ commit and must never block viewport rendering indefinitely.
 - Unified component variant and rigid transforms.
 - Strict versioned save/load and legacy import boundary.
 - Empty scene, component library, selection, add/delete/duplicate.
+- Contextual power-preserving R/G/B source presets and an independent
+  three-channel RGB laser preset; object sources remain one visible spectral
+  channel per placed component.
 - Translation and rotation gizmos plus exact Inspector editing.
 - Generic component rendering for every required kind.
 

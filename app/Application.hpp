@@ -447,6 +447,10 @@ struct SandboxUiEvidence final {
     UiItemBounds reconstruct;
     UiItemBounds aimAtTarget;
     UiItemBounds snapToBeam;
+    UiItemBounds sourceRed;
+    UiItemBounds sourceGreen;
+    UiItemBounds sourceBlue;
+    UiItemBounds sourceRgb;
     UiItemBounds viewport;
     gizmo::ProjectedPoint selectedComponent;
     std::array<gizmo::ProjectedPoint, 3> gizmoEndpoints {};
@@ -528,6 +532,7 @@ private:
         const math::Vec3d& positionMetres,
         std::string statusMessage);
     void drawSandboxComponentShelf();
+    void drawSandboxSourceBar();
     void drawSandboxAlignmentBar();
     void drawSandboxExperimentBar();
     void drawSandboxInspector();
