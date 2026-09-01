@@ -124,6 +124,37 @@ TEST_CASE("live wave screen follows decentered and rotated free placement") {
     CHECK(peakIntensity(tilted.fieldAtObservation) > 0.0);
 }
 
+TEST_CASE("virtual field probe observes the wave without requiring a screen") {
+    fft::CpuFftBackend backend;
+    auto project = app::makeDoubleSlitExperimentPreset();
+    const auto screen = *project.scene.find("wave-screen");
+    REQUIRE(project.scene.remove("wave-screen"));
+
+    auto probe = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::FieldProbe, "wave-field-probe");
+    probe.transform = screen.transform;
+    probe.parameters = scene::FieldProbeParameters {
+        .widthMetres = 0.012,
+        .heightMetres = 0.008,
+        .sampleWidth = 256U,
+        .sampleHeight = 256U,
+    };
+    project.scene.add(probe);
+    auto graph = ray::traceDynamicBench(project.scene);
+    const auto result = app::observeBenchWavePattern(
+        project.scene, graph, probe.id, 256U, false, backend);
+
+    CHECK(result.observationComponentId == probe.id);
+    CHECK(result.fieldAtObservation.width() == 256U);
+    CHECK(result.fieldAtObservation.height() == 256U);
+    CHECK(peakIntensity(result.fieldAtObservation) > 0.0);
+    CHECK_FALSE(result.isStaleFor(project.scene));
+
+    probe.transform.translationMetres.x += 0.25e-3;
+    project.scene.replace(probe.id, probe);
+    CHECK(result.isStaleFor(project.scene));
+}
+
 TEST_CASE("live wave screen rejects stale ambiguous and upstream observations") {
     fft::CpuFftBackend backend;
     auto project = app::makeDoubleSlitExperimentPreset();

@@ -18,6 +18,45 @@ namespace scene = optics::scene;
 
 constexpr double kParallelTolerance = 2e-12;
 
+struct ObservationSampling final {
+    double widthMetres = 0.0;
+    double heightMetres = 0.0;
+    std::size_t sampleWidth = 0U;
+    std::size_t sampleHeight = 0U;
+};
+
+[[nodiscard]] bool isWaveObservationPlane(
+    scene::BenchComponentKind kind) noexcept {
+    return kind == scene::BenchComponentKind::ScreenDetector
+        || kind == scene::BenchComponentKind::FieldProbe;
+}
+
+[[nodiscard]] ObservationSampling observationSampling(
+    const scene::BenchComponent& observation) {
+    if (observation.kind == scene::BenchComponentKind::ScreenDetector) {
+        const auto& value = std::get<scene::ScreenDetectorParameters>(
+            observation.parameters);
+        return {
+            .widthMetres = value.widthMetres,
+            .heightMetres = value.heightMetres,
+            .sampleWidth = value.sampleWidth,
+            .sampleHeight = value.sampleHeight,
+        };
+    }
+    if (observation.kind == scene::BenchComponentKind::FieldProbe) {
+        const auto& value = std::get<scene::FieldProbeParameters>(
+            observation.parameters);
+        return {
+            .widthMetres = value.widthMetres,
+            .heightMetres = value.heightMetres,
+            .sampleWidth = value.sampleWidth,
+            .sampleHeight = value.sampleHeight,
+        };
+    }
+    throw std::invalid_argument(
+        "live wave observation must be a Screen / Detector or virtual Field Probe");
+}
+
 [[nodiscard]] std::size_t boundedPowerOfTwo(
     std::size_t requested,
     std::size_t maximum) {
@@ -161,7 +200,7 @@ bool BenchWaveObservationResult::isStaleFor(
         || aperture == nullptr
         || aperture->kind != scene::BenchComponentKind::Aperture
         || observation == nullptr
-        || observation->kind != scene::BenchComponentKind::ScreenDetector;
+        || !isWaveObservationPlane(observation->kind);
 }
 
 BenchWaveObservationResult observeBenchWavePattern(
@@ -176,13 +215,11 @@ BenchWaveObservationResult observeBenchWavePattern(
             "live wave screen requires a current Bench trace graph");
     }
     const auto* observation = bench.find(observationComponentId);
-    if (observation == nullptr
-        || observation->kind != scene::BenchComponentKind::ScreenDetector) {
+    if (observation == nullptr || !isWaveObservationPlane(observation->kind)) {
         throw std::invalid_argument(
-            "live wave observation must be an ordinary placed Screen / Detector");
+            "live wave observation must be an ordinary placed Screen / Detector or virtual Field Probe");
     }
-    const auto& screen = std::get<scene::ScreenDetectorParameters>(
-        observation->parameters);
+    const auto observerSampling = observationSampling(*observation);
     const auto& route = selectApertureRoute(bench, traceGraph);
     const auto* aperture = bench.find(route.componentId);
     const auto& sourceId
@@ -198,9 +235,9 @@ BenchWaveObservationResult observeBenchWavePattern(
         = std::get<scene::ApertureParameters>(aperture->parameters);
 
     const std::size_t width = boundedPowerOfTwo(
-        screen.sampleWidth, maximumSamplesPerAxis);
+        observerSampling.sampleWidth, maximumSamplesPerAxis);
     const std::size_t height = boundedPowerOfTwo(
-        screen.sampleHeight, maximumSamplesPerAxis);
+        observerSampling.sampleHeight, maximumSamplesPerAxis);
     if (!fftBackend.supportsDimensions(width * 2U, height * 2U)) {
         throw std::invalid_argument(
             "FFT backend does not support the padded live wave-screen grid");
@@ -208,8 +245,8 @@ BenchWaveObservationResult observeBenchWavePattern(
     field::ComplexField2D field(
         width,
         height,
-        screen.widthMetres / static_cast<double>(width),
-        screen.heightMetres / static_cast<double>(height),
+        observerSampling.widthMetres / static_cast<double>(width),
+        observerSampling.heightMetres / static_cast<double>(height),
         route.incidentBeam.wavelengthMetres);
     initializeIncidentField(
         field, laser, route.incidentBeam, *aperture);

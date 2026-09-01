@@ -556,6 +556,7 @@ private:
     void drawSandboxInspector();
     void applySandboxTargetAlignment(SandboxAlignmentAction action);
     void snapSandboxSelectedToNearestBeam();
+    void focusSandboxSelection();
     void runSandboxInteractionSmoke();
     void loadBenchProjectFromPath();
     void saveBenchProjectToPath();
@@ -621,7 +622,7 @@ private:
     std::string sandboxActiveRecordingRecipeId_;
     std::string sandboxObservationComponentId_;
     std::string sandboxWaveObservationComponentId_;
-    bool sandboxLiveWaveScreen_ = true;
+    bool sandboxLiveWavePlane_ = true;
     std::string sandboxWaveObservationDiagnostic_;
     bool sandboxReconstructionOverlaySubmitted_ = false;
     std::string sandboxReconstructionOverlayDiagnostic_;

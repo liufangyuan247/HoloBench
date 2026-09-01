@@ -65,6 +65,22 @@ void OrbitCamera::pan(float deltaX, float deltaY) noexcept {
     }
 }
 
+void OrbitCamera::moveLocal(
+    float deltaRight,
+    float deltaUp,
+    float deltaForward) noexcept {
+    if (!std::isfinite(deltaRight) || !std::isfinite(deltaUp)
+        || !std::isfinite(deltaForward)) {
+        return;
+    }
+    const glm::vec3 translation = rightVector() * deltaRight
+        + upVector() * deltaUp + forwardVector() * deltaForward;
+    const glm::vec3 newTarget = target_ + translation;
+    if (isFiniteVec3(newTarget)) {
+        target_ = newTarget;
+    }
+}
+
 void OrbitCamera::zoom(float deltaFactor) noexcept {
     if (!std::isfinite(deltaFactor)) {
         return;
@@ -80,6 +96,22 @@ void OrbitCamera::zoom(float deltaFactor) noexcept {
         return;
     }
     distance_ = std::clamp(newDistance, kMinDistance, kMaxDistance);
+}
+
+void OrbitCamera::focusOn(
+    const glm::vec3& target,
+    float framingRadius) noexcept {
+    if (!isFiniteVec3(target) || !std::isfinite(framingRadius)
+        || framingRadius <= 0.0F) {
+        return;
+    }
+    const float requiredDistance = 1.25F * framingRadius
+        / std::tan(0.5F * fovY_);
+    if (!std::isfinite(requiredDistance)) {
+        return;
+    }
+    target_ = target;
+    distance_ = std::clamp(requiredDistance, kMinDistance, kMaxDistance);
 }
 
 void OrbitCamera::setViewportSize(int width, int height) noexcept {

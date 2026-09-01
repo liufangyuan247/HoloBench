@@ -68,16 +68,21 @@ The required interaction is now explicit:
   Circular Diffraction actions load ordinary Laser -> Aperture -> Screen
   benches. The centre ray remains global routing evidence; the opaque centre
   of a double slit is never treated as transmitted wave energy.
-- **Freely movable live white screen**: A selected ordinary Screen / Detector
-  evaluates a bounded local 2-D complex field from the real routed laser and
-  aperture, then uses padded shifted ASM for parallel/decentred planes or the
-  padded tilted-spectrum solver for rotated non-grazing planes. Gizmo dragging
-  refreshes at up to 256 samples per axis; release replaces it with the
-  persisted screen request up to 512. Source, aperture, screen, and exact scene
+- **Freely movable live observation planes**: A selected ordinary Screen /
+  Detector or virtual non-blocking Field Probe evaluates a bounded local 2-D
+  complex field from the real routed laser and aperture, then uses padded
+  shifted ASM for parallel/decentred planes or the padded tilted-spectrum
+  solver for rotated non-grazing planes. The Screen intercepts the routed beam;
+  the Field Probe samples it without terminating downstream routes. Gizmo
+  dragging refreshes at up to 256 samples per axis; release replaces it with
+  the persisted observation-plane request up to 512. Source, aperture,
+  observation plane, and exact scene
   revision gate the texture, so failed or stale propagation never leaves a
   plausible-looking image behind. The analytic test measures the first
   double-slit fringe against `lambda*z/d` and proves that moving the screen
-  from 0.5 m to 0.8 m increases the spacing proportionally.
+  from 0.5 m to 0.8 m increases the spacing proportionally. A second gate
+  removes the physical Screen entirely and proves that a 256x256 Field Probe
+  still receives a current non-zero field and becomes stale after movement.
 - **RGB reflection/Denisyuk**: A new ordinary preset contains three structured
   object paths and one RGB laser whose independent 638/532/450 nm channels are
   both recording references and replay illumination. Exactly three reflection
@@ -89,13 +94,22 @@ The required interaction is now explicit:
   three-channel volume recipes round-trip canonically while legacy circular
   and rectangular aperture JSON keeps its original three keys. The expanded
   hardware OpenGL smoke clicks Double Slit, moves the actual Screen gizmo,
-  requires a current committed 512-sample texture on the moved quad, then
+  requires a current committed 512-sample texture on the moved quad, places a
+  virtual Field Probe and requires a current 256-sample texture without a
+  Screen, then
   clicks RGB Denisyuk Record/Reconstruct and requires current RGB evidence on
-  the plate. The Clang development gate passes 572/572 cases and the expanded
+  the plate. The Clang development gate passes 574/574 cases and the expanded
   smoke exits without GL errors on AMD Radeon Pro 5300M. Implementation commit
   `c0ab45d` passes all four Windows/Linux Core/Application jobs in GitHub
   Actions run `33498048377`, including the M6-M9 performance gates. See
   [ADR 0025](adr/0025-live-wave-screen-and-rgb-denisyuk.md).
+
+- **Direct camera navigation**: Right-button orbit follows the drag direction
+  on both axes. `F` focuses and frames the selected component, while
+  `Shift+W/A/S/D` roams along the current camera forward/right basis at a
+  distance-scaled bounded speed. Unit tests cover finite local movement and
+  framing; the hardware OpenGL smoke drives the real RMB, focus, and roam
+  input paths before assembling the optical experiment.
 
 ## M7 implementation progress
 

@@ -112,6 +112,97 @@ gizmo::LocalRotationAxis localRotationAxisForIndex(int index) {
     }
 }
 
+[[nodiscard]] float sandboxComponentFocusRadius(
+    const optics::scene::BenchComponent& component) {
+    namespace bench = optics::scene;
+    double width = 0.05;
+    double height = 0.05;
+    switch (component.kind) {
+    case bench::BenchComponentKind::LaserSource: {
+        const auto& value = std::get<bench::LaserSourceParameters>(
+            component.parameters);
+        width = height = 2.0 * value.beamRadiusMetres;
+        break;
+    }
+    case bench::BenchComponentKind::ObjectWavefrontSource: {
+        const auto& value = std::get<bench::ObjectWavefrontSourceParameters>(
+            component.parameters);
+        width = value.widthMetres;
+        height = value.heightMetres;
+        break;
+    }
+    case bench::BenchComponentKind::PlanarMirror: {
+        const auto& value = std::get<bench::PlanarMirrorParameters>(
+            component.parameters);
+        width = value.widthMetres;
+        height = value.heightMetres;
+        break;
+    }
+    case bench::BenchComponentKind::BeamSplitterCombiner: {
+        const auto& value = std::get<bench::BeamSplitterParameters>(
+            component.parameters);
+        width = value.widthMetres;
+        height = value.heightMetres;
+        break;
+    }
+    case bench::BenchComponentKind::IdealThinLens: {
+        const auto& value = std::get<bench::IdealThinLensParameters>(
+            component.parameters);
+        width = height = value.clearApertureDiameterMetres;
+        break;
+    }
+    case bench::BenchComponentKind::RealLensAssembly: {
+        const auto& value = std::get<bench::RealLensAssemblyParameters>(
+            component.parameters);
+        width = height = value.clearApertureDiameterMetres;
+        break;
+    }
+    case bench::BenchComponentKind::Aperture: {
+        const auto& value = std::get<bench::ApertureParameters>(
+            component.parameters);
+        width = value.widthMetres;
+        height = value.heightMetres;
+        break;
+    }
+    case bench::BenchComponentKind::SpatialFilter: {
+        const auto& value = std::get<bench::SpatialFilterParameters>(
+            component.parameters);
+        width = height = value.clearApertureDiameterMetres;
+        break;
+    }
+    case bench::BenchComponentKind::SpatialLightModulator: {
+        const auto& value = std::get<bench::SpatialLightModulatorParameters>(
+            component.parameters);
+        width = value.widthMetres;
+        height = value.heightMetres;
+        break;
+    }
+    case bench::BenchComponentKind::ScreenDetector: {
+        const auto& value = std::get<bench::ScreenDetectorParameters>(
+            component.parameters);
+        width = value.widthMetres;
+        height = value.heightMetres;
+        break;
+    }
+    case bench::BenchComponentKind::FieldProbe: {
+        const auto& value = std::get<bench::FieldProbeParameters>(
+            component.parameters);
+        width = value.widthMetres;
+        height = value.heightMetres;
+        break;
+    }
+    case bench::BenchComponentKind::HolographicPlate: {
+        const auto& value = std::get<bench::HolographicPlateParameters>(
+            component.parameters);
+        width = value.widthMetres;
+        height = value.heightMetres;
+        break;
+    }
+    }
+    return static_cast<float>(std::max(
+        0.03, 0.5 * std::hypot(width, height)));
+}
+
 GLADapiproc loadOpenGlProcedure(const char* name) {
     return reinterpret_cast<GLADapiproc>(SDL_GL_GetProcAddress(name));
 }
@@ -179,12 +270,12 @@ constexpr T toImTextureID(GLuint textureId) noexcept {
         ImDrawFlags_Closed,
         2.5F);
     const std::string completeLabel
-        = "CURRENT RECONSTRUCTION | " + std::string(label);
+        = "CURRENT FIELD | " + std::string(label);
     drawList.AddText(
         ImVec2(points[3].x + 6.0F, points[3].y - 18.0F),
         IM_COL32(100, 255, 190, 255),
         completeLabel.c_str());
-    diagnostic = "current reconstruction quad submitted";
+    diagnostic = "current field quad submitted";
     return true;
 }
 
@@ -2440,13 +2531,15 @@ void Application::updateSandboxWaveObservation() {
     const auto* selected = benchProject_.scene.find(
         selectedBenchComponentId_);
     if (selected != nullptr
-        && selected->kind == bench::BenchComponentKind::ScreenDetector) {
+        && (selected->kind == bench::BenchComponentKind::ScreenDetector
+            || selected->kind == bench::BenchComponentKind::FieldProbe)) {
         sandboxWaveObservationComponentId_ = selected->id;
     }
     const auto* observation = benchProject_.scene.find(
         sandboxWaveObservationComponentId_);
-    if (!sandboxLiveWaveScreen_ || observation == nullptr
-        || observation->kind != bench::BenchComponentKind::ScreenDetector) {
+    if (!sandboxLiveWavePlane_ || observation == nullptr
+        || (observation->kind != bench::BenchComponentKind::ScreenDetector
+            && observation->kind != bench::BenchComponentKind::FieldProbe)) {
         sandboxWaveObservation_.reset();
         sandboxWaveObservationDiagnostic_.clear();
         if (sandboxWaveTexture_) {
@@ -5869,6 +5962,26 @@ void Application::snapSandboxSelectedToNearestBeam() {
     }
 }
 
+void Application::focusSandboxSelection() {
+    const auto* selected = benchProject_.scene.find(
+        selectedBenchComponentId_);
+    if (selected == nullptr) {
+        errorMessage_ = "Select a Bench component before focusing the camera";
+        statusMessage_.clear();
+        return;
+    }
+    const auto& position = selected->transform.translationMetres;
+    camera_.focusOn(
+        {
+            static_cast<float>(position.x),
+            static_cast<float>(position.y),
+            static_cast<float>(position.z),
+        },
+        sandboxComponentFocusRadius(*selected));
+    errorMessage_.clear();
+    statusMessage_ = "Focused camera on " + selected->id;
+}
+
 void Application::drawSandboxComponentShelf() {
     namespace bench = optics::scene;
     ImGui::BeginChild(
@@ -5969,7 +6082,7 @@ void Application::drawSandboxComponentShelf() {
     }
     ImGui::SameLine();
     ImGui::TextDisabled(
-        "Move the ordinary Screen in 3D; field follows its real distance");
+        "Move a white Screen or non-blocking Field Probe; the field follows its real 3D plane");
 
     const auto& kinds = bench::requiredBenchComponentKinds();
     constexpr int kShelfColumns = 4;
@@ -6196,13 +6309,15 @@ void Application::drawSandboxWaveBar() {
     const auto* selected = benchProject_.scene.find(
         selectedBenchComponentId_);
     if (selected != nullptr
-        && selected->kind == bench::BenchComponentKind::ScreenDetector) {
+        && (selected->kind == bench::BenchComponentKind::ScreenDetector
+            || selected->kind == bench::BenchComponentKind::FieldProbe)) {
         sandboxWaveObservationComponentId_ = selected->id;
     }
     const auto* observation = benchProject_.scene.find(
         sandboxWaveObservationComponentId_);
     if (observation == nullptr
-        || observation->kind != bench::BenchComponentKind::ScreenDetector) {
+        || (observation->kind != bench::BenchComponentKind::ScreenDetector
+            && observation->kind != bench::BenchComponentKind::FieldProbe)) {
         sandboxWaveObservationComponentId_.clear();
         return;
     }
@@ -6217,9 +6332,14 @@ void Application::drawSandboxWaveBar() {
         ImGuiChildFlags_Borders,
         ImGuiWindowFlags_NoScrollbar);
     ImGui::AlignTextToFramePadding();
-    ImGui::Text("Live wave screen: %s", observation->id.c_str());
+    const bool virtualProbe
+        = observation->kind == bench::BenchComponentKind::FieldProbe;
+    ImGui::Text(
+        "%s: %s",
+        virtualProbe ? "Virtual field plane" : "White screen field",
+        observation->id.c_str());
     ImGui::SameLine();
-    ImGui::Checkbox("Observe field", &sandboxLiveWaveScreen_);
+    ImGui::Checkbox("Observe light field", &sandboxLiveWavePlane_);
     ImGui::SameLine();
     if (current) {
         const auto& result = *sandboxWaveObservation_;
@@ -6242,7 +6362,9 @@ void Application::drawSandboxWaveBar() {
         ImGui::TextDisabled("Waiting for a Laser -> Aperture route");
     }
     ImGui::TextDisabled(
-        "Rays route the bench; the local complex field is recomputed at the moved screen plane.");
+        virtualProbe
+            ? "Field Probe is non-blocking; move it through space to scan local intensity without terminating the ray route."
+            : "Screen / Detector intercepts the route and displays intensity on its physical white plane.");
     ImGui::EndChild();
 }
 
@@ -7084,6 +7206,10 @@ void Application::drawSandboxInspector() {
             static_cast<void>(applyBenchScene(std::move(candidate), "Duplicated component"));
         }
         ImGui::SameLine();
+        if (ImGui::Button("Focus (F)")) {
+            focusSandboxSelection();
+        }
+        ImGui::SameLine();
         if (ImGui::Button("Delete")) {
             auto candidate = benchProject_.scene;
             static_cast<void>(candidate.remove(selected->id));
@@ -7535,6 +7661,10 @@ void Application::drawSandboxInspector() {
                             .sampleHeight = static_cast<std::size_t>(std::max(samples[1], 0)),
                         };
                     }
+                    ImGui::TextWrapped(
+                        edited.kind == bench::BenchComponentKind::FieldProbe
+                            ? "Virtual, non-destructive light-field plane: select it and enable Observe light field above the 3D viewport, then move or rotate it to scan space."
+                            : "Physical white Screen / Detector: intercepts the routed beam and displays the sampled intensity on the placed plane.");
                     break;
                 }
                 case bench::BenchComponentKind::HolographicPlate: {
@@ -9306,11 +9436,35 @@ void Application::drawWorkspace() {
                 if (std::abs(io.MouseWheel) > 0.0F) {
                     camera_.zoom(io.MouseWheel);
                 }
-                if (ImGui::IsKeyPressed(ImGuiKey_W, false)) {
+                if (ImGui::IsKeyPressed(ImGuiKey_F, false)) {
+                    focusSandboxSelection();
+                }
+                if (!io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_W, false)) {
                     sandboxGizmoMode_ = SandboxGizmoMode::Translate;
                 }
-                if (ImGui::IsKeyPressed(ImGuiKey_E, false)) {
+                if (!io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_E, false)) {
                     sandboxGizmoMode_ = SandboxGizmoMode::Rotate;
+                }
+                if (io.KeyShift && !io.KeyCtrl && !io.KeyAlt
+                    && std::isfinite(io.DeltaTime) && io.DeltaTime > 0.0F) {
+                    float rightMotion = 0.0F;
+                    float forwardMotion = 0.0F;
+                    if (ImGui::IsKeyDown(ImGuiKey_A)) rightMotion -= 1.0F;
+                    if (ImGui::IsKeyDown(ImGuiKey_D)) rightMotion += 1.0F;
+                    if (ImGui::IsKeyDown(ImGuiKey_W)) forwardMotion += 1.0F;
+                    if (ImGui::IsKeyDown(ImGuiKey_S)) forwardMotion -= 1.0F;
+                    const float magnitude = std::hypot(
+                        rightMotion, forwardMotion);
+                    if (magnitude > 0.0F) {
+                        const float speedMetresPerSecond = std::clamp(
+                            camera_.distance() * 1.5F, 0.05F, 5.0F);
+                        const float scale = speedMetresPerSecond
+                            * io.DeltaTime / magnitude;
+                        camera_.moveLocal(
+                            rightMotion * scale,
+                            0.0F,
+                            forwardMotion * scale);
+                    }
                 }
                 if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
                     isOrbiting_ = true;
@@ -9347,7 +9501,9 @@ void Application::drawWorkspace() {
 
             if (isOrbiting_) {
                 if (ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
-                    camera_.orbit(io.MouseDelta.x * 0.005F, -io.MouseDelta.y * 0.005F);
+                    camera_.orbit(
+                        -io.MouseDelta.x * 0.005F,
+                        io.MouseDelta.y * 0.005F);
                 } else {
                     isOrbiting_ = false;
                 }
@@ -9530,10 +9686,10 @@ void Application::drawWorkspace() {
                 const char* modeName = sandboxGizmoMode_ == SandboxGizmoMode::Translate
                     ? "Move (world axes)" : "Rotate (local axes)";
                 const std::string hud = std::string("SANDBOX | ") + modeName
-                    + " [W/E] | drag axis or body | RMB orbit | MMB pan | wheel zoom";
+                    + " [W/E] | F focus | Shift+WASD roam | RMB orbit | MMB pan | wheel zoom";
                 drawList->AddRectFilled(
                     ImVec2(imagePosMin.x + 10.0F, imagePosMin.y + 10.0F),
-                    ImVec2(imagePosMin.x + 650.0F, imagePosMin.y + 34.0F),
+                    ImVec2(imagePosMin.x + 820.0F, imagePosMin.y + 34.0F),
                     IM_COL32(8, 15, 25, 205), 4.0F);
                 drawList->AddText(
                     ImVec2(imagePosMin.x + 17.0F, imagePosMin.y + 15.0F),
@@ -9692,7 +9848,9 @@ void Application::drawWorkspace() {
         if (isOrbiting_) {
             if (ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
                 constexpr float kOrbitSensitivity = 0.005F;
-                camera_.orbit(io.MouseDelta.x * kOrbitSensitivity, -io.MouseDelta.y * kOrbitSensitivity);
+                camera_.orbit(
+                    -io.MouseDelta.x * kOrbitSensitivity,
+                    io.MouseDelta.y * kOrbitSensitivity);
             } else {
                 isOrbiting_ = false;
             }
@@ -10112,6 +10270,15 @@ void Application::drawWorkspace() {
         if (ImGui::Button("Reset Camera")) {
             camera_.reset();
         }
+        if (viewportMode_ == ViewportMode::Sandbox) {
+            ImGui::SameLine();
+            ImGui::BeginDisabled(
+                benchProject_.scene.find(selectedBenchComponentId_) == nullptr);
+            if (ImGui::Button("Focus Selected (F)")) {
+                focusSandboxSelection();
+            }
+            ImGui::EndDisabled();
+        }
         ImGui::SameLine();
         if (ImGui::Button("Perspective")) {
             camera_.setPresetView(render::CameraPresetView::Perspective);
@@ -10186,7 +10353,9 @@ void Application::runSandboxInteractionSmoke() {
                                     const glm::vec2& mousePosition,
                                     int leftButtonState,
                                     ImGuiKey key = ImGuiKey_None,
-                                    int keyState = -1) {
+                                    int keyState = -1,
+                                    int rightButtonState = -1,
+                                    bool shiftDown = false) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGuiIO& io = ImGui::GetIO();
@@ -10194,6 +10363,10 @@ void Application::runSandboxInteractionSmoke() {
         if (leftButtonState >= 0) {
             io.AddMouseButtonEvent(0, leftButtonState != 0);
         }
+        if (rightButtonState >= 0) {
+            io.AddMouseButtonEvent(1, rightButtonState != 0);
+        }
+        io.AddKeyEvent(ImGuiMod_Shift, shiftDown);
         if (key != ImGuiKey_None && keyState >= 0) {
             io.AddKeyEvent(key, keyState != 0);
         }
@@ -10260,6 +10433,33 @@ void Application::runSandboxInteractionSmoke() {
     requireBounds(sandboxUiEvidence_.laserShelf, "Laser shelf item");
     requireBounds(sandboxUiEvidence_.plateShelf, "Plate shelf item");
     requireBounds(sandboxUiEvidence_.viewport, "3D Bench viewport");
+
+    const glm::vec2 orbitOrigin = sandboxUiEvidence_.viewport.centre();
+    const float yawBeforeOrbit = camera_.yaw();
+    const float pitchBeforeOrbit = camera_.pitch();
+    drawInputFrame(orbitOrigin, 0, ImGuiKey_None, -1, 0);
+    drawInputFrame(orbitOrigin, -1, ImGuiKey_None, -1, 1);
+    drawInputFrame(
+        orbitOrigin + glm::vec2(30.0F, 20.0F),
+        -1,
+        ImGuiKey_None,
+        -1,
+        -1);
+    drawInputFrame(
+        orbitOrigin + glm::vec2(30.0F, 20.0F),
+        -1,
+        ImGuiKey_None,
+        -1,
+        0);
+    if (!(camera_.yaw() < yawBeforeOrbit
+            && camera_.pitch() > pitchBeforeOrbit)) {
+        throw std::runtime_error(
+            "RMB viewport orbit did not follow direct drag direction");
+    }
+    camera_.setPresetView(render::CameraPresetView::Perspective);
+    camera_.setTarget({0.0F, 0.0F, 0.0F});
+    camera_.setDistance(0.8F);
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
 
     click(sandboxUiEvidence_.emptyBench, "Empty Bench action");
     if (!benchProject_.scene.components().empty()) {
@@ -10355,6 +10555,39 @@ void Application::runSandboxInteractionSmoke() {
         throw std::runtime_error(
             "shelf-to-table plate drag did not add an ordinary plate");
     }
+
+    const auto* navigationSelection = benchProject_.scene.find(
+        selectedBenchComponentId_);
+    if (navigationSelection == nullptr) {
+        throw std::runtime_error(
+            "camera navigation smoke has no selected component");
+    }
+    const auto focusPosition = navigationSelection->transform.translationMetres;
+    const glm::vec2 navigationPoint = sandboxUiEvidence_.viewport.centre();
+    drawInputFrame(navigationPoint, 0, ImGuiKey_F, 1);
+    drawInputFrame(navigationPoint, 0, ImGuiKey_F, 0);
+    const glm::vec3 expectedFocus {
+        static_cast<float>(focusPosition.x),
+        static_cast<float>(focusPosition.y),
+        static_cast<float>(focusPosition.z),
+    };
+    if (glm::length(camera_.target() - expectedFocus) > 1e-6F) {
+        throw std::runtime_error(
+            "F key did not focus the camera on the selected component");
+    }
+    const glm::vec3 targetBeforeRoam = camera_.target();
+    const glm::vec3 forwardBeforeRoam = camera_.forwardVector();
+    drawInputFrame(navigationPoint, 0, ImGuiKey_W, 1, -1, true);
+    drawInputFrame(navigationPoint, 0, ImGuiKey_W, 0, -1, false);
+    if (glm::dot(
+            camera_.target() - targetBeforeRoam,
+            forwardBeforeRoam) <= 0.0F) {
+        throw std::runtime_error(
+            "Shift+W did not roam the camera forward");
+    }
+    camera_.setPresetView(render::CameraPresetView::Perspective);
+    camera_.setTarget({0.0F, 0.0F, 0.0F});
+    camera_.setDistance(0.8F);
 
     // The selected plate adds the contextual experiment bar on the following
     // frame, so sample handle coordinates only after that layout transition.
@@ -10731,6 +10964,25 @@ void Application::runSandboxInteractionSmoke() {
                 : "0")
             + ", wave=" + sandboxWaveObservationDiagnostic_
             + ", overlay=" + sandboxReconstructionOverlayDiagnostic_ + ")");
+    }
+
+    const std::string virtualProbeId = dropAtWorld(
+        sandboxUiEvidence_.probeShelf,
+        {0.001, 0.0, 0.30},
+        "Virtual Field Probe shelf item");
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    const auto* virtualProbe = benchProject_.scene.find(virtualProbeId);
+    if (virtualProbe == nullptr
+        || virtualProbe->kind != bench::BenchComponentKind::FieldProbe
+        || !sandboxWaveObservation_
+        || sandboxWaveObservation_->isStaleFor(benchProject_.scene)
+        || sandboxWaveObservation_->observationComponentId != virtualProbeId
+        || sandboxWaveObservation_->fieldAtObservation.width() != 256U
+        || !sandboxReconstructionOverlaySubmitted_) {
+        throw std::runtime_error(
+            "virtual Field Probe did not display a current non-destructive light-field plane (wave="
+            + sandboxWaveObservationDiagnostic_ + ", overlay="
+            + sandboxReconstructionOverlayDiagnostic_ + ")");
     }
 
     click(

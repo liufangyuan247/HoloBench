@@ -21,16 +21,18 @@ and reconstruction imagery required a separate Screen or Probe.
   physical openings; it does not claim that the opaque centre transmits light.
 - `BenchWaveObservation` constructs a bounded two-dimensional complex field at
   the routed aperture, applies circular, rectangular, or double-slit support,
-  and propagates it to an ordinary freely placed Screen / Detector.
-- Parallel/decentred screens use the existing 2x-padded shifted angular-
+  and propagates it to an ordinary freely placed Screen / Detector or Field
+  Probe. A Screen is a physical route terminator; a Field Probe is a virtual,
+  non-destructive observation plane and does not alter downstream routing.
+- Parallel/decentred observation planes use the existing 2x-padded shifted angular-
   spectrum path. Non-grazing rotated screens use the existing padded tilted-
   plane spectrum path within the field's explicitly represented spatial
   bandwidth. The routed hit point centres an off-axis incident beam and routed
   branch power sets its amplitude. The scene revision and exact source,
-  aperture, and screen IDs gate every result.
+  aperture, and observation-plane IDs gate every result.
 - Interactive movement uses at most 256 samples per axis. Releasing the gizmo
-  replaces that preview with at most 512 samples per axis from the screen's
-  persisted sampling request. These bounds are independent of GPU identity;
+  replaces that preview with at most 512 samples per axis from the observation
+  plane's persisted sampling request. These bounds are independent of GPU identity;
   the deterministic CPU backend is the current oracle.
 - RGB Denisyuk recording selects exactly three distinct same-coherence,
   same-wavelength object/reference pairs in reflection geometry. Each channel
@@ -44,7 +46,8 @@ and reconstruction imagery required a separate Screen or Probe.
 ## Consequences
 
 Double-slit interference, single-slit diffraction, circular-aperture
-diffraction, and spatial exploration by moving the screen are native Bench
+diffraction, and spatial exploration by moving a physical Screen or virtual
+Field Probe are native Bench
 experiments. Full-colour Denisyuk recording/replay is also a native plate
 workflow. The displayed intensity is a scalar, uncalibrated relative preview;
 it is not an absolute radiometric display, polarization model, eye box, or

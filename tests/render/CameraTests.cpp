@@ -295,6 +295,38 @@ TEST_CASE("OrbitCamera pan translates target and eye along camera right and up a
     }
 }
 
+TEST_CASE("OrbitCamera local movement and focus preserve a finite rigid view") {
+    OrbitCamera camera;
+    const glm::vec3 initialTarget = camera.target();
+    const glm::vec3 right = camera.rightVector();
+    const glm::vec3 up = camera.upVector();
+    const glm::vec3 forward = camera.forwardVector();
+
+    camera.moveLocal(0.20F, -0.10F, 0.35F);
+    const glm::vec3 expected = initialTarget
+        + right * 0.20F - up * 0.10F + forward * 0.35F;
+    CHECK(camera.target().x == doctest::Approx(expected.x).epsilon(kEpsilon));
+    CHECK(camera.target().y == doctest::Approx(expected.y).epsilon(kEpsilon));
+    CHECK(camera.target().z == doctest::Approx(expected.z).epsilon(kEpsilon));
+    CHECK(isFiniteMat4(camera.viewMatrix()));
+
+    const glm::vec3 moved = camera.target();
+    camera.moveLocal(
+        std::numeric_limits<float>::quiet_NaN(), 0.0F, 0.0F);
+    CHECK(camera.target() == moved);
+
+    camera.focusOn({1.0F, 0.25F, -0.5F}, 0.10F);
+    CHECK(camera.target() == glm::vec3(1.0F, 0.25F, -0.5F));
+    CHECK(camera.distance() > 0.10F);
+    CHECK(isFiniteMat4(camera.viewMatrix()));
+
+    const glm::vec3 focused = camera.target();
+    const float focusedDistance = camera.distance();
+    camera.focusOn({2.0F, 0.0F, 0.0F}, -1.0F);
+    CHECK(camera.target() == focused);
+    CHECK(camera.distance() == focusedDistance);
+}
+
 TEST_CASE("OrbitCamera viewport and projection matrices are finite") {
     OrbitCamera camera;
 
@@ -444,4 +476,3 @@ TEST_CASE("OrbitCamera projection matrix with explicit aspect and invalid aspect
         }
     }
 }
-

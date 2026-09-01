@@ -34,8 +34,9 @@ struct BenchWaveObservationResult final {
 };
 
 // Observes a current Laser -> Aperture route on an ordinary freely placed
-// Screen / Detector. Rays establish the global route; the aperture and free-
-// space propagation are evaluated as a bounded local 2-D complex field.
+// Screen / Detector or non-destructive Field Probe. Rays establish the global
+// route; the aperture and free-space propagation are evaluated as a bounded
+// local 2-D complex field.
 [[nodiscard]] BenchWaveObservationResult observeBenchWavePattern(
     const optics::scene::BenchScene& bench,
     const optics::scene::BenchTraceGraph& traceGraph,

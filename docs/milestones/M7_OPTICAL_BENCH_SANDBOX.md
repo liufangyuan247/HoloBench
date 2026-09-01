@@ -177,11 +177,13 @@ commit and must never block viewport rendering indefinitely.
 - Ordinary Apertures now include a persisted, directly editable double slit.
 - Double-slit, single-slit, and circular-diffraction presets are ordinary
   three-component benches, not fixed parameter panels.
-- A freely placed Screen / Detector samples the actual local complex field at
-  its current distance and pose. Gizmo movement uses a bounded 256-axis
-  preview; mouse release replaces it with the screen-requested resolution up
-  to 512 per axis.
-- Moving the screen changes the diffraction scale; the double-slit gate checks
+- A freely placed Screen / Detector or non-blocking Field Probe samples the
+  actual local complex field at its current distance and pose. The physical
+  Screen intercepts the routed beam; the virtual Probe does not. Gizmo movement
+  uses a bounded 256-axis preview; mouse release replaces it with the
+  observation-plane-requested resolution up to 512 per axis.
+- Moving either observation plane changes the diffraction scale; the
+  double-slit gate checks
   the measured fringe spacing against `lambda * z / separation`.
 - See [ADR 0025](../adr/0025-live-wave-screen-and-rgb-denisyuk.md).
 
@@ -208,6 +210,10 @@ commit and must never block viewport rendering indefinitely.
   rotation handle, snap to a traced beam, switch back to movement, assemble all
   three holography experiments from Empty through shelf/Bench actions, and prove
   that a later shelf edit stales the visible replay.
+- The same smoke reverses both legacy RMB orbit axes to direct-drag behaviour,
+  focuses the selected component with `F`, roams forward with `Shift+W`, and
+  verifies that a Field Probe can display the current double-slit field without
+  requiring or terminating at a physical Screen.
 
 ## Performance budget
 
@@ -228,7 +234,9 @@ commit and must never block viewport rendering indefinitely.
   translated, rotated, duplicated, deleted, and inspected.
 - [x] A beam splitter visibly and numerically creates conserved branches; a
   reciprocal layout can bring branches to a shared detector or plate.
-- [x] Screens/probes show results derived from their actual spatial placement.
+- [x] Screens/probes show results derived from their actual spatial placement;
+  a Screen intercepts the route while a Field Probe is a movable non-blocking
+  virtual light-field plane.
 - [x] A user can place a double slit, single slit, or circular aperture and
   move an ordinary white screen through the resulting interference/diffraction
   field, with a committed high-resolution refresh after dragging.

@@ -23,7 +23,12 @@ public:
 
     void orbit(float deltaYaw, float deltaPitch) noexcept;
     void pan(float deltaX, float deltaY) noexcept;
+    void moveLocal(
+        float deltaRight,
+        float deltaUp,
+        float deltaForward) noexcept;
     void zoom(float deltaFactor) noexcept;
+    void focusOn(const glm::vec3& target, float framingRadius) noexcept;
 
     void setViewportSize(int width, int height) noexcept;
     void setPresetView(CameraPresetView preset) noexcept;
