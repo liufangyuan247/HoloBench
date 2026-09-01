@@ -31,7 +31,11 @@ exposure axis suppresses physical selection until material-dose calibration is
 explicitly attached to the sweep. A strict measured material LUT and the
 existing M5 measured complex SLM LUT now attach to single-hogel execution;
 actual sampled object/reference irradiances produce total and fringe-modulation
-dose, and calibrated index modulation/shrinkage drive the M8 recording.
+dose, and calibrated index modulation/shrinkage drive the M8 recording. The
+same path now evaluates one deterministic bounded representative hogel for each
+calibrated sweep candidate, retains all RGB dose/material evidence in result
+format v2, rejects extrapolation per candidate, and permits exposure ranking
+only from successful measured responses.
 
 ## User-visible outcome
 

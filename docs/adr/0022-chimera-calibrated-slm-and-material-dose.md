@@ -52,5 +52,7 @@ Exposure time can now affect M8 diffraction efficiency when, and only when, a
 measured material LUT is explicitly attached. The model remains a scalar
 area-averaged empirical adapter: it does not model oxygen inhibition,
 reciprocity failure outside measured data, bleaching, diffusion, saturation
-history, polarization, or spatially varying chemistry. Multi-hogel cumulative
-dose and parameter-sweep use of the calibration remain batch-layer work.
+history, polarization, or spatially varying chemistry. The deterministic
+parameter sweep can evaluate this adapter on one explicit representative hogel
+per candidate, but multi-hogel cumulative dose and chemistry history remain
+batch/material-model work.

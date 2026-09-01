@@ -65,6 +65,9 @@ Single-hogel execution can also attach the existing measured complex SLM LUT
 and a strict measured material dose-response LUT. It derives total and
 fringe-modulation dose from the actual sampled object/reference fields and uses
 the calibrated index modulation and shrinkage in the ordinary M8 recorder.
+The deterministic CHIMERA sweep can consume the same calibrations on a bounded
+representative hogel, retain every RGB dose/material metric, and rank exposure
+candidates without extrapolating beyond the measured domain.
 
 ## M1 Features
 

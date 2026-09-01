@@ -155,7 +155,9 @@
   off-axis resampling and calibrated colour response remain incomplete. M9 can
   attach a measured scalar material dose LUT to a single-hogel execution, but
   cumulative multi-hogel chemistry and unmeasured-dose extrapolation are not
-  modeled.
+  modeled. Calibrated parameter sweeps use one explicitly reported bounded
+  representative hogel per candidate; they do not yet reuse exposure-invariant
+  sampled fields or claim whole-plate chemistry.
 - The dynamic bench has its own bounded scene-wide undo/redo timeline. The
   separate legacy history still covers lesson-relevant fixed optical-bench,
   Wave Detector, Sampling Debugger, and SLM inputs, but not Real Lens or the

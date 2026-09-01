@@ -9,6 +9,43 @@
 #include "app/ChimeraParameterSweep.hpp"
 
 namespace chimera = holobench::app::chimera;
+namespace holography = holobench::optics::holography;
+namespace slm = holobench::optics::slm;
+
+namespace {
+
+slm::CalibratedSlmResponse makeSweepSlmResponse() {
+    return slm::CalibratedSlmResponse(
+        std::vector<slm::SlmWavelengthResponse> {{
+            .vacuumWavelengthMetres = 400e-9,
+            .commandResponse = {{0.0, 0.0, 0.0}, {1.0, 0.5, 0.0}},
+        }, {
+            .vacuumWavelengthMetres = 700e-9,
+            .commandResponse = {{0.0, 0.0, 0.0}, {1.0, 0.5, 0.0}},
+        }});
+}
+
+holography::CalibratedMaterialDoseResponse makeSweepMaterialResponse() {
+    const std::vector<holography::MaterialDoseResponsePoint> points {
+        {0.0, 0.0001, 0.0},
+        {1.0, 0.001, 0.001},
+        {100.0, 0.003, 0.002},
+        {1e4, 0.006, 0.003},
+        {1e6, 0.009, 0.004},
+        {1e8, 0.012, 0.005},
+        {1e10, 0.015, 0.006},
+        {1e12, 0.018, 0.007},
+    };
+    return {"sweep-material-lot-3", {{
+        .vacuumWavelengthMetres = 400e-9,
+        .doseResponse = points,
+    }, {
+        .vacuumWavelengthMetres = 700e-9,
+        .doseResponse = points,
+    }}};
+}
+
+} // namespace
 
 TEST_CASE("CHIMERA parameter sweep is deterministic and selects from retained evidence") {
     chimera::ChimeraSweepDefinition definition;
@@ -125,6 +162,128 @@ TEST_CASE("varying uncalibrated exposure suppresses physical best selection") {
         }));
 }
 
+TEST_CASE("calibrated exposure sweep ranks retained physical dose evidence") {
+    const auto slmResponse = makeSweepSlmResponse();
+    const auto materialResponse = makeSweepMaterialResponse();
+    chimera::ChimeraSweepDefinition definition;
+    definition.sweepId = "calibrated-exposure-sweep";
+    definition.axes.exposureSecondsPerChannel = {0.04, 0.02};
+    definition.calibration = {
+        .slmCalibrationId = "sweep-slm-unit-2",
+        .calibratedSlmResponse = &slmResponse,
+        .calibratedMaterialDoseResponse = &materialResponse,
+        .maximumRepresentativeSampleWidth = 256U,
+        .maximumRepresentativeSampleHeight = 256U,
+    };
+
+    const auto result = chimera::runChimeraParameterSweep(definition);
+    REQUIRE(result.candidates.size() == 2U);
+    CHECK_FALSE(result.physicalBestSelectionSuppressed);
+    CHECK(result.calibratedMaterialDoseResponseAttached);
+    CHECK(result.slmCalibrationId == "sweep-slm-unit-2");
+    CHECK(result.materialCalibrationId == "sweep-material-lot-3");
+    CHECK(result.maximumRepresentativeSampleWidth == 256U);
+    CHECK(result.maximumRepresentativeSampleHeight == 256U);
+    std::string candidateIssues;
+    for (const auto& candidate : result.candidates) {
+        for (const auto& issue : candidate.evaluationIssues) {
+            candidateIssues += candidate.candidateId + ": " + issue + "\n";
+        }
+        for (const auto& violation : candidate.hardConstraintViolations) {
+            candidateIssues += candidate.candidateId + ": hard="
+                + violation + "\n";
+        }
+        for (const auto& constraint : candidate.compilerConstraints) {
+            candidateIssues += candidate.candidateId + ": compiler="
+                + constraint.code + ": " + constraint.message + "\n";
+        }
+    }
+    INFO(candidateIssues);
+    REQUIRE(result.bestCandidate() != nullptr);
+    for (const auto& candidate : result.candidates) {
+        const auto& metrics = candidate.metrics;
+        CHECK(candidate.satisfiesHardConstraints());
+        CHECK(metrics.calibratedExposureEvaluated);
+        CHECK(metrics.representativeHogelX == 3U);
+        CHECK(metrics.representativeHogelY == 2U);
+        CHECK(metrics.representativeSampleWidth == 256U);
+        CHECK(metrics.representativeSampleHeight == 256U);
+        CHECK(metrics.slmCalibrationId == "sweep-slm-unit-2");
+        CHECK(metrics.materialCalibrationId == "sweep-material-lot-3");
+        CHECK(std::all_of(
+            metrics.rgbFringeVisibility.begin(),
+            metrics.rgbFringeVisibility.end(),
+            [](double value) { return value > 0.0 && value <= 1.0; }));
+        CHECK(std::all_of(
+            metrics.rgbFringeModulationDoseJoulesPerSquareMetre.begin(),
+            metrics.rgbFringeModulationDoseJoulesPerSquareMetre.end(),
+            [](double value) { return value > 0.0; }));
+        CHECK(metrics.minimumRgbDiffractionEfficiency
+            <= result.bestCandidate()->metrics.minimumRgbDiffractionEfficiency);
+    }
+    for (std::size_t index = 0; index < 3U; ++index) {
+        CHECK(result.candidates[0]
+                .metrics.rgbFringeModulationDoseJoulesPerSquareMetre[index]
+            < result.candidates[1]
+                .metrics.rgbFringeModulationDoseJoulesPerSquareMetre[index]);
+    }
+    CHECK(result.candidates[0].metrics.minimumRgbDiffractionEfficiency
+        != result.candidates[1].metrics.minimumRgbDiffractionEfficiency);
+    const auto document = nlohmann::json::parse(
+        chimera::serializeChimeraSweepResult(result));
+    const auto& metrics = document.at("candidates")[0].at("metrics");
+    CHECK(document.at("calibration").at("material_calibration_id")
+        == "sweep-material-lot-3");
+    CHECK(metrics.at("calibrated_exposure_evaluated") == true);
+    CHECK(metrics.at("material_calibration_id")
+        == "sweep-material-lot-3");
+    CHECK(metrics.at("rgb_fringe_modulation_dose_j_m2").size() == 3U);
+}
+
+TEST_CASE("calibrated sweep retains dose-domain failures without false selection") {
+    const holography::CalibratedMaterialDoseResponse narrowResponse {
+        "narrow-material-domain", {{
+            .vacuumWavelengthMetres = 400e-9,
+            .doseResponse = {{0.0, 0.001, 0.0}, {1e-12, 0.002, 0.0}},
+        }, {
+            .vacuumWavelengthMetres = 700e-9,
+            .doseResponse = {{0.0, 0.001, 0.0}, {1e-12, 0.002, 0.0}},
+        }}};
+    chimera::ChimeraSweepDefinition definition;
+    definition.sweepId = "dose-domain-failure-sweep";
+    definition.calibration.calibratedMaterialDoseResponse = &narrowResponse;
+
+    const auto result = chimera::runChimeraParameterSweep(definition);
+    REQUIRE(result.candidates.size() == 1U);
+    CHECK_FALSE(result.physicalBestSelectionSuppressed);
+    CHECK(result.materialCalibrationId == "narrow-material-domain");
+    CHECK(result.bestCandidate() == nullptr);
+    const auto& candidate = result.candidates.front();
+    CHECK(candidate.metrics.datasetGenerated);
+    CHECK(candidate.metrics.exposurePlanGenerated);
+    CHECK_FALSE(candidate.metrics.calibratedExposureEvaluated);
+    CHECK(candidate.metrics.materialCalibrationId
+        == "narrow-material-domain");
+    CHECK(std::any_of(
+        candidate.evaluationIssues.begin(),
+        candidate.evaluationIssues.end(),
+        [](const std::string& issue) {
+            return issue.find("calibrated_exposure") != std::string::npos
+                && issue.find("outside the calibration domain")
+                    != std::string::npos;
+        }));
+    CHECK(std::find(candidate.hardConstraintViolations.begin(),
+              candidate.hardConstraintViolations.end(),
+              "candidate_evaluation")
+        != candidate.hardConstraintViolations.end());
+
+    definition.axes.plateShrinkageFractions = {0.01};
+    CHECK_THROWS_WITH_AS(
+        static_cast<void>(chimera::runChimeraParameterSweep(definition)),
+        "CHIMERA calibrated sweep cannot also vary recipe shrinkage",
+        std::invalid_argument);
+}
+
 TEST_CASE("CHIMERA sweep rejects unbounded Cartesian products") {
     chimera::ChimeraSweepDefinition definition;
     definition.sweepId = "bounded-cartesian-sweep";
@@ -145,6 +304,12 @@ TEST_CASE("CHIMERA sweep rejects unbounded Cartesian products") {
     definition.axes.plateThicknessMetres.clear();
     definition.axes.hogelPitchMetres = {
         std::numeric_limits<double>::quiet_NaN()};
+    CHECK_THROWS_AS(
+        static_cast<void>(chimera::runChimeraParameterSweep(definition)),
+        std::invalid_argument);
+
+    definition.axes.hogelPitchMetres.clear();
+    definition.calibration.slmCalibrationId = "unpaired-slm";
     CHECK_THROWS_AS(
         static_cast<void>(chimera::runChimeraParameterSweep(definition)),
         std::invalid_argument);

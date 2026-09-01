@@ -15,6 +15,7 @@
 #include "app/BenchProject.hpp"
 #include "app/BenchRecordingRecipe.hpp"
 #include "app/ChimeraExposurePlan.hpp"
+#include "compute/fft/CpuFftBackend.hpp"
 #include "compute/fourier/PsfMtf.hpp"
 #include "optics/holography/BenchVolumeHologram.hpp"
 #include "optics/holography/PlateIncidentFields.hpp"
@@ -145,6 +146,16 @@ double maximumAiryCrosstalk(
     return maximum;
 }
 
+void finishRgbEfficiencyMetrics(ChimeraCandidateMetrics& metrics) {
+    metrics.minimumRgbDiffractionEfficiency = *std::min_element(
+        metrics.rgbDiffractionEfficiency.begin(),
+        metrics.rgbDiffractionEfficiency.end());
+    metrics.meanRgbDiffractionEfficiency = std::accumulate(
+        metrics.rgbDiffractionEfficiency.begin(),
+        metrics.rgbDiffractionEfficiency.end(), 0.0)
+        / static_cast<double>(metrics.rgbDiffractionEfficiency.size());
+}
+
 void evaluateM8RecordingMetrics(
     const CompileResult& compiled,
     ChimeraCandidateMetrics& metrics) {
@@ -176,13 +187,102 @@ void evaluateM8RecordingMetrics(
         metrics.rgbRecordingCrossingAngleRadians[index]
             = recording.pair.crossingAngleRadians;
     }
-    metrics.minimumRgbDiffractionEfficiency = *std::min_element(
-        metrics.rgbDiffractionEfficiency.begin(),
-        metrics.rgbDiffractionEfficiency.end());
-    metrics.meanRgbDiffractionEfficiency = std::accumulate(
-        metrics.rgbDiffractionEfficiency.begin(),
-        metrics.rgbDiffractionEfficiency.end(), 0.0)
-        / static_cast<double>(metrics.rgbDiffractionEfficiency.size());
+    finishRgbEfficiencyMetrics(metrics);
+}
+
+void evaluateCalibratedExposureMetrics(
+    const ChimeraRecipe& recipe,
+    const HogelDataset& dataset,
+    const ExposurePlan& plan,
+    const CompileResult& compiled,
+    const ChimeraSweepCalibration& calibration,
+    compute::fft::IFftBackend& fftBackend,
+    ChimeraCandidateMetrics& metrics) {
+    const std::size_t hogelX = (recipe.hogels.countX - 1U) / 2U;
+    const std::size_t hogelY = (recipe.hogels.countY - 1U) / 2U;
+    metrics.representativeHogelX = hogelX;
+    metrics.representativeHogelY = hogelY;
+    metrics.slmCalibrationId = calibration.slmCalibrationId;
+    metrics.materialCalibrationId
+        = calibration.calibratedMaterialDoseResponse->calibrationId();
+    const auto executed = executeHogelExposure(
+        recipe,
+        dataset,
+        plan,
+        compiled.project,
+        fftBackend,
+        hogelX,
+        hogelY,
+        {
+            .maximumPreviewSampleWidth
+                = calibration.maximumRepresentativeSampleWidth,
+            .maximumPreviewSampleHeight
+                = calibration.maximumRepresentativeSampleHeight,
+            .slmCalibrationId = calibration.slmCalibrationId,
+            .calibratedSlmResponse = calibration.calibratedSlmResponse,
+            .calibratedMaterialDoseResponse
+                = calibration.calibratedMaterialDoseResponse,
+        });
+    std::array<bool, 3> populated {};
+    for (const auto& channel : executed.channels) {
+        const auto arm = std::find_if(
+            recipe.rgb.begin(), recipe.rgb.end(), [&](const auto& value) {
+                return value.channelId == channel.channelId;
+            });
+        if (arm == recipe.rgb.end()) {
+            throw std::logic_error(
+                "calibrated sweep exposure returned an unknown RGB channel");
+        }
+        const std::size_t index = static_cast<std::size_t>(
+            std::distance(recipe.rgb.begin(), arm));
+        if (populated[index]
+            || !channel.calibratedMaterialDoseResponseApplied
+            || channel.calibratedSlmResponseApplied
+                != (calibration.calibratedSlmResponse != nullptr)
+            || channel.slmCalibrationId != calibration.slmCalibrationId) {
+            throw std::logic_error(
+                "calibrated sweep exposure returned duplicate or uncalibrated evidence");
+        }
+        populated[index] = true;
+        if (metrics.representativeSampleWidth == 0U) {
+            metrics.representativeSampleWidth = channel.sampleWidth;
+            metrics.representativeSampleHeight = channel.sampleHeight;
+        } else if (metrics.representativeSampleWidth != channel.sampleWidth
+            || metrics.representativeSampleHeight != channel.sampleHeight) {
+            throw std::logic_error(
+                "calibrated sweep RGB channels used different field sampling");
+        }
+        metrics.rgbDiffractionEfficiency[index]
+            = channel.recording.nominalReplay.kogelnik.diffractionEfficiency;
+        metrics.rgbRecordingCrossingAngleRadians[index]
+            = channel.recording.pair.crossingAngleRadians;
+        metrics.rgbObjectMeanIrradianceWattsPerSquareMetre[index]
+            = channel.objectMeanIrradianceWattsPerSquareMetre;
+        metrics.rgbReferenceMeanIrradianceWattsPerSquareMetre[index]
+            = channel.referenceMeanIrradianceWattsPerSquareMetre;
+        metrics.rgbFringeVisibility[index] = channel.fringeVisibility;
+        metrics.rgbTotalDoseJoulesPerSquareMetre[index]
+            = channel.totalDoseJoulesPerSquareMetre;
+        metrics.rgbFringeModulationDoseJoulesPerSquareMetre[index]
+            = channel.fringeModulationDoseJoulesPerSquareMetre;
+        metrics.rgbCalibratedRefractiveIndexModulation[index]
+            = channel.recording.material.refractiveIndexModulation;
+        metrics.rgbCalibratedShrinkageFraction[index]
+            = channel.recording.material.isotropicLinearShrinkageFraction;
+        if (metrics.materialCalibrationId
+            != channel.materialCalibrationId) {
+            throw std::logic_error(
+                "calibrated sweep exposure changed material calibration identity");
+        }
+    }
+    if (!std::all_of(populated.begin(), populated.end(), [](bool value) {
+            return value;
+        })) {
+        throw std::logic_error(
+            "calibrated sweep exposure did not return complete RGB evidence");
+    }
+    metrics.calibratedExposureEvaluated = true;
+    finishRgbEfficiencyMetrics(metrics);
 }
 
 void applyHardConstraints(
@@ -292,6 +392,8 @@ Json constraintsToJson(const ChimeraSweepConstraints& value) {
 Json metricsToJson(const ChimeraCandidateMetrics& value) {
     return {
         {"all_canonical_views_resolvable", value.allCanonicalViewsResolvable},
+        {"calibrated_exposure_evaluated",
+            value.calibratedExposureEvaluated},
         {"canonical_artifact_bytes", value.canonicalArtifactBytes},
         {"compiler_feasible", value.compilerFeasible},
         {"dataset_diagnostics", {
@@ -319,9 +421,31 @@ Json metricsToJson(const ChimeraCandidateMetrics& value) {
             value.minimumNearestViewSeparationRadians},
         {"minimum_rgb_diffraction_efficiency",
             value.minimumRgbDiffractionEfficiency},
+        {"material_calibration_id", value.materialCalibrationId},
+        {"representative_hogel", {
+            {"x", value.representativeHogelX},
+            {"y", value.representativeHogelY},
+        }},
+        {"representative_sample", {
+            {"height", value.representativeSampleHeight},
+            {"width", value.representativeSampleWidth},
+        }},
+        {"rgb_calibrated_refractive_index_modulation",
+            value.rgbCalibratedRefractiveIndexModulation},
+        {"rgb_calibrated_shrinkage_fraction",
+            value.rgbCalibratedShrinkageFraction},
         {"rgb_diffraction_efficiency", value.rgbDiffractionEfficiency},
+        {"rgb_fringe_modulation_dose_j_m2",
+            value.rgbFringeModulationDoseJoulesPerSquareMetre},
+        {"rgb_fringe_visibility", value.rgbFringeVisibility},
+        {"rgb_object_mean_irradiance_w_m2",
+            value.rgbObjectMeanIrradianceWattsPerSquareMetre},
+        {"rgb_reference_mean_irradiance_w_m2",
+            value.rgbReferenceMeanIrradianceWattsPerSquareMetre},
         {"rgb_recording_crossing_angle_rad",
             value.rgbRecordingCrossingAngleRadians},
+        {"rgb_total_dose_j_m2", value.rgbTotalDoseJoulesPerSquareMetre},
+        {"slm_calibration_id", value.slmCalibrationId},
         {"worst_diffraction_limited_angular_resolution_rad",
             value.worstDiffractionLimitedAngularResolutionRadians},
     };
@@ -358,6 +482,27 @@ ChimeraSweepResult runChimeraParameterSweep(
             > kMaximumChimeraSweepCandidates) {
         throw std::invalid_argument(
             "CHIMERA sweep candidate limit must be in [1, 10000]");
+    }
+    const auto& calibration = definition.calibration;
+    if ((calibration.calibratedSlmResponse == nullptr)
+            != calibration.slmCalibrationId.empty()
+        || (!calibration.slmCalibrationId.empty()
+            && !optics::scene::isStableBenchId(
+                calibration.slmCalibrationId))) {
+        throw std::invalid_argument(
+            "CHIMERA sweep SLM calibration identity is invalid");
+    }
+    if (calibration.calibratedSlmResponse != nullptr
+        && calibration.calibratedMaterialDoseResponse == nullptr) {
+        throw std::invalid_argument(
+            "CHIMERA sweep measured SLM response requires material-dose evaluation");
+    }
+    if (calibration.maximumRepresentativeSampleWidth < 32U
+        || calibration.maximumRepresentativeSampleHeight < 32U
+        || calibration.maximumRepresentativeSampleWidth > 2048U
+        || calibration.maximumRepresentativeSampleHeight > 2048U) {
+        throw std::invalid_argument(
+            "CHIMERA sweep representative sampling must be in [32, 2048]");
     }
 
     for (const auto value : definition.axes.hogelPitchMetres) {
@@ -456,13 +601,35 @@ ChimeraSweepResult runChimeraParameterSweep(
             candidateCount, size, definition.maximumCandidateCount);
     }
 
+    const bool materialCalibrationAttached
+        = calibration.calibratedMaterialDoseResponse != nullptr;
+    if (materialCalibrationAttached
+        && !definition.axes.plateShrinkageFractions.empty()) {
+        throw std::invalid_argument(
+            "CHIMERA calibrated sweep cannot also vary recipe shrinkage");
+    }
     ChimeraSweepResult result {
         .formatVersion = kChimeraSweepResultFormatVersion,
         .sweepId = definition.sweepId,
         .constraints = definition.constraints,
         .candidates = {},
         .bestCandidateIndex = std::nullopt,
-        .physicalBestSelectionSuppressed = exposureSeconds.size() > 1U,
+        .physicalBestSelectionSuppressed
+            = exposureSeconds.size() > 1U && !materialCalibrationAttached,
+        .calibratedMaterialDoseResponseAttached
+            = materialCalibrationAttached,
+        .slmCalibrationId = calibration.slmCalibrationId,
+        .materialCalibrationId = materialCalibrationAttached
+            ? calibration.calibratedMaterialDoseResponse->calibrationId()
+            : std::string {},
+        .maximumRepresentativeSampleWidth
+            = materialCalibrationAttached
+                ? calibration.maximumRepresentativeSampleWidth
+                : 0U,
+        .maximumRepresentativeSampleHeight
+            = materialCalibrationAttached
+                ? calibration.maximumRepresentativeSampleHeight
+                : 0U,
         .limitations = {
             "scalar ideal-relay and circular-pupil metrics do not include measured aberrations or vector high-NA effects",
             "RGB diffraction efficiency uses the current equivalent-symmetric M8 Kogelnik model",
@@ -473,7 +640,16 @@ ChimeraSweepResult runChimeraParameterSweep(
         result.limitations.push_back(
             "physical best-candidate selection is suppressed because exposure duration varies without a calibrated dose-to-material-response model");
     }
+    if (materialCalibrationAttached) {
+        result.limitations.push_back(
+            "calibrated exposure metrics use one deterministic representative hogel and do not model cumulative multi-hogel material history");
+        if (calibration.calibratedSlmResponse == nullptr) {
+            result.limitations.push_back(
+                "material dose is calibrated but the representative SLM response remains ideal");
+        }
+    }
     result.candidates.reserve(candidateCount);
+    compute::fft::CpuFftBackend calibrationFft;
 
     const std::array<std::size_t, 10> sizes {pitches.size(),
         horizontalFovs.size(), verticalFovs.size(), sampling.size(),
@@ -546,11 +722,13 @@ ChimeraSweepResult runChimeraParameterSweep(
                     >= metrics.worstDiffractionLimitedAngularResolutionRadians
             && metrics.maximumNearestViewCrosstalkFraction <= 0.10;
 
-        try {
-            evaluateM8RecordingMetrics(compiled, metrics);
-        } catch (const std::exception& error) {
-            candidate.evaluationIssues.push_back(
-                std::string("m8_recording: ") + error.what());
+        if (!materialCalibrationAttached) {
+            try {
+                evaluateM8RecordingMetrics(compiled, metrics);
+            } catch (const std::exception& error) {
+                candidate.evaluationIssues.push_back(
+                    std::string("m8_recording: ") + error.what());
+            }
         }
 
         if (compiled.feasible()) {
@@ -567,6 +745,22 @@ ChimeraSweepResult runChimeraParameterSweep(
                     = plan.totalDurationSeconds;
                 metrics.canonicalArtifactBytes
                     += serializeExposurePlan(plan).size();
+                if (materialCalibrationAttached) {
+                    try {
+                        evaluateCalibratedExposureMetrics(
+                            recipe,
+                            dataset,
+                            plan,
+                            compiled,
+                            calibration,
+                            calibrationFft,
+                            metrics);
+                    } catch (const std::exception& error) {
+                        candidate.evaluationIssues.push_back(
+                            std::string("calibrated_exposure: ")
+                            + error.what());
+                    }
+                }
             } catch (const std::exception& error) {
                 candidate.evaluationIssues.push_back(
                     std::string("dataset_or_plan: ") + error.what());
@@ -591,8 +785,22 @@ ChimeraSweepResult runChimeraParameterSweep(
 }
 
 std::string serializeChimeraSweepResult(const ChimeraSweepResult& result) {
+    const bool calibrationIdentityInvalid
+        = (!result.slmCalibrationId.empty()
+            && !optics::scene::isStableBenchId(result.slmCalibrationId))
+        || (result.calibratedMaterialDoseResponseAttached
+            && (!optics::scene::isStableBenchId(result.materialCalibrationId)
+                || result.maximumRepresentativeSampleWidth < 32U
+                || result.maximumRepresentativeSampleHeight < 32U
+                || result.maximumRepresentativeSampleWidth > 2048U
+                || result.maximumRepresentativeSampleHeight > 2048U))
+        || (!result.calibratedMaterialDoseResponseAttached
+            && (!result.materialCalibrationId.empty()
+                || result.maximumRepresentativeSampleWidth != 0U
+                || result.maximumRepresentativeSampleHeight != 0U));
     if (result.formatVersion != kChimeraSweepResultFormatVersion
         || !optics::scene::isStableBenchId(result.sweepId)
+        || calibrationIdentityInvalid
         || (result.bestCandidateIndex.has_value()
             && *result.bestCandidateIndex >= result.candidates.size())) {
         throw std::invalid_argument("CHIMERA sweep result identity is invalid");
@@ -619,6 +827,16 @@ std::string serializeChimeraSweepResult(const ChimeraSweepResult& result) {
     }
     const Json document {
         {"best_candidate_index", optionalSize(result.bestCandidateIndex)},
+        {"calibration", {
+            {"calibrated_material_dose_response_attached",
+                result.calibratedMaterialDoseResponseAttached},
+            {"material_calibration_id", result.materialCalibrationId},
+            {"maximum_representative_sample_height",
+                result.maximumRepresentativeSampleHeight},
+            {"maximum_representative_sample_width",
+                result.maximumRepresentativeSampleWidth},
+            {"slm_calibration_id", result.slmCalibrationId},
+        }},
         {"candidates", std::move(candidates)},
         {"constraints", constraintsToJson(result.constraints)},
         {"format", "holobench_chimera_parameter_sweep_result"},

@@ -12,11 +12,11 @@ engineering evidence: its compiler diagnostics, SLM mapping, diffraction
 limits, RGB replay efficiency, exposure duration, and artifact size must not
 disappear merely because it cannot be selected.
 
-Exposure time has an additional boundary. The current virtual timeline does
-not convert dose into refractive-index modulation through a calibrated material
-response, reciprocity-failure curve, or measured laser/SLM transfer function.
-Consequently, choosing the shortest exposure as the physically best hologram
-would be an unsupported claim.
+Exposure time has an additional boundary. An uncalibrated virtual timeline does
+not convert dose into refractive-index modulation, so choosing an exposure as
+the physically best hologram would be unsupported. ADR 0022 now supplies a
+measured material-dose path, but the sweep must consume it explicitly and keep
+the sampled evidence used for selection.
 
 ## Decision
 
@@ -47,13 +47,30 @@ would be an unsupported claim.
   candidate IDs.
 - If the normalized exposure axis contains more than one value, all candidates
   and timing metrics are still returned but physical best-candidate selection
-  is suppressed. A later versioned material-dose calibration adapter may lift
-  this restriction.
+  is suppressed unless a measured material-dose response is attached.
+- With a material response attached, each feasible candidate executes the
+  public sparse-SLM and M8 recording path on the deterministic centre-near
+  representative hogel. The CPU reference uses a bounded, caller-declared field
+  sampling upper limit (256x256 by default), while each candidate retains its
+  actual sample dimensions. Result format v2 retains the SLM/material
+  calibration IDs, representative coordinates and sampling, RGB object and
+  reference irradiances, fringe visibility, total/modulation dose, calibrated
+  index modulation/shrinkage, and resulting M8 efficiencies.
+- Dose or wavelength outside the measured domain does not extrapolate. The
+  candidate remains in the result with `calibrated_exposure` and
+  `candidate_evaluation` failures and cannot be selected. A measured SLM LUT is
+  optional when material calibration is present; if absent, the result states
+  that the SLM response remained ideal.
+- A calibrated response supplies shrinkage, so a simultaneous manual recipe
+  shrinkage axis rejects instead of silently evaluating a dimension that the
+  material LUT would overwrite.
 
 ## Consequences
 
-The sweep is reproducible and auditable rather than an “AI optimized” black
-box. It can find an engineering candidate when the material response is fixed,
-while refusing to overstate exposure optimization. Large searches remain
-offline work and use bounded candidate counts; resumable per-candidate
-artifacts, cancellation, and progress are handled by the later M9 batch layer.
+The sweep is reproducible and auditable rather than an AI-optimized black box.
+It can compare exposure candidates only when their measured dose response was
+actually evaluated. The representative-hogel approximation does not model
+cumulative chemistry across a plate and calibrated sweeps are intentionally
+more expensive. Large searches remain offline work and use bounded candidate
+counts; resumable per-candidate artifacts, cancellation, progress, and named
+performance budgets are handled by the later M9 batch layer.

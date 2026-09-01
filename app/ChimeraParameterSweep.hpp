@@ -7,10 +7,12 @@
 #include <vector>
 
 #include "app/ChimeraHogelDataset.hpp"
+#include "optics/holography/MaterialDoseResponse.hpp"
+#include "optics/slm/SlmResponse.hpp"
 
 namespace holobench::app::chimera {
 
-inline constexpr int kChimeraSweepResultFormatVersion = 1;
+inline constexpr int kChimeraSweepResultFormatVersion = 2;
 inline constexpr std::size_t kMaximumChimeraSweepCandidates = 10'000;
 
 struct SlmSamplingCandidate final {
@@ -50,11 +52,23 @@ struct ChimeraSweepConstraints final {
     bool operator==(const ChimeraSweepConstraints&) const = default;
 };
 
+struct ChimeraSweepCalibration final {
+    std::string slmCalibrationId;
+    const optics::slm::CalibratedSlmResponse* calibratedSlmResponse = nullptr;
+    const optics::holography::CalibratedMaterialDoseResponse*
+        calibratedMaterialDoseResponse = nullptr;
+    std::size_t maximumRepresentativeSampleWidth = 256;
+    std::size_t maximumRepresentativeSampleHeight = 256;
+
+    bool operator==(const ChimeraSweepCalibration&) const = default;
+};
+
 struct ChimeraSweepDefinition final {
     std::string sweepId = "chimera-parameter-sweep";
     ChimeraRecipe baseRecipe = makeCanonicalChimeraRecipe();
     ChimeraSweepAxes axes;
     ChimeraSweepConstraints constraints;
+    ChimeraSweepCalibration calibration;
     std::size_t maximumCandidateCount = 1024;
 
     bool operator==(const ChimeraSweepDefinition&) const = default;
@@ -73,6 +87,20 @@ struct ChimeraCandidateMetrics final {
     double minimumRgbDiffractionEfficiency = 0.0;
     double meanRgbDiffractionEfficiency = 0.0;
     std::array<double, 3> rgbRecordingCrossingAngleRadians {};
+    bool calibratedExposureEvaluated = false;
+    std::size_t representativeHogelX = 0;
+    std::size_t representativeHogelY = 0;
+    std::size_t representativeSampleWidth = 0;
+    std::size_t representativeSampleHeight = 0;
+    std::string slmCalibrationId;
+    std::string materialCalibrationId;
+    std::array<double, 3> rgbObjectMeanIrradianceWattsPerSquareMetre {};
+    std::array<double, 3> rgbReferenceMeanIrradianceWattsPerSquareMetre {};
+    std::array<double, 3> rgbFringeVisibility {};
+    std::array<double, 3> rgbTotalDoseJoulesPerSquareMetre {};
+    std::array<double, 3> rgbFringeModulationDoseJoulesPerSquareMetre {};
+    std::array<double, 3> rgbCalibratedRefractiveIndexModulation {};
+    std::array<double, 3> rgbCalibratedShrinkageFraction {};
     double idealExposureDurationSeconds = 0.0;
     std::size_t canonicalArtifactBytes = 0;
 
@@ -98,6 +126,11 @@ struct ChimeraSweepResult final {
     std::vector<ChimeraSweepCandidate> candidates;
     std::optional<std::size_t> bestCandidateIndex;
     bool physicalBestSelectionSuppressed = false;
+    bool calibratedMaterialDoseResponseAttached = false;
+    std::string slmCalibrationId;
+    std::string materialCalibrationId;
+    std::size_t maximumRepresentativeSampleWidth = 0;
+    std::size_t maximumRepresentativeSampleHeight = 0;
     std::vector<std::string> limitations;
 
     [[nodiscard]] const ChimeraSweepCandidate* bestCandidate() const noexcept;
@@ -106,9 +139,9 @@ struct ChimeraSweepResult final {
 
 // Expands a canonicalized Cartesian product, evaluates every candidate through
 // the public recipe/dataset/exposure and M8 volume-recording contracts, and
-// applies an explicit deterministic lexicographic ranking. More than one
-// exposure duration suppresses physical best-candidate selection until a
-// calibrated material-dose adapter exists.
+// applies an explicit deterministic lexicographic ranking. A varied exposure
+// axis is selectable only when the sweep explicitly evaluates the measured
+// material-dose response on a deterministic representative hogel.
 [[nodiscard]] ChimeraSweepResult runChimeraParameterSweep(
     const ChimeraSweepDefinition& definition);
 

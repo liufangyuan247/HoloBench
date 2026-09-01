@@ -492,12 +492,16 @@ completion because it is primarily driven through fixed parameter panels:
   artifact byte count, evaluation issue, and hard-constraint violation.
   Candidates passing user constraints are ranked by the documented stable
   lexicographic policy rather than an opaque optimizer. More than one exposure
-  value suppresses physical best selection until the measured material response
-  is explicitly attached to sweep evaluation. Canonical JSON exposes all
+  value suppresses physical best selection unless the measured material
+  response is explicitly attached. A calibrated sweep executes a bounded
+  deterministic representative hogel per candidate and retains RGB SLM/material
+  IDs, irradiances, visibility, total/modulation dose, calibrated index
+  modulation/shrinkage, and actual M8 efficiencies. Calibration-domain failures
+  remain visible and cannot be selected. Canonical format-v2 JSON exposes all
   selection evidence. See
   [ADR 0020](adr/0020-chimera-deterministic-parameter-sweep.md).
 - **Current M9 validation**: Windows Clang warnings-as-errors core/application
-  builds pass; `core-ci` passes 534/534 and `dev` passes 536/536 including GPU
+  builds pass; `core-ci` passes 536/536 and `dev` passes 538/538 including GPU
   and font executables. Hidden OpenGL smoke renders and semantically
   round-trips the generated 23-component bench, finds its six plate branches,
   and exits with no GL errors on AMD Radeon Pro 5300M. GitHub Actions run
@@ -510,8 +514,10 @@ completion because it is primarily driven through fixed parameter panels:
   [33455832150](https://github.com/liufangyuan247/HoloBench/actions/runs/33455832150)
   passes all four jobs through deterministic parameter sweeps. Run
   [33456409971](https://github.com/liufangyuan247/HoloBench/actions/runs/33456409971)
-  passes all four jobs through the real perspective-raster adapter. Remote
-  evidence for calibrated SLM/material-dose execution remains pending.
+  passes all four jobs through the real perspective-raster adapter. Run
+  [33457995330](https://github.com/liufangyuan247/HoloBench/actions/runs/33457995330)
+  passes all four jobs through calibrated SLM/material-dose execution. Remote
+  evidence for calibrated exposure-aware parameter sweeps remains pending.
 
 ## Known limitations (M1/M2)
 
@@ -524,7 +530,7 @@ completion because it is primarily driven through fixed parameter panels:
 ## Next five tasks
 
 1. Add measured camera LUT plus spectral/pupil reconstruction and bounded image composition.
-2. Let calibrated material response participate in exposure parameter sweeps.
+2. Add deterministic calibrated-sweep performance evidence and reuse of exposure-invariant field samples.
 3. Expose real image import, dataset, exposure, preview, sweep, and batch controls in the Lab UI.
 4. Add resumable batch execution, corrupt-artifact rejection, named budgets,
    and cross-platform M9 acceptance gates.
