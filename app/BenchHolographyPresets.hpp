@@ -10,5 +10,6 @@ namespace holobench::app {
 [[nodiscard]] BenchProject makeTransmissionHolographyPreset();
 [[nodiscard]] BenchProject makeReflectionHolographyPreset();
 [[nodiscard]] BenchProject makeRgbHolographyPreset();
+[[nodiscard]] BenchProject makeRgbDenisyukHolographyPreset();
 
 } // namespace holobench::app

@@ -1131,6 +1131,35 @@ bool OpticalBenchRenderer::updateDynamicScene(
             }
         }
 
+        if (component.kind == bench::BenchComponentKind::Aperture) {
+            const auto& aperture = std::get<bench::ApertureParameters>(
+                component.parameters);
+            if (aperture.shape == bench::ApertureShape::DoubleSlit) {
+                const double slitHalfWidth = 0.5 * aperture.slitWidthMetres;
+                const double slitHalfHeight = 0.5 * aperture.slitHeightMetres;
+                const double halfSeparation
+                    = 0.5 * aperture.slitSeparationMetres;
+                for (const double centreX : {-halfSeparation, halfSeparation}) {
+                    const std::array<math::Vec3d, 4> slitCorners {
+                        math::Vec3d {centreX - slitHalfWidth, -slitHalfHeight, 0.0},
+                        math::Vec3d {centreX + slitHalfWidth, -slitHalfHeight, 0.0},
+                        math::Vec3d {centreX + slitHalfWidth, slitHalfHeight, 0.0},
+                        math::Vec3d {centreX - slitHalfWidth, slitHalfHeight, 0.0},
+                    };
+                    for (std::size_t index = 0;
+                         index < slitCorners.size(); ++index) {
+                        if (!addLine(
+                                world(slitCorners[index]),
+                                world(slitCorners[
+                                    (index + 1) % slitCorners.size()]),
+                                {0.95F, 0.78F, 0.18F, 1.0F})) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+
         if (component.kind == bench::BenchComponentKind::LaserSource) {
             if (!addLine(world({0.0, 0.0, -0.012}), world({0.0, 0.0, 0.035}), color)
                 || !addLine(world({0.0, 0.0, 0.035}), world({-0.004, 0.0, 0.027}), color)

@@ -30,6 +30,12 @@ The user can build or load three ordinary bench presets:
    reconstruct as separately computed spectral channels combined only for
    display.
 
+The accepted follow-up also includes an **RGB reflection/Denisyuk hologram**:
+three object channels and one placed RGB reference/replay laser record three
+independent reflection gratings. Under RGB replay, the reconstructed exit
+intensity is visible directly on the ordinary placed holographic plate; no
+extra Probe is required.
+
 For every plate, the UI exposes incident branches, wavelength, coherence group,
 object/reference role, angle, optical path difference, sampling status,
 exposure, grating vector/period, Bragg detuning, diffraction efficiency, and
@@ -186,6 +192,10 @@ propagation used to compute the image.
 - Per-channel replay and combined display with explicit uncalibrated-colour
   limitation.
 - Ordinary saved full-colour preset built from the same component library.
+- RGB reflection/Denisyuk preset with one three-channel replay laser, three
+  spatially structured object paths, three persisted volume recipe channels,
+  and direct plate-plane reconstruction display.
+- See [ADR 0025](../adr/0025-live-wave-screen-and-rgb-denisyuk.md).
 
 ### M8.5 — Validation and product hardening
 
@@ -223,6 +233,9 @@ propagation used to compute the image.
 - [x] An RGB full-colour hologram can be assembled through the direct viewport
   workflow, recorded per wavelength,
   replayed per wavelength, and viewed as a labelled combined result.
+- [x] An RGB reflection/Denisyuk preset records three independent volume
+  gratings from one RGB reference/replay laser and displays the replayed
+  reconstruction directly on the placed plate without an extra Probe.
 - [x] Every result is tied to the exact bench revision and becomes stale after
   any relevant component edit.
 - [x] The three examples are ordinary unified bench projects, not special

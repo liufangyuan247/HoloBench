@@ -103,6 +103,22 @@ void validateParameters(const RealLensAssemblyParameters& value) {
 void validateParameters(const ApertureParameters& value) {
     requireFinitePositive(value.widthMetres, "aperture width_m");
     requireFinitePositive(value.heightMetres, "aperture height_m");
+    if (value.shape != ApertureShape::DoubleSlit) {
+        return;
+    }
+    requireFinitePositive(value.slitWidthMetres, "double-slit width_m");
+    requireFinitePositive(value.slitHeightMetres, "double-slit height_m");
+    requireFinitePositive(value.slitSeparationMetres, "double-slit separation_m");
+    if (value.slitSeparationMetres <= value.slitWidthMetres) {
+        throw std::invalid_argument(
+            "double-slit centre separation must exceed the slit width");
+    }
+    if (value.slitHeightMetres > value.heightMetres
+        || value.slitSeparationMetres + value.slitWidthMetres
+            > value.widthMetres) {
+        throw std::invalid_argument(
+            "double slits must fit inside the aperture mounting frame");
+    }
 }
 
 void validateParameters(const SpatialFilterParameters& value) {

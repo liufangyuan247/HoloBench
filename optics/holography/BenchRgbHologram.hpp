@@ -5,6 +5,7 @@
 #include <string>
 
 #include "optics/holography/BenchHologramReplay.hpp"
+#include "optics/holography/BenchVolumeHologramReplay.hpp"
 
 namespace holobench::compute::fft {
 class IFftBackend;
@@ -42,12 +43,34 @@ struct RgbThinPlateReplayResult final {
         const scene::BenchScene& bench) const noexcept;
 };
 
+struct RgbVolumePlateRecordingResult final {
+    std::string plateComponentId;
+    scene::SceneRevision sourceRevision = 0;
+    std::array<VolumePlateRecordingResult, 3> channels;
+
+    [[nodiscard]] bool isStaleFor(
+        const scene::BenchScene& bench) const noexcept;
+};
+
+struct RgbVolumePlateReplayResult final {
+    std::string plateComponentId;
+    std::string observationComponentId;
+    scene::SceneRevision sourceRevision = 0;
+    std::array<VolumePlateObservationReplayResult, 3> channels;
+
+    [[nodiscard]] bool isStaleFor(
+        const scene::BenchScene& bench) const noexcept;
+};
+
 // Finds exactly three unambiguous same-side, same-wavelength/coherence
 // object/reference pairs and orders them by descending vacuum wavelength as
 // red, green, and blue. Any missing, duplicate, reflection, or extra compatible
 // pair is rejected instead of being silently assigned to a colour.
 [[nodiscard]] std::array<PlateBranchPairSelection, 3>
 selectRgbThinTransmissionPairs(const PlateIncidentFieldSet& fields);
+
+[[nodiscard]] std::array<PlateBranchPairSelection, 3>
+selectRgbReflectionPairs(const PlateIncidentFieldSet& fields);
 
 // Records each wavelength through the existing single-channel thin path.
 // There is no cross-wavelength field addition or interference term.
@@ -71,6 +94,23 @@ selectRgbThinTransmissionPairs(const PlateIncidentFieldSet& fields);
     const RgbThinPlateRecordingResult& recording,
     std::string observationComponentId,
     ThinPlateReplayKind replayKind,
+    compute::fft::IFftBackend& fftBackend);
+
+[[nodiscard]] RgbVolumePlateRecordingResult recordRgbReflectionVolumePlate(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    const std::array<PlateBranchPairSelection, 3>& selections,
+    const VolumePlateMaterial& material = {});
+
+// The observation may be the recorded HolographicPlate itself. In that case
+// the three reconstructed exit fields need no separate Probe.
+[[nodiscard]] RgbVolumePlateReplayResult
+replayRgbReflectionVolumeToObservation(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    const RgbVolumePlateRecordingResult& recording,
+    std::string observationComponentId,
+    const PlateFieldSamplingOptions& sampling,
     compute::fft::IFftBackend& fftBackend);
 
 } // namespace holobench::optics::holography

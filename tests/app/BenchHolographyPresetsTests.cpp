@@ -10,6 +10,7 @@
 #include "compute/fft/CpuFftBackend.hpp"
 #include "optics/holography/BenchHologramRecording.hpp"
 #include "optics/holography/BenchHologramReplay.hpp"
+#include "optics/holography/BenchRgbHologram.hpp"
 #include "optics/holography/PlateIncidentFields.hpp"
 #include "optics/ray/DynamicBenchTracer.hpp"
 
@@ -145,4 +146,28 @@ TEST_CASE("RGB preset exposes exactly three independent same-wavelength pairs") 
     CHECK(compatiblePairCount == 3U);
     CHECK(recordedWavelengths
         == std::set<double> {450e-9, 532e-9, 638e-9});
+}
+
+TEST_CASE("RGB Denisyuk preset uses one RGB replay laser and three reflection pairs") {
+    const auto project = app::makeRgbDenisyukHolographyPreset();
+    checkCanonicalRoundTrip(project);
+    CHECK(project.projectId == "preset-rgb-denisyuk-holography");
+    const auto* replay = project.scene.find("rgb-replay-reference");
+    REQUIRE(replay != nullptr);
+    const auto& channels = std::get<scene::LaserSourceParameters>(
+        replay->parameters).channels;
+    REQUIRE(channels.size() == 3U);
+    CHECK(project.scene.find("reflection-reconstruction-probe") == nullptr);
+    const auto fields = plateFields(project);
+    REQUIRE(fields.branches.size() == 6U);
+    const auto selections = holography::selectRgbReflectionPairs(fields);
+    std::set<double> wavelengths;
+    for (const auto& selection : selections) {
+        const auto pair = holography::makePlateRecordingPair(
+            fields, selection.objectBranchId, selection.referenceBranchId);
+        CHECK(pair.geometry
+            == holography::PlateRecordingGeometry::Reflection);
+        wavelengths.insert(pair.wavelengthMetres);
+    }
+    CHECK(wavelengths == std::set<double> {450e-9, 532e-9, 638e-9});
 }

@@ -70,6 +70,26 @@ bench::BenchComponent referenceSource(
     return result;
 }
 
+bench::BenchComponent rgbReferenceSource(
+    std::string id,
+    math::Vec3d position) {
+    auto result = bench::makeDefaultBenchComponent(
+        bench::BenchComponentKind::LaserSource, std::move(id));
+    result.transform = aimedTransform(position, {0.0, 0.0, 0.0});
+    auto parameters = std::get<bench::LaserSourceParameters>(result.parameters);
+    parameters.beamRadiusMetres = 0.006;
+    parameters.channels = {
+        {.wavelengthMetres = 638e-9, .powerWatts = 0.20,
+            .coherenceId = "red-recording"},
+        {.wavelengthMetres = 532e-9, .powerWatts = 0.20,
+            .coherenceId = "green-recording"},
+        {.wavelengthMetres = 450e-9, .powerWatts = 0.20,
+            .coherenceId = "blue-recording"},
+    };
+    result.parameters = std::move(parameters);
+    return result;
+}
+
 bench::BenchComponent plate() {
     auto result = bench::makeDefaultBenchComponent(
         bench::BenchComponentKind::HolographicPlate, "plate-h1");
@@ -173,6 +193,62 @@ BenchProject makeRgbHolographyPreset() {
     }
     result.scene.add(plate());
     result.scene.add(transmittedScreen());
+    return result;
+}
+
+BenchProject makeRgbDenisyukHolographyPreset() {
+    auto result = baseProject(
+        "preset-rgb-denisyuk-holography",
+        "RGB Reflection / Denisyuk Holography Bench");
+    struct Channel final {
+        const char* name;
+        double wavelengthMetres;
+        double yMetres;
+    };
+    constexpr std::array<Channel, 3> channels {{
+        {"red", 638e-9, -0.004},
+        {"green", 532e-9, 0.0},
+        {"blue", 450e-9, 0.004},
+    }};
+    for (const auto& channel : channels) {
+        const std::string coherence
+            = std::string(channel.name) + "-recording";
+        const math::Vec3d objectPosition {
+            0.003, channel.yMetres, 0.16};
+        result.scene.add(objectSource(
+            std::string("object-") + channel.name,
+            objectPosition,
+            channel.wavelengthMetres,
+            0.16,
+            coherence));
+
+        auto slm = bench::makeDefaultBenchComponent(
+            bench::BenchComponentKind::SpatialLightModulator,
+            std::string("object-pattern-") + channel.name);
+        slm.transform = aimedTransform(
+            objectPosition * 0.55, {0.0, 0.0, 0.0});
+        auto slmParameters
+            = std::get<bench::SpatialLightModulatorParameters>(
+                slm.parameters);
+        slmParameters.widthMetres = 0.012;
+        slmParameters.heightMetres = 0.012;
+        slmParameters.modulationMode = bench::SlmModulationMode::Amplitude;
+        slmParameters.commandPattern = bench::SlmCommandPattern::Checkerboard;
+        slmParameters.primaryCommand = 0.25;
+        slmParameters.secondaryCommand = 1.0;
+        slmParameters.checkerboardCellWidthPixels = 96U;
+        slmParameters.checkerboardCellHeightPixels = 96U;
+        slm.parameters = slmParameters;
+        result.scene.add(std::move(slm));
+    }
+    result.scene.add(rgbReferenceSource(
+        "rgb-replay-reference", {-0.003, 0.0, -0.16}));
+    auto rgbPlate = plate();
+    auto plateParameters = std::get<bench::HolographicPlateParameters>(
+        rgbPlate.parameters);
+    plateParameters.thicknessMetres = 30e-6;
+    rgbPlate.parameters = plateParameters;
+    result.scene.add(std::move(rgbPlate));
     return result;
 }
 

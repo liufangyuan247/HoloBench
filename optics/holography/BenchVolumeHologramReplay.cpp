@@ -38,9 +38,10 @@ const scene::BenchComponent& requireObservation(
     const auto* observer = bench.find(componentId);
     if (observer == nullptr
         || (observer->kind != scene::BenchComponentKind::ScreenDetector
-            && observer->kind != scene::BenchComponentKind::FieldProbe)) {
+            && observer->kind != scene::BenchComponentKind::FieldProbe
+            && observer->kind != scene::BenchComponentKind::HolographicPlate)) {
         throw std::invalid_argument(
-            "volume replay observation must be a placed screen or field probe");
+            "volume replay observation must be a placed screen, field probe, or the recorded plate");
     }
     return *observer;
 }
@@ -49,6 +50,11 @@ std::pair<double, double> observerExtent(
     const scene::BenchComponent& observer) {
     if (observer.kind == scene::BenchComponentKind::ScreenDetector) {
         const auto& value = std::get<scene::ScreenDetectorParameters>(
+            observer.parameters);
+        return {value.widthMetres, value.heightMetres};
+    }
+    if (observer.kind == scene::BenchComponentKind::HolographicPlate) {
+        const auto& value = std::get<scene::HolographicPlateParameters>(
             observer.parameters);
         return {value.widthMetres, value.heightMetres};
     }
@@ -133,7 +139,8 @@ bool VolumePlateObservationReplayResult::isStaleFor(
         || plate->kind != scene::BenchComponentKind::HolographicPlate
         || observer == nullptr
         || (observer->kind != scene::BenchComponentKind::ScreenDetector
-            && observer->kind != scene::BenchComponentKind::FieldProbe);
+            && observer->kind != scene::BenchComponentKind::FieldProbe
+            && observer->kind != scene::BenchComponentKind::HolographicPlate);
 }
 
 VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
@@ -163,6 +170,13 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
         throw std::invalid_argument("volume replay plate was not found");
     }
     const auto& observer = requireObservation(bench, observationComponentId);
+    const bool observeAtRecordedPlate
+        = observer.id == recording.plateComponentId;
+    if (observer.kind == scene::BenchComponentKind::HolographicPlate
+        && !observeAtRecordedPlate) {
+        throw std::invalid_argument(
+            "volume replay can only use its own recorded plate as an in-plane observation");
+    }
     const auto& replayBranch = requireBranch(fields, replayBranchId);
     if (replayBranch.role != RecordingBranchRole::Reference) {
         throw std::invalid_argument(
@@ -212,11 +226,12 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
     const math::Vec3d plateToObserver
         = observer.transform.translationMetres
         - plate->transform.translationMetres;
-    if (math::dot(plateToObserver, reconstructedDirectionWorld) <= 0.0) {
+    if (!observeAtRecordedPlate
+        && math::dot(plateToObserver, reconstructedDirectionWorld) <= 0.0) {
         throw std::invalid_argument(
             "volume replay observation is not on the reconstructed reflection side");
     }
-    if (!parallelAxisAligned
+    if (!observeAtRecordedPlate && !parallelAxisAligned
         && std::abs(math::dot(
             observer.transform.localZAxisInWorld,
             reconstructedDirectionWorld)) <= 1e-8) {
@@ -250,10 +265,10 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
         = observerCentre.x - sampling.centreXMetres;
     const double samplingOffsetY
         = observerCentre.y - sampling.centreYMetres;
-    if (std::abs(samplingOffsetX)
+    if (!observeAtRecordedPlate && (std::abs(samplingOffsetX)
             > 0.5 * object.diagnostics.sampledExtentWidthMetres
         || std::abs(samplingOffsetY)
-            > 0.5 * object.diagnostics.sampledExtentHeightMetres) {
+            > 0.5 * object.diagnostics.sampledExtentHeightMetres)) {
         throw std::invalid_argument(
             "volume replay observation centre exceeds the padded sampling support");
     }
@@ -304,12 +319,16 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
 
     auto reconstructedAtObservation = reconstructedAtPlate;
     compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
-    const bool tilted = !parallelAxisAligned;
+    const bool tilted = !observeAtRecordedPlate && !parallelAxisAligned;
     const bool shifted = !tilted
+        && !observeAtRecordedPlate
         && (samplingOffsetX != 0.0 || samplingOffsetY != 0.0);
     compute::propagation::AngularSpectrumDiagnostics propagation;
     compute::propagation::TiltedPlaneDiagnostics tiltedPropagation;
-    if (tilted) {
+    if (observeAtRecordedPlate) {
+        // This is the reconstructed exit field at the emulsion plane itself;
+        // no fictitious zero-distance propagation or separate probe is used.
+    } else if (tilted) {
         auto inputPlane = plate->transform;
         inputPlane.translationMetres = math::transformPointLocalToWorld(
             plate->transform,

@@ -156,6 +156,38 @@ TEST_CASE("volume recipe persists material and resolves reflection geometry") {
     CHECK(pair.geometry == holography::PlateRecordingGeometry::Reflection);
 }
 
+TEST_CASE("RGB Denisyuk recipe persists three independent reflection gratings") {
+    auto project = app::makeRgbDenisyukHolographyPreset();
+    const auto fields = fieldsFor(project);
+    const auto selections = holography::selectRgbReflectionPairs(fields);
+    app::upsertRecordingRecipe(
+        project,
+        app::makeVolumeRecordingRecipe(
+            "rgb-denisyuk",
+            fields,
+            selections,
+            thinOptions().sampling,
+            {}));
+    const auto bytes = app::serializeBenchProject(project);
+    const auto restored = app::parseBenchProject(bytes);
+    CHECK(app::serializeBenchProject(restored) == bytes);
+    REQUIRE(restored.recordingRecipes.size() == 1U);
+    CHECK(restored.recordingRecipes.front().model
+        == app::HologramRecordingModel::VolumeGrating);
+    REQUIRE(restored.recordingRecipes.front().channels.size() == 3U);
+    const auto restoredFields = fieldsFor(restored);
+    const auto resolved = app::resolveRecordingRecipe(
+        restoredFields, restored.recordingRecipes.front());
+    REQUIRE(resolved.channels.size() == 3U);
+    for (const auto& selection : resolved.channels) {
+        CHECK(holography::makePlateRecordingPair(
+            restoredFields,
+            selection.objectBranchId,
+            selection.referenceBranchId).geometry
+            == holography::PlateRecordingGeometry::Reflection);
+    }
+}
+
 TEST_CASE("legacy bench migrates empty recipes and corrupt recipes reject strictly") {
     auto project = app::makeTransmissionHolographyPreset();
     auto json = nlohmann::json::parse(app::serializeBenchProject(project));

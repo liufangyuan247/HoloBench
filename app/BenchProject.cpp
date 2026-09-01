@@ -265,6 +265,7 @@ std::string_view apertureShapeName(scene::ApertureShape shape) noexcept {
     switch (shape) {
     case scene::ApertureShape::Circular: return "circular";
     case scene::ApertureShape::Rectangular: return "rectangular";
+    case scene::ApertureShape::DoubleSlit: return "double_slit";
     }
     return "unknown";
 }
@@ -272,6 +273,7 @@ std::string_view apertureShapeName(scene::ApertureShape shape) noexcept {
 scene::ApertureShape apertureShapeFromName(std::string_view name) {
     if (name == "circular") return scene::ApertureShape::Circular;
     if (name == "rectangular") return scene::ApertureShape::Rectangular;
+    if (name == "double_slit") return scene::ApertureShape::DoubleSlit;
     throw std::runtime_error("unsupported aperture shape: " + std::string(name));
 }
 
@@ -375,6 +377,16 @@ Json parametersToJson(const scene::BenchComponent& component) {
     }
     case scene::BenchComponentKind::Aperture: {
         const auto& value = std::get<scene::ApertureParameters>(component.parameters);
+        if (value.shape == scene::ApertureShape::DoubleSlit) {
+            return {
+                {"height_m", value.heightMetres},
+                {"shape", apertureShapeName(value.shape)},
+                {"slit_height_m", value.slitHeightMetres},
+                {"slit_separation_m", value.slitSeparationMetres},
+                {"slit_width_m", value.slitWidthMetres},
+                {"width_m", value.widthMetres},
+            };
+        }
         return {{"height_m", value.heightMetres}, {"shape", apertureShapeName(value.shape)},
             {"width_m", value.widthMetres}};
     }
@@ -475,13 +487,30 @@ scene::BenchComponentParameters parametersFromJson(
             .prescriptionId = requiredString(value.at("prescription_id"), "real-lens prescription_id"),
             .clearApertureDiameterMetres = finiteNumber(value.at("clear_aperture_diameter_m"), "real-lens clear aperture_m"),
         };
-    case scene::BenchComponentKind::Aperture:
+    case scene::BenchComponentKind::Aperture: {
+        const auto shape = apertureShapeFromName(requiredString(
+            value.at("shape"), "aperture shape"));
+        if (shape == scene::ApertureShape::DoubleSlit) {
+            requireKeys(value,
+                {"height_m", "shape", "slit_height_m",
+                    "slit_separation_m", "slit_width_m", "width_m"},
+                "double-slit aperture parameters");
+            return scene::ApertureParameters {
+                .shape = shape,
+                .widthMetres = finiteNumber(value.at("width_m"), "aperture width_m"),
+                .heightMetres = finiteNumber(value.at("height_m"), "aperture height_m"),
+                .slitWidthMetres = finiteNumber(value.at("slit_width_m"), "double-slit width_m"),
+                .slitHeightMetres = finiteNumber(value.at("slit_height_m"), "double-slit height_m"),
+                .slitSeparationMetres = finiteNumber(value.at("slit_separation_m"), "double-slit separation_m"),
+            };
+        }
         requireKeys(value, {"height_m", "shape", "width_m"}, "aperture parameters");
         return scene::ApertureParameters {
-            .shape = apertureShapeFromName(requiredString(value.at("shape"), "aperture shape")),
+            .shape = shape,
             .widthMetres = finiteNumber(value.at("width_m"), "aperture width_m"),
             .heightMetres = finiteNumber(value.at("height_m"), "aperture height_m"),
         };
+    }
     case scene::BenchComponentKind::SpatialFilter:
         requireKeys(value, {"clear_aperture_diameter_m", "focal_length_m", "pinhole_diameter_m"}, "spatial-filter parameters");
         return scene::SpatialFilterParameters {
@@ -927,11 +956,6 @@ void validateRecordingRecipe(
     if (recipe.channels.size() != 1U && recipe.channels.size() != 3U) {
         throw std::invalid_argument(
             "hologram recording recipe requires one or three channels");
-    }
-    if (recipe.model == HologramRecordingModel::VolumeGrating
-        && recipe.channels.size() != 1U) {
-        throw std::invalid_argument(
-            "volume recording recipe requires exactly one channel");
     }
     double previousWavelength = std::numeric_limits<double>::infinity();
     for (const auto& channel : recipe.channels) {

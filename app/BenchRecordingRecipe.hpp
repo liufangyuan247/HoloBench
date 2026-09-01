@@ -27,6 +27,13 @@ struct ResolvedRecordingRecipe final {
     const optics::holography::PlateFieldSamplingOptions& sampling,
     const optics::holography::VolumePlateMaterial& material);
 
+[[nodiscard]] HologramRecordingRecipe makeVolumeRecordingRecipe(
+    std::string recipeId,
+    const optics::holography::PlateIncidentFieldSet& fields,
+    std::span<const optics::holography::PlateBranchPairSelection> channels,
+    const optics::holography::PlateFieldSamplingOptions& sampling,
+    const optics::holography::VolumePlateMaterial& material);
+
 [[nodiscard]] ResolvedRecordingRecipe resolveRecordingRecipe(
     const optics::holography::PlateIncidentFieldSet& fields,
     const HologramRecordingRecipe& recipe);

@@ -29,9 +29,14 @@ struct ObservationPlaneQuad final {
             component.parameters);
         widthMetres = value.widthMetres;
         heightMetres = value.heightMetres;
+    } else if (component.kind == bench::BenchComponentKind::HolographicPlate) {
+        const auto& value = std::get<bench::HolographicPlateParameters>(
+            component.parameters);
+        widthMetres = value.widthMetres;
+        heightMetres = value.heightMetres;
     } else {
         throw std::invalid_argument(
-            "reconstruction overlay target must be a Screen / Detector or Field Probe");
+            "reconstruction overlay target must be a Screen / Detector, Field Probe, or Holographic Plate");
     }
     math::validateRigidTransform(component.transform);
     if (!std::isfinite(widthMetres) || !std::isfinite(heightMetres)

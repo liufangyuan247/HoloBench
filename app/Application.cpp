@@ -34,6 +34,8 @@
 #include "app/BenchAlignment.hpp"
 #include "app/BenchHolographyPresets.hpp"
 #include "app/BenchObservationOverlay.hpp"
+#include "app/BenchWaveObservation.hpp"
+#include "app/BenchWavePresets.hpp"
 #include "app/BenchRecordingRecipe.hpp"
 #include "app/BenchSourceSpectrum.hpp"
 #include "app/ChimeraBenchWorkflow.hpp"
@@ -608,6 +610,7 @@ Application::Application()
     , sandboxReplayTexture_(std::make_unique<render::gl::Texture2D>())
     , sandboxVolumeReplayTexture_(std::make_unique<render::gl::Texture2D>())
     , sandboxRgbReplayTexture_(std::make_unique<render::gl::Texture2D>())
+    , sandboxWaveTexture_(std::make_unique<render::gl::Texture2D>())
     , chimeraCameraTexture_(std::make_unique<render::gl::Texture2D>())
     , reflectionRefractionResult_(
           reflection::evaluateReflectionRefraction(
@@ -906,6 +909,8 @@ void Application::buildChimeraBench(
             sandboxVolumeObservationReplay_.reset();
             sandboxRgbRecording_.reset();
             sandboxRgbReplay_.reset();
+            sandboxRgbVolumeRecording_.reset();
+            sandboxRgbVolumeReplay_.reset();
             if (chimeraCameraTexture_) {
                 chimeraCameraTexture_->destroy();
             }
@@ -1331,9 +1336,10 @@ void Application::recomputeRecordingRecipe(
             "thin recording recipe must contain one or three channels");
     }
 
-    if (resolved.channels.size() != 1U) {
+    if (resolved.channels.size() != 1U
+        && resolved.channels.size() != 3U) {
         throw std::invalid_argument(
-            "volume recording recipe must contain exactly one channel");
+            "volume recording recipe must contain one or three channels");
     }
     sandboxVolumeAverageRefractiveIndex_ = static_cast<float>(
         recipe.volumeMaterial.averageRefractiveIndex);
@@ -1341,6 +1347,32 @@ void Application::recomputeRecordingRecipe(
         recipe.volumeMaterial.refractiveIndexModulation);
     sandboxVolumeShrinkagePercent_ = static_cast<float>(
         recipe.volumeMaterial.isotropicLinearShrinkageFraction * 100.0);
+    if (resolved.channels.size() == 3U) {
+        const std::array selections {
+            resolved.channels[0],
+            resolved.channels[1],
+            resolved.channels[2],
+        };
+        auto recording
+            = optics::holography::recordRgbReflectionVolumePlate(
+                benchProject_.scene,
+                fields,
+                selections,
+                recipe.volumeMaterial);
+        sandboxRgbVolumeRecording_ = std::make_unique<
+            optics::holography::RgbVolumePlateRecordingResult>(
+                std::move(recording));
+        sandboxRecordedExperiment_
+            = SandboxRecordedExperiment::RgbReflectionDenisyuk;
+        sandboxActiveRecordingRecipeId_ = recipe.recipeId;
+        sandboxRgbVolumeReplay_.reset();
+        if (sandboxRgbReplayTexture_) {
+            sandboxRgbReplayTexture_->destroy();
+        }
+        statusMessage_ = "Recomputed saved RGB reflection recording recipe "
+            + recipe.recipeId;
+        return;
+    }
     const auto& channel = resolved.channels.front();
     auto recording = optics::holography::recordVolumePlate(
         benchProject_.scene,
@@ -1401,6 +1433,10 @@ void Application::recordSelectedPlateExperiment(bool recordHistory) {
                     == SandboxExperimentMode::RgbFullColour
                 && recipe.model
                     == HologramRecordingModel::ThinTransmission
+                && recipe.channels.size() == 3U)
+            || (sandboxExperimentMode_
+                    == SandboxExperimentMode::RgbReflectionDenisyuk
+                && recipe.model == HologramRecordingModel::VolumeGrating
                 && recipe.channels.size() == 3U);
         if (matches) {
             matchingRecipes.push_back(&recipe);
@@ -1414,19 +1450,26 @@ void Application::recordSelectedPlateExperiment(bool recordHistory) {
         const auto& recipe = *matchingRecipes.front();
         const auto resolved = resolveRecordingRecipe(fields, recipe);
         if (sandboxExperimentMode_
-                == SandboxExperimentMode::ReflectionDenisyuk) {
-            if (resolved.channels.size() != 1U) {
+                == SandboxExperimentMode::ReflectionDenisyuk
+            || sandboxExperimentMode_
+                == SandboxExperimentMode::RgbReflectionDenisyuk) {
+            const std::size_t requiredChannels = sandboxExperimentMode_
+                    == SandboxExperimentMode::RgbReflectionDenisyuk
+                ? 3U : 1U;
+            if (resolved.channels.size() != requiredChannels) {
                 throw std::invalid_argument(
-                    "reflection recording requires exactly one branch pair");
+                    "reflection recording recipe has the wrong channel count");
             }
-            const auto pair = holography::makePlateRecordingPair(
-                fields,
-                resolved.channels.front().objectBranchId,
-                resolved.channels.front().referenceBranchId);
-            if (pair.geometry
-                != holography::PlateRecordingGeometry::Reflection) {
-                throw std::invalid_argument(
-                    "the saved volume recipe is not an opposite-side reflection/Denisyuk geometry");
+            for (const auto& channel : resolved.channels) {
+                const auto pair = holography::makePlateRecordingPair(
+                    fields,
+                    channel.objectBranchId,
+                    channel.referenceBranchId);
+                if (pair.geometry
+                    != holography::PlateRecordingGeometry::Reflection) {
+                    throw std::invalid_argument(
+                        "the saved volume recipe is not an opposite-side reflection/Denisyuk geometry");
+                }
             }
         }
         recomputeRecordingRecipe(fields, recipe);
@@ -1502,9 +1545,21 @@ void Application::recordSelectedPlateExperiment(bool recordHistory) {
     } catch (const std::exception&) {
         rgbReady = false;
     }
+    std::array<holography::PlateBranchPairSelection, 3>
+        rgbReflectionSelections {};
+    bool rgbReflectionReady = false;
+    try {
+        rgbReflectionSelections
+            = holography::selectRgbReflectionPairs(fields);
+        rgbReflectionReady = true;
+    } catch (const std::exception&) {
+        rgbReflectionReady = false;
+    }
     if (mode == SandboxExperimentMode::Auto) {
-        if (rgbReady) {
+        if (rgbReady && !rgbReflectionReady) {
             mode = SandboxExperimentMode::RgbFullColour;
+        } else if (rgbReflectionReady && !rgbReady) {
+            mode = SandboxExperimentMode::RgbReflectionDenisyuk;
         } else if (candidates.size() == 1U) {
             mode = candidates.front().geometry
                     == holography::PlateRecordingGeometry::Transmission
@@ -1512,7 +1567,7 @@ void Application::recordSelectedPlateExperiment(bool recordHistory) {
                 : SandboxExperimentMode::ReflectionDenisyuk;
         } else {
             throw std::invalid_argument(
-                "auto recording requires one unambiguous pair or exactly three independent RGB transmission pairs");
+                "auto recording requires one unambiguous pair or exactly one three-channel RGB geometry");
         }
     }
 
@@ -1524,6 +1579,25 @@ void Application::recordSelectedPlateExperiment(bool recordHistory) {
         }
         recipe = makeThinRecordingRecipe(
             "rgb-" + plate->id, fields, rgbSelections, thinOptions);
+    } else if (mode == SandboxExperimentMode::RgbReflectionDenisyuk) {
+        if (!rgbReflectionReady) {
+            throw std::invalid_argument(
+                "RGB Denisyuk recording requires exactly three independent red, green, and blue opposite-side pairs");
+        }
+        const holography::VolumePlateMaterial material {
+            .averageRefractiveIndex = static_cast<double>(
+                sandboxVolumeAverageRefractiveIndex_),
+            .refractiveIndexModulation = static_cast<double>(
+                sandboxVolumeIndexModulation_),
+            .isotropicLinearShrinkageFraction = static_cast<double>(
+                sandboxVolumeShrinkagePercent_) * 0.01,
+        };
+        recipe = makeVolumeRecordingRecipe(
+            "rgb-volume-" + plate->id,
+            fields,
+            rgbReflectionSelections,
+            thinOptions.sampling,
+            material);
     } else {
         const auto requiredGeometry
             = mode == SandboxExperimentMode::ThinTransmission
@@ -1657,9 +1731,11 @@ void Application::reconstructSelectedPlateExperiment() {
         || (observation->kind
                 != bench::BenchComponentKind::ScreenDetector
             && observation->kind
-                != bench::BenchComponentKind::FieldProbe)) {
+                != bench::BenchComponentKind::FieldProbe
+            && observation->kind
+                != bench::BenchComponentKind::HolographicPlate)) {
         throw std::invalid_argument(
-            "select a placed Screen / Detector or Field Probe");
+            "select a placed Screen / Detector, Field Probe, or the recorded plate");
     }
     if (!detectorFftBackend_) {
         throw std::runtime_error("CPU FFT backend is unavailable");
@@ -1678,6 +1754,9 @@ void Application::reconstructSelectedPlateExperiment() {
     } else if (sandboxExperimentMode_
         == SandboxExperimentMode::RgbFullColour) {
         kind = SandboxRecordedExperiment::RgbFullColour;
+    } else if (sandboxExperimentMode_
+        == SandboxExperimentMode::RgbReflectionDenisyuk) {
+        kind = SandboxRecordedExperiment::RgbReflectionDenisyuk;
     }
 
     if (kind == SandboxRecordedExperiment::ThinTransmission) {
@@ -1743,6 +1822,68 @@ void Application::reconstructSelectedPlateExperiment() {
         sandboxRgbReplayViewIndex_ = 0;
         statusMessage_ = "Reconstructed three independent RGB channels on "
             + observation->id;
+    } else if (kind
+        == SandboxRecordedExperiment::RgbReflectionDenisyuk) {
+        if (!sandboxRgbVolumeRecording_
+            || sandboxRgbVolumeRecording_->plateComponentId != plate->id
+            || sandboxRgbVolumeRecording_->isStaleFor(
+                benchProject_.scene)) {
+            throw std::invalid_argument(
+                "record a current RGB reflection/Denisyuk volume set first");
+        }
+        if (observation->id != plate->id) {
+            throw std::invalid_argument(
+                "RGB Denisyuk direct replay is displayed on its recorded plate");
+        }
+        const auto fields = holography::collectPlateIncidentFields(
+            benchProject_.scene, benchTraceGraph_, plate->id);
+        holography::PlateFieldSamplingOptions sampling {
+            .sampleWidth = static_cast<std::size_t>(sandboxPlateSampleSize_),
+            .sampleHeight = static_cast<std::size_t>(sandboxPlateSampleSize_),
+            .refractiveIndex = 1.0,
+            .extentWidthMetres = static_cast<double>(
+                sandboxPlateWindowMillimetres_) * 1e-3,
+            .extentHeightMetres = static_cast<double>(
+                sandboxPlateWindowMillimetres_) * 1e-3,
+        };
+        for (const auto& recipe : benchProject_.recordingRecipes) {
+            if (recipe.recipeId == sandboxActiveRecordingRecipeId_
+                && recipe.plateComponentId == plate->id) {
+                sampling = recipe.sampling;
+                break;
+            }
+        }
+        auto replay
+            = holography::replayRgbReflectionVolumeToObservation(
+                benchProject_.scene,
+                fields,
+                *sandboxRgbVolumeRecording_,
+                plate->id,
+                sampling,
+                *detectorFftBackend_);
+        const field::RgbIntensityVisualizationOptions displayOptions {
+            .channelIntensityGains = {
+                static_cast<double>(sandboxRgbDisplayGains_[0]),
+                static_cast<double>(sandboxRgbDisplayGains_[1]),
+                static_cast<double>(sandboxRgbDisplayGains_[2]),
+            },
+            .referenceIntensity = 0.0,
+            .displayGamma = static_cast<double>(sandboxRgbDisplayGamma_),
+        };
+        const auto image = field::renderUncalibratedRgbIntensity(
+            replay.channels[0].reconstructedAtPlate,
+            replay.channels[1].reconstructedAtPlate,
+            replay.channels[2].reconstructedAtPlate,
+            displayOptions);
+        if (!sandboxRgbReplayTexture_
+            || !sandboxRgbReplayTexture_->uploadImage(image)) {
+            throw std::runtime_error(
+                "OpenGL rejected the RGB Denisyuk plate texture");
+        }
+        sandboxRgbVolumeReplay_ = std::make_unique<
+            holography::RgbVolumePlateReplayResult>(std::move(replay));
+        statusMessage_
+            = "RGB reflection reconstruction visible on plate under RGB replay";
     } else if (kind == SandboxRecordedExperiment::ReflectionDenisyuk) {
         if (!sandboxVolumeRecording_
             || sandboxVolumeRecording_->plateComponentId != plate->id
@@ -2231,6 +2372,9 @@ void Application::shutdown() noexcept {
     if (sandboxRgbReplayTexture_) {
         sandboxRgbReplayTexture_->destroy();
     }
+    if (sandboxWaveTexture_) {
+        sandboxWaveTexture_->destroy();
+    }
     if (chimeraCameraTexture_) {
         chimeraCameraTexture_->destroy();
     }
@@ -2246,6 +2390,9 @@ void Application::shutdown() noexcept {
     sandboxVolumeObservationReplay_.reset();
     sandboxRgbRecording_.reset();
     sandboxRgbReplay_.reset();
+    sandboxRgbVolumeRecording_.reset();
+    sandboxRgbVolumeReplay_.reset();
+    sandboxWaveObservation_.reset();
     chimeraWorkflow_.reset();
     chimeraBatch_.reset();
     chimeraSweepResult_.reset();
@@ -2285,6 +2432,70 @@ void Application::shutdown() noexcept {
     if (sdlInitialized_) {
         SDL_Quit();
         sdlInitialized_ = false;
+    }
+}
+
+void Application::updateSandboxWaveObservation() {
+    namespace bench = optics::scene;
+    const auto* selected = benchProject_.scene.find(
+        selectedBenchComponentId_);
+    if (selected != nullptr
+        && selected->kind == bench::BenchComponentKind::ScreenDetector) {
+        sandboxWaveObservationComponentId_ = selected->id;
+    }
+    const auto* observation = benchProject_.scene.find(
+        sandboxWaveObservationComponentId_);
+    if (!sandboxLiveWaveScreen_ || observation == nullptr
+        || observation->kind != bench::BenchComponentKind::ScreenDetector) {
+        sandboxWaveObservation_.reset();
+        sandboxWaveObservationDiagnostic_.clear();
+        if (sandboxWaveTexture_) {
+            sandboxWaveTexture_->destroy();
+        }
+        return;
+    }
+
+    const bool current = sandboxWaveObservation_
+        && !sandboxWaveObservation_->isStaleFor(benchProject_.scene)
+        && sandboxWaveObservation_->observationComponentId
+            == observation->id;
+    const bool needsFullResolution = current
+        && sandboxWaveObservation_->interactivePreview
+        && !sandboxGizmoDragging_;
+    if (current && !needsFullResolution) {
+        return;
+    }
+
+    try {
+        if (!detectorFftBackend_) {
+            throw std::runtime_error("CPU FFT backend is unavailable");
+        }
+        const bool preview = sandboxGizmoDragging_;
+        auto result = observeBenchWavePattern(
+            benchProject_.scene,
+            benchTraceGraph_,
+            observation->id,
+            preview ? 256U : 512U,
+            preview,
+            *detectorFftBackend_);
+        field::FieldVisualizationOptions options;
+        options.colormap = field::ColormapKind::Grayscale;
+        const auto image = field::renderLinearIntensity(
+            result.fieldAtObservation, options);
+        if (!sandboxWaveTexture_
+            || !sandboxWaveTexture_->uploadImage(image)) {
+            throw std::runtime_error(
+                "OpenGL rejected the live wave-screen texture");
+        }
+        sandboxWaveObservation_ = std::make_unique<
+            BenchWaveObservationResult>(std::move(result));
+        sandboxWaveObservationDiagnostic_.clear();
+    } catch (const std::exception& error) {
+        sandboxWaveObservation_.reset();
+        sandboxWaveObservationDiagnostic_ = error.what();
+        if (sandboxWaveTexture_) {
+            sandboxWaveTexture_->destroy();
+        }
     }
 }
 
@@ -5715,11 +5926,50 @@ void Application::drawSandboxComponentShelf() {
     }
     captureLastItemBounds(sandboxUiEvidence_.rgbPreset);
     ImGui::SameLine();
+    if (ImGui::Button("RGB Denisyuk")) {
+        sandboxExperimentMode_
+            = SandboxExperimentMode::RgbReflectionDenisyuk;
+        selectedBenchComponentId_ = "plate-h1";
+        sandboxObservationComponentId_ = "plate-h1";
+        static_cast<void>(applyDynamicBenchProject(
+            makeRgbDenisyukHolographyPreset(),
+            "Loaded editable RGB reflection / Denisyuk bench"));
+    }
+    captureLastItemBounds(sandboxUiEvidence_.rgbDenisyukPreset);
+    ImGui::SameLine();
     if (ImGui::Button("CHIMERA")) {
         buildChimeraBench(
             chimera::makeCanonicalChimeraRecipe(), "canonical recipe");
     }
     captureLastItemBounds(sandboxUiEvidence_.chimeraPreset);
+
+    if (ImGui::Button("Double Slit")) {
+        selectedBenchComponentId_ = "wave-screen";
+        sandboxWaveObservationComponentId_ = "wave-screen";
+        static_cast<void>(applyDynamicBenchProject(
+            makeDoubleSlitExperimentPreset(),
+            "Loaded editable double-slit interference bench"));
+    }
+    captureLastItemBounds(sandboxUiEvidence_.doubleSlitPreset);
+    ImGui::SameLine();
+    if (ImGui::Button("Single Slit Diffraction")) {
+        selectedBenchComponentId_ = "wave-screen";
+        sandboxWaveObservationComponentId_ = "wave-screen";
+        static_cast<void>(applyDynamicBenchProject(
+            makeSingleSlitDiffractionPreset(),
+            "Loaded editable single-slit diffraction bench"));
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Circular Diffraction")) {
+        selectedBenchComponentId_ = "wave-screen";
+        sandboxWaveObservationComponentId_ = "wave-screen";
+        static_cast<void>(applyDynamicBenchProject(
+            makeCircularDiffractionPreset(),
+            "Loaded editable circular-aperture diffraction bench"));
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled(
+        "Move the ordinary Screen in 3D; field follows its real distance");
 
     const auto& kinds = bench::requiredBenchComponentKinds();
     constexpr int kShelfColumns = 4;
@@ -5941,6 +6191,61 @@ void Application::drawSandboxAlignmentBar() {
     ImGui::EndChild();
 }
 
+void Application::drawSandboxWaveBar() {
+    namespace bench = optics::scene;
+    const auto* selected = benchProject_.scene.find(
+        selectedBenchComponentId_);
+    if (selected != nullptr
+        && selected->kind == bench::BenchComponentKind::ScreenDetector) {
+        sandboxWaveObservationComponentId_ = selected->id;
+    }
+    const auto* observation = benchProject_.scene.find(
+        sandboxWaveObservationComponentId_);
+    if (observation == nullptr
+        || observation->kind != bench::BenchComponentKind::ScreenDetector) {
+        sandboxWaveObservationComponentId_.clear();
+        return;
+    }
+
+    const bool current = sandboxWaveObservation_
+        && !sandboxWaveObservation_->isStaleFor(benchProject_.scene)
+        && sandboxWaveObservation_->observationComponentId
+            == observation->id;
+    ImGui::BeginChild(
+        "##sandbox_wave_bar",
+        ImVec2(0.0F, 58.0F),
+        ImGuiChildFlags_Borders,
+        ImGuiWindowFlags_NoScrollbar);
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Live wave screen: %s", observation->id.c_str());
+    ImGui::SameLine();
+    ImGui::Checkbox("Observe field", &sandboxLiveWaveScreen_);
+    ImGui::SameLine();
+    if (current) {
+        const auto& result = *sandboxWaveObservation_;
+        ImGui::TextColored(
+            result.interactivePreview
+                ? ImVec4(1.0F, 0.72F, 0.24F, 1.0F)
+                : ImVec4(0.35F, 0.9F, 0.45F, 1.0F),
+            "%s %zux%zu | z %.4f m | offset (%.4f, %.4f) m",
+            result.interactivePreview ? "DRAG PREVIEW" : "CURRENT",
+            result.fieldAtObservation.width(),
+            result.fieldAtObservation.height(),
+            result.signedPropagationDistanceMetres,
+            result.observationOffsetXMetres,
+            result.observationOffsetYMetres);
+    } else if (!sandboxWaveObservationDiagnostic_.empty()) {
+        ImGui::TextColored(
+            ImVec4(1.0F, 0.55F, 0.25F, 1.0F),
+            "%s", sandboxWaveObservationDiagnostic_.c_str());
+    } else {
+        ImGui::TextDisabled("Waiting for a Laser -> Aperture route");
+    }
+    ImGui::TextDisabled(
+        "Rays route the bench; the local complex field is recomputed at the moved screen plane.");
+    ImGui::EndChild();
+}
+
 void Application::drawSandboxExperimentBar() {
     namespace holography = optics::holography;
     namespace bench = optics::scene;
@@ -5957,11 +6262,22 @@ void Application::drawSandboxExperimentBar() {
         || (currentObservation->kind
                 != bench::BenchComponentKind::ScreenDetector
             && currentObservation->kind
-                != bench::BenchComponentKind::FieldProbe)) {
+                != bench::BenchComponentKind::FieldProbe
+            && currentObservation->kind
+                != bench::BenchComponentKind::HolographicPlate)) {
         sandboxObservationComponentId_.clear();
     }
     if (sandboxObservationComponentId_.empty()) {
+        if (sandboxExperimentMode_
+                == SandboxExperimentMode::RgbReflectionDenisyuk
+            || sandboxRecordedExperiment_
+                == SandboxRecordedExperiment::RgbReflectionDenisyuk) {
+            sandboxObservationComponentId_ = selected->id;
+        }
         for (const auto& component : benchProject_.scene.components()) {
+            if (!sandboxObservationComponentId_.empty()) {
+                break;
+            }
             if (component.kind == bench::BenchComponentKind::ScreenDetector
                 || component.kind == bench::BenchComponentKind::FieldProbe) {
                 sandboxObservationComponentId_ = component.id;
@@ -5985,6 +6301,7 @@ void Application::drawSandboxExperimentBar() {
     };
     std::vector<IncidentPairSummary> incidentPairs;
     bool rgbReady = false;
+    bool rgbReflectionReady = false;
     std::string analysisError;
     try {
         const auto fields = holography::collectPlateIncidentFields(
@@ -6035,6 +6352,13 @@ void Application::drawSandboxExperimentBar() {
         } catch (const std::exception&) {
             rgbReady = false;
         }
+        try {
+            static_cast<void>(
+                holography::selectRgbReflectionPairs(fields));
+            rgbReflectionReady = true;
+        } catch (const std::exception&) {
+            rgbReflectionReady = false;
+        }
     } catch (const std::exception& error) {
         analysisError = error.what();
     }
@@ -6063,6 +6387,14 @@ void Application::drawSandboxExperimentBar() {
         recordingCurrent
             = !sandboxRgbRecording_->isStaleFor(benchProject_.scene);
         recordingState = recordingCurrent ? "CURRENT RGB" : "STALE RGB";
+    } else if (sandboxRecordedExperiment_
+            == SandboxRecordedExperiment::RgbReflectionDenisyuk
+        && sandboxRgbVolumeRecording_
+        && sandboxRgbVolumeRecording_->plateComponentId == selected->id) {
+        recordingCurrent = !sandboxRgbVolumeRecording_->isStaleFor(
+            benchProject_.scene);
+        recordingState = recordingCurrent
+            ? "CURRENT RGB DENISYUK" : "STALE RGB DENISYUK";
     }
 
     ImGui::BeginChild(
@@ -6078,12 +6410,13 @@ void Application::drawSandboxExperimentBar() {
     ImGui::SameLine();
     if (analysisError.empty()) {
         ImGui::TextDisabled(
-            "object %zu | reference %zu | transmission %zu | reflection %zu | RGB %s",
+            "object %zu | reference %zu | transmission %zu | reflection %zu | RGB-T %s | RGB-R %s",
             objectCount,
             referenceCount,
             transmissionPairCount,
             reflectionPairCount,
-            rgbReady ? "ready" : "not ready");
+            rgbReady ? "ready" : "not ready",
+            rgbReflectionReady ? "ready" : "not ready");
         ImGui::SameLine();
         if (ImGui::SmallButton("Incident details")) {
             ImGui::OpenPopup("##plate-incident-details");
@@ -6122,12 +6455,16 @@ void Application::drawSandboxExperimentBar() {
     }
 
     constexpr const char* kExperimentModes
-        = "Auto (unambiguous)\0Thin transmission\0Reflection / Denisyuk\0RGB full-colour\0";
+        = "Auto (unambiguous)\0Thin transmission\0Reflection / Denisyuk\0RGB full-colour\0RGB reflection / Denisyuk\0";
     int modeIndex = static_cast<int>(sandboxExperimentMode_);
     ImGui::SetNextItemWidth(190.0F);
     if (ImGui::Combo("##experiment-mode", &modeIndex, kExperimentModes)) {
         sandboxExperimentMode_
             = static_cast<SandboxExperimentMode>(modeIndex);
+        if (sandboxExperimentMode_
+            == SandboxExperimentMode::RgbReflectionDenisyuk) {
+            sandboxObservationComponentId_ = selected->id;
+        }
     }
     ImGui::SameLine();
     if (ImGui::Button("Record", ImVec2(82.0F, 0.0F))) {
@@ -6142,13 +6479,20 @@ void Application::drawSandboxExperimentBar() {
     captureLastItemBounds(sandboxUiEvidence_.record);
     ImGui::SameLine();
     const char* observationPreview = sandboxObservationComponentId_.empty()
-        ? "No Screen / Probe"
+        ? "No observation plane"
         : sandboxObservationComponentId_.c_str();
     ImGui::SetNextItemWidth(190.0F);
     if (ImGui::BeginCombo("##experiment-observation", observationPreview)) {
         for (const auto& component : benchProject_.scene.components()) {
             if (component.kind != bench::BenchComponentKind::ScreenDetector
-                && component.kind != bench::BenchComponentKind::FieldProbe) {
+                && component.kind != bench::BenchComponentKind::FieldProbe
+                && !(component.kind
+                        == bench::BenchComponentKind::HolographicPlate
+                    && component.id == selected->id
+                    && (sandboxExperimentMode_
+                            == SandboxExperimentMode::RgbReflectionDenisyuk
+                        || sandboxRecordedExperiment_
+                            == SandboxRecordedExperiment::RgbReflectionDenisyuk))) {
                 continue;
             }
             const bool isSelected
@@ -6173,7 +6517,11 @@ void Application::drawSandboxExperimentBar() {
     if (sandboxExperimentMode_
             == SandboxExperimentMode::ReflectionDenisyuk
         || sandboxRecordedExperiment_
-            == SandboxRecordedExperiment::ReflectionDenisyuk) {
+            == SandboxRecordedExperiment::ReflectionDenisyuk
+        || sandboxExperimentMode_
+            == SandboxExperimentMode::RgbReflectionDenisyuk
+        || sandboxRecordedExperiment_
+            == SandboxRecordedExperiment::RgbReflectionDenisyuk) {
         ImGui::SameLine();
         ImGui::TextDisabled("volume replay uses the recorded reference branch");
     }
@@ -6210,6 +6558,12 @@ void Application::drawSandboxExperimentBar() {
         && sandboxRgbReplay_
         && !sandboxRgbReplay_->isStaleFor(benchProject_.scene)) {
         reconstructedOn = sandboxRgbReplay_->observationComponentId.c_str();
+    } else if (sandboxRecordedExperiment_
+            == SandboxRecordedExperiment::RgbReflectionDenisyuk
+        && sandboxRgbVolumeReplay_
+        && !sandboxRgbVolumeReplay_->isStaleFor(benchProject_.scene)) {
+        reconstructedOn
+            = sandboxRgbVolumeReplay_->observationComponentId.c_str();
     }
     if (reconstructedOn != nullptr) {
         ImGui::SameLine();
@@ -6990,15 +7344,43 @@ void Application::drawSandboxInspector() {
                 }
                 case bench::BenchComponentKind::Aperture: {
                     auto value = std::get<bench::ApertureParameters>(edited.parameters);
-                    int shape = value.shape == bench::ApertureShape::Circular ? 0 : 1;
+                    int shape = value.shape == bench::ApertureShape::Circular
+                        ? 0
+                        : value.shape == bench::ApertureShape::Rectangular
+                            ? 1 : 2;
                     changed |= ImGui::RadioButton("Circular", &shape, 0);
                     ImGui::SameLine();
                     changed |= ImGui::RadioButton("Rectangular", &shape, 1);
-                    value.shape = shape == 0 ? bench::ApertureShape::Circular : bench::ApertureShape::Rectangular;
+                    ImGui::SameLine();
+                    changed |= ImGui::RadioButton("Double slit", &shape, 2);
+                    value.shape = shape == 0
+                        ? bench::ApertureShape::Circular
+                        : shape == 1
+                            ? bench::ApertureShape::Rectangular
+                            : bench::ApertureShape::DoubleSlit;
                     float sizeMm[2] {static_cast<float>(value.widthMetres * 1000.0), static_cast<float>(value.heightMetres * 1000.0)};
-                    changed |= ImGui::DragFloat2("Opening size (mm)", sizeMm, 0.1F, 0.001F, 5000.0F);
+                    changed |= ImGui::DragFloat2(
+                        value.shape == bench::ApertureShape::DoubleSlit
+                            ? "Mount size (mm)" : "Opening size (mm)",
+                        sizeMm, 0.1F, 0.001F, 5000.0F);
                     value.widthMetres = static_cast<double>(sizeMm[0]) * 1e-3;
                     value.heightMetres = static_cast<double>(sizeMm[1]) * 1e-3;
+                    if (value.shape == bench::ApertureShape::DoubleSlit) {
+                        float slitMicrometres[3] {
+                            static_cast<float>(value.slitWidthMetres * 1e6),
+                            static_cast<float>(value.slitHeightMetres * 1e6),
+                            static_cast<float>(value.slitSeparationMetres * 1e6),
+                        };
+                        changed |= ImGui::DragFloat3(
+                            "Slit width / height / centre spacing (um)",
+                            slitMicrometres, 1.0F, 0.1F, 100000.0F);
+                        value.slitWidthMetres
+                            = static_cast<double>(slitMicrometres[0]) * 1e-6;
+                        value.slitHeightMetres
+                            = static_cast<double>(slitMicrometres[1]) * 1e-6;
+                        value.slitSeparationMetres
+                            = static_cast<double>(slitMicrometres[2]) * 1e-6;
+                    }
                     edited.parameters = value;
                     break;
                 }
@@ -8613,6 +8995,7 @@ void Application::drawWorkspace() {
         drawSandboxComponentShelf();
         drawSandboxSourceBar();
         drawSandboxAlignmentBar();
+        drawSandboxWaveBar();
         drawSandboxExperimentBar();
         drawChimeraAutomationBar();
     }
@@ -8978,6 +9361,7 @@ void Application::drawWorkspace() {
                 }
             }
 
+            updateSandboxWaveObservation();
             ImDrawList* drawList = ImGui::GetWindowDrawList();
             if (drawList != nullptr) {
                 drawList->PushClipRect(
@@ -9027,6 +9411,25 @@ void Application::drawWorkspace() {
                         = sandboxRgbReplayTexture_->handle();
                     reconstructionObservationId
                         = sandboxRgbReplay_->observationComponentId;
+                } else if (sandboxRecordedExperiment_
+                        == SandboxRecordedExperiment::RgbReflectionDenisyuk
+                    && sandboxRgbVolumeReplay_
+                    && !sandboxRgbVolumeReplay_->isStaleFor(
+                        benchProject_.scene)
+                    && sandboxRgbReplayTexture_
+                    && sandboxRgbReplayTexture_->isValid()) {
+                    reconstructionTexture
+                        = sandboxRgbReplayTexture_->handle();
+                    reconstructionObservationId
+                        = sandboxRgbVolumeReplay_->observationComponentId;
+                } else if (sandboxWaveObservation_
+                    && !sandboxWaveObservation_->isStaleFor(
+                        benchProject_.scene)
+                    && sandboxWaveTexture_
+                    && sandboxWaveTexture_->isValid()) {
+                    reconstructionTexture = sandboxWaveTexture_->handle();
+                    reconstructionObservationId
+                        = sandboxWaveObservation_->observationComponentId;
                 }
                 if (reconstructionTexture != 0U) {
                     if (const auto* observation = benchProject_.scene.find(
@@ -10247,6 +10650,107 @@ void Application::runSandboxInteractionSmoke() {
         || sandboxReconstructionOverlaySubmitted_) {
         throw std::runtime_error(
             "post-reconstruction shelf edit did not stale and hide RGB evidence");
+    }
+
+    camera_.setPresetView(render::CameraPresetView::Perspective);
+    camera_.setTarget({0.0F, 0.0F, 0.2F});
+    camera_.setDistance(0.8F);
+    click(
+        sandboxUiEvidence_.doubleSlitPreset,
+        "Double Slit Bench action");
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    if (benchProject_.projectId != "preset-double-slit"
+        || !sandboxWaveObservation_
+        || sandboxWaveObservation_->isStaleFor(benchProject_.scene)
+        || sandboxWaveObservation_->interactivePreview
+        || !sandboxWaveTexture_
+        || !sandboxWaveTexture_->isValid()
+        || !sandboxReconstructionOverlaySubmitted_) {
+        throw std::runtime_error(
+            "Double Slit action did not submit a current full-resolution field on the placed screen (status="
+            + statusMessage_ + ", wave="
+            + sandboxWaveObservationDiagnostic_ + ", result="
+            + (sandboxWaveObservation_ ? "yes" : "no")
+            + ", preview="
+            + (sandboxWaveObservation_
+                    && sandboxWaveObservation_->interactivePreview
+                ? "yes" : "no")
+            + ", texture="
+            + (sandboxWaveTexture_ && sandboxWaveTexture_->isValid()
+                ? "yes" : "no")
+            + ", overlay="
+            + sandboxReconstructionOverlayDiagnostic_ + ")");
+    }
+    const std::uint64_t waveRevision = benchProject_.scene.revision();
+    std::size_t waveDragAxis = 2U;
+    if (!sandboxUiEvidence_.gizmoEndpoints[waveDragAxis].visible
+        || sandboxUiEvidence_.gizmoProjections[waveDragAxis].isDegenerate) {
+        waveDragAxis = sandboxUiEvidence_.gizmoEndpoints.size();
+    }
+    for (std::size_t axis = 0;
+         waveDragAxis == sandboxUiEvidence_.gizmoEndpoints.size()
+             && axis < sandboxUiEvidence_.gizmoEndpoints.size(); ++axis) {
+        if (sandboxUiEvidence_.gizmoEndpoints[axis].visible
+            && !sandboxUiEvidence_.gizmoProjections[axis].isDegenerate) {
+            waveDragAxis = axis;
+            break;
+        }
+    }
+    if (waveDragAxis == sandboxUiEvidence_.gizmoEndpoints.size()) {
+        throw std::runtime_error(
+            "Double Slit screen exposes no draggable 3D axis");
+    }
+    const glm::vec2 waveDragOrigin
+        = sandboxUiEvidence_.gizmoEndpoints[waveDragAxis].screenPos;
+    const glm::vec2 waveDragDestination = waveDragOrigin
+        + sandboxUiEvidence_.gizmoProjections[waveDragAxis].screenDir * 28.0F;
+    dragPoints(
+        waveDragOrigin,
+        waveDragDestination,
+        "Double Slit screen axis");
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    if (benchProject_.scene.revision() <= waveRevision
+        || !sandboxWaveObservation_
+        || sandboxWaveObservation_->isStaleFor(benchProject_.scene)
+        || sandboxWaveObservation_->interactivePreview
+        || sandboxWaveObservation_->fieldAtObservation.width() != 512U
+        || !sandboxReconstructionOverlaySubmitted_) {
+        throw std::runtime_error(
+            "moved Double Slit screen did not settle to a current 512-sample field (revision="
+            + std::to_string(benchProject_.scene.revision())
+            + ", initial=" + std::to_string(waveRevision)
+            + ", result=" + (sandboxWaveObservation_ ? "yes" : "no")
+            + ", preview="
+            + (sandboxWaveObservation_
+                    && sandboxWaveObservation_->interactivePreview
+                ? "yes" : "no")
+            + ", samples="
+            + (sandboxWaveObservation_
+                ? std::to_string(
+                    sandboxWaveObservation_->fieldAtObservation.width())
+                : "0")
+            + ", wave=" + sandboxWaveObservationDiagnostic_
+            + ", overlay=" + sandboxReconstructionOverlayDiagnostic_ + ")");
+    }
+
+    click(
+        sandboxUiEvidence_.rgbDenisyukPreset,
+        "RGB Denisyuk Bench action");
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    click(sandboxUiEvidence_.record, "RGB Denisyuk Record action");
+    click(
+        sandboxUiEvidence_.reconstruct,
+        "RGB Denisyuk Reconstruct action");
+    if (!sandboxRgbVolumeRecording_
+        || !sandboxRgbVolumeReplay_
+        || sandboxRgbVolumeReplay_->isStaleFor(benchProject_.scene)
+        || sandboxRgbVolumeReplay_->observationComponentId != "plate-h1"
+        || !sandboxRgbReplayTexture_
+        || !sandboxRgbReplayTexture_->isValid()
+        || !sandboxReconstructionOverlaySubmitted_) {
+        throw std::runtime_error(
+            "RGB Denisyuk action did not reconstruct three volume channels directly on the plate (status="
+            + statusMessage_ + ", error=" + errorMessage_ + ")");
     }
 
     click(sandboxUiEvidence_.chimeraPreset, "CHIMERA Bench action");

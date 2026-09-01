@@ -41,7 +41,8 @@ struct VolumePlateObservationReplayResult final {
 
 // Replays a recorded reflection grating with a reference-role branch that
 // actually reaches the plate, then propagates the first scalar reconstructed
-// field to a placed Screen/Probe. The field transfer uses the sampled
+// field to a placed Screen/Probe, or exposes the reconstructed exit field on
+// the recorded plate itself. The field transfer uses the sampled
 // object-reference phase product and normalizes its outgoing power to the
 // Kogelnik diffraction efficiency. Parallel decenter uses shifted ASM;
 // non-grazing rotated observations use 2x-padded rotated-spectrum interpolation.

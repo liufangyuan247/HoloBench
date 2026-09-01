@@ -97,12 +97,16 @@ struct RealLensAssemblyParameters final {
 enum class ApertureShape {
     Circular,
     Rectangular,
+    DoubleSlit,
 };
 
 struct ApertureParameters final {
     ApertureShape shape = ApertureShape::Circular;
     double widthMetres = 0.01;
     double heightMetres = 0.01;
+    double slitWidthMetres = 0.10e-3;
+    double slitHeightMetres = 4.0e-3;
+    double slitSeparationMetres = 0.50e-3;
 
     bool operator==(const ApertureParameters&) const = default;
 };

@@ -473,6 +473,14 @@ void applyProjectedElement(
                     const double nx = local.x / (0.5 * p.widthMetres);
                     const double ny = local.y / (0.5 * p.heightMetres);
                     transmitted = nx * nx + ny * ny <= 1.0;
+                } else if (p.shape == scene::ApertureShape::DoubleSlit) {
+                    const double halfSeparation
+                        = 0.5 * p.slitSeparationMetres;
+                    transmitted = std::abs(
+                            std::abs(local.x) - halfSeparation)
+                            <= 0.5 * p.slitWidthMetres
+                        && std::abs(local.y)
+                            <= 0.5 * p.slitHeightMetres;
                 } else {
                     transmitted = std::abs(local.x) <= 0.5 * p.widthMetres
                         && std::abs(local.y) <= 0.5 * p.heightMetres;

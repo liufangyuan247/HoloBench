@@ -51,7 +51,7 @@ The M7 gate requires at least these twelve user-placeable kinds:
 4. Beam Splitter / Combiner (one reciprocal optical element).
 5. Ideal Thin Lens.
 6. Real Lens Assembly.
-7. Circular / Rectangular Aperture.
+7. Circular / Rectangular / Double-slit Aperture.
 8. Spatial Filter / Pinhole.
 9. SLM.
 10. Screen / Detector.
@@ -172,6 +172,19 @@ commit and must never block viewport rendering indefinitely.
 - Named ray-layout and wave-refinement benchmarks.
 - Windows/Linux warnings-as-errors CI and hardware OpenGL smoke.
 
+## Accepted optical-experiment follow-up (2026-09-01)
+
+- Ordinary Apertures now include a persisted, directly editable double slit.
+- Double-slit, single-slit, and circular-diffraction presets are ordinary
+  three-component benches, not fixed parameter panels.
+- A freely placed Screen / Detector samples the actual local complex field at
+  its current distance and pose. Gizmo movement uses a bounded 256-axis
+  preview; mouse release replaces it with the screen-requested resolution up
+  to 512 per axis.
+- Moving the screen changes the diffraction scale; the double-slit gate checks
+  the measured fringe spacing against `lambda * z / separation`.
+- See [ADR 0025](../adr/0025-live-wave-screen-and-rgb-denisyuk.md).
+
 ## Automated tests and numerical validation
 
 - Component schema, transform, parameter, stable-ID, and project migration
@@ -216,6 +229,9 @@ commit and must never block viewport rendering indefinitely.
 - [x] A beam splitter visibly and numerically creates conserved branches; a
   reciprocal layout can bring branches to a shared detector or plate.
 - [x] Screens/probes show results derived from their actual spatial placement.
+- [x] A user can place a double slit, single slit, or circular aperture and
+  move an ordinary white screen through the resulting interference/diffraction
+  field, with a committed high-resolution refresh after dragging.
 - [x] One unified project saves and reloads the complete bench byte-stably.
 - [x] A user can build or load transmission, reflection, and full-colour
   holography-ready layouts and identify every object/reference branch arriving

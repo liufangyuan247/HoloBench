@@ -16,6 +16,23 @@
 | Holography Sandbox (M8) | Physics and direct workflow validated in documented scalar domains | Plate-local branch geometry; thin transmission; opposite-side reflection/Denisyuk; independent RGB record/replay; compact selected-plate Record/replay-target/Reconstruct/stale action bar; clipping-safe persisted relative-exposure preflight; Screen/Probe propagation; current reconstruction texture projected onto the actual placed Screen/Probe transform. Hardware OpenGL input builds all three experiments from Empty using ordinary shelf components and contextual alignment/spectrum actions, then records, reconstructs, and verifies current placed evidence. Performance gates and cross-platform CI pass. | Accepted sandbox basis for CHIMERA automation; not a vector/high-NA or calibrated-colour claim |
 | CHIMERA Automation (M9) | C9.1-C9.5 shared-Bench virtual workflow accepted in documented scalar/paraxial domains | Strict recipe and deterministic 23-component editable RGB reflection bench; strict two-to-256-view manifest with radian angles, relative/absolute P3/P6 paths, and explicit linear/sRGB transfer; hashed dataset and exposure plan; contextual Bench actions execute a selected hogel through three M8 volume recordings, reconstruct a selected or bounded 1-64-hogel region, and project finite-pupil camera output onto the placed Probe with exact-revision stale handling. Strict atomic batch checkpoints cancel/resume only at complete RGB hogels, reject corruption/stale provenance, and restore compact reconstruction evidence. Visible deterministic relay sweeps retain and apply inspectable recipe/constraint/SLM/M8/Airy/artifact metrics. The selected-hogel CPU/camera gate meets its 30 s and 64 MiB budgets; the 1920x1080 renderer gate measured 2.503 ms p95 against 33.333 ms; GitHub Actions 33471184614 passes all four Windows/Linux jobs. | Accepted virtual printer and reconstruction simulator; real hardware, proprietary fidelity, absolute calibration, and high-NA/vector extensions are separate future scope |
 
+## Optical experiment Bench follow-up (2026-09-01)
+
+- Native double-slit, single-slit, and circular-aperture experiments propagate
+  a bounded local complex field to an ordinary freely moved Screen / Detector.
+  The 512-sample double-slit oracle matches `lambda*z/d`, moving the screen
+  changes the measured spacing, and a 256-axis drag preview is replaced by the
+  committed screen resolution after release.
+- RGB Denisyuk uses one placed RGB reference/replay laser, three structured
+  object branches, and three independent reflection volume gratings. Replay
+  fields remain wavelength-separated and are combined only as display
+  intensity directly on the recorded plate.
+- The complete Clang development gate passes 572/572 including the final RGB
+  volume-recipe persistence case; the expanded hardware OpenGL smoke moves the
+  real screen, requires its recomputed 512-sample texture, records/reconstructs
+  RGB Denisyuk on the plate, and exits with no GL errors on AMD Radeon Pro
+  5300M. Cross-compiler CI evidence is recorded after `main` is pushed.
+
 ## M1 Validation Breakdown
 
 ### 1. Paraxial Thin Lens (`ThinLensTests.cpp`)

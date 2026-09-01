@@ -45,8 +45,32 @@ bool RgbThinPlateReplayResult::isStaleFor(
             });
 }
 
-std::array<PlateBranchPairSelection, 3> selectRgbThinTransmissionPairs(
-    const PlateIncidentFieldSet& fields) {
+bool RgbVolumePlateRecordingResult::isStaleFor(
+    const scene::BenchScene& bench) const noexcept {
+    return sourceRevision != bench.revision()
+        || std::any_of(
+            channels.begin(), channels.end(),
+            [&bench](const auto& channel) {
+                return channel.isStaleFor(bench);
+            });
+}
+
+bool RgbVolumePlateReplayResult::isStaleFor(
+    const scene::BenchScene& bench) const noexcept {
+    return sourceRevision != bench.revision()
+        || std::any_of(
+            channels.begin(), channels.end(),
+            [&bench](const auto& channel) {
+                return channel.isStaleFor(bench);
+            });
+}
+
+namespace {
+
+std::array<PlateBranchPairSelection, 3> selectRgbPairs(
+    const PlateIncidentFieldSet& fields,
+    PlateRecordingGeometry requiredGeometry,
+    const char* geometryLabel) {
     std::vector<Candidate> candidates;
     for (const auto& object : fields.branches) {
         if (object.role != RecordingBranchRole::Object) {
@@ -61,9 +85,10 @@ std::array<PlateBranchPairSelection, 3> selectRgbThinTransmissionPairs(
                 fields,
                 object.beam.provenance.branchId,
                 reference.beam.provenance.branchId);
-            if (pair.geometry != PlateRecordingGeometry::Transmission) {
+            if (pair.geometry != requiredGeometry) {
                 throw std::invalid_argument(
-                    "RGB thin recording requires every compatible pair to use transmission geometry");
+                    std::string("RGB ") + geometryLabel
+                    + " recording has a compatible pair with the wrong geometry");
             }
             candidates.push_back({
                 .selection = {
@@ -76,7 +101,8 @@ std::array<PlateBranchPairSelection, 3> selectRgbThinTransmissionPairs(
     }
     if (candidates.size() != 3U) {
         throw std::invalid_argument(
-            "RGB thin recording requires exactly three unambiguous compatible object/reference pairs");
+            std::string("RGB ") + geometryLabel
+            + " recording requires exactly three unambiguous compatible pairs");
     }
     std::sort(
         candidates.begin(), candidates.end(),
@@ -87,13 +113,27 @@ std::array<PlateBranchPairSelection, 3> selectRgbThinTransmissionPairs(
             && candidates[1].wavelengthMetres
                 > candidates[2].wavelengthMetres)) {
         throw std::invalid_argument(
-            "RGB thin recording requires three distinct ordered wavelengths");
+            "RGB recording requires three distinct ordered wavelengths");
     }
     return {{
         candidates[0].selection,
         candidates[1].selection,
         candidates[2].selection,
     }};
+}
+
+} // namespace
+
+std::array<PlateBranchPairSelection, 3> selectRgbThinTransmissionPairs(
+    const PlateIncidentFieldSet& fields) {
+    return selectRgbPairs(
+        fields, PlateRecordingGeometry::Transmission, "thin transmission");
+}
+
+std::array<PlateBranchPairSelection, 3> selectRgbReflectionPairs(
+    const PlateIncidentFieldSet& fields) {
+    return selectRgbPairs(
+        fields, PlateRecordingGeometry::Reflection, "reflection/Denisyuk");
 }
 
 RgbThinPlateRecordingResult recordRgbThinTransmissionPlate(
@@ -215,6 +255,81 @@ RgbThinPlateReplayResult replayRgbThinTransmissionToObservation(
                 sharedObservationId,
                 replayKind,
                 fftBackend),
+        }},
+    };
+}
+
+RgbVolumePlateRecordingResult recordRgbReflectionVolumePlate(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    const std::array<PlateBranchPairSelection, 3>& selections,
+    const VolumePlateMaterial& material) {
+    if (fields.isStaleFor(bench)) {
+        throw std::invalid_argument(
+            "RGB reflection recording requires current plate incident evidence");
+    }
+    const std::array<PlateRecordingPair, 3> pairs {{
+        makePlateRecordingPair(fields, selections[0].objectBranchId,
+            selections[0].referenceBranchId),
+        makePlateRecordingPair(fields, selections[1].objectBranchId,
+            selections[1].referenceBranchId),
+        makePlateRecordingPair(fields, selections[2].objectBranchId,
+            selections[2].referenceBranchId),
+    }};
+    if (!(pairs[0].wavelengthMetres > pairs[1].wavelengthMetres
+            && pairs[1].wavelengthMetres > pairs[2].wavelengthMetres)) {
+        throw std::invalid_argument(
+            "RGB reflection selections must be ordered red, green, blue");
+    }
+    for (const auto& pair : pairs) {
+        if (pair.geometry != PlateRecordingGeometry::Reflection) {
+            throw std::invalid_argument(
+                "RGB volume recording requires reflection geometry");
+        }
+    }
+    return {
+        .plateComponentId = fields.plateComponentId,
+        .sourceRevision = fields.sourceRevision,
+        .channels = {{
+            recordVolumePlate(bench, fields, selections[0].objectBranchId,
+                selections[0].referenceBranchId, material),
+            recordVolumePlate(bench, fields, selections[1].objectBranchId,
+                selections[1].referenceBranchId, material),
+            recordVolumePlate(bench, fields, selections[2].objectBranchId,
+                selections[2].referenceBranchId, material),
+        }},
+    };
+}
+
+RgbVolumePlateReplayResult replayRgbReflectionVolumeToObservation(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    const RgbVolumePlateRecordingResult& recording,
+    std::string observationComponentId,
+    const PlateFieldSamplingOptions& sampling,
+    compute::fft::IFftBackend& fftBackend) {
+    if (recording.isStaleFor(bench)) {
+        throw std::invalid_argument(
+            "RGB reflection replay requires a current three-channel volume recording");
+    }
+    const std::string sharedObservationId = observationComponentId;
+    return {
+        .plateComponentId = recording.plateComponentId,
+        .observationComponentId = std::move(observationComponentId),
+        .sourceRevision = recording.sourceRevision,
+        .channels = {{
+            replayVolumeReflectionToObservation(
+                bench, fields, recording.channels[0],
+                recording.channels[0].pair.referenceBranchId,
+                sharedObservationId, sampling, fftBackend),
+            replayVolumeReflectionToObservation(
+                bench, fields, recording.channels[1],
+                recording.channels[1].pair.referenceBranchId,
+                sharedObservationId, sampling, fftBackend),
+            replayVolumeReflectionToObservation(
+                bench, fields, recording.channels[2],
+                recording.channels[2].pair.referenceBranchId,
+                sharedObservationId, sampling, fftBackend),
         }},
     };
 }

@@ -60,6 +60,41 @@ The required interaction is now explicit:
 6. complete transmission, reflection/Denisyuk, and RGB full-colour workflows
    without switching to a legacy fixed-axis workbench.
 
+## Optical experiment Bench closure (2026-09-01)
+
+- **Native interference and diffraction experiments**: Aperture is now a
+  strict persisted union covering circular, rectangular/single-slit, and
+  double-slit geometry. Editable Double Slit, Single Slit Diffraction, and
+  Circular Diffraction actions load ordinary Laser -> Aperture -> Screen
+  benches. The centre ray remains global routing evidence; the opaque centre
+  of a double slit is never treated as transmitted wave energy.
+- **Freely movable live white screen**: A selected ordinary Screen / Detector
+  evaluates a bounded local 2-D complex field from the real routed laser and
+  aperture, then uses padded shifted ASM for parallel/decentred planes or the
+  padded tilted-spectrum solver for rotated non-grazing planes. Gizmo dragging
+  refreshes at up to 256 samples per axis; release replaces it with the
+  persisted screen request up to 512. Source, aperture, screen, and exact scene
+  revision gate the texture, so failed or stale propagation never leaves a
+  plausible-looking image behind. The analytic test measures the first
+  double-slit fringe against `lambda*z/d` and proves that moving the screen
+  from 0.5 m to 0.8 m increases the spacing proportionally.
+- **RGB reflection/Denisyuk**: A new ordinary preset contains three structured
+  object paths and one RGB laser whose independent 638/532/450 nm channels are
+  both recording references and replay illumination. Exactly three reflection
+  pairs record three volume gratings; no cross-wavelength complex-field sum is
+  introduced. RGB replay exposes each reconstructed exit field at the recorded
+  plate and combines only uncalibrated linear intensities for a texture on that
+  physical plate, without requiring an extra Probe.
+- **Persistence and interaction evidence**: Double-slit parameters and one- or
+  three-channel volume recipes round-trip canonically while legacy circular
+  and rectangular aperture JSON keeps its original three keys. The expanded
+  hardware OpenGL smoke clicks Double Slit, moves the actual Screen gizmo,
+  requires a current committed 512-sample texture on the moved quad, then
+  clicks RGB Denisyuk Record/Reconstruct and requires current RGB evidence on
+  the plate. The Clang development gate passes 572/572 cases and the expanded
+  smoke exits without GL errors on AMD Radeon Pro 5300M. See
+  [ADR 0025](adr/0025-live-wave-screen-and-rgb-denisyuk.md).
+
 ## M7 implementation progress
 
 - **Direct component shelf and table placement**: The free-form viewport now

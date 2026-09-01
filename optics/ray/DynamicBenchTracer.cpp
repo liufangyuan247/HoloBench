@@ -188,6 +188,12 @@ std::optional<CandidateHit> findNextHit(
 }
 
 bool apertureTransmits(const scene::ApertureParameters& aperture, math::Vec3d localPoint) {
+    if (aperture.shape == scene::ApertureShape::DoubleSlit) {
+        // The centre carrier is a routing aid only. The opaque gap between the
+        // slits must not terminate the branch before the local sampled wave
+        // model applies both openings and diffracts the field.
+        return true;
+    }
     if (aperture.shape == scene::ApertureShape::Rectangular) {
         return true;
     }

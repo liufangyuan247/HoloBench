@@ -61,6 +61,8 @@ struct WaveDetectorResult;
 
 namespace holobench::app {
 
+struct BenchWaveObservationResult;
+
 class UiFontAsset;
 
 namespace gizmo {
@@ -405,6 +407,7 @@ enum class SandboxExperimentMode {
     ThinTransmission,
     ReflectionDenisyuk,
     RgbFullColour,
+    RgbReflectionDenisyuk,
 };
 
 enum class SandboxRecordedExperiment {
@@ -412,6 +415,7 @@ enum class SandboxRecordedExperiment {
     ThinTransmission,
     ReflectionDenisyuk,
     RgbFullColour,
+    RgbReflectionDenisyuk,
 };
 
 enum class SandboxAlignmentAction {
@@ -444,6 +448,8 @@ struct SandboxUiEvidence final {
     UiItemBounds transmissionPreset;
     UiItemBounds reflectionPreset;
     UiItemBounds rgbPreset;
+    UiItemBounds rgbDenisyukPreset;
+    UiItemBounds doubleSlitPreset;
     UiItemBounds chimeraPreset;
     UiItemBounds laserShelf;
     UiItemBounds objectSourceShelf;
@@ -544,6 +550,7 @@ private:
     void drawSandboxComponentShelf();
     void drawSandboxSourceBar();
     void drawSandboxAlignmentBar();
+    void drawSandboxWaveBar();
     void drawSandboxExperimentBar();
     void drawChimeraAutomationBar();
     void drawSandboxInspector();
@@ -573,6 +580,7 @@ private:
     void reconstructSelectedPlateExperiment();
     void loadSceneFromPath(const char* pathStr);
     void saveSceneToPath(const char* pathStr);
+    void updateSandboxWaveObservation();
 
     SDL_Window* window_ = nullptr;
     SDL_GLContextState* glContext_ = nullptr;
@@ -612,6 +620,9 @@ private:
         = SandboxRecordedExperiment::None;
     std::string sandboxActiveRecordingRecipeId_;
     std::string sandboxObservationComponentId_;
+    std::string sandboxWaveObservationComponentId_;
+    bool sandboxLiveWaveScreen_ = true;
+    std::string sandboxWaveObservationDiagnostic_;
     bool sandboxReconstructionOverlaySubmitted_ = false;
     std::string sandboxReconstructionOverlayDiagnostic_;
     SandboxUiEvidence sandboxUiEvidence_;
@@ -663,6 +674,7 @@ private:
     std::unique_ptr<render::gl::Texture2D> sandboxReplayTexture_;
     std::unique_ptr<render::gl::Texture2D> sandboxVolumeReplayTexture_;
     std::unique_ptr<render::gl::Texture2D> sandboxRgbReplayTexture_;
+    std::unique_ptr<render::gl::Texture2D> sandboxWaveTexture_;
     std::unique_ptr<render::gl::Texture2D> chimeraCameraTexture_;
     std::unique_ptr<wave::WaveDetectorResult> detectorResult_;
     std::unique_ptr<samplingdebug::SamplingDebuggerResult> samplingDebuggerResult_;
@@ -683,6 +695,11 @@ private:
         sandboxRgbRecording_;
     std::unique_ptr<optics::holography::RgbThinPlateReplayResult>
         sandboxRgbReplay_;
+    std::unique_ptr<optics::holography::RgbVolumePlateRecordingResult>
+        sandboxRgbVolumeRecording_;
+    std::unique_ptr<optics::holography::RgbVolumePlateReplayResult>
+        sandboxRgbVolumeReplay_;
+    std::unique_ptr<BenchWaveObservationResult> sandboxWaveObservation_;
     reflection::ReflectionRefractionConfig reflectionRefractionConfig_;
     reflection::ReflectionRefractionResult reflectionRefractionResult_;
     project::ProjectProvenance reflectionProjectProvenance_;

@@ -171,6 +171,46 @@ TEST_CASE("bench project parser rejects unknown keys duplicate IDs and invalid p
     CHECK_THROWS_AS(static_cast<void>(app::parseBenchProject(invalidTransform.dump())), std::runtime_error);
 }
 
+TEST_CASE("double-slit aperture round trips canonically without changing legacy aperture bytes") {
+    app::BenchProject project;
+    auto aperture = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::Aperture, "double-slit");
+    auto parameters = std::get<scene::ApertureParameters>(
+        aperture.parameters);
+    parameters.shape = scene::ApertureShape::DoubleSlit;
+    parameters.widthMetres = 0.006;
+    parameters.heightMetres = 0.006;
+    parameters.slitWidthMetres = 80e-6;
+    parameters.slitHeightMetres = 3e-3;
+    parameters.slitSeparationMetres = 400e-6;
+    aperture.parameters = parameters;
+    project.scene.add(aperture);
+
+    const auto bytes = app::serializeBenchProject(project);
+    const auto restored = app::parseBenchProject(bytes);
+    CHECK(app::serializeBenchProject(restored) == bytes);
+    const auto& restoredParameters = std::get<scene::ApertureParameters>(
+        restored.scene.find("double-slit")->parameters);
+    CHECK(restoredParameters.shape == scene::ApertureShape::DoubleSlit);
+    CHECK(restoredParameters.slitSeparationMetres
+        == doctest::Approx(400e-6));
+
+    auto json = nlohmann::json::parse(bytes);
+    json["components"][0]["parameters"]["slit_separation_m"] = 40e-6;
+    CHECK_THROWS_AS(
+        static_cast<void>(app::parseBenchProject(json.dump())),
+        std::runtime_error);
+
+    app::BenchProject legacyShape;
+    auto circular = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::Aperture, "circle");
+    legacyShape.scene.add(circular);
+    const auto legacyJson = nlohmann::json::parse(
+        app::serializeBenchProject(legacyShape));
+    CHECK(legacyJson["components"][0]["parameters"].size() == 3U);
+    CHECK(legacyJson["components"][0]["parameters"].contains("shape"));
+}
+
 TEST_CASE("bench project file persistence uses the same canonical representation") {
     const TemporaryBenchFile file;
     app::BenchProject project;

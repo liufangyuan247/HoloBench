@@ -112,11 +112,35 @@ HologramRecordingRecipe makeVolumeRecordingRecipe(
     holography::PlateBranchPairSelection channel,
     const holography::PlateFieldSamplingOptions& sampling,
     const holography::VolumePlateMaterial& material) {
+    const std::array channels {channel};
+    return makeVolumeRecordingRecipe(
+        std::move(recipeId), fields, channels, sampling, material);
+}
+
+HologramRecordingRecipe makeVolumeRecordingRecipe(
+    std::string recipeId,
+    const holography::PlateIncidentFieldSet& fields,
+    std::span<const holography::PlateBranchPairSelection> channels,
+    const holography::PlateFieldSamplingOptions& sampling,
+    const holography::VolumePlateMaterial& material) {
+    if (channels.size() != 1U && channels.size() != 3U) {
+        throw std::invalid_argument(
+            "volume recording recipe requires one or three channels");
+    }
     HologramRecordingRecipe result;
     result.recipeId = std::move(recipeId);
     result.plateComponentId = fields.plateComponentId;
     result.model = HologramRecordingModel::VolumeGrating;
-    result.channels = {channelFor(fields, channel)};
+    result.channels.reserve(channels.size());
+    for (const auto channel : channels) {
+        const auto pair = holography::makePlateRecordingPair(
+            fields, channel.objectBranchId, channel.referenceBranchId);
+        if (pair.geometry != holography::PlateRecordingGeometry::Reflection) {
+            throw std::invalid_argument(
+                "volume recording recipe requires reflection geometry");
+        }
+        result.channels.push_back(channelFor(fields, channel));
+    }
     result.sampling = sampling;
     result.volumeMaterial = material;
     return result;
@@ -149,6 +173,12 @@ ResolvedRecordingRecipe resolveRecordingRecipe(
                 != holography::PlateRecordingGeometry::Transmission) {
             throw std::invalid_argument(
                 "current branch geometry no longer satisfies the thin recording recipe");
+        }
+        if (recipe.model == HologramRecordingModel::VolumeGrating
+            && pair.geometry
+                != holography::PlateRecordingGeometry::Reflection) {
+            throw std::invalid_argument(
+                "current branch geometry no longer satisfies the volume recording recipe");
         }
         result.channels.push_back(selection);
     }

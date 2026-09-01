@@ -29,7 +29,7 @@ TEST_CASE("observation overlay follows the placed screen transform and extent") 
     CHECK(quad.worldCorners[2].z == doctest::Approx(0.31));
 }
 
-TEST_CASE("observation overlay accepts a field probe and rejects other kinds") {
+TEST_CASE("observation overlay accepts a field probe and holographic plate") {
     const auto probe = scene::makeDefaultBenchComponent(
         scene::BenchComponentKind::FieldProbe, "probe");
     const auto quad
@@ -37,6 +37,16 @@ TEST_CASE("observation overlay accepts a field probe and rejects other kinds") {
     CHECK(quad.worldCorners[0].x < quad.worldCorners[1].x);
     CHECK(quad.worldCorners[0].y < quad.worldCorners[3].y);
 
+    const auto plate = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::HolographicPlate, "plate");
+    const auto plateQuad
+        = app::observationoverlay::makeObservationPlaneQuad(plate);
+    CHECK(plateQuad.worldCorners[0].x < plateQuad.worldCorners[1].x);
+    CHECK(plateQuad.worldCorners[0].y < plateQuad.worldCorners[3].y);
+
+}
+
+TEST_CASE("observation overlay rejects non-observation optics") {
     const auto lens = scene::makeDefaultBenchComponent(
         scene::BenchComponentKind::IdealThinLens, "lens");
     CHECK_THROWS_AS(

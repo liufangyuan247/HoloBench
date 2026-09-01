@@ -126,6 +126,8 @@ add_library(holobench_app_logic STATIC
     app/BenchEditHistory.cpp
     app/BenchHolographyPresets.cpp
     app/BenchSourceSpectrum.cpp
+    app/BenchWaveObservation.cpp
+    app/BenchWavePresets.cpp
     app/BenchProject.cpp
     app/BenchRecordingRecipe.cpp
     app/ChimeraBenchWorkflow.cpp
@@ -473,6 +475,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/app/BenchEditHistoryTests.cpp
         tests/app/BenchHolographyPresetsTests.cpp
         tests/app/BenchSourceSpectrumTests.cpp
+        tests/app/BenchWaveObservationTests.cpp
         tests/app/BenchProjectTests.cpp
         tests/app/BenchRecordingRecipeTests.cpp
         tests/app/ChimeraBenchWorkflowTests.cpp

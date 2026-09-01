@@ -6,6 +6,7 @@
 
 #include "app/BenchHolographyPresets.hpp"
 #include "compute/fft/CpuFftBackend.hpp"
+#include "core/field/FieldObservables.hpp"
 #include "optics/holography/BenchRgbHologram.hpp"
 #include "optics/ray/DynamicBenchTracer.hpp"
 
@@ -108,4 +109,52 @@ TEST_CASE("RGB bench rejects incomplete ambiguous and stale channel evidence") {
             holography::ThinPlateReplayKind::ConjugateReference,
             fft)),
         std::invalid_argument);
+}
+
+TEST_CASE("RGB Denisyuk records independent volume gratings and replays on the plate") {
+    const auto project
+        = holobench::app::makeRgbDenisyukHolographyPreset();
+    const auto trace = ray::traceDynamicBench(project.scene);
+    const auto fields = holography::collectPlateIncidentFields(
+        project.scene, trace, "plate-h1");
+    const auto selections = holography::selectRgbReflectionPairs(fields);
+    const auto recording = holography::recordRgbReflectionVolumePlate(
+        project.scene, fields, selections);
+    CHECK(recording.channels[0].pair.wavelengthMetres
+        == doctest::Approx(638e-9));
+    CHECK(recording.channels[1].pair.wavelengthMetres
+        == doctest::Approx(532e-9));
+    CHECK(recording.channels[2].pair.wavelengthMetres
+        == doctest::Approx(450e-9));
+    for (const auto& channel : recording.channels) {
+        CHECK(channel.pair.geometry
+            == holography::PlateRecordingGeometry::Reflection);
+        CHECK(channel.nominalReplay.kogelnik.diffractionEfficiency > 0.0);
+    }
+
+    holobench::compute::fft::CpuFftBackend fft;
+    const holography::PlateFieldSamplingOptions sampling {
+        .sampleWidth = 256U,
+        .sampleHeight = 256U,
+        .refractiveIndex = 1.0,
+        .extentWidthMetres = 1e-3,
+        .extentHeightMetres = 1e-3,
+    };
+    const auto replay
+        = holography::replayRgbReflectionVolumeToObservation(
+            project.scene,
+            fields,
+            recording,
+            "plate-h1",
+            sampling,
+            fft);
+    CHECK(replay.observationComponentId == "plate-h1");
+    for (std::size_t index = 0U; index < replay.channels.size(); ++index) {
+        CHECK(replay.channels[index].signedObservationDistanceMetres
+            == doctest::Approx(0.0));
+        CHECK_FALSE(replay.channels[index].usedShiftedPaddedPropagation);
+        CHECK_FALSE(replay.channels[index].usedTiltedPlanePropagation);
+        CHECK(holobench::field::computeIntegratedIntensity(
+            replay.channels[index].reconstructedAtPlate) > 0.0);
+    }
 }
