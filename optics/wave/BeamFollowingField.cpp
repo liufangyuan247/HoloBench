@@ -12,6 +12,7 @@
 
 #include "compute/fft/IFftBackend.hpp"
 #include "compute/propagation/AngularSpectrumPropagator.hpp"
+#include "optics/ray/LensPrescriptionCatalog.hpp"
 #include "optics/slm/SlmResponse.hpp"
 
 namespace holobench::optics::wave {
@@ -158,21 +159,113 @@ bool approximatelyParallel(math::Vec3d first, math::Vec3d second) {
         >= 1.0 - kAlignmentTolerance;
 }
 
+const material::OpticalMaterial& requireLensMaterial(
+    const ray::SequentialLensPrescription& prescription,
+    const std::string& materialId) {
+    const auto found = std::find_if(
+        prescription.materials.begin(), prescription.materials.end(),
+        [&](const auto& material) { return material.id == materialId; });
+    if (found == prescription.materials.end()) {
+        throw std::logic_error(
+            "validated real-lens prescription lost a referenced material");
+    }
+    return *found;
+}
+
+ray::SequentialLensPrescription requireSupportedWaveLens(
+    const scene::BenchComponent& component,
+    const scene::BenchPathInteraction& interaction,
+    math::Vec3d pathDirection,
+    double wavelengthMetres,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const auto& parameters
+        = std::get<scene::RealLensAssemblyParameters>(component.parameters);
+    if (lensPrescriptions == nullptr) {
+        throw std::invalid_argument(
+            "real-lens wave propagation requires a prescription resolver");
+    }
+    const auto* prescription = lensPrescriptions->resolve(
+        parameters.prescriptionId);
+    if (prescription == nullptr) {
+        throw std::invalid_argument(
+            "real-lens prescription '" + parameters.prescriptionId
+            + "' is absent from the wave-propagation catalog");
+    }
+    auto placed = ray::placeLensPrescription(
+        *prescription, component.transform);
+    if (!approximatelyAligned(
+            component.transform.localZAxisInWorld, pathDirection)) {
+        throw std::invalid_argument(
+            "real-lens scalar wave adapter requires forward coaxial incidence");
+    }
+    const double centreOffset = math::length(
+        interaction.hitPointMetres
+        - component.transform.translationMetres);
+    if (centreOffset > 1e-9) {
+        throw std::invalid_argument(
+            "real-lens scalar wave adapter requires the centre ray to pass through the prescription axis");
+    }
+
+    const auto& firstFrame = placed.surfaces.front().localToWorld;
+    double previousZ = -1.0;
+    constexpr double kFrameToleranceMetres = 2e-12;
+    constexpr double kMaximumParaxialSurfaceSlope = 0.25;
+    const double assemblyRadius
+        = 0.5 * parameters.clearApertureDiameterMetres;
+    for (const auto& surface : placed.surfaces) {
+        const auto relativeVertex = math::transformPointWorldToLocal(
+            firstFrame, surface.localToWorld.translationMetres);
+        if (std::abs(relativeVertex.x) > kFrameToleranceMetres
+            || std::abs(relativeVertex.y) > kFrameToleranceMetres
+            || relativeVertex.z <= previousZ) {
+            throw std::invalid_argument(
+                "real-lens scalar wave adapter requires strictly ordered coaxial surface vertices");
+        }
+        if (!approximatelyAligned(
+                surface.localToWorld.localZAxisInWorld,
+                firstFrame.localZAxisInWorld)) {
+            throw std::invalid_argument(
+                "real-lens scalar wave adapter does not support tilted or decentered surfaces");
+        }
+        const double evaluatedRadius = std::min(
+            assemblyRadius, surface.geometry.clearSemiDiameterMetres);
+        const auto edge = ray::evaluateSurfaceSag(
+            surface.geometry, evaluatedRadius);
+        if (std::abs(edge.radialDerivative)
+            > kMaximumParaxialSurfaceSlope) {
+            throw std::invalid_argument(
+                "real-lens prescription exceeds the validated low-NA scalar surface-slope limit");
+        }
+        previousZ = relativeVertex.z;
+    }
+    const double entryIndex = material::refractiveIndexAtVacuumWavelength(
+        requireLensMaterial(
+            placed, placed.surfaces.front().materialBeforeId),
+        wavelengthMetres);
+    const double exitIndex = material::refractiveIndexAtVacuumWavelength(
+        requireLensMaterial(
+            placed, placed.surfaces.back().materialAfterId),
+        wavelengthMetres);
+    constexpr double kAmbientIndexTolerance = 2e-12;
+    if (std::abs(entryIndex - 1.0) > kAmbientIndexTolerance
+        || std::abs(exitIndex - 1.0) > kAmbientIndexTolerance) {
+        throw std::invalid_argument(
+            "real-lens scalar wave adapter requires vacuum/air-equivalent entry and exit media");
+    }
+    return placed;
+}
+
 void validateSupportedPath(
     const scene::BenchScene& bench,
     const scene::BenchComponent& source,
-    std::span<const scene::BenchPathInteraction> path) {
+    std::span<const scene::BenchPathInteraction> path,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
     math::Vec3d pathDirection = source.transform.localZAxisInWorld;
     for (const auto& interaction : path) {
         const auto* component = bench.find(interaction.componentId);
         if (component == nullptr) {
             throw std::invalid_argument(
                 "beam-following path contains a missing component");
-        }
-        if (component->kind
-            == scene::BenchComponentKind::RealLensAssembly) {
-            throw std::invalid_argument(
-                "real-lens prescription wave propagation is not available");
         }
         if (!approximatelyAligned(
                 interaction.incidentBeam.direction, pathDirection)) {
@@ -195,6 +288,15 @@ void validateSupportedPath(
                 throw std::invalid_argument(
                     "an ideal powered lens is tilted relative to its incident centre ray");
             }
+            if (component->kind
+                == scene::BenchComponentKind::RealLensAssembly) {
+                static_cast<void>(requireSupportedWaveLens(
+                    *component,
+                    interaction,
+                    pathDirection,
+                    interaction.incidentBeam.wavelengthMetres,
+                    lensPrescriptions));
+            }
         }
         if (interaction.hasOutgoingBeam) {
             const auto outgoing = math::normalized(
@@ -210,6 +312,103 @@ void validateSupportedPath(
             pathDirection = outgoing;
         }
     }
+}
+
+void propagateInRefractiveIndex(
+    field::ComplexField2D& value,
+    double refractiveIndex,
+    double distanceMetres,
+    compute::propagation::AngularSpectrumPropagator& propagator) {
+    field::ComplexField2D mediumField(
+        value.width(),
+        value.height(),
+        value.pitchXMetres(),
+        value.pitchYMetres(),
+        value.vacuumWavelengthMetres(),
+        refractiveIndex);
+    std::copy(
+        value.samples().begin(), value.samples().end(),
+        mediumField.samples().begin());
+    static_cast<void>(propagator.propagateInPlace(
+        mediumField, distanceMetres));
+    std::copy(
+        mediumField.samples().begin(), mediumField.samples().end(),
+        value.samples().begin());
+}
+
+void applySequentialLens(
+    field::ComplexField2D& value,
+    const scene::BenchComponent& component,
+    const scene::BenchPathInteraction& interaction,
+    math::Vec3d propagationDirection,
+    const ray::ILensPrescriptionResolver* lensPrescriptions,
+    compute::propagation::AngularSpectrumPropagator& propagator,
+    BeamFollowingFieldDiagnostics& diagnostics) {
+    const auto& parameters
+        = std::get<scene::RealLensAssemblyParameters>(component.parameters);
+    const auto placed = requireSupportedWaveLens(
+        component,
+        interaction,
+        propagationDirection,
+        value.vacuumWavelengthMetres(),
+        lensPrescriptions);
+    const auto& firstFrame = placed.surfaces.front().localToWorld;
+    const double vacuumWavenumber
+        = 2.0 * std::numbers::pi / value.vacuumWavelengthMetres();
+    const double assemblyRadius
+        = 0.5 * parameters.clearApertureDiameterMetres;
+    for (std::size_t surfaceIndex = 0;
+         surfaceIndex < placed.surfaces.size(); ++surfaceIndex) {
+        const auto& surface = placed.surfaces[surfaceIndex];
+        const double beforeIndex
+            = material::refractiveIndexAtVacuumWavelength(
+                requireLensMaterial(
+                    placed, surface.materialBeforeId),
+                value.vacuumWavelengthMetres());
+        const double afterIndex
+            = material::refractiveIndexAtVacuumWavelength(
+                requireLensMaterial(
+                    placed, surface.materialAfterId),
+                value.vacuumWavelengthMetres());
+        const double clearRadius = std::min(
+            assemblyRadius, surface.geometry.clearSemiDiameterMetres);
+        for (std::size_t y = 0; y < value.height(); ++y) {
+            for (std::size_t x = 0; x < value.width(); ++x) {
+                const double radius = std::hypot(
+                    value.xCoordinateMetres(x),
+                    value.yCoordinateMetres(y));
+                if (radius > clearRadius) {
+                    value.at(x, y) = {0.0, 0.0};
+                    continue;
+                }
+                const double sag = ray::evaluateSurfaceSag(
+                    surface.geometry, radius).sagMetres;
+                const double phase = vacuumWavenumber
+                    * (beforeIndex - afterIndex) * sag;
+                value.at(x, y) *= finitePhasor(phase);
+            }
+        }
+        if (surfaceIndex + 1U < placed.surfaces.size()) {
+            const auto currentVertex = math::transformPointWorldToLocal(
+                firstFrame, surface.localToWorld.translationMetres);
+            const auto nextVertex = math::transformPointWorldToLocal(
+                firstFrame,
+                placed.surfaces[surfaceIndex + 1U]
+                    .localToWorld.translationMetres);
+            propagateInRefractiveIndex(
+                value,
+                afterIndex,
+                nextVertex.z - currentVertex.z,
+                propagator);
+            ++diagnostics.propagatedSegmentCount;
+        }
+    }
+    diagnostics.appliedWaveComponentIds.push_back(component.id);
+    diagnostics.appliedRealLensPrescriptionIds.push_back(
+        parameters.prescriptionId);
+    diagnostics.warnings.push_back(
+        component.id + ": prescription '" + parameters.prescriptionId
+        + "' used a scalar low-NA split-step surface-phase model; exact sequential centre-ray routing remains authoritative, while Fresnel loss, polarization, high-NA longitudinal fields, and non-sequential ghosts are excluded");
 }
 
 math::Vec3d reflectVector(math::Vec3d value, math::Vec3d normal) {
@@ -660,12 +859,14 @@ bool requiresBeamFollowingWaveTransform(
 void validateBeamFollowingFieldPath(
     const scene::BenchScene& bench,
     const scene::BeamState& terminalBeam,
-    std::span<const scene::BenchPathInteraction> pathInteractions) {
+    std::span<const scene::BenchPathInteraction> pathInteractions,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
     scene::validateBeamState(terminalBeam);
     const auto& source = requireSource(bench, terminalBeam);
     static_cast<void>(requireTarget(
         bench, terminalBeam, pathInteractions));
-    validateSupportedPath(bench, source, pathInteractions);
+    validateSupportedPath(
+        bench, source, pathInteractions, lensPrescriptions);
 }
 
 BeamFollowingFieldResult sampleBeamFollowingField(
@@ -674,11 +875,12 @@ BeamFollowingFieldResult sampleBeamFollowingField(
     std::span<const scene::BenchPathInteraction> pathInteractions,
     const BeamFollowingFieldOptions& options,
     compute::fft::IFftBackend& fftBackend,
-    std::span<const PlacedSlmSparseCommand> slmCommands) {
+    std::span<const PlacedSlmSparseCommand> slmCommands,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
     validateOptions(options);
     validateSparseSlmCommands(bench, slmCommands);
     validateBeamFollowingFieldPath(
-        bench, terminalBeam, pathInteractions);
+        bench, terminalBeam, pathInteractions, lensPrescriptions);
     const auto& source = requireSource(bench, terminalBeam);
     const auto& target = requireTarget(
         bench, terminalBeam, pathInteractions);
@@ -723,13 +925,25 @@ BeamFollowingFieldResult sampleBeamFollowingField(
         }
         fieldFrame.translationMetres = interaction.hitPointMetres;
         if (component->id != target.id) {
-            applyProjectedElement(
-                propagated,
-                *component,
-                fieldFrame,
-                propagationDirection,
-                diagnostics,
-                slmCommands);
+            if (component->kind
+                == scene::BenchComponentKind::RealLensAssembly) {
+                applySequentialLens(
+                    propagated,
+                    *component,
+                    interaction,
+                    propagationDirection,
+                    lensPrescriptions,
+                    propagator,
+                    diagnostics);
+            } else {
+                applyProjectedElement(
+                    propagated,
+                    *component,
+                    fieldFrame,
+                    propagationDirection,
+                    diagnostics,
+                    slmCommands);
+            }
         }
         if (interaction.hasOutgoingBeam) {
             const math::Vec3d outgoing = math::normalized(
@@ -745,7 +959,14 @@ BeamFollowingFieldResult sampleBeamFollowingField(
             }
             propagationDirection = outgoing;
         }
-        previousPoint = interaction.hitPointMetres;
+        if (component->kind
+                == scene::BenchComponentKind::RealLensAssembly
+            && interaction.hasOutgoingBeam) {
+            previousPoint = interaction.outgoingBeam.originMetres;
+            fieldFrame.translationMetres = previousPoint;
+        } else {
+            previousPoint = interaction.hitPointMetres;
+        }
     }
 
     auto sampled = sampleOnTargetTangentPlane(

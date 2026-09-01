@@ -8,6 +8,8 @@
 #include <unordered_set>
 #include <utility>
 
+#include "optics/ray/LensPrescriptionCatalog.hpp"
+
 namespace holobench::app::reallens {
 namespace {
 
@@ -95,39 +97,7 @@ RealLensWorkbenchConfig makeDefaultRealLensWorkbenchConfig() {
     auto options = optics::ray::SurfaceIntersectionOptions {};
     options.maximumDistanceMetres = 0.30;
     return {
-        .prescription = {
-            .id = "default_n_bk7_biconvex",
-            .materials = {
-                optics::material::makeVacuumMaterial(),
-                optics::material::makeSchottNBk7Material(),
-            },
-            .surfaces = {
-                {
-                    .id = "front",
-                    .geometry = {
-                        .curvaturePerMetre = 20.0,
-                        .conicConstant = 0.0,
-                        .evenAsphereTerms = {},
-                        .clearSemiDiameterMetres = 0.01,
-                    },
-                    .localToWorld = {},
-                    .materialBeforeId = "vacuum",
-                    .materialAfterId = "schott_n_bk7",
-                },
-                {
-                    .id = "rear",
-                    .geometry = {
-                        .curvaturePerMetre = -20.0,
-                        .conicConstant = 0.0,
-                        .evenAsphereTerms = {},
-                        .clearSemiDiameterMetres = 0.01,
-                    },
-                    .localToWorld = {.translationMetres = {0.0, 0.0, 0.006}},
-                    .materialBeforeId = "schott_n_bk7",
-                    .materialAfterId = "vacuum",
-                },
-            },
-        },
+        .prescription = optics::ray::makeDefaultNBk7BiconvexPrescription(),
         .fields = {
             {.id = "on_axis", .angleXRadians = 0.0, .angleYRadians = 0.0, .powerFraction = 1.0 / 3.0},
             {.id = "field_x_3deg", .angleXRadians = std::numbers::pi / 60.0, .angleYRadians = 0.0, .powerFraction = 1.0 / 3.0},

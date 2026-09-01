@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "optics/ray/GeometricElements.hpp"
+#include "optics/ray/LensPrescriptionCatalog.hpp"
 #include "optics/ray/Ray.hpp"
 
 namespace holobench::optics::ray {
@@ -149,7 +150,8 @@ bool isWithinFootprint(const scene::BenchComponent& component, math::Vec3d local
 
 std::optional<CandidateHit> findNextHit(
     const scene::BenchScene& bench,
-    const scene::BeamState& beam) {
+    const scene::BeamState& beam,
+    const ILensPrescriptionResolver* lensPrescriptions) {
     const Ray ray = makeRay(
         beam.originMetres, beam.direction, beam.wavelengthMetres, beam.powerWatts);
     std::optional<CandidateHit> nearest;
@@ -165,21 +167,61 @@ std::optional<CandidateHit> findNextHit(
         if (!intersection.hit) {
             continue;
         }
+        double candidateDistance = intersection.signedDistanceMetres;
+        math::Vec3d candidatePoint = intersection.pointMetres;
+        if (component.kind == scene::BenchComponentKind::RealLensAssembly
+            && lensPrescriptions != nullptr) {
+            const auto& parameters
+                = std::get<scene::RealLensAssemblyParameters>(
+                    component.parameters);
+            const auto* prescription = lensPrescriptions->resolve(
+                parameters.prescriptionId);
+            if (prescription != nullptr) {
+                const auto placed = placeLensPrescription(
+                    *prescription, component.transform);
+                const auto& firstSurface = placed.surfaces.front();
+                const Ray localRay = makeRay(
+                    math::transformPointWorldToLocal(
+                        firstSurface.localToWorld, ray.originMetres),
+                    math::transformDirectionWorldToLocal(
+                        firstSurface.localToWorld, ray.direction),
+                    ray.wavelengthMetres,
+                    ray.power);
+                SurfaceIntersectionOptions options;
+                options.maximumDistanceMetres = std::max(
+                    options.maximumDistanceMetres,
+                    intersection.signedDistanceMetres
+                        + parameters.clearApertureDiameterMetres);
+                const auto surfaceHit = intersectRotationalSurfaceForward(
+                    localRay, firstSurface.geometry, options);
+                if (surfaceHit.status == SurfaceIntersectionStatus::Miss
+                    || surfaceHit.status
+                        == SurfaceIntersectionStatus::Clipped) {
+                    continue;
+                }
+                if (surfaceHit.status == SurfaceIntersectionStatus::Hit) {
+                    candidateDistance = surfaceHit.distanceMetres;
+                    candidatePoint = math::transformPointLocalToWorld(
+                        firstSurface.localToWorld,
+                        surfaceHit.pointMetres);
+                }
+            }
+        }
         const auto localPoint = math::transformPointWorldToLocal(
-            component.transform, intersection.pointMetres);
+            component.transform, candidatePoint);
         if (!isWithinFootprint(component, localPoint)) {
             continue;
         }
         const bool isCloser = !nearest.has_value()
-            || intersection.signedDistanceMetres < nearest->distanceMetres;
+            || candidateDistance < nearest->distanceMetres;
         const bool isStableTieBreak = nearest.has_value()
-            && intersection.signedDistanceMetres == nearest->distanceMetres
+            && candidateDistance == nearest->distanceMetres
             && component.id < nearest->component->id;
         if (isCloser || isStableTieBreak) {
             nearest = CandidateHit {
                 .component = &component,
-                .distanceMetres = intersection.signedDistanceMetres,
-                .pointMetres = intersection.pointMetres,
+                .distanceMetres = candidateDistance,
+                .pointMetres = candidatePoint,
                 .localPointMetres = localPoint,
             };
         }
@@ -305,11 +347,154 @@ scene::OpticalInteraction interactThinLens(
         scene::BranchInteractionKind::Transmitted);
 }
 
+const material::OpticalMaterial& requirePrescriptionMaterial(
+    const SequentialLensPrescription& prescription,
+    const std::string& materialId) {
+    const auto found = std::find_if(
+        prescription.materials.begin(), prescription.materials.end(),
+        [&](const auto& material) { return material.id == materialId; });
+    if (found == prescription.materials.end()) {
+        throw std::logic_error(
+            "validated prescription lost a referenced material");
+    }
+    return *found;
+}
+
+std::string_view sequentialTraceStatusName(
+    SequentialTraceStatus status) noexcept {
+    switch (status) {
+    case SequentialTraceStatus::Completed: return "completed";
+    case SequentialTraceStatus::Miss: return "missed a surface";
+    case SequentialTraceStatus::Clipped: return "was clipped";
+    case SequentialTraceStatus::OutsideSurfaceDomain:
+        return "left the surface domain";
+    case SequentialTraceStatus::SurfaceNonConvergence:
+        return "did not converge at a surface";
+    case SequentialTraceStatus::TotalInternalReflection:
+        return "encountered total internal reflection";
+    }
+    return "has an unknown status";
+}
+
+struct RealLensInteractionResult final {
+    scene::OpticalInteraction interaction;
+    SequentialTraceResult trace;
+};
+
+RealLensInteractionResult interactRealLens(
+    const scene::BeamState& incoming,
+    const CandidateHit& hit,
+    const ILensPrescriptionResolver* lensPrescriptions) {
+    const auto& parameters
+        = std::get<scene::RealLensAssemblyParameters>(
+            hit.component->parameters);
+    const auto unresolved = [&](std::string diagnostic) {
+        return RealLensInteractionResult {
+            .interaction = {
+                .componentId = hit.component->id,
+                .hitPointMetres = hit.pointMetres,
+                .distanceMetres = hit.distanceMetres,
+                .incidentBeam = incidentAtHit(incoming, hit),
+                .outgoing = {},
+                .diagnostics = {std::move(diagnostic)},
+            },
+            .trace = {},
+        };
+    };
+    if (lensPrescriptions == nullptr) {
+        return unresolved(
+            "real-lens prescription resolver is unavailable for this dynamic scene");
+    }
+    const auto* prescription = lensPrescriptions->resolve(
+        parameters.prescriptionId);
+    if (prescription == nullptr) {
+        return unresolved(
+            "real-lens prescription '" + parameters.prescriptionId
+            + "' is not present in the runtime catalog");
+    }
+    const auto placed = placeLensPrescription(
+        *prescription, hit.component->transform);
+    const auto& entryMaterial = requirePrescriptionMaterial(
+        placed, placed.surfaces.front().materialBeforeId);
+    const auto& exitMaterial = requirePrescriptionMaterial(
+        placed, placed.surfaces.back().materialAfterId);
+    const double entryIndex = material::refractiveIndexAtVacuumWavelength(
+        entryMaterial, incoming.wavelengthMetres);
+    const double exitIndex = material::refractiveIndexAtVacuumWavelength(
+        exitMaterial, incoming.wavelengthMetres);
+    constexpr double kBenchAmbientTolerance = 2e-12;
+    if (std::abs(entryIndex - 1.0) > kBenchAmbientTolerance
+        || std::abs(exitIndex - 1.0) > kBenchAmbientTolerance) {
+        return unresolved(
+            "real-lens Bench routing currently requires vacuum/air-equivalent entry and exit media");
+    }
+    SurfaceIntersectionOptions options;
+    options.maximumDistanceMetres = std::max(
+        options.maximumDistanceMetres,
+        hit.distanceMetres + parameters.clearApertureDiameterMetres);
+    auto trace = traceSequentialLens(
+        makeRay(
+            incoming.originMetres,
+            incoming.direction,
+            incoming.wavelengthMetres,
+            incoming.powerWatts),
+        placed,
+        options);
+    if (trace.status != SequentialTraceStatus::Completed
+        || !trace.finalRay.has_value()
+        || trace.records.empty()) {
+        return unresolved(
+            "real-lens prescription '" + parameters.prescriptionId + "' "
+            + std::string(sequentialTraceStatusName(trace.status)));
+    }
+
+    scene::BeamState incident = incoming;
+    incident.originMetres = trace.records.front().worldPointMetres;
+    incident.accumulatedOpticalPathMetres +=
+        trace.records.front().segmentOpticalPathMetres;
+    incident.localFrame = makeBeamFrame(
+        incident.originMetres, incident.direction);
+    incident.provenance.componentPath.push_back(hit.component->id);
+    scene::validateBeamState(incident);
+
+    scene::BeamState outgoing = incident;
+    outgoing.originMetres = trace.finalRay->originMetres;
+    outgoing.direction = trace.finalRay->direction;
+    outgoing.accumulatedOpticalPathMetres
+        = incoming.accumulatedOpticalPathMetres
+        + trace.totalOpticalPathMetres;
+    outgoing.localFrame = makeBeamFrame(
+        outgoing.originMetres, outgoing.direction);
+    scene::validateBeamState(outgoing);
+
+    return {
+        .interaction = {
+            .componentId = hit.component->id,
+            .hitPointMetres = incident.originMetres,
+            .distanceMetres
+                = trace.records.front().geometricDistanceMetres,
+            .incidentBeam = incident,
+            .outgoing = {{
+                .interaction = scene::BranchInteractionKind::Transmitted,
+                .beam = outgoing,
+            }},
+            .diagnostics = {
+                "resolved sequential prescription '"
+                    + parameters.prescriptionId + "' across "
+                    + std::to_string(trace.records.size())
+                    + " refracting surfaces",
+            },
+        },
+        .trace = std::move(trace),
+    };
+}
+
 } // namespace
 
 scene::BenchTraceGraph traceDynamicBench(
     const scene::BenchScene& bench,
-    const scene::TraceBudget& budget) {
+    const scene::TraceBudget& budget,
+    const ILensPrescriptionResolver* lensPrescriptions) {
     scene::validateTraceBudget(budget);
     static_cast<void>(scene::BenchScene(bench.components(), bench.revision()));
 
@@ -389,7 +574,8 @@ scene::BenchTraceGraph traceDynamicBench(
             continue;
         }
 
-        const auto hit = findNextHit(bench, current.beam);
+        const auto hit = findNextHit(
+            bench, current.beam, lensPrescriptions);
         if (!hit.has_value()) {
             const auto end = current.beam.originMetres
                 + math::normalized(current.beam.direction) * budget.escapeDistanceMetres;
@@ -586,20 +772,43 @@ scene::BenchTraceGraph traceDynamicBench(
                 scene::TraceTerminationReason::Absorbed,
                 "holographic plate intercepted the branch for recording input");
             break;
-        case scene::BenchComponentKind::RealLensAssembly:
-            graph.interactions.push_back({
-                .componentId = hit->component->id,
-                .hitPointMetres = hit->pointMetres,
-                .distanceMetres = hit->distanceMetres,
-                .incidentBeam = incidentAtHit(current.beam, *hit),
-                .outgoing = {},
-                .diagnostics = {
-                    "real-lens prescription adapter is unavailable for this dynamic scene"},
+        case scene::BenchComponentKind::RealLensAssembly: {
+            auto resolved = interactRealLens(
+                current.beam, *hit, lensPrescriptions);
+            if (resolved.interaction.outgoing.empty()) {
+                const std::string detail
+                    = resolved.interaction.diagnostics.empty()
+                    ? "real-lens prescription interaction failed"
+                    : resolved.interaction.diagnostics.front();
+                graph.interactions.push_back(
+                    std::move(resolved.interaction));
+                appendTermination(
+                    graph,
+                    current.beam,
+                    scene::TraceTerminationReason::InvalidInteraction,
+                    detail);
+                break;
+            }
+            for (std::size_t index = 1;
+                 index < resolved.trace.records.size(); ++index) {
+                graph.segments.push_back({
+                    .branchId = current.beam.provenance.branchId,
+                    .startMetres = resolved.trace.records[index - 1U]
+                        .worldPointMetres,
+                    .endMetres = resolved.trace.records[index]
+                        .worldPointMetres,
+                    .wavelengthMetres = current.beam.wavelengthMetres,
+                    .powerWatts = current.beam.powerWatts,
+                });
+            }
+            pending.push_back({
+                .beam = resolved.interaction.outgoing.front().beam,
+                .hopCount = current.hopCount + 1,
             });
-            appendTermination(graph, current.beam,
-                scene::TraceTerminationReason::InvalidInteraction,
-                "real-lens prescription adapter is unavailable for this dynamic scene");
+            graph.interactions.push_back(
+                std::move(resolved.interaction));
             break;
+        }
         case scene::BenchComponentKind::LaserSource:
         case scene::BenchComponentKind::ObjectWavefrontSource:
             throw std::logic_error("unsupported component escaped traceable-plane filtering");

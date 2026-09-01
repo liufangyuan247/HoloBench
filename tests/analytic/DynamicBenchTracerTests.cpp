@@ -415,3 +415,79 @@ TEST_CASE("real lens without a resolved prescription fails visibly") {
     CHECK(graph.terminations[0].reason
         == scene::TraceTerminationReason::InvalidInteraction);
 }
+
+TEST_CASE("resolved real lens traces its placed sequential surfaces and optical path") {
+    scene::BenchScene bench;
+    auto source = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource, "resolved-lens-laser");
+    source.transform.translationMetres = {0.004, 0.0, 0.0};
+    bench.add(source);
+    auto lens = placed(
+        scene::BenchComponentKind::RealLensAssembly,
+        "resolved-lens",
+        {.translationMetres = {0.0, 0.0, 0.5}});
+    auto lensParameters
+        = std::get<scene::RealLensAssemblyParameters>(lens.parameters);
+    lensParameters.clearApertureDiameterMetres = 0.02;
+    lens.parameters = lensParameters;
+    bench.add(lens);
+    bench.add(placed(
+        scene::BenchComponentKind::ScreenDetector,
+        "resolved-lens-screen",
+        {.translationMetres = {0.0, 0.0, 0.65}}));
+
+    const auto prescription
+        = ray::makeDefaultNBk7BiconvexPrescription();
+    const ray::LensPrescriptionCatalog catalog({prescription});
+    const auto graph = ray::traceDynamicBench(
+        bench, {}, &catalog);
+
+    REQUIRE(graph.interactions.size() == 2U);
+    const auto& lensInteraction = graph.interactions.front();
+    CHECK(lensInteraction.componentId == "resolved-lens");
+    REQUIRE(lensInteraction.outgoing.size() == 1U);
+    CHECK(lensInteraction.outgoing.front().beam.originMetres.z > 0.505);
+    CHECK(lensInteraction.outgoing.front().beam.direction.x < 0.0);
+    CHECK(lensInteraction.outgoing.front().beam.accumulatedOpticalPathMetres
+        > lensInteraction.outgoing.front().beam.originMetres.z);
+    CHECK(lensInteraction.diagnostics.front()
+        == doctest::Contains("2 refracting surfaces"));
+    CHECK(graph.interactions.back().componentId
+        == "resolved-lens-screen");
+    CHECK(graph.segments.size() == 3U);
+    REQUIRE(graph.terminations.size() == 1U);
+    CHECK(graph.terminations.front().reason
+        == scene::TraceTerminationReason::Absorbed);
+}
+
+TEST_CASE("placed lens prescription anchors every relative surface frame") {
+    const auto source = ray::makeDefaultNBk7BiconvexPrescription();
+    const auto frame = facingPositiveX({0.4, 0.2, -0.1});
+    const auto placedPrescription = ray::placeLensPrescription(
+        source, frame);
+
+    REQUIRE(placedPrescription.surfaces.size() == 2U);
+    CHECK(placedPrescription.surfaces.front().localToWorld == frame);
+    const auto rearOffset
+        = placedPrescription.surfaces.back().localToWorld.translationMetres
+        - frame.translationMetres;
+    CHECK(math::dot(rearOffset, frame.localZAxisInWorld)
+        == doctest::Approx(0.006).epsilon(1e-14));
+    CHECK(math::length(
+        rearOffset - frame.localZAxisInWorld * 0.006)
+        == doctest::Approx(0.0).epsilon(1e-14));
+
+    auto alphabeticallyFirst = source;
+    alphabeticallyFirst.id = "aaa_biconvex";
+    ray::LensPrescriptionCatalog catalog({source, alphabeticallyFirst});
+    REQUIRE(catalog.entries().size() == 2U);
+    CHECK(catalog.entries().front().id == "aaa_biconvex");
+    catalog.registerPrescription(source);
+    CHECK(catalog.entries().size() == 2U);
+    auto conflicting = source;
+    conflicting.surfaces.back().geometry.curvaturePerMetre = -21.0;
+    CHECK_THROWS_WITH_AS(
+        catalog.registerPrescription(std::move(conflicting)),
+        doctest::Contains("different immutable content"),
+        std::invalid_argument);
+}

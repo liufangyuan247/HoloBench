@@ -91,7 +91,8 @@ observeBenchWaveChannels(
     std::string observationComponentId,
     std::size_t maximumSamplesPerAxis,
     bool interactivePreview,
-    compute::fft::IFftBackend& fftBackend);
+    compute::fft::IFftBackend& fftBackend,
+    const optics::ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
 
 // Convenience for callers that require exactly one physical channel.
 [[nodiscard]] BenchWaveObservationResult observeBenchWavePattern(
@@ -100,6 +101,7 @@ observeBenchWaveChannels(
     std::string observationComponentId,
     std::size_t maximumSamplesPerAxis,
     bool interactivePreview,
-    compute::fft::IFftBackend& fftBackend);
+    compute::fft::IFftBackend& fftBackend,
+    const optics::ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
 
 } // namespace holobench::app

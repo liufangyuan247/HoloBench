@@ -95,6 +95,7 @@ add_library(holobench_optics STATIC
     optics/ray/DynamicBenchTracer.cpp
     optics/ray/GeometricElements.cpp
     optics/ray/Interface.cpp
+    optics/ray/LensPrescriptionCatalog.cpp
     optics/ray/Ray.cpp
     optics/ray/RotationalSurface.cpp
     optics/ray/SequentialLens.cpp

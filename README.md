@@ -124,9 +124,12 @@ areas, apertures, pinholes, and SLM finite pixels/dead space now act on a
 beam-following local complex field before plate recording. Ideal mirror and
 splitter folds transport the transverse frame explicitly; tilted zero-thickness
 masks use their projected physical footprint, and the final oblique plate
-restores the resolved centre carrier. Tilted powered lenses, real-prescription
-paths, and high-NA/vector effects remain explicit limitations. Thin, RGB, and
-reflection-volume reconstruction supports both bounded decentered parallel
+restores the resolved centre carrier. Placed real-lens IDs now resolve through
+a runtime catalog for exact sequential centre-ray routing; centred, coaxial,
+low-NA prescriptions also use a visibly labelled scalar surface-phase/thickness
+adapter on Screen/Probe fields. Tilted/decentered or high-NA prescription
+paths, plate-path binding, and vector effects remain explicit limitations.
+Thin, RGB, and reflection-volume reconstruction supports bounded decentered parallel
 Screen/Probe planes and non-grazing rotated observation planes through explicit
 2x-padded shifted or rotated angular-spectrum propagation with rejected-band
 and interpolation diagnostics.

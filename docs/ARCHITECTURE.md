@@ -99,6 +99,9 @@ The following wave and Fourier-optics architecture decisions are locked:
 - Boundary condition absorption and grid sampling limits for Angular Spectrum Method (ASM).
 - Real-lens prescription, rotational-surface, material-dispersion, sequential
   tracing, and independent-validation conventions (ADR 0007).
+- Runtime prescription-ID resolution, first-surface Bench anchoring, exact
+  placed sequential routing, and the bounded scalar low-NA surface-phase model
+  (ADR 0031).
 - Beam-following placed local fields, ideal fold-frame transport, projected
   zero-thickness elements, and explicit powered/vector fallback boundaries
   (ADR 0012).

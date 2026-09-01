@@ -12,6 +12,10 @@ namespace holobench::compute::fft {
 class IFftBackend;
 }
 
+namespace holobench::optics::ray {
+class ILensPrescriptionResolver;
+}
+
 namespace holobench::optics::slm {
 class CalibratedSlmResponse;
 }
@@ -63,6 +67,7 @@ struct BeamFollowingFieldDiagnostics final {
     std::vector<std::string> foldedWaveComponentIds;
     std::vector<std::string> appliedSlmCommandIds;
     std::vector<std::string> appliedSlmCalibrationIds;
+    std::vector<std::string> appliedRealLensPrescriptionIds;
     std::vector<std::string> warnings;
 };
 
@@ -80,7 +85,8 @@ struct BeamFollowingFieldResult final {
 void validateBeamFollowingFieldPath(
     const scene::BenchScene& bench,
     const scene::BeamState& terminalBeam,
-    std::span<const scene::BenchPathInteraction> pathInteractions);
+    std::span<const scene::BenchPathInteraction> pathInteractions,
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
 
 // Propagates one exact traced branch through its ordered physical path. The
 // target is the final Screen, Field Probe, or Holographic Plate interaction.
@@ -93,6 +99,7 @@ void validateBeamFollowingFieldPath(
     std::span<const scene::BenchPathInteraction> pathInteractions,
     const BeamFollowingFieldOptions& options,
     compute::fft::IFftBackend& fftBackend,
-    std::span<const PlacedSlmSparseCommand> slmCommands = {});
+    std::span<const PlacedSlmSparseCommand> slmCommands = {},
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
 
 } // namespace holobench::optics::wave

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "optics/ray/LensPrescriptionCatalog.hpp"
 #include "optics/scene/BenchInteraction.hpp"
 #include "optics/scene/BenchScene.hpp"
 
@@ -12,6 +13,7 @@ namespace holobench::optics::ray {
  */
 [[nodiscard]] scene::BenchTraceGraph traceDynamicBench(
     const scene::BenchScene& bench,
-    const scene::TraceBudget& budget = {});
+    const scene::TraceBudget& budget = {},
+    const ILensPrescriptionResolver* lensPrescriptions = nullptr);
 
 } // namespace holobench::optics::ray

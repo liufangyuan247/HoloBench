@@ -66,6 +66,7 @@ struct PlateFieldSamplingDiagnostics final {
     std::vector<std::string> foldedWaveComponentIds;
     std::vector<std::string> appliedSlmCommandIds;
     std::vector<std::string> appliedSlmCalibrationIds;
+    std::vector<std::string> appliedRealLensPrescriptionIds;
     std::vector<std::string> warnings;
 };
 
@@ -99,14 +100,16 @@ struct SampledPlateIncidentField final {
 // Free-space segments use ASM, tilted zero-thickness masks are projected into
 // the transverse field plane, and ideal mirror/splitter folds transport the
 // scalar field frame explicitly. The final carrier is restored on the plate
-// tangent plane. Unsupported powered-lens or prescription geometry falls back
-// to explicit centreline-envelope evidence and retains refinement warnings.
+// tangent plane. When a path contains a wave-transforming component, failure
+// to model any such component rejects the refined result; product recording
+// must never retain a plausible field that omitted a physical branch element.
 [[nodiscard]] SampledPlateIncidentField samplePlateIncidentField(
     const scene::BenchScene& bench,
     const PlateIncidentFieldSet& fields,
     std::uint64_t branchId,
     const PlateFieldSamplingOptions& options,
     compute::fft::IFftBackend& fftBackend,
-    std::span<const PlacedSlmSparseCommand> slmCommands = {});
+    std::span<const PlacedSlmSparseCommand> slmCommands = {},
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
 
 } // namespace holobench::optics::holography

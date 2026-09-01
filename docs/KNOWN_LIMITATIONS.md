@@ -114,8 +114,8 @@
   mirrors, splitters, ideal thin lenses, apertures, and screens. The current
   tracer still emits only one centre ray per laser/object-source spectral
   channel for global layout. Probes observe it non-destructively, and plates
-  collect it as recording input. Real-lens components stop explicitly until their persisted
-  prescription IDs can be resolved into sequential assemblies. A placed
+  collect it as recording input. Real-lens components resolve stable IDs from a
+  runtime prescription catalog; a missing asset terminates explicitly. A placed
   Screen/Probe now exposes intensity, peak-relative dB, validity-masked phase,
   complex cursor values, and physical cross-sections. Its live-wave producer
   accepts traced Laser/Object source paths, adds exact wavelength/coherence
@@ -123,11 +123,17 @@
   The shared beam-following producer applies mirror/splitter folds, clear areas,
   apertures, aligned ideal thin lenses, explicit spatial-filter pinholes, and
   persisted SLM pixels/commands before sampling the actual Screen/Probe tangent
-  plane. Post-path Field Probes remain non-blocking. Real-lens prescriptions,
-  tilted powered lenses, grazing planes, thick/vector/polarization and high-NA
-  longitudinal fields still reject the complete measurement rather than
-  silently omitting a branch. The Inspector exposes per-branch path, working
-  grid, segment, fold, SLM, boundary, and approximation evidence plus bounded
+  plane. Post-path Field Probes remain non-blocking. A resolved Real Lens uses
+  exact sequential centre-ray routing and a scalar split-step Screen/Probe
+  adapter only for forward, centred, coaxial, air-embedded prescriptions whose
+  active-edge surface slopes do not exceed `0.25`. It applies surface sag,
+  aperture, wavelength-dependent intermediate index, and thickness, and labels
+  the approximation. Tilted/decentered prescription surfaces, off-axis centre
+  rays, reverse traversal, non-air exterior media, high NA, Fresnel loss,
+  coatings, vector/polarization and longitudinal fields still reject the
+  complete measurement rather than silently omitting a branch. The Inspector
+  exposes per-branch path, working grid, segment, fold, SLM, boundary, and
+  approximation evidence plus bounded
   drag/settled sample-axis limits. These limits are session numerical controls,
   not persisted instrument physics or a hardware-identity workaround. A plate
   can now sample source envelopes into local complex fields and record a
@@ -137,9 +143,11 @@
   pinholes, and SLM finite pixels/dead space. Ideal mirror/splitter folds carry
   transverse parity; tilted zero-thickness masks use their ray-projected local
   footprint; and an oblique plate restores the resolved centre carrier.
-  Tilted powered lenses, non-ideal direction changes, real prescriptions,
-  thickness, vector/polarization, and high-NA longitudinal effects remain
-  explicit. Placed SLMs apply persisted ideal amplitude/phase commands using
+  Tilted powered lenses, non-ideal direction changes, and general prescription
+  paths remain explicit. The bounded Screen/Probe real-lens adapter is not yet
+  passed through plate recording; a recording branch cannot claim that model.
+  Vector/polarization and high-NA longitudinal effects remain explicit. Placed
+  SLMs apply persisted ideal amplitude/phase commands using
   uniform, wrapped linear-ramp, or checkerboard recipes with bit-depth
   quantization and manual/automation provenance. M9 transient hogel rasters can
   attach the existing measured complex-response LUT without altering the saved

@@ -47,9 +47,12 @@ outside the architecture and would be computationally wasteful.
   polarization-free physics, and periodic FFT boundaries. Support at the
   sampled boundary produces an explicit wrap-risk warning.
 - A tilted powered lens, a direction change not produced by an ideal planar
-  mirror/splitter fold, a grazing plane, or a real-lens prescription path is not
-  projected into this scalar envelope model. It retains prior
-  centreline/source-envelope evidence and reports why refinement was skipped.
+  mirror/splitter fold, a grazing plane, or a prescription outside an installed
+  adapter is not projected into this scalar envelope model. A product
+  Screen/Probe observation or FFT-refined plate field rejects the complete
+  result rather than retaining centreline/source-envelope evidence that omitted
+  a physical element. ADR 0031 installs one bounded coaxial low-NA real-lens
+  domain.
 - Recorded results retain the applied component IDs, warnings, exact scene
   revision, and intercepted power. The Inspector shows that evidence instead
   of implying every placed element was applied.

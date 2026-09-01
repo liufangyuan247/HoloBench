@@ -765,6 +765,9 @@ Application::Application()
           reflection::evaluateReflectionRefraction(
               reflectionRefractionConfig_))
     , realLensConfig_(reallens::makeDefaultRealLensWorkbenchConfig())
+    , realLensPrescriptionCatalog_(
+          std::vector<optics::ray::SequentialLensPrescription> {
+              realLensConfig_.prescription})
     , lessonLocalization_(lessons::makeDefaultLessonLocalization())
     , scene_(optics::scene::createDefaultRealImageScene())
     , naResult_(optics::scene::computeObjectSideNumericalAperture(scene_))
@@ -878,7 +881,9 @@ bool Application::applyDynamicBenchProject(
             = candidateProject.scene.find(selectedBenchComponentId_) != nullptr
             ? selectedBenchComponentId_ : std::string {};
         const auto traceGraph = optics::ray::traceDynamicBench(
-            candidateProject.scene, benchTraceBudget_);
+            candidateProject.scene,
+            benchTraceBudget_,
+            &realLensPrescriptionCatalog_);
         if (!renderer_ || !renderer_->updateDynamicScene(
                 candidateProject.scene, traceGraph, selection)) {
             throw std::runtime_error("renderer rejected dynamic bench geometry");
@@ -906,7 +911,9 @@ bool Application::applyDynamicBenchProject(
 bool Application::showSandboxViewport() {
     try {
         const auto traceGraph = optics::ray::traceDynamicBench(
-            benchProject_.scene, benchTraceBudget_);
+            benchProject_.scene,
+            benchTraceBudget_,
+            &realLensPrescriptionCatalog_);
         if (!renderer_ || !renderer_->updateDynamicScene(
                 benchProject_.scene, traceGraph, selectedBenchComponentId_)) {
             throw std::runtime_error("renderer rejected dynamic bench geometry");
@@ -2709,7 +2716,8 @@ void Application::updateSandboxWaveObservation() {
                     kWaveCommittedSampleLimits,
                     sandboxWaveCommittedSampleLimitIndex_),
             preview,
-            *detectorFftBackend_);
+            *detectorFftBackend_,
+            &realLensPrescriptionCatalog_);
         const auto previous = std::find_if(
             results.begin(), results.end(),
             [&](const BenchWaveObservationResult& candidate) {
@@ -3248,9 +3256,11 @@ void Application::loadRealLensPrescription(bool csv) {
         if (path.empty()) {
             throw std::invalid_argument("prescription path cannot be empty");
         }
-        realLensConfig_.prescription = csv
+        auto loaded = csv
             ? optics::io::loadLensPrescriptionCsv(path)
             : optics::io::loadLensPrescriptionJson(path);
+        realLensPrescriptionCatalog_.registerPrescription(loaded);
+        realLensConfig_.prescription = std::move(loaded);
         selectedRealLensSurface_ = 0;
         realLensDirty_ = true;
         refreshRealLensWorkbench();
@@ -8172,7 +8182,18 @@ void Application::drawSandboxInspector() {
                     changed |= ImGui::DragFloat("Assembly clear diameter (mm)", &apertureMm, 0.1F, 0.001F, 5000.0F);
                     value.clearApertureDiameterMetres = static_cast<double>(apertureMm) * 1e-3;
                     ImGui::TextDisabled("Prescription ID: %s", value.prescriptionId.c_str());
-                    ImGui::TextDisabled("Sequential routing adapter is pending.");
+                    if (ImGui::Button("Use active imported prescription")) {
+                        value.prescriptionId
+                            = realLensConfig_.prescription.id;
+                        changed = true;
+                    }
+                    const auto* resolved
+                        = realLensPrescriptionCatalog_.resolve(
+                            value.prescriptionId);
+                    ImGui::TextDisabled(
+                        resolved != nullptr
+                            ? "Resolved: exact sequential centre ray + bounded scalar low-NA wave model"
+                            : "Unresolved: import a matching JSON/CSV prescription");
                     edited.parameters = value;
                     break;
                 }
@@ -8538,6 +8559,16 @@ void Application::drawSandboxInspector() {
                                 ImGui::TextWrapped(
                                     "SLM commands: %s",
                                     commands.c_str());
+                            }
+                            if (!diagnostics
+                                     .appliedRealLensPrescriptionIds.empty()) {
+                                const std::string prescriptions
+                                    = joinedBenchIdentifiers(
+                                        diagnostics
+                                            .appliedRealLensPrescriptionIds);
+                                ImGui::TextWrapped(
+                                    "Real-lens prescriptions: %s",
+                                    prescriptions.c_str());
                             }
                             if (!diagnostics
                                      .appliedSlmCalibrationIds.empty()) {

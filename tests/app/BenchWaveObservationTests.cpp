@@ -424,6 +424,127 @@ TEST_CASE("placed observation follows lenses SLMs mirrors and splitter folds") {
     }
 }
 
+TEST_CASE("placed real prescription focuses a bounded coaxial scalar field") {
+    fft::CpuFftBackend backend;
+    scene::BenchScene bench;
+    auto laser = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource,
+        "real-wave-laser");
+    auto laserParameters = std::get<scene::LaserSourceParameters>(
+        laser.parameters);
+    laserParameters.beamRadiusMetres = 1.0e-3;
+    laser.parameters = laserParameters;
+    bench.add(laser);
+
+    auto lens = placedComponent(
+        scene::BenchComponentKind::RealLensAssembly,
+        "real-wave-lens",
+        {.translationMetres = {0.0, 0.0, 0.50}});
+    auto lensParameters
+        = std::get<scene::RealLensAssemblyParameters>(lens.parameters);
+    lensParameters.clearApertureDiameterMetres = 2.0e-3;
+    lens.parameters = lensParameters;
+    bench.add(lens);
+
+    auto screen = placedComponent(
+        scene::BenchComponentKind::ScreenDetector,
+        "real-wave-screen",
+        {.translationMetres = {0.0, 0.0, 0.553}});
+    screen.parameters = scene::ScreenDetectorParameters {
+        .widthMetres = 0.004,
+        .heightMetres = 0.004,
+        .sampleWidth = 256U,
+        .sampleHeight = 256U,
+    };
+    bench.add(screen);
+
+    const ray::LensPrescriptionCatalog catalog({
+        ray::makeDefaultNBk7BiconvexPrescription()});
+    const auto graph = ray::traceDynamicBench(
+        bench, {}, &catalog);
+    CHECK_THROWS_WITH_AS(
+        static_cast<void>(app::observeBenchWavePattern(
+            bench,
+            graph,
+            "real-wave-screen",
+            256U,
+            false,
+            backend)),
+        doctest::Contains("prescription resolver"),
+        std::invalid_argument);
+
+    const auto result = app::observeBenchWavePattern(
+        bench,
+        graph,
+        "real-wave-screen",
+        256U,
+        false,
+        backend,
+        &catalog);
+    REQUIRE(result.contributions.size() == 1U);
+    const auto& diagnostics
+        = result.contributions.front().pathSampling;
+    CHECK(diagnostics.propagatedSegmentCount == 3U);
+    CHECK(diagnostics.appliedWaveComponentIds
+        == std::vector<std::string> {"real-wave-lens"});
+    CHECK(diagnostics.appliedRealLensPrescriptionIds
+        == std::vector<std::string> {
+            "default_n_bk7_biconvex"});
+    REQUIRE_FALSE(diagnostics.warnings.empty());
+    CHECK(diagnostics.warnings.front()
+        == doctest::Contains("scalar low-NA split-step"));
+    const std::size_t centreX
+        = result.fieldAtObservation.width() / 2U;
+    const std::size_t centreY
+        = result.fieldAtObservation.height() / 2U;
+    const double centreIntensity = std::norm(
+        result.fieldAtObservation.at(centreX, centreY));
+    CHECK(centreIntensity > 10.0 * std::norm(
+        result.fieldAtObservation.at(centreX + 20U, centreY)));
+    CHECK(result.integratedPowerWatts > 0.0);
+    CHECK(result.integratedPowerWatts <= 1.0);
+}
+
+TEST_CASE("real prescription wave adapter rejects a high-slope surface") {
+    fft::CpuFftBackend backend;
+    scene::BenchScene bench;
+    bench.add(scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource,
+        "high-na-laser"));
+    auto lens = placedComponent(
+        scene::BenchComponentKind::RealLensAssembly,
+        "high-na-lens",
+        {.translationMetres = {0.0, 0.0, 0.20}});
+    auto lensParameters
+        = std::get<scene::RealLensAssemblyParameters>(lens.parameters);
+    lensParameters.prescriptionId = "high-slope-lens";
+    lensParameters.clearApertureDiameterMetres = 0.02;
+    lens.parameters = lensParameters;
+    bench.add(lens);
+    bench.add(placedComponent(
+        scene::BenchComponentKind::ScreenDetector,
+        "high-na-screen",
+        {.translationMetres = {0.0, 0.0, 0.40}}));
+
+    auto prescription = ray::makeDefaultNBk7BiconvexPrescription();
+    prescription.id = lensParameters.prescriptionId;
+    prescription.surfaces.front().geometry.curvaturePerMetre = 80.0;
+    const ray::LensPrescriptionCatalog catalog({prescription});
+    const auto graph = ray::traceDynamicBench(
+        bench, {}, &catalog);
+    CHECK_THROWS_WITH_AS(
+        static_cast<void>(app::observeBenchWavePattern(
+            bench,
+            graph,
+            "high-na-screen",
+            128U,
+            true,
+            backend,
+            &catalog)),
+        doctest::Contains("low-NA scalar surface-slope limit"),
+        std::invalid_argument);
+}
+
 TEST_CASE("placed Mach-Zehnder instruments recombine fields on one Screen") {
     fft::CpuFftBackend backend;
     auto constructiveProject = app::makeMachZehnderInterferometerPreset();

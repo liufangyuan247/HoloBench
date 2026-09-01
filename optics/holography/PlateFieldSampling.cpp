@@ -226,7 +226,8 @@ SampledPlateIncidentField sampleLocalWavePath(
     const PlateFieldSamplingOptions& options,
     compute::fft::IFftBackend& fftBackend,
     SampledPlateIncidentField baseline,
-    std::span<const PlacedSlmSparseCommand> slmCommands) {
+    std::span<const PlacedSlmSparseCommand> slmCommands,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
     const double extentWidth = baseline.diagnostics.sampledExtentWidthMetres;
     const double extentHeight = baseline.diagnostics.sampledExtentHeightMetres;
     auto sampled = wave::sampleBeamFollowingField(
@@ -243,7 +244,8 @@ SampledPlateIncidentField sampleLocalWavePath(
             .refractiveIndex = options.refractiveIndex,
         },
         fftBackend,
-        slmCommands);
+        slmCommands,
+        lensPrescriptions);
     baseline.field = std::move(sampled.fieldAtTarget);
     baseline.diagnostics.usedTiltedElementProjection
         = sampled.diagnostics.usedTiltedElementProjection;
@@ -261,6 +263,9 @@ SampledPlateIncidentField sampleLocalWavePath(
         = std::move(sampled.diagnostics.appliedSlmCommandIds);
     baseline.diagnostics.appliedSlmCalibrationIds
         = std::move(sampled.diagnostics.appliedSlmCalibrationIds);
+    baseline.diagnostics.appliedRealLensPrescriptionIds
+        = std::move(
+            sampled.diagnostics.appliedRealLensPrescriptionIds);
     baseline.diagnostics.warnings.insert(
         baseline.diagnostics.warnings.end(),
         std::make_move_iterator(sampled.diagnostics.warnings.begin()),
@@ -485,7 +490,8 @@ SampledPlateIncidentField samplePlateIncidentField(
     std::uint64_t branchId,
     const PlateFieldSamplingOptions& options,
     compute::fft::IFftBackend& fftBackend,
-    std::span<const PlacedSlmSparseCommand> slmCommands) {
+    std::span<const PlacedSlmSparseCommand> slmCommands,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
     validateSparseSlmCommands(bench, slmCommands);
     auto baseline = samplePlateIncidentField(
         bench, fields, branchId, options);
@@ -493,22 +499,19 @@ SampledPlateIncidentField samplePlateIncidentField(
     if (!hasWaveRefinementComponent(bench, branch)) {
         return baseline;
     }
-    try {
-        wave::validateBeamFollowingFieldPath(
-            bench, branch.beam, branch.pathInteractions);
-    } catch (const std::invalid_argument& error) {
-        baseline.diagnostics.warnings.push_back(
-            "local wave refinement skipped: "
-            + std::string(error.what()));
-        return baseline;
-    }
+    wave::validateBeamFollowingFieldPath(
+        bench,
+        branch.beam,
+        branch.pathInteractions,
+        lensPrescriptions);
     return sampleLocalWavePath(
         bench,
         branch,
         options,
         fftBackend,
         std::move(baseline),
-        slmCommands);
+        slmCommands,
+        lensPrescriptions);
 }
 
 } // namespace holobench::optics::holography

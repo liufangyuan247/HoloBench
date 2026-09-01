@@ -161,7 +161,8 @@ struct SampledObservationContribution final {
     const ObservationSampling& sampling,
     std::size_t width,
     std::size_t height,
-    compute::fft::IFftBackend& fftBackend) {
+    compute::fft::IFftBackend& fftBackend,
+    const optics::ray::ILensPrescriptionResolver* lensPrescriptions) {
     const auto& observationBeam
         = route.observationInteraction->incidentBeam;
     auto sampled = optics::wave::sampleBeamFollowingField(
@@ -177,7 +178,9 @@ struct SampledObservationContribution final {
             .centreYMetres = 0.0,
             .refractiveIndex = 1.0,
         },
-        fftBackend);
+        fftBackend,
+        {},
+        lensPrescriptions);
     std::vector<std::string> pathComponentIds;
     pathComponentIds.reserve(route.pathInteractions.size());
     for (const auto& interaction : route.pathInteractions) {
@@ -376,7 +379,8 @@ std::vector<BenchWaveObservationResult> observeBenchWaveChannels(
     std::string observationComponentId,
     std::size_t maximumSamplesPerAxis,
     bool interactivePreview,
-    compute::fft::IFftBackend& fftBackend) {
+    compute::fft::IFftBackend& fftBackend,
+    const optics::ray::ILensPrescriptionResolver* lensPrescriptions) {
     if (traceGraph.sourceRevision != bench.revision()) {
         throw std::invalid_argument(
             "live wave screen requires a current Bench trace graph");
@@ -407,7 +411,8 @@ std::vector<BenchWaveObservationResult> observeBenchWaveChannels(
             observerSampling,
             width,
             height,
-            fftBackend);
+            fftBackend,
+            lensPrescriptions);
         const bool startsNewChannel = results.empty()
             || results.back().fieldAtObservation.vacuumWavelengthMetres()
                 != beam.wavelengthMetres
@@ -444,14 +449,16 @@ BenchWaveObservationResult observeBenchWavePattern(
     std::string observationComponentId,
     std::size_t maximumSamplesPerAxis,
     bool interactivePreview,
-    compute::fft::IFftBackend& fftBackend) {
+    compute::fft::IFftBackend& fftBackend,
+    const optics::ray::ILensPrescriptionResolver* lensPrescriptions) {
     auto channels = observeBenchWaveChannels(
         bench,
         traceGraph,
         std::move(observationComponentId),
         maximumSamplesPerAxis,
         interactivePreview,
-        fftBackend);
+        fftBackend,
+        lensPrescriptions);
     if (channels.size() != 1U) {
         throw std::invalid_argument(
             "single-channel observation requires exactly one wavelength and coherence identity");

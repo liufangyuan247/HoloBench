@@ -89,7 +89,7 @@ struct IdealThinLensParameters final {
 };
 
 struct RealLensAssemblyParameters final {
-    std::string prescriptionId = "default-singlet";
+    std::string prescriptionId = "default_n_bk7_biconvex";
     double clearApertureDiameterMetres = 0.05;
 
     bool operator==(const RealLensAssemblyParameters&) const = default;

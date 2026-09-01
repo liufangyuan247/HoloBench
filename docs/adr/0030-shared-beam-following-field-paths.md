@@ -47,11 +47,13 @@ controls: changing them invalidates and recomputes only the derived observation
 cache, never the Bench revision or physical instrument state. The working grid
 remains exactly twice the resolved output size on each axis.
 
-Real-lens prescriptions, a tilted powered thin lens that changes the centre
-ray, grazing planes, vector/polarization effects, thick-element propagation,
-and high-NA longitudinal fields remain explicit unsupported domains. A Screen
-measurement rejects the complete result if one incident branch is unsupported;
-the older plate-envelope fallback remains visibly diagnostic for compatibility.
+A bounded forward-coaxial, centred, low-NA real-lens prescription adapter is
+defined by ADR 0031. General prescription geometry, a tilted powered thin lens
+that changes the centre ray, grazing planes, vector/polarization effects, and
+high-NA longitudinal fields remain explicit unsupported domains. A Screen or
+Plate refined-field measurement rejects the complete result if one required
+path transform is unsupported; it never retains centreline/source-envelope
+evidence that omitted an interacting instrument.
 
 ## Consequences
 

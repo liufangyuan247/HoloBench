@@ -759,6 +759,7 @@ private:
     project::ProjectProvenance waveProjectProvenance_;
     std::string waveProjectName_ = "Wave & Sampling Workbench";
     reallens::RealLensWorkbenchConfig realLensConfig_;
+    optics::ray::LensPrescriptionCatalog realLensPrescriptionCatalog_;
     slmui::SlmInterferenceUiState slmInterferenceUiState_;
     project::ProjectProvenance slmProjectProvenance_;
     std::string slmProjectName_ = "SLM & Interference Experiment";

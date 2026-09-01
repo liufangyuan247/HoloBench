@@ -49,8 +49,8 @@ animated or silently approximated.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: `dev` passes 590/590 tests and `core-ci` passes
-  588/588. Clang and MSVC core/application builds pass with warnings as errors;
+- **Acceptance evidence**: `dev` passes 595/595 tests and `core-ci` passes
+  593/593. Clang and MSVC core/application builds pass with warnings as errors;
   the packaged CJK font validates. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
   smoke passes real shelf placement, constrained whole-instrument edits,
   post/XYZ and yaw/pitch mechanical drags, optical-frame updates, all M7/M8
@@ -124,8 +124,24 @@ animated or silently approximated.
   editable instruments. The preset has no private solver graph: its two traced
   branches, arm SLM phase, recombination, Inspector evidence, and Screen result
   use the shared Bench services.
-- **M10.4 next slice**: resolve real-lens prescriptions into the shared service
-  without weakening other supported paths.
+- **M10.4 placed real-lens slice implemented and locally validated**: A
+  solver-facing, deterministic runtime catalog resolves the stable prescription
+  ID of a Real Lens Assembly. The dynamic Bench places every prescription
+  surface relative to the component optical frame, traces the exact sequential
+  centre ray, starts the outgoing branch at the final surface, retains internal
+  ray segments, and accumulates wavelength-dependent glass OPL. Screen/Probe
+  fields accept only centred forward-coaxial prescriptions with ordered
+  rotational surfaces, air-equivalent exterior media, and a bounded `0.25`
+  surface-slope gate; within that domain they apply per-surface sag phase,
+  aperture, intermediate-index ASM propagation, and thickness. Inspector path
+  evidence names the applied prescription and labels the scalar low-NA
+  approximation. Missing assets, high slope, tilt, decenter, off-axis centre
+  rays, non-air exterior media, and other unsupported regimes fail explicitly
+  instead of becoming a thin lens. See
+  [ADR 0031](adr/0031-placed-real-lens-prescription-adapter.md).
+- **M10.4 next slice**: bind imported prescriptions through hashed calibration
+  asset references and pass the resolver/provenance through plate-recording
+  paths without permitting centreline-envelope fallback.
 
 ## Product rebaseline (2026-09-01)
 
@@ -349,9 +365,10 @@ The required interaction is now explicit:
   screens. Object/wavefront sources now emit their own centre branches;
   spatial filters clip against the pinhole, SLMs expose an explicit
   layout-only pass-through, probes observe non-destructively, and holographic
-  plates collect incident branches as future recording inputs. An unresolved
-  real-lens prescription stops with `InvalidInteraction` instead of silently
-  passing through. Every screen/probe/plate hit retains the complete incident
+  plates collect incident branches as future recording inputs. A real-lens ID
+  resolved by the runtime catalog follows its placed sequential surfaces; an
+  unresolved ID stops with `InvalidInteraction` instead of silently passing
+  through. Every screen/probe/plate hit retains the complete incident
   beam state at the plane, including wavelength, coherence identity, power,
   accumulated optical path, local frame, and component provenance; selecting
   one of those planes shows the actual incident branches in the Inspector.
@@ -370,9 +387,10 @@ The required interaction is now explicit:
   aligned powered optics and ideal folds, projected tilted masks, bounded
   decentered observation, non-grazing rotated observation planes, and placed
   SLM command/provenance behavior. Named M8 performance scenes and remote
-  Windows/Linux cross-compiler validation pass. The unresolved real-lens wave
-  adapter and vector/high-NA physics remain explicit scope limits rather than
-  hidden claims. Real input-driven empty-Bench assembly, placed reconstruction,
+  Windows/Linux cross-compiler validation pass. The later bounded real-lens
+  Screen/Probe adapter covers only its declared coaxial low-NA domain;
+  plate-path binding and vector/high-NA physics remain explicit scope limits
+  rather than hidden claims. Real input-driven empty-Bench assembly, placed reconstruction,
   and stale invalidation now add direct-manipulation product evidence.
 
 ## Completed
@@ -559,8 +577,10 @@ completion because it is primarily driven through fixed parameter panels:
   validated plane-wave oracle while labelling paraxial envelope evolution on an
   oblique window. Applied/folded component IDs, intercepted power, boundary
   risk, and limitations are visible in the Inspector. Tilted powered lenses,
-  direction changes outside ideal folds, real prescriptions, vector/polarization,
-  thickness, and high-NA longitudinal effects remain explicit limitations; see
+  direction changes outside ideal folds, general real-prescription paths,
+  vector/polarization, and high-NA longitudinal effects remain explicit
+  limitations; the later ADR 0031 adapter adds only a bounded coaxial low-NA
+  real-lens Screen/Probe domain; see
   [ADR 0012](adr/0012-placed-local-wave-path-conventions.md).
 - **Placed volume workflow**: Counter-propagating reflection recording refracts
   both actual local branch directions into the configured material and records

@@ -483,6 +483,52 @@ TEST_CASE("coaxial placed thin lens creates a sampled focal-plane concentration"
         > 10.0 * std::norm(baseline.field.at(center, center)));
 }
 
+TEST_CASE("resolved real lens is never omitted from a refined plate field") {
+    auto lens = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::RealLensAssembly,
+        "recording-real-lens");
+    auto parameters
+        = std::get<scene::RealLensAssemblyParameters>(lens.parameters);
+    parameters.clearApertureDiameterMetres = 0.002;
+    lens.parameters = parameters;
+    const auto bench = coaxialElementBench(
+        std::move(lens), 532e-9, 0.001);
+    const ray::LensPrescriptionCatalog catalog({
+        ray::makeDefaultNBk7BiconvexPrescription()});
+    const auto trace = ray::traceDynamicBench(
+        bench, {}, &catalog);
+    const auto fields = holography::collectPlateIncidentFields(
+        bench, trace, "plate");
+    REQUIRE(fields.branches.size() == 1U);
+    const auto branchId
+        = fields.branches.front().beam.provenance.branchId;
+    holobench::compute::fft::CpuFftBackend fft;
+    auto sampling = coaxialSampling(256U);
+    sampling.extentWidthMetres = 0.004;
+    sampling.extentHeightMetres = 0.004;
+    CHECK_THROWS_WITH_AS(
+        static_cast<void>(holography::samplePlateIncidentField(
+            bench, fields, branchId, sampling, fft)),
+        doctest::Contains("prescription resolver"),
+        std::invalid_argument);
+
+    const auto sampled = holography::samplePlateIncidentField(
+        bench,
+        fields,
+        branchId,
+        sampling,
+        fft,
+        {},
+        &catalog);
+    REQUIRE(sampled.diagnostics.appliedLocalWavePath);
+    CHECK(sampled.diagnostics.appliedWaveComponentIds
+        == std::vector<std::string> {"recording-real-lens"});
+    CHECK(sampled.diagnostics.appliedRealLensPrescriptionIds
+        == std::vector<std::string> {
+            "default_n_bk7_biconvex"});
+    CHECK(sampled.diagnostics.integratedPowerWatts > 0.0);
+}
+
 TEST_CASE("coaxial placed SLM applies finite active pixels and dead space") {
     auto device = scene::makeDefaultBenchComponent(
         scene::BenchComponentKind::SpatialLightModulator, "slm");
