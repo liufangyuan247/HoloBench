@@ -36,6 +36,12 @@ same path now evaluates one deterministic bounded representative hogel for each
 calibrated sweep candidate, retains all RGB dose/material evidence in result
 format v2, rejects extrapolation per candidate, and permits exposure ranking
 only from successful measured responses.
+The directional result now also feeds a bounded ideal on-axis camera. A placed
+finite pupil selects actual hogel/view directions, independent wavelengths use
+their own circular-pupil Airy kernels, and a strict measured spectral LUT maps
+optical intensity into linear sensor RGB with explicit edge-loss and work
+accounting. Distortion, defocus, noise, and absolute camera calibration remain
+open rather than hidden behind display colour.
 
 ## User-visible outcome
 

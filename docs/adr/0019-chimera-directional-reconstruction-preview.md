@@ -37,7 +37,8 @@ sub-femtoradian arithmetic error under the ideal mapping. The bounded two-hogel
 case retains distinct 1 mm spatial positions and two distinguishable viewpoints
 per hogel with explicit worst-case Airy cross-talk and angular resolution.
 
-This is a scalar ideal directional preview, not a synthesized camera image.
-Measured lens aberrations, polarization, high-NA vector effects, calibrated SLM
-response, material dose response, spectral replay distributions, finite camera
-pupils, and full multi-hogel field superposition remain explicit later work.
+This result remains a scalar ideal directional preview. ADR 0023 consumes it in
+a bounded finite-pupil camera with measured spectral response and
+wavelength-specific Airy deposition. Measured lens aberrations, polarization,
+high-NA vector effects, full spectral replay distributions, defocus, and full
+coherent multi-hogel field superposition remain explicit later work.

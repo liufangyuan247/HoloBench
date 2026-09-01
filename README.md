@@ -68,6 +68,10 @@ the calibrated index modulation and shrinkage in the ordinary M8 recorder.
 The deterministic CHIMERA sweep can consume the same calibrations on a bounded
 representative hogel, retain every RGB dose/material metric, and rank exposure
 candidates without extrapolating beyond the measured domain.
+Directional reconstruction can now feed a bounded finite-pupil camera: pupil
+position selects arriving hogel/view rays, wavelength-specific Airy kernels
+deposit them on a finite sensor, and a strict measured spectral LUT maps the
+independent optical wavelengths into linear camera RGB response.
 
 ## M1 Features
 

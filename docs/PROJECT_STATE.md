@@ -484,6 +484,15 @@ completion because it is primarily driven through fixed parameter panels:
   two hogels/two views without constructing a hidden 3D wave volume. It remains
   an ideal scalar directional preview rather than a calibrated camera image.
   See [ADR 0019](adr/0019-chimera-directional-reconstruction-preview.md).
+- **Calibrated finite-pupil camera image**: A bounded ideal on-axis camera now
+  intersects every reconstructed hogel/view direction with a positioned finite
+  circular pupil. Accepted rays map by physical focal angle to a finite sensor;
+  each independent optical wavelength receives its own Airy PSF and measured
+  three-channel spectral response. The result retains accepted/rejected ray
+  evidence, calibration ID, row orientation, ideal/deposited signal totals,
+  sensor-edge loss, Airy support, and bounded work. It remains relative linear
+  camera signal rather than display RGB or absolute photoelectrons. See
+  [ADR 0023](adr/0023-chimera-calibrated-camera-image.md).
 - **Deterministic parameter sweep**: Explicit axes cover hogel pitch, FOV,
   SLM/field sampling, relay focal length and stop, reference geometry,
   exposure, plate thickness, and shrinkage. A bounded Cartesian product retains
@@ -501,7 +510,7 @@ completion because it is primarily driven through fixed parameter panels:
   selection evidence. See
   [ADR 0020](adr/0020-chimera-deterministic-parameter-sweep.md).
 - **Current M9 validation**: Windows Clang warnings-as-errors core/application
-  builds pass; `core-ci` passes 536/536 and `dev` passes 538/538 including GPU
+  builds pass; `core-ci` passes 543/543 and `dev` passes 545/545 including GPU
   and font executables. Hidden OpenGL smoke renders and semantically
   round-trips the generated 23-component bench, finds its six plate branches,
   and exits with no GL errors on AMD Radeon Pro 5300M. GitHub Actions run
@@ -516,8 +525,10 @@ completion because it is primarily driven through fixed parameter panels:
   [33456409971](https://github.com/liufangyuan247/HoloBench/actions/runs/33456409971)
   passes all four jobs through the real perspective-raster adapter. Run
   [33457995330](https://github.com/liufangyuan247/HoloBench/actions/runs/33457995330)
-  passes all four jobs through calibrated SLM/material-dose execution. Remote
-  evidence for calibrated exposure-aware parameter sweeps remains pending.
+  passes all four jobs through calibrated SLM/material-dose execution. Run
+  [33459807508](https://github.com/liufangyuan247/HoloBench/actions/runs/33459807508)
+  passes all four jobs through calibrated exposure-aware parameter sweeps.
+  Remote cross-compiler evidence for the finite-pupil camera slice is pending.
 
 ## Known limitations (M1/M2)
 
@@ -529,9 +540,9 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Add measured camera LUT plus spectral/pupil reconstruction and bounded image composition.
+1. Expose real image import, dataset, exposure, reconstruction camera, sweep, and batch controls in the Lab UI.
 2. Add deterministic calibrated-sweep performance evidence and reuse of exposure-invariant field samples.
-3. Expose real image import, dataset, exposure, preview, sweep, and batch controls in the Lab UI.
+3. Add camera distortion/defocus/noise adapters without weakening the bounded ideal reference.
 4. Add resumable batch execution, corrupt-artifact rejection, named budgets,
    and cross-platform M9 acceptance gates.
 5. Complete the M9 virtual-printer acceptance audit and documentation.

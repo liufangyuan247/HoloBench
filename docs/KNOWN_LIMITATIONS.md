@@ -158,6 +158,12 @@
   modeled. Calibrated parameter sweeps use one explicitly reported bounded
   representative hogel per candidate; they do not yet reuse exposure-invariant
   sampled fields or claim whole-plate chemistry.
+- M9 camera composition uses an ideal on-axis thin camera with a finite circular
+  pupil, wavelength-specific scalar Airy kernels, a finite sensor, and measured
+  linear spectral response. It does not yet model distortion, depth-dependent
+  focus, measured lens aberration, coherent multi-hogel field superposition,
+  polarization, noise, saturation, absolute photoelectrons, Bayer sampling, or
+  an ICC/display colour transform.
 - The dynamic bench has its own bounded scene-wide undo/redo timeline. The
   separate legacy history still covers lesson-relevant fixed optical-bench,
   Wave Detector, Sampling Debugger, and SLM inputs, but not Real Lens or the
