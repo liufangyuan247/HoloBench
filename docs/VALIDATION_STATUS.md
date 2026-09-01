@@ -33,9 +33,8 @@
   selected-component focus, `Shift+W` roam, a recomputed 512-sample physical
   Screen, a non-blocking 256-sample virtual Field Probe, and RGB Denisyuk
   record/reconstruct on the plate, then exits with no GL errors on AMD Radeon
-  Pro 5300M. The earlier implementation baseline `c0ab45d` remains green in
-  GitHub Actions run `33498048377`; the camera/probe follow-up is locally
-  validated pending its own CI run.
+  Pro 5300M. Camera/probe implementation commit `24ada0f` passes all four
+  Windows/Linux Core/Application jobs in GitHub Actions run `33516608199`.
 
 ## M1 Validation Breakdown
 

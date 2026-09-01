@@ -100,8 +100,8 @@ The required interaction is now explicit:
   clicks RGB Denisyuk Record/Reconstruct and requires current RGB evidence on
   the plate. The Clang development gate passes 574/574 cases and the expanded
   smoke exits without GL errors on AMD Radeon Pro 5300M. Implementation commit
-  `c0ab45d` passes all four Windows/Linux Core/Application jobs in GitHub
-  Actions run `33498048377`, including the M6-M9 performance gates. See
+  `24ada0f` passes all four Windows/Linux Core/Application jobs in GitHub
+  Actions run `33516608199`, including the M6-M9 performance gates. See
   [ADR 0025](adr/0025-live-wave-screen-and-rgb-denisyuk.md).
 
 - **Direct camera navigation**: Right-button orbit follows the drag direction
