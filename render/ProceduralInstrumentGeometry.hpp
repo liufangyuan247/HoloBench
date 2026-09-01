@@ -48,4 +48,3 @@ struct InstrumentGenerationOptions final {
     const InstrumentGenerationOptions& options = {});
 
 } // namespace holobench::render
-

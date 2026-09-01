@@ -121,4 +121,3 @@ TEST_CASE("PCG tessellation is deterministic and bounded by the public options")
 }
 
 } // namespace holobench::render
-
