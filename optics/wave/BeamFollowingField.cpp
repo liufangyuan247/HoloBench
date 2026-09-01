@@ -705,6 +705,8 @@ BeamFollowingFieldResult sampleBeamFollowingField(
     }
 
     BeamFollowingFieldDiagnostics diagnostics;
+    diagnostics.workingSampleWidth = propagated.width();
+    diagnostics.workingSampleHeight = propagated.height();
     compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
     math::Vec3d previousPoint = source.transform.translationMetres;
     math::Vec3d propagationDirection = source.transform.localZAxisInWorld;
@@ -713,6 +715,7 @@ BeamFollowingFieldResult sampleBeamFollowingField(
         const double distance = math::length(
             interaction.hitPointMetres - previousPoint);
         static_cast<void>(propagator.propagateInPlace(propagated, distance));
+        ++diagnostics.propagatedSegmentCount;
         const auto* component = bench.find(interaction.componentId);
         if (component == nullptr) {
             throw std::logic_error(

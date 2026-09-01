@@ -664,6 +664,8 @@ private:
     std::string sandboxWaveMeasurementComponentId_;
     int sandboxWaveChannelIndex_ = 0;
     int sandboxWaveViewModeIndex_ = 0;
+    int sandboxWavePreviewSampleLimitIndex_ = 2;
+    int sandboxWaveCommittedSampleLimitIndex_ = 2;
     bool sandboxWaveTextureDirty_ = true;
     float sandboxWaveDecibelFloor_ = -60.0F;
     float sandboxWavePhaseMinimumPeakFraction_ = 1.0e-6F;

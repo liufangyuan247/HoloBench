@@ -60,6 +60,34 @@ namespace {
 constexpr const char* kBenchComponentDragPayload
     = "HOLOBENCH_BENCH_COMPONENT_KIND";
 
+constexpr std::array<std::size_t, 4> kWavePreviewSampleLimits {
+    64U, 128U, 256U, 512U};
+constexpr std::array<std::size_t, 4> kWaveCommittedSampleLimits {
+    128U, 256U, 512U, 1024U};
+constexpr std::array<const char*, 4> kWavePreviewSampleLimitLabels {
+    "64", "128", "256", "512"};
+constexpr std::array<const char*, 4> kWaveCommittedSampleLimitLabels {
+    "128", "256", "512", "1024"};
+
+[[nodiscard]] std::size_t waveSampleLimit(
+    const std::array<std::size_t, 4>& limits,
+    int index) noexcept {
+    return limits[static_cast<std::size_t>(std::clamp(
+        index, 0, static_cast<int>(limits.size() - 1U)))];
+}
+
+[[nodiscard]] std::string joinedBenchIdentifiers(
+    const std::vector<std::string>& identifiers) {
+    std::string result;
+    for (const auto& identifier : identifiers) {
+        if (!result.empty()) {
+            result += " -> ";
+        }
+        result += identifier;
+    }
+    return result;
+}
+
 [[nodiscard]] std::string waveChannelLabel(
     const BenchWaveObservationResult& observation) {
     std::array<char, 256> label {};
@@ -2673,7 +2701,13 @@ void Application::updateSandboxWaveObservation() {
             benchProject_.scene,
             benchTraceGraph_,
             observation->id,
-            preview ? 256U : 512U,
+            preview
+                ? waveSampleLimit(
+                    kWavePreviewSampleLimits,
+                    sandboxWavePreviewSampleLimitIndex_)
+                : waveSampleLimit(
+                    kWaveCommittedSampleLimits,
+                    sandboxWaveCommittedSampleLimitIndex_),
             preview,
             *detectorFftBackend_);
         const auto previous = std::find_if(
@@ -6551,7 +6585,7 @@ void Application::drawSandboxWaveBar() {
             ImVec4(1.0F, 0.55F, 0.25F, 1.0F),
             "%s", sandboxWaveObservationDiagnostic_.c_str());
     } else {
-        ImGui::TextDisabled("Waiting for a Laser -> Aperture route");
+        ImGui::TextDisabled("Waiting for a supported traced source route");
     }
     ImGui::TextDisabled(
         virtualProbe
@@ -8362,6 +8396,33 @@ void Application::drawSandboxInspector() {
                     || selected->kind
                         == bench::BenchComponentKind::FieldProbe)) {
                 ImGui::SeparatorText("Complex Field Measurement");
+                bool samplingLimitChanged = false;
+                ImGui::SetNextItemWidth(96.0F);
+                samplingLimitChanged |= ImGui::Combo(
+                    "Drag max axis",
+                    &sandboxWavePreviewSampleLimitIndex_,
+                    kWavePreviewSampleLimitLabels.data(),
+                    static_cast<int>(
+                        kWavePreviewSampleLimitLabels.size()));
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(96.0F);
+                samplingLimitChanged |= ImGui::Combo(
+                    "Settled max axis",
+                    &sandboxWaveCommittedSampleLimitIndex_,
+                    kWaveCommittedSampleLimitLabels.data(),
+                    static_cast<int>(
+                        kWaveCommittedSampleLimitLabels.size()));
+                if (samplingLimitChanged) {
+                    sandboxWaveObservations_.clear();
+                    sandboxWaveChannelIndex_ = 0;
+                    sandboxWaveObservationDiagnostic_.clear();
+                    sandboxWaveTextureDirty_ = true;
+                    if (sandboxWaveTexture_) {
+                        sandboxWaveTexture_->destroy();
+                    }
+                }
+                ImGui::TextDisabled(
+                    "Each branch uses a 2x-padded working grid; lower drag quality keeps a moving probe responsive without changing settled quality.");
                 const auto* waveObservation
                     = activeSandboxWaveObservation();
                 const bool measurementCurrent = waveObservation
@@ -8407,6 +8468,92 @@ void Application::drawSandboxInspector() {
                         observationResult
                             .peakIntensityWattsPerSquareMetre,
                         observationResult.integratedPowerWatts);
+                    for (const auto& contribution
+                         : observationResult.contributions) {
+                        ImGui::PushID(&contribution);
+                        const bool routeOpen = ImGui::TreeNode(
+                            "Route evidence",
+                            "Branch %llu | source %s | OPL %.7g m",
+                            static_cast<unsigned long long>(
+                                contribution.branchId),
+                            contribution.sourceComponentId.c_str(),
+                            contribution.accumulatedOpticalPathMetres);
+                        if (routeOpen) {
+                            std::string completePath
+                                = contribution.sourceComponentId;
+                            const std::string interactionPath
+                                = joinedBenchIdentifiers(
+                                    contribution.pathComponentIds);
+                            if (!interactionPath.empty()) {
+                                completePath += " -> ";
+                                completePath += interactionPath;
+                            }
+                            ImGui::TextWrapped(
+                                "Ordered path: %s",
+                                completePath.c_str());
+                            const auto& diagnostics
+                                = contribution.pathSampling;
+                            ImGui::Text(
+                                "Working grid %zux%zu | %zu ASM segments",
+                                diagnostics.workingSampleWidth,
+                                diagnostics.workingSampleHeight,
+                                diagnostics.propagatedSegmentCount);
+                            ImGui::Text(
+                                "Folded %s | tilted element %s | tilted target %s | boundary %s",
+                                diagnostics.usedFoldedPath ? "yes" : "no",
+                                diagnostics.usedTiltedElementProjection
+                                    ? "yes" : "no",
+                                diagnostics.usedTargetTangentProjection
+                                    ? "yes" : "no",
+                                diagnostics.supportTouchesBoundary
+                                    ? "touched" : "clear");
+                            if (!diagnostics.appliedWaveComponentIds.empty()) {
+                                const std::string applied
+                                    = joinedBenchIdentifiers(
+                                        diagnostics.appliedWaveComponentIds);
+                                ImGui::TextWrapped(
+                                    "Applied wave elements: %s",
+                                    applied.c_str());
+                            }
+                            if (!diagnostics.foldedWaveComponentIds.empty()) {
+                                const std::string folds
+                                    = joinedBenchIdentifiers(
+                                        diagnostics.foldedWaveComponentIds);
+                                ImGui::TextWrapped(
+                                    "Field-frame folds: %s",
+                                    folds.c_str());
+                            }
+                            if (!diagnostics.appliedSlmCommandIds.empty()) {
+                                const std::string commands
+                                    = joinedBenchIdentifiers(
+                                        diagnostics.appliedSlmCommandIds);
+                                ImGui::TextWrapped(
+                                    "SLM commands: %s",
+                                    commands.c_str());
+                            }
+                            if (!diagnostics
+                                     .appliedSlmCalibrationIds.empty()) {
+                                const std::string calibrations
+                                    = joinedBenchIdentifiers(
+                                        diagnostics
+                                            .appliedSlmCalibrationIds);
+                                ImGui::TextWrapped(
+                                    "SLM calibrations: %s",
+                                    calibrations.c_str());
+                            }
+                            for (const auto& warning
+                                 : diagnostics.warnings) {
+                                ImGui::TextColored(
+                                    ImVec4(1.0F, 0.72F, 0.25F, 1.0F),
+                                    "Warning:");
+                                ImGui::SameLine();
+                                ImGui::TextWrapped(
+                                    "%s", warning.c_str());
+                            }
+                            ImGui::TreePop();
+                        }
+                        ImGui::PopID();
+                    }
                     ImGui::SliderInt(
                         "Sample X",
                         &sandboxWaveCursorX_,
@@ -12156,6 +12303,13 @@ void Application::runSandboxInteractionSmoke() {
         || !waveObservation
         || waveObservation->isStaleFor(benchProject_.scene)
         || waveObservation->interactivePreview
+        || waveObservation->contributions.size() != 1U
+        || waveObservation->contributions.front()
+                .pathSampling.workingSampleWidth != 1024U
+        || waveObservation->contributions.front()
+                .pathSampling.workingSampleHeight != 1024U
+        || waveObservation->contributions.front()
+                .pathSampling.propagatedSegmentCount != 2U
         || !sandboxWaveTexture_
         || !sandboxWaveTexture_->isValid()
         || !sandboxReconstructionOverlaySubmitted_) {

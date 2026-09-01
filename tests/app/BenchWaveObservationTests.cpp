@@ -365,6 +365,9 @@ TEST_CASE("placed observation follows lenses SLMs mirrors and splitter folds") {
     REQUIRE(straightResult.contributions.size() == 1U);
     const auto& straightDiagnostics
         = straightResult.contributions.front().pathSampling;
+    CHECK(straightDiagnostics.workingSampleWidth == 256U);
+    CHECK(straightDiagnostics.workingSampleHeight == 256U);
+    CHECK(straightDiagnostics.propagatedSegmentCount == 3U);
     CHECK(std::find(
         straightDiagnostics.appliedWaveComponentIds.begin(),
         straightDiagnostics.appliedWaveComponentIds.end(),
@@ -411,6 +414,9 @@ TEST_CASE("placed observation follows lenses SLMs mirrors and splitter folds") {
             folded, graph, "folded-screen", 128U, true, backend);
         REQUIRE(foldedResult.contributions.size() == 1U);
         const auto& contribution = foldedResult.contributions.front();
+        CHECK(contribution.pathSampling.workingSampleWidth == 256U);
+        CHECK(contribution.pathSampling.workingSampleHeight == 256U);
+        CHECK(contribution.pathSampling.propagatedSegmentCount == 2U);
         CHECK(contribution.pathSampling.usedFoldedPath);
         CHECK(contribution.pathSampling.foldedWaveComponentIds
             == std::vector<std::string> {id});

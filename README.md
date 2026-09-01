@@ -106,6 +106,13 @@ ordered path evidence, and switching intensity/dB/phase or channel only
 rerenders the cached field. If an incident branch contains an unsupported
 transform, measurement fails instead of silently drawing a partial result.
 
+The selected observation Inspector expands every contributing branch into its
+source, branch ID, OPL, ordered component path, 2x-padded working grid, ASM
+segment count, folds, applied wave elements, SLM commands/calibrations,
+boundary state, and approximation warnings. Separate bounded drag and settled
+sample-axis controls let probe motion trade temporary preview resolution for
+responsiveness without changing the settled result or Bench physics.
+
 For supported ray-routed paths, placed ideal lenses, mirror/splitter clear
 areas, apertures, pinholes, and SLM finite pixels/dead space now act on a
 beam-following local complex field before plate recording. Ideal mirror and

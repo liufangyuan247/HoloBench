@@ -112,8 +112,14 @@ animated or silently approximated.
   and an arm SLM; both physical branches merge on one Screen and a pi SLM command
   suppresses the observed peak. See
   [ADR 0030](adr/0030-shared-beam-following-field-paths.md).
-- **M10.4 next slice**: expose richer path diagnostics and performance controls
-  in the Inspector, add reusable interferometer/template entry points, then
+- **M10.4 routed-field inspection and quality controls implemented and locally validated**:
+  Every coherent contribution expands in the selected Screen/Probe Inspector
+  into source/branch identity, OPL, ordered path, 2x working grid, ASM segment
+  count, applied elements, folds, SLM evidence, boundary state, and retained
+  approximation warnings. Independent bounded drag and settled sample-axis
+  limits invalidate and recompute only the derived field cache; they do not
+  edit the Bench or select behavior by hardware identity.
+- **M10.4 next slice**: add reusable interferometer/template entry points, then
   resolve real-lens prescriptions into the shared service without weakening
   other supported paths.
 

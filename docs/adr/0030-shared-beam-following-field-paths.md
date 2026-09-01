@@ -34,12 +34,18 @@ branch it:
 - transports scalar-field parity and the local frame through mirror/splitter
   folds;
 - samples the result on the actual terminal tangent plane and retains applied
-  component, fold, SLM-command, calibration, boundary, and approximation
-  diagnostics.
+  component, fold, SLM-command, calibration, boundary, approximation, working
+  grid, and propagated-segment diagnostics.
 
 Placed measurement channels use this service independently per branch and then
 apply ADR 0029 coherent-channel merging. Holographic-plate refinement calls the
 same service and maps its diagnostics into the established plate result.
+
+The Screen/Probe Inspector exposes that branch evidence directly. Its separate
+bounded drag-preview and settled sample-axis limits are numerical quality
+controls: changing them invalidates and recomputes only the derived observation
+cache, never the Bench revision or physical instrument state. The working grid
+remains exactly twice the resolved output size on each axis.
 
 Real-lens prescriptions, a tilted powered thin lens that changes the centre
 ray, grazing planes, vector/polarization effects, thick-element propagation,

@@ -126,8 +126,11 @@
   plane. Post-path Field Probes remain non-blocking. Real-lens prescriptions,
   tilted powered lenses, grazing planes, thick/vector/polarization and high-NA
   longitudinal fields still reject the complete measurement rather than
-  silently omitting a branch. A plate can
-  now sample source envelopes into local complex fields and record a
+  silently omitting a branch. The Inspector exposes per-branch path, working
+  grid, segment, fold, SLM, boundary, and approximation evidence plus bounded
+  drag/settled sample-axis limits. These limits are session numerical controls,
+  not persisted instrument physics or a hardware-identity workaround. A plate
+  can now sample source envelopes into local complex fields and record a
   same-side thin transmission exposure over an explicit ROI. A 2x-padded
   beam-following envelope applies ASM per routed segment, finite mirror/splitter
   clear areas, ideal-lens phase/aperture, circular/rectangular masks, explicit

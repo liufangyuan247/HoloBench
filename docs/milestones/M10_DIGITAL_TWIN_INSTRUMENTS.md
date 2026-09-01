@@ -99,7 +99,10 @@ channels; contributors within one channel add as complex fields, while channel
 switching only rerenders the cache. One shared beam-following service now
 applies mirror/splitter folds, apertures, aligned ideal lenses, explicit
 spatial-filter pinholes, and finite SLM commands for both plates and placed
-measurement planes. Unsupported incident paths reject the complete observation.
+measurement planes. The selected observation Inspector exposes every branch's
+ordered path, OPL, working grid, segment count, applied transforms, retained
+warnings, and bounded drag/settled sampling controls. Unsupported incident paths
+reject the complete observation.
 See
 [ADR 0028](../adr/0028-revision-bound-placed-field-measurements.md) and
 [ADR 0029](../adr/0029-coherent-merge-and-independent-measurement-channels.md),

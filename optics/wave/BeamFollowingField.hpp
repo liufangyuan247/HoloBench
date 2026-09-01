@@ -52,6 +52,9 @@ struct BeamFollowingFieldOptions final {
 };
 
 struct BeamFollowingFieldDiagnostics final {
+    std::size_t workingSampleWidth = 0;
+    std::size_t workingSampleHeight = 0;
+    std::size_t propagatedSegmentCount = 0;
     bool usedTiltedElementProjection = false;
     bool usedFoldedPath = false;
     bool usedTargetTangentProjection = false;
