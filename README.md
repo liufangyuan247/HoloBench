@@ -2,6 +2,12 @@
 
 HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator, and a long-term R&D tool for CHIMERA-like holographic printing.
 
+Its product north star is a digital twin of an optical laboratory: experiments
+must emerge from reusable instruments, validated model families, and placed
+measurements rather than hard-coded experiment screens. See the
+[product vision](docs/PRODUCT_VISION.md) for the complete contract and the
+honest boundary between extensibility and physics currently implemented.
+
 **Milestone status**: M1-M6 physics/reference foundations, the M7/M8
 free-form holography sandbox, and the M9 CHIMERA virtual-printer automation are
 validated in their documented domains. M10 is active: HoloBench is becoming an

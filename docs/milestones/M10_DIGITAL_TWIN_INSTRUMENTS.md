@@ -71,6 +71,13 @@ readings. See [ADR 0026](../adr/0026-mechanical-assembly-and-optical-frame.md).
   detector, and stage calibration hooks with provenance and validity domains.
 - Nominal and calibrated modes are visibly distinguished.
 
+Implementation in progress: Bench format v5 gives every component a strict
+generic specification and optional instance metadata plus hashed external
+calibration references. The Inspector attaches/removes those references and the
+Inspector/viewport distinguish nominal, calibrated, and stale state. Stored
+evidence does not claim to affect physics until the corresponding model adapter
+resolves and validates the asset. See [ADR 0027](../adr/0027-instrument-identity-and-calibration-references.md).
+
 ### M10.4 — Measurement and general experiment closure
 
 - Field Probe amplitude, intensity, phase, dB, spectral-channel, cursor, and

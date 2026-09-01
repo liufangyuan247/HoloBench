@@ -95,6 +95,47 @@ TEST_CASE("recording after undo clears the redo branch") {
     CHECK(history.current().scene.find("mirror") == nullptr);
 }
 
+TEST_CASE("instrument identity calibration and staleness participate in undo") {
+    namespace bench = holobench::optics::scene;
+    holobench::app::BenchEditHistory history;
+    auto calibrated = makeProject("calibrated-history");
+    auto laser = *calibrated.scene.find("laser");
+    laser.instrument.calibrationMode
+        = bench::InstrumentCalibrationMode::Calibrated;
+    laser.instrument.calibrationAssets.push_back({
+        .kind = bench::CalibrationAssetKind::OpticalPose,
+        .calibrationId = "laser-pose-2026",
+        .formatVersion = 1,
+        .source = "calibration/laser-pose-2026.json",
+        .contentSha256
+            = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        .specificationId = laser.instrument.specificationId,
+        .specificationVersion = laser.instrument.specificationVersion,
+        .validity = {},
+    });
+    calibrated.scene.replace(laser.id, laser);
+    history.reset(calibrated);
+    CHECK(bench::instrumentCalibrationState(
+        history.current().scene.find("laser")->instrument)
+        == bench::InstrumentCalibrationState::Calibrated);
+
+    auto stale = calibrated;
+    laser = *stale.scene.find("laser");
+    ++laser.instrument.specificationVersion;
+    stale.scene.replace(laser.id, laser);
+    CHECK(history.record(stale));
+    CHECK(bench::instrumentCalibrationState(
+        history.current().scene.find("laser")->instrument)
+        == bench::InstrumentCalibrationState::Stale);
+
+    const auto& restored = history.undo();
+    CHECK(bench::instrumentCalibrationState(
+        restored.scene.find("laser")->instrument)
+        == bench::InstrumentCalibrationState::Calibrated);
+    CHECK(history.redo().scene.find("laser")->instrument
+        .specificationVersion == laser.instrument.specificationVersion);
+}
+
 TEST_CASE("bounded bench history evicts only the oldest snapshots") {
     holobench::app::BenchEditHistory history(2U);
     history.reset(makeProject("one"));

@@ -1,10 +1,12 @@
 #include <doctest/doctest.h>
 
+#include <array>
 #include <cmath>
 #include <limits>
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <variant>
 
 #include "optics/scene/BenchScene.hpp"
@@ -139,6 +141,119 @@ TEST_CASE("mechanical assembly resolves constrained stage and mount state into o
     CHECK_FALSE(mirror.mechanicalAssembly.has_value());
     CHECK(mirror.transform == resolvedBeforeRemoval);
     CHECK_NOTHROW(scene::validateBenchComponent(mirror));
+}
+
+TEST_CASE("instrument calibration identity is explicit contextual and becomes stale") {
+    auto detector = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::ScreenDetector, "calibrated-detector");
+    CHECK(detector.instrument.instrumentClass == "screen_detector");
+    CHECK(detector.instrument.specificationId
+        == "holobench.generic.screen_detector");
+    CHECK(scene::instrumentCalibrationState(detector.instrument)
+        == scene::InstrumentCalibrationState::Nominal);
+
+    detector.instrument.manufacturer = "Example Metrology Lab";
+    detector.instrument.model = "DT-1";
+    detector.instrument.serialNumber = "SN-0001";
+    detector.instrument.calibrationMode
+        = scene::InstrumentCalibrationMode::Calibrated;
+    detector.instrument.calibrationAssets.push_back({
+        .kind = scene::CalibrationAssetKind::DetectorResponse,
+        .calibrationId = "detector-rgb-2026",
+        .formatVersion = 1,
+        .source = "calibration/detector-rgb-2026.json",
+        .contentSha256
+            = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        .specificationId = detector.instrument.specificationId,
+        .specificationVersion = detector.instrument.specificationVersion,
+        .validity = {
+            .minimumVacuumWavelengthMetres = 400e-9,
+            .maximumVacuumWavelengthMetres = 700e-9,
+            .minimumTemperatureKelvin = 290.0,
+            .maximumTemperatureKelvin = 310.0,
+        },
+    });
+    CHECK_NOTHROW(scene::validateBenchComponent(detector));
+    CHECK(scene::instrumentCalibrationState(detector.instrument)
+        == scene::InstrumentCalibrationState::Calibrated);
+    constexpr std::array visibleWavelengths {450e-9, 532e-9, 638e-9};
+    CHECK(scene::instrumentCalibrationStateForContext(
+        detector.instrument, visibleWavelengths, 298.15)
+        == scene::InstrumentCalibrationState::Calibrated);
+    constexpr std::array outsideWavelengths {365e-9};
+    CHECK(scene::instrumentCalibrationStateForContext(
+        detector.instrument, outsideWavelengths, 298.15)
+        == scene::InstrumentCalibrationState::Stale);
+
+    auto changedSpecification = detector.instrument;
+    ++changedSpecification.specificationVersion;
+    CHECK(scene::instrumentCalibrationState(changedSpecification)
+        == scene::InstrumentCalibrationState::Stale);
+
+    auto invalidHash = detector.instrument;
+    invalidHash.calibrationAssets.front().contentSha256 = "not-a-hash";
+    CHECK_THROWS_AS(
+        scene::validateInstrumentIdentity(invalidHash),
+        std::invalid_argument);
+    auto duplicateAssetId = detector.instrument;
+    duplicateAssetId.calibrationAssets.push_back(
+        duplicateAssetId.calibrationAssets.front());
+    CHECK_THROWS_AS(
+        scene::validateInstrumentIdentity(duplicateAssetId),
+        std::invalid_argument);
+    auto invalidSource = detector.instrument;
+    invalidSource.calibrationAssets.front().source.clear();
+    CHECK_THROWS_AS(
+        scene::validateInstrumentIdentity(invalidSource),
+        std::invalid_argument);
+    auto invalidDomain = detector.instrument;
+    invalidDomain.calibrationAssets.front()
+        .validity.minimumVacuumWavelengthMetres = 800e-9;
+    CHECK_THROWS_AS(
+        scene::validateInstrumentIdentity(invalidDomain),
+        std::invalid_argument);
+    auto wrongClass = detector;
+    wrongClass.instrument.instrumentClass = "laser_source";
+    CHECK_THROWS_AS(
+        scene::validateBenchComponent(wrongClass),
+        std::invalid_argument);
+}
+
+TEST_CASE("calibration context accepts contiguous evidence split across assets") {
+    auto detector = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::ScreenDetector, "multi-range-detector");
+    detector.instrument.calibrationMode
+        = scene::InstrumentCalibrationMode::Calibrated;
+    const auto makeRange = [&](std::string id, double minimum, double maximum) {
+        return scene::CalibrationAssetReference {
+            .kind = scene::CalibrationAssetKind::DetectorResponse,
+            .calibrationId = std::move(id),
+            .formatVersion = 1,
+            .source = "calibration/detector-visible.json",
+            .contentSha256
+                = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            .specificationId = detector.instrument.specificationId,
+            .specificationVersion = detector.instrument.specificationVersion,
+            .validity = {
+                .minimumVacuumWavelengthMetres = minimum,
+                .maximumVacuumWavelengthMetres = maximum,
+                .minimumTemperatureKelvin = 290.0,
+                .maximumTemperatureKelvin = 310.0,
+            },
+        };
+    };
+    detector.instrument.calibrationAssets = {
+        makeRange("detector-blue-green", 400e-9, 550e-9),
+        makeRange("detector-green-red", 550e-9, 700e-9),
+    };
+    constexpr std::array rgb {450e-9, 532e-9, 638e-9};
+    CHECK(scene::instrumentCalibrationStateForContext(
+        detector.instrument, rgb, 298.15)
+        == scene::InstrumentCalibrationState::Calibrated);
+    constexpr std::array ultraviolet {365e-9};
+    CHECK(scene::instrumentCalibrationStateForContext(
+        detector.instrument, ultraviolet, 298.15)
+        == scene::InstrumentCalibrationState::Stale);
 }
 
 TEST_CASE("placed SLM procedural commands are deterministic quantized and bounded") {

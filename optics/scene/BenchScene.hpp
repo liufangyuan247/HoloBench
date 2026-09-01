@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "core/math/RigidTransform.hpp"
+#include "optics/scene/InstrumentCalibration.hpp"
 
 namespace holobench::optics::scene {
 
@@ -239,11 +240,14 @@ struct BenchComponent final {
     math::RigidTransform3d transform {};
     BenchComponentParameters parameters = LaserSourceParameters {};
     std::optional<MechanicalAssemblyState> mechanicalAssembly;
+    InstrumentIdentity instrument;
 
     bool operator==(const BenchComponent&) const = default;
 };
 
 [[nodiscard]] bool isStableBenchId(std::string_view id) noexcept;
+[[nodiscard]] InstrumentIdentity makeDefaultInstrumentIdentity(
+    BenchComponentKind kind);
 void validateMechanicalAssemblyState(const MechanicalAssemblyState& state);
 [[nodiscard]] math::RigidTransform3d resolveMechanicalOpticalTransform(
     const MechanicalAssemblyState& state);

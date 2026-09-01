@@ -18,6 +18,7 @@
 #include <cstring>
 #include <filesystem>
 #include <numeric>
+#include <optional>
 #include <numbers>
 #include <string>
 #include <type_traits>
@@ -57,6 +58,22 @@ namespace {
 
 constexpr const char* kBenchComponentDragPayload
     = "HOLOBENCH_BENCH_COMPONENT_KIND";
+
+template <std::size_t Size>
+void copyTextToBuffer(std::string_view text, char (&buffer)[Size]) noexcept {
+    static_assert(Size > 0U);
+    std::fill(std::begin(buffer), std::end(buffer), '\0');
+    const auto count = std::min(text.size(), Size - 1U);
+    std::copy_n(text.begin(), count, buffer);
+}
+
+[[nodiscard]] std::optional<std::string> optionalInstrumentText(
+    const char* text) {
+    if (text == nullptr || text[0] == '\0') {
+        return std::nullopt;
+    }
+    return std::string(text);
+}
 
 optics::sensor::CalibratedCameraSpectralResponse
 makeNominalChimeraCameraResponse() {
@@ -7444,6 +7461,327 @@ void Application::drawSandboxInspector() {
                         "selected component disappeared during mechanical editing");
                 }
 
+                ImGui::SeparatorText("Digital-twin Identity");
+                if (sandboxInstrumentEditorComponentId_
+                    != selectedBenchComponentId_) {
+                    sandboxInstrumentEditorComponentId_
+                        = selectedBenchComponentId_;
+                    copyTextToBuffer(
+                        selected->instrument.specificationId,
+                        sandboxInstrumentSpecificationId_);
+                    sandboxInstrumentSpecificationVersion_
+                        = selected->instrument.specificationVersion;
+                    copyTextToBuffer(
+                        selected->instrument.manufacturer.value_or(""),
+                        sandboxInstrumentManufacturer_);
+                    copyTextToBuffer(
+                        selected->instrument.model.value_or(""),
+                        sandboxInstrumentModel_);
+                    copyTextToBuffer(
+                        selected->instrument.serialNumber.value_or(""),
+                        sandboxInstrumentSerialNumber_);
+                    sandboxInstrumentCalibrationModeIndex_
+                        = selected->instrument.calibrationMode
+                            == bench::InstrumentCalibrationMode::Calibrated
+                        ? 1
+                        : 0;
+                }
+
+                const auto calibrationState
+                    = bench::instrumentCalibrationState(selected->instrument);
+                const ImVec4 calibrationStateColor
+                    = calibrationState
+                            == bench::InstrumentCalibrationState::Calibrated
+                    ? ImVec4(0.28F, 0.92F, 0.62F, 1.0F)
+                    : calibrationState
+                            == bench::InstrumentCalibrationState::Stale
+                    ? ImVec4(1.0F, 0.72F, 0.25F, 1.0F)
+                    : ImVec4(0.62F, 0.70F, 0.82F, 1.0F);
+                ImGui::Text("Instrument class: %s",
+                    selected->instrument.instrumentClass.c_str());
+                ImGui::TextColored(
+                    calibrationStateColor,
+                    "State: %s",
+                    bench::instrumentCalibrationStateName(
+                        calibrationState).data());
+                if (calibrationState
+                    == bench::InstrumentCalibrationState::Stale) {
+                    ImGui::TextWrapped(
+                        "Calibrated mode is requested, but no attached asset "
+                        "or its specification binding is current. Solvers "
+                        "continue to use declared nominal behavior until a "
+                        "supported asset is explicitly resolved.");
+                }
+                ImGui::InputText(
+                    "Specification ID",
+                    sandboxInstrumentSpecificationId_,
+                    sizeof(sandboxInstrumentSpecificationId_));
+                ImGui::InputInt(
+                    "Specification version",
+                    &sandboxInstrumentSpecificationVersion_);
+                ImGui::InputText(
+                    "Manufacturer (optional)",
+                    sandboxInstrumentManufacturer_,
+                    sizeof(sandboxInstrumentManufacturer_));
+                ImGui::InputText(
+                    "Model (optional)",
+                    sandboxInstrumentModel_,
+                    sizeof(sandboxInstrumentModel_));
+                ImGui::InputText(
+                    "Serial number (optional)",
+                    sandboxInstrumentSerialNumber_,
+                    sizeof(sandboxInstrumentSerialNumber_));
+                ImGui::RadioButton(
+                    "Nominal mode",
+                    &sandboxInstrumentCalibrationModeIndex_,
+                    0);
+                ImGui::SameLine();
+                ImGui::RadioButton(
+                    "Calibrated mode",
+                    &sandboxInstrumentCalibrationModeIndex_,
+                    1);
+                if (ImGui::Button("Apply instrument identity")) {
+                    try {
+                        auto candidate = benchProject_.scene;
+                        auto edited = *candidate.find(
+                            selectedBenchComponentId_);
+                        edited.instrument.specificationId
+                            = sandboxInstrumentSpecificationId_;
+                        edited.instrument.specificationVersion
+                            = sandboxInstrumentSpecificationVersion_;
+                        edited.instrument.manufacturer = optionalInstrumentText(
+                            sandboxInstrumentManufacturer_);
+                        edited.instrument.model = optionalInstrumentText(
+                            sandboxInstrumentModel_);
+                        edited.instrument.serialNumber
+                            = optionalInstrumentText(
+                                sandboxInstrumentSerialNumber_);
+                        edited.instrument.calibrationMode
+                            = sandboxInstrumentCalibrationModeIndex_ == 0
+                            ? bench::InstrumentCalibrationMode::Nominal
+                            : bench::InstrumentCalibrationMode::Calibrated;
+                        candidate.replace(edited.id, edited);
+                        static_cast<void>(applyBenchScene(
+                            std::move(candidate),
+                            "Updated instrument identity"));
+                    } catch (const std::exception& error) {
+                        errorMessage_ = "Instrument identity rejected: "
+                            + std::string(error.what());
+                        statusMessage_.clear();
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Reset generic identity")) {
+                    try {
+                        auto candidate = benchProject_.scene;
+                        auto edited = *candidate.find(
+                            selectedBenchComponentId_);
+                        edited.instrument
+                            = bench::makeDefaultInstrumentIdentity(
+                                edited.kind);
+                        candidate.replace(edited.id, edited);
+                        sandboxInstrumentEditorComponentId_.clear();
+                        static_cast<void>(applyBenchScene(
+                            std::move(candidate),
+                            "Reset generic nominal instrument identity"));
+                    } catch (const std::exception& error) {
+                        errorMessage_ = "Instrument reset failed: "
+                            + std::string(error.what());
+                        statusMessage_.clear();
+                    }
+                }
+
+                selected = benchProject_.scene.find(
+                    selectedBenchComponentId_);
+                if (selected == nullptr) {
+                    throw std::runtime_error(
+                        "selected component disappeared during identity editing");
+                }
+                ImGui::TextDisabled(
+                    "%zu attached calibration reference(s); identity metadata never selects a GPU path",
+                    selected->instrument.calibrationAssets.size());
+                bool calibrationAssetRemoved = false;
+                for (std::size_t assetIndex = 0;
+                     assetIndex
+                        < selected->instrument.calibrationAssets.size();
+                     ++assetIndex) {
+                    const auto& asset
+                        = selected->instrument.calibrationAssets[assetIndex];
+                    ImGui::PushID(static_cast<int>(assetIndex));
+                    ImGui::TextWrapped(
+                        "%s | %s | format v%d",
+                        bench::calibrationAssetKindName(asset.kind).data(),
+                        asset.calibrationId.c_str(),
+                        asset.formatVersion);
+                    ImGui::TextDisabled(
+                        "%s | %.1f-%.1f nm | %.2f-%.2f K",
+                        asset.source.c_str(),
+                        asset.validity.minimumVacuumWavelengthMetres * 1e9,
+                        asset.validity.maximumVacuumWavelengthMetres * 1e9,
+                        asset.validity.minimumTemperatureKelvin,
+                        asset.validity.maximumTemperatureKelvin);
+                    if (ImGui::SmallButton("Remove reference")) {
+                        try {
+                            auto candidate = benchProject_.scene;
+                            auto edited = *candidate.find(
+                                selectedBenchComponentId_);
+                            edited.instrument.calibrationAssets.erase(
+                                edited.instrument.calibrationAssets.begin()
+                                    + static_cast<std::ptrdiff_t>(assetIndex));
+                            candidate.replace(edited.id, edited);
+                            static_cast<void>(applyBenchScene(
+                                std::move(candidate),
+                                "Removed calibration asset reference"));
+                            calibrationAssetRemoved = true;
+                        } catch (const std::exception& error) {
+                            errorMessage_ = "Calibration removal failed: "
+                                + std::string(error.what());
+                            statusMessage_.clear();
+                        }
+                    }
+                    ImGui::PopID();
+                    if (calibrationAssetRemoved) break;
+                }
+
+                selected = benchProject_.scene.find(
+                    selectedBenchComponentId_);
+                if (selected == nullptr) {
+                    throw std::runtime_error(
+                        "selected component disappeared during calibration editing");
+                }
+                constexpr std::array calibrationAssetKinds {
+                    bench::CalibrationAssetKind::OpticalPose,
+                    bench::CalibrationAssetKind::ClearAperture,
+                    bench::CalibrationAssetKind::CoatingResponse,
+                    bench::CalibrationAssetKind::MaterialResponse,
+                    bench::CalibrationAssetKind::SlmResponse,
+                    bench::CalibrationAssetKind::DetectorResponse,
+                    bench::CalibrationAssetKind::StageResponse,
+                };
+                sandboxCalibrationAssetKindIndex_ = std::clamp(
+                    sandboxCalibrationAssetKindIndex_,
+                    0,
+                    static_cast<int>(calibrationAssetKinds.size()) - 1);
+                const auto selectedAssetKind = calibrationAssetKinds[
+                    static_cast<std::size_t>(
+                        sandboxCalibrationAssetKindIndex_)];
+                if (ImGui::BeginCombo(
+                        "Calibration kind",
+                        bench::calibrationAssetKindName(
+                            selectedAssetKind).data())) {
+                    for (std::size_t kindIndex = 0;
+                         kindIndex < calibrationAssetKinds.size();
+                         ++kindIndex) {
+                        const bool isSelected = static_cast<int>(kindIndex)
+                            == sandboxCalibrationAssetKindIndex_;
+                        if (ImGui::Selectable(
+                                bench::calibrationAssetKindName(
+                                    calibrationAssetKinds[kindIndex]).data(),
+                                isSelected)) {
+                            sandboxCalibrationAssetKindIndex_
+                                = static_cast<int>(kindIndex);
+                        }
+                        if (isSelected) ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+                ImGui::InputText(
+                    "Calibration ID",
+                    sandboxCalibrationAssetId_,
+                    sizeof(sandboxCalibrationAssetId_));
+                ImGui::InputInt(
+                    "Asset format version",
+                    &sandboxCalibrationAssetFormatVersion_);
+                ImGui::InputText(
+                    "Asset source / URI",
+                    sandboxCalibrationAssetSource_,
+                    sizeof(sandboxCalibrationAssetSource_));
+                ImGui::InputText(
+                    "Content SHA-256",
+                    sandboxCalibrationAssetSha256_,
+                    sizeof(sandboxCalibrationAssetSha256_));
+                ImGui::DragFloat(
+                    "Minimum wavelength (nm)",
+                    &sandboxCalibrationMinimumWavelengthNanometres_,
+                    1.0F,
+                    0.001F,
+                    1.0e9F,
+                    "%.3f");
+                ImGui::DragFloat(
+                    "Maximum wavelength (nm)",
+                    &sandboxCalibrationMaximumWavelengthNanometres_,
+                    1.0F,
+                    0.001F,
+                    1.0e9F,
+                    "%.3f");
+                ImGui::DragFloat(
+                    "Minimum temperature (K)",
+                    &sandboxCalibrationMinimumTemperatureKelvin_,
+                    0.1F,
+                    0.001F,
+                    1.0e6F,
+                    "%.2f");
+                ImGui::DragFloat(
+                    "Maximum temperature (K)",
+                    &sandboxCalibrationMaximumTemperatureKelvin_,
+                    0.1F,
+                    0.001F,
+                    1.0e6F,
+                    "%.2f");
+                ImGui::BeginDisabled(
+                    selected->instrument.calibrationAssets.size()
+                    >= bench::kMaximumInstrumentCalibrationAssets);
+                if (ImGui::Button("Attach calibration reference")) {
+                    try {
+                        auto candidate = benchProject_.scene;
+                        auto edited = *candidate.find(
+                            selectedBenchComponentId_);
+                        edited.instrument.calibrationAssets.push_back({
+                            .kind = calibrationAssetKinds[
+                                static_cast<std::size_t>(
+                                    sandboxCalibrationAssetKindIndex_)],
+                            .calibrationId = sandboxCalibrationAssetId_,
+                            .formatVersion
+                                = sandboxCalibrationAssetFormatVersion_,
+                            .source = sandboxCalibrationAssetSource_,
+                            .contentSha256
+                                = sandboxCalibrationAssetSha256_,
+                            .specificationId
+                                = edited.instrument.specificationId,
+                            .specificationVersion
+                                = edited.instrument.specificationVersion,
+                            .validity = {
+                                .minimumVacuumWavelengthMetres
+                                    = static_cast<double>(
+                                        sandboxCalibrationMinimumWavelengthNanometres_)
+                                        * 1e-9,
+                                .maximumVacuumWavelengthMetres
+                                    = static_cast<double>(
+                                        sandboxCalibrationMaximumWavelengthNanometres_)
+                                        * 1e-9,
+                                .minimumTemperatureKelvin
+                                    = sandboxCalibrationMinimumTemperatureKelvin_,
+                                .maximumTemperatureKelvin
+                                    = sandboxCalibrationMaximumTemperatureKelvin_,
+                            },
+                        });
+                        candidate.replace(edited.id, edited);
+                        static_cast<void>(applyBenchScene(
+                            std::move(candidate),
+                            "Attached calibration asset reference"));
+                        sandboxCalibrationAssetId_[0] = '\0';
+                        sandboxCalibrationAssetSource_[0] = '\0';
+                        sandboxCalibrationAssetSha256_[0] = '\0';
+                    } catch (const std::exception& error) {
+                        errorMessage_ = "Calibration reference rejected: "
+                            + std::string(error.what());
+                        statusMessage_.clear();
+                    }
+                }
+                ImGui::EndDisabled();
+                ImGui::TextDisabled(
+                    "References are persisted with a SHA-256 and validity domain. Edit by removing and reattaching; unresolved assets do not silently change physics.");
+
                 ImGui::SeparatorText("Optical Alignment");
                 const auto* alignmentTarget = benchProject_.scene.find(
                     sandboxAlignmentTargetComponentId_);
@@ -10056,11 +10394,38 @@ void Application::drawWorkspace() {
                     drawList->AddCircle(
                         ImVec2(projected.screenPos.x, projected.screenPos.y),
                         selected ? 10.0F : 7.0F, color, 24, selected ? 2.5F : 1.5F);
+                    const auto componentCalibrationState
+                        = optics::scene::instrumentCalibrationState(
+                            component.instrument);
+                    const ImU32 calibrationColor
+                        = componentCalibrationState
+                                == optics::scene::InstrumentCalibrationState::Calibrated
+                        ? IM_COL32(72, 235, 158, 255)
+                        : componentCalibrationState
+                                == optics::scene::InstrumentCalibrationState::Stale
+                        ? IM_COL32(255, 184, 64, 255)
+                        : IM_COL32(150, 168, 196, 220);
+                    drawList->AddCircleFilled(
+                        ImVec2(
+                            projected.screenPos.x + (selected ? 8.0F : 6.0F),
+                            projected.screenPos.y + (selected ? 8.0F : 6.0F)),
+                        selected ? 4.0F : 3.0F,
+                        calibrationColor,
+                        12);
                     if (selected || hovered) {
                         drawList->AddText(
                             ImVec2(projected.screenPos.x + 12.0F, projected.screenPos.y - 8.0F),
                             color,
                             component.id.c_str());
+                        const auto stateLabel
+                            = optics::scene::instrumentCalibrationStateName(
+                                componentCalibrationState);
+                        drawList->AddText(
+                            ImVec2(
+                                projected.screenPos.x + 12.0F,
+                                projected.screenPos.y + 8.0F),
+                            calibrationColor,
+                            stateLabel.data());
                     }
                 }
                 if (selectedComponentProjection.visible) {

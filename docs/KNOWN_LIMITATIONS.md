@@ -81,11 +81,13 @@
 ## Architecture & data
 
 - The current GPU propagation backend covers fused ASM-style spectral transfer; arbitrary non-power-of-two FFTs, automatic padding, and CUDA-specific acceleration are not implemented.
-- The unified optical-bench document is format v4 with source provenance,
+- The unified optical-bench document is format v5 with source provenance,
   recording recipes, placed SLM command recipes, and optional persisted
-  mechanical assemblies. Strict v1-v3 migrations preserve supported legacy
+  mechanical assemblies plus required instrument identity and optional
+  calibration references. Strict v1-v4 migrations preserve supported legacy
   data, add explicit manual zero-phase SLM defaults where required, and migrate
-  components without an assembly to `null`.
+  components without an assembly to `null` and without identity to the matching
+  generic nominal specification.
   Real-lens prescriptions use separate versioned JSON/CSV exchange and are not
   embedded in that scene document; the separate holography document is format
   v3 with narrowly scoped v1/v2 migrations.
@@ -171,4 +173,8 @@
   Wave Detector, Sampling Debugger, and SLM inputs, but not Real Lens or the
   fixed Holography Lab. There is no autosave, crash recovery, or complete
   accessibility layer.
-- Hardware control and digital-twin calibration are long-term roadmap modules.
+- Direct hardware control remains a long-term roadmap module. Bench format v5
+  now persists generic instrument identity and hashed external calibration
+  references with visible nominal/calibrated/stale state, but most asset kinds
+  are not yet resolved into general placed-instrument solver behavior. A stored
+  reference is evidence, not a claim that calibrated physics was applied.

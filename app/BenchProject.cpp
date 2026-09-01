@@ -230,6 +230,159 @@ math::RigidTransform3d transformFromJson(const Json& value) {
     return result;
 }
 
+Json optionalStringToJson(const std::optional<std::string>& value) {
+    return value.has_value() ? Json(*value) : Json(nullptr);
+}
+
+std::optional<std::string> optionalStringFromJson(
+    const Json& value,
+    std::string_view field) {
+    if (value.is_null()) return std::nullopt;
+    return requiredString(value, field);
+}
+
+Json calibrationValidityToJson(
+    const scene::CalibrationValidityDomain& domain) {
+    scene::validateCalibrationValidityDomain(domain);
+    return {
+        {"maximum_temperature_k", domain.maximumTemperatureKelvin},
+        {"maximum_vacuum_wavelength_m", domain.maximumVacuumWavelengthMetres},
+        {"minimum_temperature_k", domain.minimumTemperatureKelvin},
+        {"minimum_vacuum_wavelength_m", domain.minimumVacuumWavelengthMetres},
+    };
+}
+
+scene::CalibrationValidityDomain calibrationValidityFromJson(
+    const Json& value) {
+    requireKeys(value,
+        {"maximum_temperature_k", "maximum_vacuum_wavelength_m",
+            "minimum_temperature_k", "minimum_vacuum_wavelength_m"},
+        "calibration validity domain");
+    scene::CalibrationValidityDomain result {
+        .minimumVacuumWavelengthMetres = finiteNumber(
+            value.at("minimum_vacuum_wavelength_m"),
+            "calibration minimum_vacuum_wavelength_m"),
+        .maximumVacuumWavelengthMetres = finiteNumber(
+            value.at("maximum_vacuum_wavelength_m"),
+            "calibration maximum_vacuum_wavelength_m"),
+        .minimumTemperatureKelvin = finiteNumber(
+            value.at("minimum_temperature_k"),
+            "calibration minimum_temperature_k"),
+        .maximumTemperatureKelvin = finiteNumber(
+            value.at("maximum_temperature_k"),
+            "calibration maximum_temperature_k"),
+    };
+    scene::validateCalibrationValidityDomain(result);
+    return result;
+}
+
+Json calibrationAssetToJson(
+    const scene::CalibrationAssetReference& asset) {
+    scene::validateCalibrationAssetReference(asset);
+    return {
+        {"calibration_id", asset.calibrationId},
+        {"content_sha256", asset.contentSha256},
+        {"format_version", asset.formatVersion},
+        {"kind", scene::calibrationAssetKindName(asset.kind)},
+        {"source", asset.source},
+        {"specification_id", asset.specificationId},
+        {"specification_version", asset.specificationVersion},
+        {"validity", calibrationValidityToJson(asset.validity)},
+    };
+}
+
+scene::CalibrationAssetReference calibrationAssetFromJson(
+    const Json& value) {
+    requireKeys(value,
+        {"calibration_id", "content_sha256", "format_version", "kind",
+            "source", "specification_id", "specification_version",
+            "validity"},
+        "calibration asset reference");
+    if (!value.at("format_version").is_number_integer()
+        || !value.at("specification_version").is_number_integer()) {
+        throw std::runtime_error(
+            "calibration asset versions must be integers");
+    }
+    scene::CalibrationAssetReference result {
+        .kind = scene::calibrationAssetKindFromName(requiredString(
+            value.at("kind"), "calibration asset kind")),
+        .calibrationId = requiredString(
+            value.at("calibration_id"), "calibration asset ID"),
+        .formatVersion = value.at("format_version").get<int>(),
+        .source = requiredString(
+            value.at("source"), "calibration asset source"),
+        .contentSha256 = requiredString(
+            value.at("content_sha256"), "calibration asset SHA-256"),
+        .specificationId = requiredString(
+            value.at("specification_id"),
+            "calibration asset specification ID"),
+        .specificationVersion
+            = value.at("specification_version").get<int>(),
+        .validity = calibrationValidityFromJson(value.at("validity")),
+    };
+    scene::validateCalibrationAssetReference(result);
+    return result;
+}
+
+Json instrumentIdentityToJson(const scene::InstrumentIdentity& identity) {
+    scene::validateInstrumentIdentity(identity);
+    Json assets = Json::array();
+    for (const auto& asset : identity.calibrationAssets) {
+        assets.push_back(calibrationAssetToJson(asset));
+    }
+    return {
+        {"calibration_assets", std::move(assets)},
+        {"calibration_mode",
+            scene::instrumentCalibrationModeName(identity.calibrationMode)},
+        {"instrument_class", identity.instrumentClass},
+        {"manufacturer", optionalStringToJson(identity.manufacturer)},
+        {"model", optionalStringToJson(identity.model)},
+        {"serial_number", optionalStringToJson(identity.serialNumber)},
+        {"specification_id", identity.specificationId},
+        {"specification_version", identity.specificationVersion},
+    };
+}
+
+scene::InstrumentIdentity instrumentIdentityFromJson(const Json& value) {
+    requireKeys(value,
+        {"calibration_assets", "calibration_mode", "instrument_class",
+            "manufacturer", "model", "serial_number", "specification_id",
+            "specification_version"},
+        "instrument identity");
+    if (!value.at("calibration_assets").is_array()
+        || !value.at("specification_version").is_number_integer()) {
+        throw std::runtime_error(
+            "instrument calibration assets or specification version has the wrong type");
+    }
+    scene::InstrumentIdentity result {
+        .instrumentClass = requiredString(
+            value.at("instrument_class"), "instrument class"),
+        .specificationId = requiredString(
+            value.at("specification_id"), "instrument specification ID"),
+        .specificationVersion
+            = value.at("specification_version").get<int>(),
+        .manufacturer = optionalStringFromJson(
+            value.at("manufacturer"), "instrument manufacturer"),
+        .model = optionalStringFromJson(
+            value.at("model"), "instrument model"),
+        .serialNumber = optionalStringFromJson(
+            value.at("serial_number"), "instrument serial number"),
+        .calibrationMode = scene::instrumentCalibrationModeFromName(
+            requiredString(
+                value.at("calibration_mode"), "instrument calibration mode")),
+        .calibrationAssets = {},
+    };
+    if (value.at("calibration_assets").size()
+        > scene::kMaximumInstrumentCalibrationAssets) {
+        throw std::runtime_error("instrument has too many calibration assets");
+    }
+    for (const auto& asset : value.at("calibration_assets")) {
+        result.calibrationAssets.push_back(calibrationAssetFromJson(asset));
+    }
+    scene::validateInstrumentIdentity(result);
+    return result;
+}
+
 Json mechanicalAssemblyToJson(
     const scene::MechanicalAssemblyState& state) {
     scene::validateMechanicalAssemblyState(state);
@@ -686,6 +839,7 @@ Json componentToJson(const scene::BenchComponent& component) {
     scene::validateBenchComponent(component);
     return {
         {"id", component.id},
+        {"instrument", instrumentIdentityToJson(component.instrument)},
         {"kind", scene::benchComponentKindName(component.kind)},
         {"mechanical_assembly",
             component.mechanicalAssembly.has_value()
@@ -701,8 +855,14 @@ scene::BenchComponent componentFromJson(
     int formatVersion) {
     if (formatVersion >= kBenchProjectFormatVersion) {
         requireKeys(value,
-            {"id", "kind", "mechanical_assembly", "parameters", "transform"},
+            {"id", "instrument", "kind", "mechanical_assembly", "parameters",
+                "transform"},
             "bench component");
+    } else if (formatVersion
+        >= kMechanicalAssemblyBenchProjectFormatVersion) {
+        requireKeys(value,
+            {"id", "kind", "mechanical_assembly", "parameters", "transform"},
+            "mechanical bench component");
     } else {
         requireKeys(value,
             {"id", "kind", "parameters", "transform"},
@@ -716,11 +876,15 @@ scene::BenchComponent componentFromJson(
         .parameters = parametersFromJson(
             kind, value.at("parameters"), formatVersion),
         .mechanicalAssembly = std::nullopt,
+        .instrument = scene::makeDefaultInstrumentIdentity(kind),
     };
-    if (formatVersion >= kBenchProjectFormatVersion
+    if (formatVersion >= kMechanicalAssemblyBenchProjectFormatVersion
         && !value.at("mechanical_assembly").is_null()) {
         result.mechanicalAssembly = mechanicalAssemblyFromJson(
             value.at("mechanical_assembly"));
+    }
+    if (formatVersion >= kBenchProjectFormatVersion) {
+        result.instrument = instrumentIdentityFromJson(value.at("instrument"));
     }
     scene::validateBenchComponent(result);
     return result;
@@ -1198,6 +1362,7 @@ BenchProject parseBenchProject(std::string_view jsonText) {
         }
         const int formatVersion = root.at("format_version").get<int>();
         if (formatVersion != kBenchProjectFormatVersion
+            && formatVersion != kMechanicalAssemblyBenchProjectFormatVersion
             && formatVersion != kSlmCommandBenchProjectFormatVersion
             && formatVersion != kRecipeBenchProjectFormatVersion
             && formatVersion != kLegacyBenchProjectFormatVersion) {

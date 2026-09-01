@@ -26,6 +26,12 @@ implemented as special-case screens. M10 replaces diagnostic line symbols with
 deterministic PCG solid bodies while preserving explicit hidden optical proxies
 as the only solver truth.
 
+The complete north-star and extensibility contract is recorded in
+[PRODUCT_VISION.md](PRODUCT_VISION.md). "Any optical experiment" means any
+experiment covered by installed, validated model families can be composed on
+the shared Bench; it does not permit an unsupported physical regime to be
+animated or silently approximated.
+
 ## M10 implementation state (in progress)
 
 - **M10.1 PCG foundation implemented**: All 12 current Bench component kinds
@@ -43,8 +49,8 @@ as the only solver truth.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: `dev` passes 581/581 tests and `core-ci` passes
-  579/579. Clang and MSVC core/application builds pass with warnings as errors;
+- **Acceptance evidence**: `dev` passes 584/584 tests and `core-ci` passes
+  582/582. Clang and MSVC core/application builds pass with warnings as errors;
   the packaged CJK font validates. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
   smoke passes real shelf placement, constrained whole-instrument edits,
   post/XYZ and yaw/pitch mechanical drags, optical-frame updates, all M7/M8
@@ -64,9 +70,20 @@ as the only solver truth.
   `mechanical_assembly` as a complete object or `null`. Strict v1-v3 migration
   retains free components, and inconsistent resolved transforms are rejected.
   See [ADR 0026](adr/0026-mechanical-assembly-and-optical-frame.md).
-- **Next slice**: M10.3 adds versioned generic instrument identity and
-  calibration evidence without allowing manufacturer/model data to select GPU
-  behavior. M10.4 then closes general placed-probe measurement interaction.
+- **M10.3 identity/calibration foundation in progress**: Bench format v5 gives
+  every component a versioned generic specification, optional manufacturer,
+  model and serial metadata, explicit nominal/calibrated mode, and bounded
+  hashed external calibration references for optical pose, clear aperture,
+  coating, material, SLM, detector, and stage evidence. Specification changes
+  make incompatible evidence stale. The Inspector edits identity and
+  attaches/removes references; both it and the viewport distinguish Nominal,
+  Calibrated, and Stale. Identity is project, revision, undo, and autosave
+  state. Stored references remain evidence only until an applicable model
+  explicitly resolves and validates their content. See
+  [ADR 0027](adr/0027-instrument-identity-and-calibration-references.md).
+- **Next slice**: connect supported asset kinds to their existing model
+  adapters with explicit applied-calibration diagnostics, then M10.4 closes
+  general placed-probe measurement interaction.
 
 ## Product rebaseline (2026-09-01)
 

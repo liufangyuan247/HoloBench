@@ -128,6 +128,7 @@ TEST_CASE("format two bench SLM migrates to explicit manual zero-phase command")
         scene::BenchComponentKind::SpatialLightModulator, "legacy-slm"));
     auto json = nlohmann::json::parse(app::serializeBenchProject(project));
     json["format_version"] = app::kRecipeBenchProjectFormatVersion;
+    json["components"][0].erase("instrument");
     json["components"][0].erase("mechanical_assembly");
     auto& parameters = json["components"][0]["parameters"];
     const nlohmann::json legacy {
@@ -148,7 +149,7 @@ TEST_CASE("format two bench SLM migrates to explicit manual zero-phase command")
     CHECK(restored.primaryCommand == doctest::Approx(0.0));
 }
 
-TEST_CASE("format four persists mechanical assemblies and migrates format three") {
+TEST_CASE("format five persists instrument calibration and migrates format four") {
     app::BenchProject project;
     auto lens = scene::makeDefaultBenchComponent(
         scene::BenchComponentKind::IdealThinLens, "mounted-lens");
@@ -158,6 +159,22 @@ TEST_CASE("format four persists mechanical assemblies and migrates format three"
     assembly.mountYawRadians = 0.15;
     assembly.mountPitchRadians = -0.05;
     scene::applyMechanicalAssembly(lens, assembly);
+    lens.instrument.manufacturer = "HoloBench Reference";
+    lens.instrument.model = "Nominal Lens Mount";
+    lens.instrument.serialNumber = "HB-LENS-0001";
+    lens.instrument.calibrationMode
+        = scene::InstrumentCalibrationMode::Calibrated;
+    lens.instrument.calibrationAssets.push_back({
+        .kind = scene::CalibrationAssetKind::OpticalPose,
+        .calibrationId = "lens-pose-2026",
+        .formatVersion = 1,
+        .source = "calibration/lens-pose-2026.json",
+        .contentSha256
+            = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+        .specificationId = lens.instrument.specificationId,
+        .specificationVersion = lens.instrument.specificationVersion,
+        .validity = {},
+    });
     project.scene.add(lens);
 
     const auto bytes = app::serializeBenchProject(project);
@@ -165,6 +182,7 @@ TEST_CASE("format four persists mechanical assemblies and migrates format three"
     CHECK(json.at("format_version").get<int>()
         == app::kBenchProjectFormatVersion);
     CHECK(json["components"][0]["mechanical_assembly"].is_object());
+    CHECK(json["components"][0]["instrument"].is_object());
     const auto restored = app::parseBenchProject(bytes);
     CHECK(app::serializeBenchProject(restored) == bytes);
     const auto* restoredLens = restored.scene.find("mounted-lens");
@@ -173,6 +191,9 @@ TEST_CASE("format four persists mechanical assemblies and migrates format three"
     CHECK(restoredLens->mechanicalAssembly->stageTranslationMetres.x
         == doctest::Approx(0.004));
     CHECK(restoredLens->transform == lens.transform);
+    CHECK(restoredLens->instrument == lens.instrument);
+    CHECK(scene::instrumentCalibrationState(restoredLens->instrument)
+        == scene::InstrumentCalibrationState::Calibrated);
 
     auto inconsistent = json;
     inconsistent["components"][0]["mechanical_assembly"]
@@ -181,17 +202,41 @@ TEST_CASE("format four persists mechanical assemblies and migrates format three"
         static_cast<void>(app::parseBenchProject(inconsistent.dump())),
         std::runtime_error);
 
-    app::BenchProject legacyProject;
-    legacyProject.scene.add(scene::makeDefaultBenchComponent(
-        scene::BenchComponentKind::PlanarMirror, "legacy-free-mirror"));
-    auto legacy = nlohmann::json::parse(
-        app::serializeBenchProject(legacyProject));
-    legacy["format_version"] = app::kSlmCommandBenchProjectFormatVersion;
-    legacy["components"][0].erase("mechanical_assembly");
+    auto legacy = json;
+    legacy["format_version"]
+        = app::kMechanicalAssemblyBenchProjectFormatVersion;
+    legacy["components"][0].erase("instrument");
     const auto migrated = app::parseBenchProject(legacy.dump());
     CHECK(migrated.formatVersion == app::kBenchProjectFormatVersion);
-    CHECK_FALSE(migrated.scene.find("legacy-free-mirror")
-                    ->mechanicalAssembly.has_value());
+    const auto* migratedLens = migrated.scene.find("mounted-lens");
+    REQUIRE(migratedLens != nullptr);
+    CHECK(migratedLens->mechanicalAssembly.has_value());
+    CHECK(migratedLens->instrument
+        == scene::makeDefaultInstrumentIdentity(
+            scene::BenchComponentKind::IdealThinLens));
+
+    auto corruptHash = json;
+    corruptHash["components"][0]["instrument"]["calibration_assets"][0]
+        ["content_sha256"] = "bad";
+    CHECK_THROWS_AS(
+        static_cast<void>(app::parseBenchProject(corruptHash.dump())),
+        std::runtime_error);
+
+    auto missingInstrumentField = json;
+    missingInstrumentField["components"][0]["instrument"].erase(
+        "specification_id");
+    CHECK_THROWS_AS(
+        static_cast<void>(
+            app::parseBenchProject(missingInstrumentField.dump())),
+        std::runtime_error);
+
+    auto unknownInstrumentField = json;
+    unknownInstrumentField["components"][0]["instrument"]["vendor_hint"]
+        = "must-not-select-a-backend";
+    CHECK_THROWS_AS(
+        static_cast<void>(
+            app::parseBenchProject(unknownInstrumentField.dump())),
+        std::runtime_error);
 }
 
 TEST_CASE("bench project parser rejects unknown keys duplicate IDs and invalid physical parameters") {

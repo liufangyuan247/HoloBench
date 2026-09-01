@@ -307,6 +307,22 @@ bool isStableBenchId(std::string_view id) noexcept {
     return true;
 }
 
+InstrumentIdentity makeDefaultInstrumentIdentity(BenchComponentKind kind) {
+    const std::string kindName(benchComponentKindName(kind));
+    InstrumentIdentity result {
+        .instrumentClass = kindName,
+        .specificationId = "holobench.generic." + kindName,
+        .specificationVersion = kInstrumentSpecificationVersion,
+        .manufacturer = std::nullopt,
+        .model = std::nullopt,
+        .serialNumber = std::nullopt,
+        .calibrationMode = InstrumentCalibrationMode::Nominal,
+        .calibrationAssets = {},
+    };
+    validateInstrumentIdentity(result);
+    return result;
+}
+
 void validateMechanicalAssemblyState(const MechanicalAssemblyState& state) {
     math::validateRigidTransform(state.benchFrame);
     requireOrderedMechanicalRange(
@@ -451,6 +467,12 @@ void validateBenchComponent(const BenchComponent& component) {
         throw std::invalid_argument("bench component ID is invalid");
     }
     math::validateRigidTransform(component.transform);
+    validateInstrumentIdentity(component.instrument);
+    if (component.instrument.instrumentClass
+        != benchComponentKindName(component.kind)) {
+        throw std::invalid_argument(
+            "instrument class does not match the Bench component kind");
+    }
     if (component.mechanicalAssembly.has_value()) {
         const auto resolved = resolveMechanicalOpticalTransform(
             *component.mechanicalAssembly);
@@ -518,6 +540,7 @@ BenchComponent makeDefaultBenchComponent(BenchComponentKind kind, std::string id
         .transform = {},
         .parameters = LaserSourceParameters {},
         .mechanicalAssembly = std::nullopt,
+        .instrument = makeDefaultInstrumentIdentity(kind),
     };
     switch (kind) {
     case BenchComponentKind::LaserSource: result.parameters = LaserSourceParameters {}; break;

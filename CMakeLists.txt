@@ -102,6 +102,7 @@ add_library(holobench_optics STATIC
     optics/scene/GeometricComponents.cpp
     optics/scene/BenchInteraction.cpp
     optics/scene/BenchScene.cpp
+    optics/scene/InstrumentCalibration.cpp
     optics/scene/NumericalAperture.cpp
     optics/scene/OpticalBenchScene.cpp
     optics/scene/SceneProjectAdapter.cpp
