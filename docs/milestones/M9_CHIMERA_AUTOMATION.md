@@ -70,6 +70,15 @@ covers RGB M8 exposure through finite-pupil camera output with a 30 s latency
 ceiling and a conservative 64 MiB working-memory budget; Windows/Linux CI now
 runs the gate.
 
+The named GPU display gate is
+`chimera/editable_23_component_bench_renderer`: the canonical 23-component
+Bench renders at 1920x1080 after 60 warm-up frames, with 120 synchronized
+measurements and a 33.333 ms p95 ceiling. AMD Radeon Pro 5300M measured
+2.503 ms p95. This is a CHIMERA layout/beam renderer budget, not a claim that
+the unrelated 1024x1024 GPU wave-compute benchmark passed on that older GPU.
+The latter remains a capability/performance validation for the user's NVIDIA
+environment without any vendor/model branch.
+
 Real view input now has a strict manifest boundary: two to 256 entries declare
 stable view ID, horizontal/vertical radians, relative or absolute P3/P6 path,
 and explicit linear or IEC sRGB transfer. The files are bounded and

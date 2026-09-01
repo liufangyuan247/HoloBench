@@ -426,6 +426,7 @@ struct RunOptions {
     int benchmarkFrames = 0;
     int initialRayCount = 64;
     bool glSmoke = false;
+    bool chimeraBenchmark = false;
 };
 
 struct UiItemBounds final {

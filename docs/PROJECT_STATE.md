@@ -538,7 +538,14 @@ completion because it is primarily driven through fixed parameter panels:
   on an Intel Core i7-9750H / Windows 10 19045 host. Canonical artifacts occupied
   1,273,819 bytes and the deliberately conservative twelve-complex-field peak
   estimate was 13,856,731 bytes against a 64 MiB budget. The gate is now wired
-  into Windows and Linux core CI.
+  into Windows and Linux core CI. The separate
+  `chimera/editable_23_component_bench_renderer` hardware gate renders the
+  generated ordinary Bench at 1920x1080 with 60 warm-up and 120 measured,
+  GPU-synchronized frames. AMD Radeon Pro 5300M measured 2.503 ms p95 against
+  a 33.333 ms ceiling with all 23 components and 128 displayed ray segments.
+  This renderer result does not disguise the same GPU's failure of the separate
+  1024x1024 wave-compute target; NVIDIA compute parity remains an explicit later
+  validation on the user's hardware.
 - **Shared-Bench automation workflow**: The generated 23-component ordinary
   Bench now exposes contextual Generate Dataset/Plan, Expose Selected RGB Hogel,
   and Reconstruct View to Probe actions. Product workflow state binds recipe,

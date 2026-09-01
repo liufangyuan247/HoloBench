@@ -49,7 +49,8 @@ int main(int argc, char** argv) {
             seenGlSmoke = true;
             options.glSmoke = true;
             options.smokeFrameLimit = 3;
-        } else if (arg == "--benchmark-frames") {
+        } else if (arg == "--benchmark-frames"
+            || arg == "--chimera-benchmark-frames") {
             if (seenBenchmark || (index + 1 >= argc)) {
                 return 64;
             }
@@ -58,6 +59,8 @@ int main(int argc, char** argv) {
             if (!parsePositiveInt(argv[index], 1'000'000, options.benchmarkFrames)) {
                 return 64;
             }
+            options.chimeraBenchmark
+                = arg == "--chimera-benchmark-frames";
         } else if (arg == "--ray-count") {
             if (seenRayCount || (index + 1 >= argc)) {
                 return 64;

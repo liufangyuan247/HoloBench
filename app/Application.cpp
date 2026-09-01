@@ -2167,6 +2167,12 @@ bool Application::initialize(const RunOptions& options) {
         shutdown();
         return false;
     }
+    if (options.chimeraBenchmark) {
+        auto compiled = chimera::compileChimeraRecipe(
+            chimera::makeCanonicalChimeraRecipe());
+        benchProject_ = std::move(compiled.project);
+        selectedBenchComponentId_ = "chimera-plate";
+    }
     if (!showSandboxViewport()) {
         SDL_Log("Initial dynamic sandbox setup failed: %s", errorMessage_.c_str());
         shutdown();
@@ -10385,6 +10391,7 @@ int Application::run(const RunOptions& options) {
         }
     }
 
+    bool benchmarkTargetMissed = false;
     if (isBenchmark && !frameDurationsMs.empty()) {
         const std::size_t measuredCount = frameDurationsMs.size();
         const double totalTimeMs = std::accumulate(frameDurationsMs.begin(), frameDurationsMs.end(), 0.0);
@@ -10399,6 +10406,12 @@ int Application::run(const RunOptions& options) {
         const double p50_ms = sortedDurations[p50Index];
         const double p95_ms = sortedDurations[p95Index];
         const double max_ms = sortedDurations.back();
+        constexpr double kChimeraRendererP95TargetMilliseconds = 33.333;
+        const double targetP95 = options.chimeraBenchmark
+            ? kChimeraRendererP95TargetMilliseconds : 0.0;
+        const bool targetMet = !options.chimeraBenchmark
+            || p95_ms < targetP95;
+        benchmarkTargetMissed = !targetMet;
 
         if (window_ != nullptr && (lastWindowPixelWidth <= 0 || lastWindowPixelHeight <= 0)) {
             SDL_GetWindowSizeInPixels(window_, &lastWindowPixelWidth, &lastWindowPixelHeight);
@@ -10408,17 +10421,23 @@ int Application::run(const RunOptions& options) {
         const int viewportHeight = (lastViewportHeight_ > 0) ? lastViewportHeight_ : (isBenchmark ? 1080 : lastWindowPixelHeight);
 
         SDL_Log(
-            "[Benchmark] avg_fps=%.2f p50_ms=%.3f p95_ms=%.3f max_ms=%.3f viewport_width=%d viewport_height=%d window_width=%d window_height=%d ray_count=%zu displayed_segments=%zu warmup_frames=%d measured_frames=%zu vsync=%d gpu_sync=%s",
+            "[Benchmark] benchmark=%s avg_fps=%.2f p50_ms=%.3f p95_ms=%.3f max_ms=%.3f target_p95_ms=%.3f target_met=%s viewport_width=%d viewport_height=%d window_width=%d window_height=%d ray_count=%zu displayed_segments=%zu dynamic_components=%zu warmup_frames=%d measured_frames=%zu vsync=%d gpu_sync=%s",
+            options.chimeraBenchmark
+                ? "chimera/editable_23_component_bench_renderer"
+                : "application/default_bench_renderer",
             avgFps,
             p50_ms,
             p95_ms,
             max_ms,
+            targetP95,
+            targetMet ? "true" : "false",
             viewportWidth,
             viewportHeight,
             lastWindowPixelWidth,
             lastWindowPixelHeight,
             tracerOptions_.rayCount,
             raySegments_.size(),
+            benchProject_.scene.components().size(),
             kWarmupFrames,
             measuredCount,
             vsyncInterval_,
@@ -10839,7 +10858,8 @@ int Application::run(const RunOptions& options) {
 
     shutdown();
 
-    return (!rawGlError && debugCallbackClean) ? 0 : 2;
+    return (!rawGlError && debugCallbackClean && !benchmarkTargetMissed)
+        ? 0 : 2;
 }
 
 int Application::run(int smokeFrameLimit, int initialRayCount) {
