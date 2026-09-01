@@ -850,6 +850,9 @@ void Application::recomputeRecordingRecipe(
             sandboxPlateRecording_ = std::make_unique<
                 optics::holography::ThinPlateRecordingResult>(
                     std::move(recording));
+            sandboxRecordedExperiment_
+                = SandboxRecordedExperiment::ThinTransmission;
+            sandboxActiveRecordingRecipeId_ = recipe.recipeId;
             sandboxPlateReplay_.reset();
             if (sandboxReplayTexture_) {
                 sandboxReplayTexture_->destroy();
@@ -874,6 +877,9 @@ void Application::recomputeRecordingRecipe(
             sandboxRgbRecording_ = std::make_unique<
                 optics::holography::RgbThinPlateRecordingResult>(
                     std::move(recording));
+            sandboxRecordedExperiment_
+                = SandboxRecordedExperiment::RgbFullColour;
+            sandboxActiveRecordingRecipeId_ = recipe.recipeId;
             sandboxRgbReplay_.reset();
             if (sandboxRgbReplayTexture_) {
                 sandboxRgbReplayTexture_->destroy();
@@ -911,6 +917,9 @@ void Application::recomputeRecordingRecipe(
     sandboxVolumeRecording_ = std::make_unique<
         optics::holography::VolumePlateRecordingResult>(
             std::move(recording));
+    sandboxRecordedExperiment_
+        = SandboxRecordedExperiment::ReflectionDenisyuk;
+    sandboxActiveRecordingRecipeId_ = recipe.recipeId;
     sandboxVolumeReplay_.reset();
     sandboxVolumeObservationReplay_.reset();
     if (sandboxVolumeReplayTexture_) {
@@ -918,6 +927,435 @@ void Application::recomputeRecordingRecipe(
     }
     statusMessage_ = "Recomputed saved volume recording recipe "
         + recipe.recipeId;
+}
+
+void Application::recordSelectedPlateExperiment(bool recordHistory) {
+    namespace holography = optics::holography;
+    namespace bench = optics::scene;
+
+    const auto* plate = benchProject_.scene.find(selectedBenchComponentId_);
+    if (plate == nullptr
+        || plate->kind != bench::BenchComponentKind::HolographicPlate) {
+        throw std::invalid_argument(
+            "select a holographic plate before recording");
+    }
+    const auto fields = holography::collectPlateIncidentFields(
+        benchProject_.scene, benchTraceGraph_, plate->id);
+
+    std::vector<const HologramRecordingRecipe*> matchingRecipes;
+    for (const auto& recipe : benchProject_.recordingRecipes) {
+        if (recipe.plateComponentId != plate->id) {
+            continue;
+        }
+        const bool matches = sandboxExperimentMode_
+                == SandboxExperimentMode::Auto
+            || (sandboxExperimentMode_
+                    == SandboxExperimentMode::ThinTransmission
+                && recipe.model
+                    == HologramRecordingModel::ThinTransmission
+                && recipe.channels.size() == 1U)
+            || (sandboxExperimentMode_
+                    == SandboxExperimentMode::ReflectionDenisyuk
+                && recipe.model == HologramRecordingModel::VolumeGrating
+                && recipe.channels.size() == 1U)
+            || (sandboxExperimentMode_
+                    == SandboxExperimentMode::RgbFullColour
+                && recipe.model
+                    == HologramRecordingModel::ThinTransmission
+                && recipe.channels.size() == 3U);
+        if (matches) {
+            matchingRecipes.push_back(&recipe);
+        }
+    }
+    if (matchingRecipes.size() > 1U) {
+        throw std::invalid_argument(
+            "multiple saved recording recipes match this mode; choose the exact recipe in the Inspector");
+    }
+    if (matchingRecipes.size() == 1U) {
+        const auto& recipe = *matchingRecipes.front();
+        const auto resolved = resolveRecordingRecipe(fields, recipe);
+        if (sandboxExperimentMode_
+                == SandboxExperimentMode::ReflectionDenisyuk) {
+            if (resolved.channels.size() != 1U) {
+                throw std::invalid_argument(
+                    "reflection recording requires exactly one branch pair");
+            }
+            const auto pair = holography::makePlateRecordingPair(
+                fields,
+                resolved.channels.front().objectBranchId,
+                resolved.channels.front().referenceBranchId);
+            if (pair.geometry
+                != holography::PlateRecordingGeometry::Reflection) {
+                throw std::invalid_argument(
+                    "the saved volume recipe is not an opposite-side reflection/Denisyuk geometry");
+            }
+        }
+        recomputeRecordingRecipe(fields, recipe);
+        errorMessage_.clear();
+        return;
+    }
+
+    if (sandboxPlateSampleSize_ < 2 || sandboxPlateSampleSize_ > 4096) {
+        throw std::invalid_argument(
+            "plate sample size must be in [2, 4096]");
+    }
+    if (!std::isfinite(sandboxPlateWindowMillimetres_)
+        || sandboxPlateWindowMillimetres_ <= 0.0F) {
+        throw std::invalid_argument(
+            "plate analysis window must be positive");
+    }
+    if (!std::isfinite(
+            sandboxPlateRelativeReferenceKilowattsPerSquareMetre_)
+        || sandboxPlateRelativeReferenceKilowattsPerSquareMetre_ <= 0.0F) {
+        throw std::invalid_argument(
+            "relative intensity reference must be positive");
+    }
+    const double extentMetres
+        = static_cast<double>(sandboxPlateWindowMillimetres_) * 1e-3;
+    holography::ThinPlateRecordingOptions thinOptions;
+    thinOptions.sampling = {
+        .sampleWidth = static_cast<std::size_t>(sandboxPlateSampleSize_),
+        .sampleHeight = static_cast<std::size_t>(sandboxPlateSampleSize_),
+        .refractiveIndex = 1.0,
+        .extentWidthMetres = extentMetres,
+        .extentHeightMetres = extentMetres,
+    };
+    thinOptions.relativeIntensityReferenceWattsPerSquareMetre
+        = static_cast<double>(
+              sandboxPlateRelativeReferenceKilowattsPerSquareMetre_)
+        * 1e3;
+
+    struct PairCandidate final {
+        holography::PlateBranchPairSelection selection;
+        holography::PlateRecordingGeometry geometry;
+    };
+    std::vector<PairCandidate> candidates;
+    for (const auto& object : fields.branches) {
+        if (object.role != holography::RecordingBranchRole::Object) {
+            continue;
+        }
+        for (const auto& reference : fields.branches) {
+            if (reference.role
+                    != holography::RecordingBranchRole::Reference
+                || !bench::canInterfere(object.beam, reference.beam)) {
+                continue;
+            }
+            const auto pair = holography::makePlateRecordingPair(
+                fields,
+                object.beam.provenance.branchId,
+                reference.beam.provenance.branchId);
+            candidates.push_back({
+                .selection = {
+                    .objectBranchId = pair.objectBranchId,
+                    .referenceBranchId = pair.referenceBranchId,
+                },
+                .geometry = pair.geometry,
+            });
+        }
+    }
+
+    SandboxExperimentMode mode = sandboxExperimentMode_;
+    std::array<holography::PlateBranchPairSelection, 3> rgbSelections {};
+    bool rgbReady = false;
+    try {
+        rgbSelections = holography::selectRgbThinTransmissionPairs(fields);
+        rgbReady = true;
+    } catch (const std::exception&) {
+        rgbReady = false;
+    }
+    if (mode == SandboxExperimentMode::Auto) {
+        if (rgbReady) {
+            mode = SandboxExperimentMode::RgbFullColour;
+        } else if (candidates.size() == 1U) {
+            mode = candidates.front().geometry
+                    == holography::PlateRecordingGeometry::Transmission
+                ? SandboxExperimentMode::ThinTransmission
+                : SandboxExperimentMode::ReflectionDenisyuk;
+        } else {
+            throw std::invalid_argument(
+                "auto recording requires one unambiguous pair or exactly three independent RGB transmission pairs");
+        }
+    }
+
+    HologramRecordingRecipe recipe;
+    if (mode == SandboxExperimentMode::RgbFullColour) {
+        if (!rgbReady) {
+            throw std::invalid_argument(
+                "RGB recording requires exactly three independent red, green, and blue transmission pairs");
+        }
+        recipe = makeThinRecordingRecipe(
+            "rgb-" + plate->id, fields, rgbSelections, thinOptions);
+    } else {
+        const auto requiredGeometry
+            = mode == SandboxExperimentMode::ThinTransmission
+            ? holography::PlateRecordingGeometry::Transmission
+            : holography::PlateRecordingGeometry::Reflection;
+        std::vector<holography::PlateBranchPairSelection> matchingPairs;
+        for (const auto& candidate : candidates) {
+            if (candidate.geometry == requiredGeometry) {
+                matchingPairs.push_back(candidate.selection);
+            }
+        }
+        if (matchingPairs.size() != 1U) {
+            throw std::invalid_argument(
+                requiredGeometry
+                        == holography::PlateRecordingGeometry::Transmission
+                    ? "transmission recording requires exactly one compatible same-side pair"
+                    : "reflection/Denisyuk recording requires exactly one compatible opposite-side pair");
+        }
+        if (mode == SandboxExperimentMode::ThinTransmission) {
+            recipe = makeThinRecordingRecipe(
+                "thin-" + plate->id,
+                fields,
+                matchingPairs,
+                thinOptions);
+        } else {
+            const holography::VolumePlateMaterial material {
+                .averageRefractiveIndex = static_cast<double>(
+                    sandboxVolumeAverageRefractiveIndex_),
+                .refractiveIndexModulation = static_cast<double>(
+                    sandboxVolumeIndexModulation_),
+                .isotropicLinearShrinkageFraction = static_cast<double>(
+                    sandboxVolumeShrinkagePercent_) * 0.01,
+            };
+            recipe = makeVolumeRecordingRecipe(
+                "volume-" + plate->id,
+                fields,
+                matchingPairs.front(),
+                thinOptions.sampling,
+                material);
+        }
+    }
+
+    const std::string recipeId = recipe.recipeId;
+    recomputeRecordingRecipe(fields, recipe);
+    bool responseReferenceAutoScaled = false;
+    if (recipe.model == HologramRecordingModel::ThinTransmission) {
+        std::size_t minimumClampCount = 0U;
+        std::size_t maximumClampCount = 0U;
+        double maximumRelativeIntensity = 0.0;
+        const auto collectResponseDiagnostics = [&minimumClampCount,
+                                                    &maximumClampCount,
+                                                    &maximumRelativeIntensity](
+                                                    const auto& recording) {
+            const auto& diagnostics = recording.hologram.diagnostics;
+            minimumClampCount += diagnostics.minimumClampedSampleCount;
+            maximumClampCount += diagnostics.maximumClampedSampleCount;
+            maximumRelativeIntensity = std::max(
+                maximumRelativeIntensity,
+                diagnostics.maximumRecordedRelativeIntensity);
+        };
+        if (recipe.channels.size() == 1U && sandboxPlateRecording_) {
+            collectResponseDiagnostics(*sandboxPlateRecording_);
+        } else if (recipe.channels.size() == 3U && sandboxRgbRecording_) {
+            for (const auto& channel : sandboxRgbRecording_->channels) {
+                collectResponseDiagnostics(channel);
+            }
+        }
+        if (minimumClampCount != 0U) {
+            throw std::invalid_argument(
+                "the thin-plate response clips at its minimum; adjust the response bounds in the Inspector");
+        }
+        if (maximumClampCount != 0U) {
+            const double availableResponse
+                = recipe.thinResponse.maximumAmplitudeTransmission
+                - recipe.thinResponse.amplitudeBias;
+            if (!std::isfinite(maximumRelativeIntensity)
+                || maximumRelativeIntensity <= 0.0
+                || !std::isfinite(availableResponse)
+                || availableResponse <= 0.0
+                || !std::isfinite(
+                    recipe.thinResponse.intensityToAmplitudeGain)
+                || recipe.thinResponse.intensityToAmplitudeGain <= 0.0) {
+                throw std::invalid_argument(
+                    "the thin-plate response clips and cannot be normalized with its current response parameters");
+            }
+            constexpr double kResponseHeadroom = 0.9;
+            const double maximumUnclippedRelativeIntensity
+                = kResponseHeadroom * availableResponse
+                / recipe.thinResponse.intensityToAmplitudeGain;
+            const double referenceScale = maximumRelativeIntensity
+                / maximumUnclippedRelativeIntensity;
+            if (!std::isfinite(referenceScale) || referenceScale <= 1.0) {
+                throw std::runtime_error(
+                    "thin-plate response normalization produced an invalid scale");
+            }
+            recipe.relativeIntensityReferenceWattsPerSquareMetre
+                *= referenceScale;
+            if (!std::isfinite(
+                    recipe.relativeIntensityReferenceWattsPerSquareMetre)) {
+                throw std::overflow_error(
+                    "thin-plate relative intensity reference is not representable");
+            }
+            recomputeRecordingRecipe(fields, recipe);
+            responseReferenceAutoScaled = true;
+        }
+    }
+    upsertRecordingRecipe(benchProject_, std::move(recipe));
+    if (recordHistory) {
+        recordBenchEdit();
+    }
+    errorMessage_.clear();
+    statusMessage_ = "Recorded bench experiment as " + recipeId;
+    if (responseReferenceAutoScaled) {
+        statusMessage_ += " (relative exposure reference auto-scaled to avoid response clipping)";
+    }
+}
+
+void Application::reconstructSelectedPlateExperiment() {
+    namespace holography = optics::holography;
+    namespace bench = optics::scene;
+
+    const auto* plate = benchProject_.scene.find(selectedBenchComponentId_);
+    if (plate == nullptr
+        || plate->kind != bench::BenchComponentKind::HolographicPlate) {
+        throw std::invalid_argument(
+            "select a holographic plate before reconstruction");
+    }
+    const auto* observation
+        = benchProject_.scene.find(sandboxObservationComponentId_);
+    if (observation == nullptr
+        || (observation->kind
+                != bench::BenchComponentKind::ScreenDetector
+            && observation->kind
+                != bench::BenchComponentKind::FieldProbe)) {
+        throw std::invalid_argument(
+            "select a placed Screen / Detector or Field Probe");
+    }
+    if (!detectorFftBackend_) {
+        throw std::runtime_error("CPU FFT backend is unavailable");
+    }
+    const auto replayKind = sandboxPlateReplayKindIndex_ == 0
+        ? holography::ThinPlateReplayKind::OrdinaryReference
+        : holography::ThinPlateReplayKind::ConjugateReference;
+
+    SandboxRecordedExperiment kind = sandboxRecordedExperiment_;
+    if (sandboxExperimentMode_
+        == SandboxExperimentMode::ThinTransmission) {
+        kind = SandboxRecordedExperiment::ThinTransmission;
+    } else if (sandboxExperimentMode_
+        == SandboxExperimentMode::ReflectionDenisyuk) {
+        kind = SandboxRecordedExperiment::ReflectionDenisyuk;
+    } else if (sandboxExperimentMode_
+        == SandboxExperimentMode::RgbFullColour) {
+        kind = SandboxRecordedExperiment::RgbFullColour;
+    }
+
+    if (kind == SandboxRecordedExperiment::ThinTransmission) {
+        if (!sandboxPlateRecording_
+            || sandboxPlateRecording_->plateComponentId != plate->id
+            || sandboxPlateRecording_->isStaleFor(benchProject_.scene)) {
+            throw std::invalid_argument(
+                "record a current thin transmission exposure first");
+        }
+        auto replay = holography::replayThinTransmissionToObservation(
+            benchProject_.scene,
+            *sandboxPlateRecording_,
+            observation->id,
+            replayKind,
+            *detectorFftBackend_);
+        field::FieldVisualizationOptions viewOptions;
+        viewOptions.colormap = field::ColormapKind::Inferno;
+        const auto image = field::renderLinearIntensity(
+            replay.fullReplayAtObservation, viewOptions);
+        if (!sandboxReplayTexture_
+            || !sandboxReplayTexture_->uploadImage(image)) {
+            throw std::runtime_error(
+                "OpenGL rejected the thin reconstruction texture");
+        }
+        sandboxPlateReplay_ = std::make_unique<
+            holography::ThinPlateReplayResult>(std::move(replay));
+        sandboxPlateReplayViewIndex_ = 0;
+        statusMessage_ = "Reconstructed thin hologram on " + observation->id;
+    } else if (kind == SandboxRecordedExperiment::RgbFullColour) {
+        if (!sandboxRgbRecording_
+            || sandboxRgbRecording_->plateComponentId != plate->id
+            || sandboxRgbRecording_->isStaleFor(benchProject_.scene)) {
+            throw std::invalid_argument(
+                "record a current RGB exposure set first");
+        }
+        auto replay = holography::replayRgbThinTransmissionToObservation(
+            benchProject_.scene,
+            *sandboxRgbRecording_,
+            observation->id,
+            replayKind,
+            *detectorFftBackend_);
+        const field::RgbIntensityVisualizationOptions displayOptions {
+            .channelIntensityGains = {
+                static_cast<double>(sandboxRgbDisplayGains_[0]),
+                static_cast<double>(sandboxRgbDisplayGains_[1]),
+                static_cast<double>(sandboxRgbDisplayGains_[2]),
+            },
+            .referenceIntensity = 0.0,
+            .displayGamma = static_cast<double>(sandboxRgbDisplayGamma_),
+        };
+        const auto image = field::renderUncalibratedRgbIntensity(
+            replay.channels[0].fullReplayAtObservation,
+            replay.channels[1].fullReplayAtObservation,
+            replay.channels[2].fullReplayAtObservation,
+            displayOptions);
+        if (!sandboxRgbReplayTexture_
+            || !sandboxRgbReplayTexture_->uploadImage(image)) {
+            throw std::runtime_error(
+                "OpenGL rejected the RGB reconstruction texture");
+        }
+        sandboxRgbReplay_ = std::make_unique<
+            holography::RgbThinPlateReplayResult>(std::move(replay));
+        sandboxRgbReplayViewIndex_ = 0;
+        statusMessage_ = "Reconstructed three independent RGB channels on "
+            + observation->id;
+    } else if (kind == SandboxRecordedExperiment::ReflectionDenisyuk) {
+        if (!sandboxVolumeRecording_
+            || sandboxVolumeRecording_->plateComponentId != plate->id
+            || sandboxVolumeRecording_->isStaleFor(benchProject_.scene)) {
+            throw std::invalid_argument(
+                "record a current reflection/Denisyuk volume grating first");
+        }
+        const auto fields = holography::collectPlateIncidentFields(
+            benchProject_.scene, benchTraceGraph_, plate->id);
+        holography::PlateFieldSamplingOptions sampling {
+            .sampleWidth = static_cast<std::size_t>(sandboxPlateSampleSize_),
+            .sampleHeight = static_cast<std::size_t>(sandboxPlateSampleSize_),
+            .refractiveIndex = 1.0,
+            .extentWidthMetres = static_cast<double>(
+                sandboxPlateWindowMillimetres_) * 1e-3,
+            .extentHeightMetres = static_cast<double>(
+                sandboxPlateWindowMillimetres_) * 1e-3,
+        };
+        for (const auto& recipe : benchProject_.recordingRecipes) {
+            if (recipe.recipeId == sandboxActiveRecordingRecipeId_
+                && recipe.plateComponentId == plate->id) {
+                sampling = recipe.sampling;
+                break;
+            }
+        }
+        auto replay = holography::replayVolumeReflectionToObservation(
+            benchProject_.scene,
+            fields,
+            *sandboxVolumeRecording_,
+            sandboxVolumeRecording_->pair.referenceBranchId,
+            observation->id,
+            sampling,
+            *detectorFftBackend_);
+        field::FieldVisualizationOptions viewOptions;
+        viewOptions.colormap = field::ColormapKind::Inferno;
+        const auto image = field::renderLinearIntensity(
+            replay.reconstructedAtObservation, viewOptions);
+        if (!sandboxVolumeReplayTexture_
+            || !sandboxVolumeReplayTexture_->uploadImage(image)) {
+            throw std::runtime_error(
+                "OpenGL rejected the reflection reconstruction texture");
+        }
+        sandboxVolumeObservationReplay_ = std::make_unique<
+            holography::VolumePlateObservationReplayResult>(
+                std::move(replay));
+        statusMessage_ = "Reconstructed reflection/Denisyuk hologram on "
+            + observation->id;
+    } else {
+        throw std::invalid_argument(
+            "record the selected plate before reconstruction");
+    }
+    errorMessage_.clear();
 }
 
 LessonEditState Application::captureLessonEditState() const {
@@ -4752,6 +5190,284 @@ void Application::drawSandboxComponentShelf() {
     ImGui::EndChild();
 }
 
+void Application::drawSandboxExperimentBar() {
+    namespace holography = optics::holography;
+    namespace bench = optics::scene;
+
+    const auto* selected = benchProject_.scene.find(selectedBenchComponentId_);
+    if (selected == nullptr
+        || selected->kind != bench::BenchComponentKind::HolographicPlate) {
+        return;
+    }
+
+    if (const auto* currentObservation
+        = benchProject_.scene.find(sandboxObservationComponentId_);
+        currentObservation == nullptr
+        || (currentObservation->kind
+                != bench::BenchComponentKind::ScreenDetector
+            && currentObservation->kind
+                != bench::BenchComponentKind::FieldProbe)) {
+        sandboxObservationComponentId_.clear();
+    }
+    if (sandboxObservationComponentId_.empty()) {
+        for (const auto& component : benchProject_.scene.components()) {
+            if (component.kind == bench::BenchComponentKind::ScreenDetector
+                || component.kind == bench::BenchComponentKind::FieldProbe) {
+                sandboxObservationComponentId_ = component.id;
+                break;
+            }
+        }
+    }
+
+    std::size_t objectCount = 0U;
+    std::size_t referenceCount = 0U;
+    std::size_t transmissionPairCount = 0U;
+    std::size_t reflectionPairCount = 0U;
+    struct IncidentPairSummary final {
+        holography::PlateRecordingGeometry geometry;
+        double wavelengthMetres = 0.0;
+        std::uint64_t objectBranchId = 0U;
+        std::uint64_t referenceBranchId = 0U;
+        double signedOpticalPathDifferenceMetres = 0.0;
+        double crossingAngleRadians = 0.0;
+        std::string coherenceId;
+    };
+    std::vector<IncidentPairSummary> incidentPairs;
+    bool rgbReady = false;
+    std::string analysisError;
+    try {
+        const auto fields = holography::collectPlateIncidentFields(
+            benchProject_.scene, benchTraceGraph_, selected->id);
+        for (const auto& branch : fields.branches) {
+            if (branch.role == holography::RecordingBranchRole::Object) {
+                ++objectCount;
+            } else {
+                ++referenceCount;
+            }
+        }
+        for (const auto& object : fields.branches) {
+            if (object.role != holography::RecordingBranchRole::Object) {
+                continue;
+            }
+            for (const auto& reference : fields.branches) {
+                if (reference.role
+                        != holography::RecordingBranchRole::Reference
+                    || !bench::canInterfere(object.beam, reference.beam)) {
+                    continue;
+                }
+                const auto pair = holography::makePlateRecordingPair(
+                    fields,
+                    object.beam.provenance.branchId,
+                    reference.beam.provenance.branchId);
+                if (pair.geometry
+                    == holography::PlateRecordingGeometry::Transmission) {
+                    ++transmissionPairCount;
+                } else {
+                    ++reflectionPairCount;
+                }
+                incidentPairs.push_back({
+                    .geometry = pair.geometry,
+                    .wavelengthMetres = pair.wavelengthMetres,
+                    .objectBranchId = pair.objectBranchId,
+                    .referenceBranchId = pair.referenceBranchId,
+                    .signedOpticalPathDifferenceMetres
+                        = pair.signedOpticalPathDifferenceMetres,
+                    .crossingAngleRadians = pair.crossingAngleRadians,
+                    .coherenceId = object.beam.coherenceId,
+                });
+            }
+        }
+        try {
+            static_cast<void>(
+                holography::selectRgbThinTransmissionPairs(fields));
+            rgbReady = true;
+        } catch (const std::exception&) {
+            rgbReady = false;
+        }
+    } catch (const std::exception& error) {
+        analysisError = error.what();
+    }
+
+    bool recordingCurrent = false;
+    const char* recordingState = "NOT RECORDED";
+    if (sandboxRecordedExperiment_
+            == SandboxRecordedExperiment::ThinTransmission
+        && sandboxPlateRecording_
+        && sandboxPlateRecording_->plateComponentId == selected->id) {
+        recordingCurrent
+            = !sandboxPlateRecording_->isStaleFor(benchProject_.scene);
+        recordingState = recordingCurrent ? "CURRENT THIN" : "STALE THIN";
+    } else if (sandboxRecordedExperiment_
+            == SandboxRecordedExperiment::ReflectionDenisyuk
+        && sandboxVolumeRecording_
+        && sandboxVolumeRecording_->plateComponentId == selected->id) {
+        recordingCurrent
+            = !sandboxVolumeRecording_->isStaleFor(benchProject_.scene);
+        recordingState = recordingCurrent
+            ? "CURRENT REFLECTION" : "STALE REFLECTION";
+    } else if (sandboxRecordedExperiment_
+            == SandboxRecordedExperiment::RgbFullColour
+        && sandboxRgbRecording_
+        && sandboxRgbRecording_->plateComponentId == selected->id) {
+        recordingCurrent
+            = !sandboxRgbRecording_->isStaleFor(benchProject_.scene);
+        recordingState = recordingCurrent ? "CURRENT RGB" : "STALE RGB";
+    }
+
+    ImGui::BeginChild(
+        "##sandbox_experiment_bar",
+        ImVec2(0.0F, 92.0F),
+        ImGuiChildFlags_Borders);
+    ImGui::Text("Plate experiment: %s", selected->id.c_str());
+    ImGui::SameLine();
+    const ImVec4 stateColour = recordingCurrent
+        ? ImVec4(0.35F, 0.9F, 0.45F, 1.0F)
+        : ImVec4(1.0F, 0.58F, 0.25F, 1.0F);
+    ImGui::TextColored(stateColour, "%s", recordingState);
+    ImGui::SameLine();
+    if (analysisError.empty()) {
+        ImGui::TextDisabled(
+            "object %zu | reference %zu | transmission %zu | reflection %zu | RGB %s",
+            objectCount,
+            referenceCount,
+            transmissionPairCount,
+            reflectionPairCount,
+            rgbReady ? "ready" : "not ready");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Incident details")) {
+            ImGui::OpenPopup("##plate-incident-details");
+        }
+        if (ImGui::BeginPopup("##plate-incident-details")) {
+            if (incidentPairs.empty()) {
+                ImGui::TextDisabled(
+                    "No compatible same-wavelength/coherence pair reaches the plate.");
+            }
+            for (const auto& pair : incidentPairs) {
+                ImGui::BulletText(
+                    "%s | %.3f nm | object #%llu + reference #%llu",
+                    pair.geometry
+                            == holography::PlateRecordingGeometry::Transmission
+                        ? "Transmission"
+                        : "Reflection / Denisyuk",
+                    pair.wavelengthMetres * 1e9,
+                    static_cast<unsigned long long>(pair.objectBranchId),
+                    static_cast<unsigned long long>(pair.referenceBranchId));
+                ImGui::Indent();
+                ImGui::TextDisabled(
+                    "coherence %s | OPD %.6g m | crossing %.3f deg",
+                    pair.coherenceId.c_str(),
+                    pair.signedOpticalPathDifferenceMetres,
+                    pair.crossingAngleRadians * 180.0
+                        / std::numbers::pi_v<double>);
+                ImGui::Unindent();
+            }
+            ImGui::EndPopup();
+        }
+    } else {
+        ImGui::TextColored(
+            ImVec4(1.0F, 0.45F, 0.25F, 1.0F),
+            "incident-field error: %s",
+            analysisError.c_str());
+    }
+
+    constexpr const char* kExperimentModes
+        = "Auto (unambiguous)\0Thin transmission\0Reflection / Denisyuk\0RGB full-colour\0";
+    int modeIndex = static_cast<int>(sandboxExperimentMode_);
+    ImGui::SetNextItemWidth(190.0F);
+    if (ImGui::Combo("##experiment-mode", &modeIndex, kExperimentModes)) {
+        sandboxExperimentMode_
+            = static_cast<SandboxExperimentMode>(modeIndex);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Record", ImVec2(82.0F, 0.0F))) {
+        try {
+            recordSelectedPlateExperiment();
+        } catch (const std::exception& error) {
+            errorMessage_ = "Bench recording failed: "
+                + std::string(error.what());
+            statusMessage_.clear();
+        }
+    }
+    ImGui::SameLine();
+    const char* observationPreview = sandboxObservationComponentId_.empty()
+        ? "No Screen / Probe"
+        : sandboxObservationComponentId_.c_str();
+    ImGui::SetNextItemWidth(190.0F);
+    if (ImGui::BeginCombo("##experiment-observation", observationPreview)) {
+        for (const auto& component : benchProject_.scene.components()) {
+            if (component.kind != bench::BenchComponentKind::ScreenDetector
+                && component.kind != bench::BenchComponentKind::FieldProbe) {
+                continue;
+            }
+            const bool isSelected
+                = sandboxObservationComponentId_ == component.id;
+            if (ImGui::Selectable(component.id.c_str(), isSelected)) {
+                sandboxObservationComponentId_ = component.id;
+            }
+            if (isSelected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(155.0F);
+    constexpr const char* kReplayKinds
+        = "Ordinary reference\0Conjugate reference\0";
+    ImGui::Combo(
+        "##experiment-replay-kind",
+        &sandboxPlateReplayKindIndex_,
+        kReplayKinds);
+    if (sandboxExperimentMode_
+            == SandboxExperimentMode::ReflectionDenisyuk
+        || sandboxRecordedExperiment_
+            == SandboxRecordedExperiment::ReflectionDenisyuk) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("volume replay uses the recorded reference branch");
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(
+        !recordingCurrent || sandboxObservationComponentId_.empty());
+    if (ImGui::Button("Reconstruct", ImVec2(96.0F, 0.0F))) {
+        try {
+            reconstructSelectedPlateExperiment();
+        } catch (const std::exception& error) {
+            errorMessage_ = "Bench reconstruction failed: "
+                + std::string(error.what());
+            statusMessage_.clear();
+        }
+    }
+    ImGui::EndDisabled();
+
+    const char* reconstructedOn = nullptr;
+    if (sandboxRecordedExperiment_
+            == SandboxRecordedExperiment::ThinTransmission
+        && sandboxPlateReplay_
+        && !sandboxPlateReplay_->isStaleFor(benchProject_.scene)) {
+        reconstructedOn = sandboxPlateReplay_->observationComponentId.c_str();
+    } else if (sandboxRecordedExperiment_
+            == SandboxRecordedExperiment::ReflectionDenisyuk
+        && sandboxVolumeObservationReplay_
+        && !sandboxVolumeObservationReplay_->isStaleFor(
+            benchProject_.scene)) {
+        reconstructedOn
+            = sandboxVolumeObservationReplay_->observationComponentId.c_str();
+    } else if (sandboxRecordedExperiment_
+            == SandboxRecordedExperiment::RgbFullColour
+        && sandboxRgbReplay_
+        && !sandboxRgbReplay_->isStaleFor(benchProject_.scene)) {
+        reconstructedOn = sandboxRgbReplay_->observationComponentId.c_str();
+    }
+    if (reconstructedOn != nullptr) {
+        ImGui::SameLine();
+        ImGui::TextColored(
+            ImVec4(0.35F, 0.9F, 0.45F, 1.0F),
+            "reconstructed on %s",
+            reconstructedOn);
+    }
+    ImGui::EndChild();
+}
+
 void Application::drawSandboxInspector() {
     namespace bench = optics::scene;
     if (!ImGui::CollapsingHeader("3D Optical Sandbox", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -5587,6 +6303,10 @@ void Application::drawSandboxInspector() {
                                         sandboxPlateRecording_ = std::make_unique<
                                             optics::holography::ThinPlateRecordingResult>(
                                                 std::move(recording));
+                                        sandboxRecordedExperiment_
+                                            = SandboxRecordedExperiment::ThinTransmission;
+                                        sandboxActiveRecordingRecipeId_
+                                            = "thin-" + selected->id;
                                         sandboxPlateReplay_.reset();
                                         if (sandboxReplayTexture_) {
                                             sandboxReplayTexture_->destroy();
@@ -5683,6 +6403,10 @@ void Application::drawSandboxInspector() {
                                             sandboxVolumeRecording_ = std::make_unique<
                                                 optics::holography::VolumePlateRecordingResult>(
                                                     std::move(recording));
+                                            sandboxRecordedExperiment_
+                                                = SandboxRecordedExperiment::ReflectionDenisyuk;
+                                            sandboxActiveRecordingRecipeId_
+                                                = "volume-" + selected->id;
                                             sandboxVolumeReplay_.reset();
                                             sandboxVolumeObservationReplay_.reset();
                                             if (sandboxVolumeReplayTexture_) {
@@ -5787,6 +6511,10 @@ void Application::drawSandboxInspector() {
                                         optics::holography::
                                             RgbThinPlateRecordingResult>(
                                                 std::move(rgbRecording));
+                                    sandboxRecordedExperiment_
+                                        = SandboxRecordedExperiment::RgbFullColour;
+                                    sandboxActiveRecordingRecipeId_
+                                        = "rgb-" + selected->id;
                                     sandboxRgbReplay_.reset();
                                     if (sandboxRgbReplayTexture_) {
                                         sandboxRgbReplayTexture_->destroy();
@@ -6716,6 +7444,7 @@ void Application::drawWorkspace() {
     ImGui::Begin(docking::DockLayoutConfig::kOpticalBenchWindowName);
     if (viewportMode_ == ViewportMode::Sandbox && !isBenchmark_) {
         drawSandboxComponentShelf();
+        drawSandboxExperimentBar();
     }
     const ImVec2 contentSize = ImGui::GetContentRegionAvail();
 
@@ -8008,6 +8737,77 @@ int Application::run(const RunOptions& options) {
             }
         } catch (const std::exception& ex) {
             SDL_Log("OpenGL smoke check failed: dynamic sandbox: %s", ex.what());
+            rawGlError = true;
+        }
+    }
+    if (glSmokeMode_) {
+        try {
+            const auto exerciseExperiment = [this](
+                                                BenchProject project,
+                                                SandboxExperimentMode mode,
+                                                std::string observationId) {
+                selectedBenchComponentId_ = "plate-h1";
+                if (!applyDynamicBenchProject(
+                        std::move(project),
+                        "OpenGL experiment-action smoke",
+                        false)) {
+                    throw std::runtime_error(
+                        "could not activate holography preset");
+                }
+                sandboxExperimentMode_ = mode;
+                sandboxObservationComponentId_ = std::move(observationId);
+                recordSelectedPlateExperiment(false);
+                reconstructSelectedPlateExperiment();
+            };
+
+            exerciseExperiment(
+                makeTransmissionHolographyPreset(),
+                SandboxExperimentMode::ThinTransmission,
+                "reconstruction-screen");
+            if (!sandboxPlateRecording_
+                || !sandboxPlateReplay_
+                || sandboxPlateRecording_->isStaleFor(benchProject_.scene)
+                || sandboxPlateReplay_->isStaleFor(benchProject_.scene)
+                || !sandboxPlateTexture_
+                || !sandboxPlateTexture_->isValid()
+                || !sandboxReplayTexture_
+                || !sandboxReplayTexture_->isValid()) {
+                throw std::runtime_error(
+                    "thin transmission Record/Reconstruct did not produce current placed evidence");
+            }
+
+            exerciseExperiment(
+                makeReflectionHolographyPreset(),
+                SandboxExperimentMode::ReflectionDenisyuk,
+                "reflection-reconstruction-probe");
+            if (!sandboxVolumeRecording_
+                || !sandboxVolumeObservationReplay_
+                || sandboxVolumeRecording_->isStaleFor(benchProject_.scene)
+                || sandboxVolumeObservationReplay_->isStaleFor(
+                    benchProject_.scene)
+                || !sandboxVolumeReplayTexture_
+                || !sandboxVolumeReplayTexture_->isValid()) {
+                throw std::runtime_error(
+                    "reflection/Denisyuk Record/Reconstruct did not produce current placed evidence");
+            }
+
+            exerciseExperiment(
+                makeRgbHolographyPreset(),
+                SandboxExperimentMode::RgbFullColour,
+                "reconstruction-screen");
+            if (!sandboxRgbRecording_
+                || !sandboxRgbReplay_
+                || sandboxRgbRecording_->isStaleFor(benchProject_.scene)
+                || sandboxRgbReplay_->isStaleFor(benchProject_.scene)
+                || !sandboxRgbReplayTexture_
+                || !sandboxRgbReplayTexture_->isValid()) {
+                throw std::runtime_error(
+                    "RGB Record/Reconstruct did not produce current placed evidence");
+            }
+        } catch (const std::exception& ex) {
+            SDL_Log(
+                "OpenGL smoke check failed: Bench experiment actions: %s",
+                ex.what());
             rawGlError = true;
         }
     }

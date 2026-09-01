@@ -218,7 +218,19 @@ ThinHologramReplayOrders decomposeUnclampedLinearReplayOrders(
             clampedMaximum);
         if (clampedMinimum || clampedMaximum) {
             throw std::invalid_argument(
-                "clipped thin-hologram response cannot use linear order decomposition");
+                "clipped thin-hologram response cannot use linear order decomposition"
+                " (relative intensity " + std::to_string(recordedIntensity)
+                + ", bias " + std::to_string(hologram.response.amplitudeBias)
+                + ", gain "
+                + std::to_string(
+                    hologram.response.intensityToAmplitudeGain)
+                + ", bounds ["
+                + std::to_string(
+                    hologram.response.minimumAmplitudeTransmission)
+                + ", "
+                + std::to_string(
+                    hologram.response.maximumAmplitudeTransmission)
+                + "])");
         }
         const double scale = std::max({
             1.0,

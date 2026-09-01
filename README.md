@@ -30,6 +30,16 @@ shows colour-coded X/Y/Z handles: Move constrains to world axes, Rotate uses
 the component's local axes, and configurable translation/rotation snapping
 supports repeatable optical alignment.
 
+Selecting a holographic plate now opens a compact experiment bar in the
+Optical Bench itself. It reports the object/reference incidence and available
+transmission, reflection, and strict RGB pairings, then provides Record,
+replay-illumination, placed Screen/Probe selection, Reconstruct, and
+current/stale state without requiring the long Inspector workflow. Auto mode
+records only an unambiguous single pair or exactly three independent RGB
+pairs. New thin/RGB recipes preflight the bounded plate response and persist a
+measured relative-exposure rescale when the default reference would clip; they
+never suppress clipping or mix wavelengths.
+
 For supported ray-routed paths, placed ideal lenses, mirror/splitter clear
 areas, apertures, pinholes, and SLM finite pixels/dead space now act on a
 beam-following local complex field before plate recording. Ideal mirror and

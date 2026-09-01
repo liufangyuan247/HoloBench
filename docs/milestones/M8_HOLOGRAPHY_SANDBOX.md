@@ -12,8 +12,9 @@ Status (reopened 2026-09-01): transmission, reflection/Denisyuk, RGB, recipe,
 and persistence solvers are validated in their documented scalar domains. The
 product milestone remains open until a user can carry out each complete
 record/reconstruct experiment through direct manipulation of the shared 3D
-bench. Preset loading and Inspector-only buttons do not by themselves satisfy
-that acceptance.
+bench. A contextual Bench action bar now closes Record/Reconstruct for the
+three ordinary presets and unambiguous user layouts, but preset loading alone
+and Inspector-only controls do not satisfy empty-bench assembly acceptance.
 
 ## User-visible outcome
 
@@ -136,6 +137,16 @@ instead of transient branch IDs. Sampling, thin response, and volume material
 parameters round-trip byte-stably, while recomputable complex fields and
 exposure images remain transient. The Inspector exposes exact resolution
 failure and never substitutes another branch.
+
+The selected-plate experiment bar reports live incidence/pairing state and
+offers explicit transmission, reflection/Denisyuk, RGB, or ambiguity-rejecting
+Auto mode, followed by Record, replay illumination, placed Screen/Probe target,
+Reconstruct, and stale/current state. New thin/RGB recipes use a measured
+response preflight: if the configured upper response bound would clip, the
+relative `I=1` reference is scaled with headroom and persisted before the final
+recording. This does not change physical source powers, response bounds, or
+independent wavelength computation. Hidden OpenGL smoke performs all three
+preset Record/Reconstruct paths through these application actions.
 
 ### M8.1 — Plate-local branch and coordinate contract
 

@@ -396,6 +396,20 @@ enum class SandboxGizmoConstraint {
     AxisZ,
 };
 
+enum class SandboxExperimentMode {
+    Auto,
+    ThinTransmission,
+    ReflectionDenisyuk,
+    RgbFullColour,
+};
+
+enum class SandboxRecordedExperiment {
+    None,
+    ThinTransmission,
+    ReflectionDenisyuk,
+    RgbFullColour,
+};
+
 struct RunOptions {
     int smokeFrameLimit = 0;
     int benchmarkFrames = 0;
@@ -478,6 +492,7 @@ private:
         const math::Vec3d& positionMetres,
         std::string statusMessage);
     void drawSandboxComponentShelf();
+    void drawSandboxExperimentBar();
     void drawSandboxInspector();
     void loadBenchProjectFromPath();
     void saveBenchProjectToPath();
@@ -488,6 +503,8 @@ private:
     void recomputeRecordingRecipe(
         const optics::holography::PlateIncidentFieldSet& fields,
         const HologramRecordingRecipe& recipe);
+    void recordSelectedPlateExperiment(bool recordHistory = true);
+    void reconstructSelectedPlateExperiment();
     void loadSceneFromPath(const char* pathStr);
     void saveSceneToPath(const char* pathStr);
 
@@ -521,6 +538,11 @@ private:
     float sandboxPlateWindowMillimetres_ = 1.0F;
     float sandboxPlateRelativeReferenceKilowattsPerSquareMetre_ = 100.0F;
     int sandboxPlateReplayKindIndex_ = 1;
+    SandboxExperimentMode sandboxExperimentMode_ = SandboxExperimentMode::Auto;
+    SandboxRecordedExperiment sandboxRecordedExperiment_
+        = SandboxRecordedExperiment::None;
+    std::string sandboxActiveRecordingRecipeId_;
+    std::string sandboxObservationComponentId_;
     int sandboxPlateReplayViewIndex_ = 0;
     int sandboxRgbReplayViewIndex_ = 0;
     float sandboxRgbDisplayGains_[3] {1.0F, 1.0F, 1.0F};

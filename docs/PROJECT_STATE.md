@@ -33,11 +33,10 @@ rebuilt on the shared bench.
 ### Product acceptance correction
 
 The M7/M8 physics and document foundations passed their numerical gates, but
-the earlier "accepted" label was too broad. The current application still
-places components from an Inspector combo, uses basic whole-object viewport
-dragging instead of a clear placement/alignment toolchain, and exposes
-hologram recording/replay inside a long plate parameter surface. A user-facing
-test has not yet proved that an empty bench can be assembled, aligned,
+the earlier "accepted" label was too broad. Direct shelf placement, constrained
+viewport transforms, and a compact plate experiment bar are now implemented,
+but multi-component optical alignment and a user-facing test have not yet
+proved that an empty bench can be assembled, aligned,
 recorded, changed to replay illumination, and observed as one understandable
 spatial experiment. M7 and M8 are therefore reopened for product acceptance;
 their validated backend evidence is retained and must not be rewritten.
@@ -402,6 +401,18 @@ completion because it is primarily driven through fixed parameter panels:
   propagated intensities with explicit display gains/gamma and is labelled as
   an uncalibrated visualization; no cross-wavelength complex-field addition is
   possible.
+- **Contextual plate experiment bar**: Selecting a placed plate exposes current
+  object/reference incidence counts, compatible transmission/reflection pairs,
+  strict RGB readiness, experiment mode, Record, ordinary/conjugate replay,
+  actual Screen/Probe selection, Reconstruct, and current/stale state directly
+  above the shared 3D viewport. Auto mode refuses ambiguity. New thin/RGB
+  recipes preflight the bounded response and, only when its upper bound would
+  clip, derive and persist a headroom-preserving relative-intensity reference
+  from the measured sampled peak before recording again. Physical beam power,
+  plate response bounds, per-wavelength fields, and clipping diagnostics are
+  unchanged. Hidden OpenGL smoke executes transmission, reflection/Denisyuk,
+  and RGB Record-to-placed-Reconstruct through these application actions and
+  requires current textures and revision evidence for all three.
 - **Persisted recording recipes and SLM commands**: Unified bench format v3 stores versioned
   thin, RGB, and volume recording recipes with stable component-path,
   wavelength, and coherence selectors plus sampling, response, and material
@@ -553,10 +564,12 @@ completion because it is primarily driven through fixed parameter panels:
 - **Current M9 validation**: Windows Clang warnings-as-errors core/application
   builds pass; `core-ci` passes 546/546 and `dev` passes 548/548. The updated
   development build, targeted gizmo tests, and OpenGL smoke pass. The
-  development gate includes GPU
-  and font executables. Hidden OpenGL smoke renders and semantically
-  round-trips the generated 23-component bench, finds its six plate branches,
-  and exits with no GL errors on AMD Radeon Pro 5300M. GitHub Actions run
+  development gate includes GPU and font executables. Hidden OpenGL smoke
+  executes the compact Bench Record/Reconstruct actions for transmission,
+  reflection/Denisyuk, and RGB presets, requires current placed observation
+  textures, renders and semantically round-trips the generated 23-component
+  CHIMERA bench, finds its six plate branches, and exits with no GL errors on
+  AMD Radeon Pro 5300M. GitHub Actions run
   [33453934235](https://github.com/liufangyuan247/HoloBench/actions/runs/33453934235)
   passes Windows/MSVC and Ubuntu/GCC core and application-compile jobs through
   the hashed dataset, exposure-plan, sparse placed-SLM, and M8 execution slice.
@@ -583,16 +596,14 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Replace Inspector-first placement with an always-visible searchable component
-   shelf, direct viewport drop/placement, axis-aware transform gizmos, snapping,
-   and clear selection/alignment feedback.
-2. Add a compact contextual experiment action surface for a selected plate:
-   branch assignment, Record, replay-source selection, Reconstruct, staleness,
-   and Screen/Probe result selection, while keeping advanced parameters in the
-   Inspector.
-3. Close user-facing end-to-end acceptance for ordinary transmission,
+1. Add multi-component optical alignment actions: co-axial alignment, aim at a
+   target, snap onto a visible beam path, equal height, and spacing, all as
+   ordinary transforms without hidden routing.
+2. Close user-facing end-to-end acceptance for ordinary transmission,
    reflection/Denisyuk, and RGB full-colour benches assembled through the same
    direct-manipulation workflow; add automated interaction smoke coverage.
+3. Bind reconstructed images visibly to the selected placed Screen/Probe in the
+   3D bench, while retaining the detailed Inspector diagnostics.
 4. Integrate the retained CHIMERA recipe, image/dataset, exposure,
    reconstruction-camera, and sweep contracts into that same bench workflow.
 5. Resume calibrated-sweep performance reuse and resumable/corruption-safe
