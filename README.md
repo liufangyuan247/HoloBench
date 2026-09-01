@@ -46,6 +46,12 @@ pairs. New thin/RGB recipes preflight the bounded plate response and persist a
 measured relative-exposure rescale when the default reference would clip; they
 never suppress clipping or mix wavelengths.
 
+A current reconstruction is drawn back onto the actual placed Screen/Probe as
+a corner-projected texture quad using that component's physical extent and rigid
+transform. The overlay is keyed to the replay observation ID and exact scene
+revision, so editing the bench removes stale imagery instead of leaving an old
+result on the table.
+
 For supported ray-routed paths, placed ideal lenses, mirror/splitter clear
 areas, apertures, pinholes, and SLM finite pixels/dead space now act on a
 beam-following local complex field before plate recording. Ideal mirror and

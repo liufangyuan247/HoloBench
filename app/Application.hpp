@@ -546,6 +546,8 @@ private:
         = SandboxRecordedExperiment::None;
     std::string sandboxActiveRecordingRecipeId_;
     std::string sandboxObservationComponentId_;
+    bool sandboxReconstructionOverlaySubmitted_ = false;
+    std::string sandboxReconstructionOverlayDiagnostic_;
     int sandboxPlateReplayViewIndex_ = 0;
     int sandboxRgbReplayViewIndex_ = 0;
     float sandboxRgbDisplayGains_[3] {1.0F, 1.0F, 1.0F};

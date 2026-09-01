@@ -181,8 +181,8 @@ The required interaction is now explicit:
   order; hop, branch, minimum-power, escape, clipping, absorption, and invalid
   interaction endings are explicit.
 - **M7/M8 acceptance verification**: Windows Clang 21 `core-ci`
-  warnings-as-errors build passes with 505/505 deterministic cases; the
-  complete development build and application link pass with 507/507 cases
+  warnings-as-errors build passes with 551/551 deterministic cases; the
+  complete development build and application link pass with 553/553 cases
   including the packaged-font and
   hardware OpenGL tests. The development and warnings-as-errors application
   smokes exit 0 with no reported GL errors on AMD Radeon Pro 5300M. Eighty-four
@@ -417,6 +417,17 @@ completion because it is primarily driven through fixed parameter panels:
   unchanged. Hidden OpenGL smoke executes transmission, reflection/Denisyuk,
   and RGB Record-to-placed-Reconstruct through these application actions and
   requires current textures and revision evidence for all three.
+- **Placed reconstruction surface**: A current thin, reflection/Denisyuk, or
+  RGB replay texture is projected onto the actual observation component's
+  physical four corners in the 3D viewport. Arbitrary Screen/Probe transforms
+  produce a corner-projected quad with a current-result label. The overlay requires
+  the exact replay observation ID and current scene revision; any relevant edit
+  suppresses it as stale. A geometry oracle covers screen/probe extent and
+  rigid transforms, while OpenGL smoke submits a real RGB reconstruction quad
+  through the ImGui/OpenGL backend. This UI overlay is not depth-tested and its
+  two screen-space triangles are not a calibrated projective display at extreme
+  tilt; the reconstructed field itself still uses the actual observation-plane
+  propagation.
 - **Persisted recording recipes and SLM commands**: Unified bench format v3 stores versioned
   thin, RGB, and volume recording recipes with stable component-path,
   wavelength, and coherence selectors plus sampling, response, and material
@@ -446,10 +457,10 @@ completion because it is primarily driven through fixed parameter panels:
   falls back from a corrupt autosave to a valid primary, recovers a corrupt
   primary from a valid autosave, and preserves both files when neither parses.
   See [ADR 0015](adr/0015-atomic-bench-autosave-recovery.md).
-- **Current local validation**: Windows Clang development build passes 507/507
+- **Current local validation**: Windows Clang development build passes 553/553
   deterministic CPU, application, font, and OpenGL GPU cases after the placed
   volume/RGB/local-wave-path/recipe/SLM/recovery increments; `core-ci` passes
-  505/505, `app-ci` compiles
+  551/551, `app-ci` compiles
   warnings-as-errors, and the hidden OpenGL smoke exits successfully on AMD
   Radeon Pro 5300M. The accepted remote cross-compiler evidence is recorded
   below.
@@ -566,7 +577,7 @@ completion because it is primarily driven through fixed parameter panels:
   selection evidence. See
   [ADR 0020](adr/0020-chimera-deterministic-parameter-sweep.md).
 - **Current M9 validation**: Windows Clang warnings-as-errors core/application
-  builds pass; `core-ci` passes 549/549 and `dev` passes 551/551. The updated
+  builds pass; `core-ci` passes 551/551 and `dev` passes 553/553. The updated
   development build, targeted gizmo/alignment tests, and OpenGL smoke pass. The
   development gate includes GPU and font executables. Hidden OpenGL smoke
   executes the compact Bench Record/Reconstruct actions for transmission,
@@ -603,11 +614,11 @@ completion because it is primarily driven through fixed parameter panels:
 1. Close user-facing end-to-end acceptance for ordinary transmission,
    reflection/Denisyuk, and RGB full-colour benches assembled through the same
    direct-manipulation workflow; add automated interaction smoke coverage.
-2. Bind reconstructed images visibly to the selected placed Screen/Probe in the
-   3D bench, while retaining the detailed Inspector diagnostics.
+2. Add automated input gestures for shelf drag/drop, transform handles,
+   target alignment, Record, and Reconstruct, then use them to close the three
+   empty-bench user workflows.
 3. Integrate the retained CHIMERA recipe, image/dataset, exposure,
    reconstruction-camera, and sweep contracts into that same bench workflow.
-4. Add multi-selection/equal-spacing tools and an input-gesture regression for
-   shelf drag/drop, transform handles, target alignment, Record, and Reconstruct.
+4. Add multi-selection and equal-spacing tools for larger optical layouts.
 5. Resume calibrated-sweep performance reuse and resumable/corruption-safe
    CHIMERA batches only after the sandbox interaction gate is closed.

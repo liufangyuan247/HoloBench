@@ -148,6 +148,16 @@ recording. This does not change physical source powers, response bounds, or
 independent wavelength computation. Hidden OpenGL smoke performs all three
 preset Record/Reconstruct paths through these application actions.
 
+Current reconstruction imagery is also mapped onto the physical four corners
+of the chosen Screen/Probe in the 3D Bench. Its projected outline follows the placed
+component's rigid transform and extent; replay observation identity plus exact
+scene revision gate visibility, so stale imagery is never left on the table.
+Geometry tests cover arbitrary observation transforms and the OpenGL smoke
+submits the RGB texture quad through the real UI renderer.
+The current UI overlay is not depth-tested or a calibrated perspective display
+at extreme tilt; this limitation does not change the actual tilted-plane field
+propagation used to compute the image.
+
 ### M8.1 — Plate-local branch and coordinate contract
 
 - Object/reference role assignment from selected incident branches.

@@ -454,6 +454,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/validation/WavepropCrossValidationTests.cpp
         tests/app/WaveDetectorUiStateTests.cpp
         tests/app/BenchAlignmentTests.cpp
+        tests/app/BenchObservationOverlayTests.cpp
         tests/app/BenchEditHistoryTests.cpp
         tests/app/BenchHolographyPresetsTests.cpp
         tests/app/BenchProjectTests.cpp

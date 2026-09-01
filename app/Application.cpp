@@ -33,6 +33,7 @@
 #include "app/HolographyProject.hpp"
 #include "app/BenchAlignment.hpp"
 #include "app/BenchHolographyPresets.hpp"
+#include "app/BenchObservationOverlay.hpp"
 #include "app/BenchRecordingRecipe.hpp"
 #include "app/SlmInterferenceProject.hpp"
 #include "app/UiFont.hpp"
@@ -98,6 +99,69 @@ constexpr T toImTextureID(GLuint textureId) noexcept {
     } else {
         return static_cast<T>(textureId);
     }
+}
+
+[[nodiscard]] bool drawPlacedObservationTexture(
+    ImDrawList& drawList,
+    GLuint texture,
+    const optics::scene::BenchComponent& observation,
+    const glm::mat4& viewProjection,
+    const glm::vec2& viewportMinimum,
+    const glm::vec2& viewportSize,
+    std::string_view label,
+    std::string& diagnostic) {
+    const auto quad
+        = observationoverlay::makeObservationPlaneQuad(observation);
+    std::array<gizmo::ProjectedPoint, 4> projected;
+    bool allVisible = true;
+    for (std::size_t corner = 0; corner < quad.worldCorners.size(); ++corner) {
+        const auto world = quad.worldCorners[corner];
+        projected[corner] = gizmo::projectWorldToViewport(
+            glm::vec3(
+                static_cast<float>(world.x),
+                static_cast<float>(world.y),
+                static_cast<float>(world.z)),
+            viewProjection,
+            viewportMinimum,
+            viewportSize);
+        allVisible = allVisible && projected[corner].visible;
+    }
+    if (!allVisible) {
+        diagnostic
+            = "placed Screen/Probe is not fully visible in the current camera";
+        return false;
+    }
+    const std::array<ImVec2, 4> points {{
+        {projected[0].screenPos.x, projected[0].screenPos.y},
+        {projected[1].screenPos.x, projected[1].screenPos.y},
+        {projected[2].screenPos.x, projected[2].screenPos.y},
+        {projected[3].screenPos.x, projected[3].screenPos.y},
+    }};
+    drawList.AddImageQuad(
+        toImTextureID(texture),
+        points[0],
+        points[1],
+        points[2],
+        points[3],
+        ImVec2(0.0F, 0.0F),
+        ImVec2(1.0F, 0.0F),
+        ImVec2(1.0F, 1.0F),
+        ImVec2(0.0F, 1.0F),
+        IM_COL32(255, 255, 255, 235));
+    drawList.AddPolyline(
+        points.data(),
+        static_cast<int>(points.size()),
+        IM_COL32(80, 238, 170, 255),
+        ImDrawFlags_Closed,
+        2.5F);
+    const std::string completeLabel
+        = "CURRENT RECONSTRUCTION | " + std::string(label);
+    drawList.AddText(
+        ImVec2(points[3].x + 6.0F, points[3].y - 18.0F),
+        IM_COL32(100, 255, 190, 255),
+        completeLabel.c_str());
+    diagnostic = "current reconstruction quad submitted";
+    return true;
 }
 
 void drawGizmoHandle(
@@ -7501,6 +7565,8 @@ void Application::drawSandboxInspector() {
 }
 
 void Application::drawWorkspace() {
+    sandboxReconstructionOverlaySubmitted_ = false;
+    sandboxReconstructionOverlayDiagnostic_ = "overlay viewport was not drawn";
     updateWaveDetector();
     updateSlmInterference();
     updateHolography();
@@ -7952,6 +8018,68 @@ void Application::drawWorkspace() {
                     imagePosMin,
                     ImVec2(imagePosMin.x + imageSize.x, imagePosMin.y + imageSize.y),
                     true);
+                GLuint reconstructionTexture = 0U;
+                std::string_view reconstructionObservationId;
+                if (sandboxRecordedExperiment_
+                        == SandboxRecordedExperiment::ThinTransmission
+                    && sandboxPlateReplay_
+                    && !sandboxPlateReplay_->isStaleFor(benchProject_.scene)
+                    && sandboxReplayTexture_
+                    && sandboxReplayTexture_->isValid()) {
+                    reconstructionTexture = sandboxReplayTexture_->handle();
+                    reconstructionObservationId
+                        = sandboxPlateReplay_->observationComponentId;
+                } else if (sandboxRecordedExperiment_
+                        == SandboxRecordedExperiment::ReflectionDenisyuk
+                    && sandboxVolumeObservationReplay_
+                    && !sandboxVolumeObservationReplay_->isStaleFor(
+                        benchProject_.scene)
+                    && sandboxVolumeReplayTexture_
+                    && sandboxVolumeReplayTexture_->isValid()) {
+                    reconstructionTexture
+                        = sandboxVolumeReplayTexture_->handle();
+                    reconstructionObservationId
+                        = sandboxVolumeObservationReplay_
+                              ->observationComponentId;
+                } else if (sandboxRecordedExperiment_
+                        == SandboxRecordedExperiment::RgbFullColour
+                    && sandboxRgbReplay_
+                    && !sandboxRgbReplay_->isStaleFor(benchProject_.scene)
+                    && sandboxRgbReplayTexture_
+                    && sandboxRgbReplayTexture_->isValid()) {
+                    reconstructionTexture
+                        = sandboxRgbReplayTexture_->handle();
+                    reconstructionObservationId
+                        = sandboxRgbReplay_->observationComponentId;
+                }
+                if (reconstructionTexture != 0U) {
+                    if (const auto* observation = benchProject_.scene.find(
+                            reconstructionObservationId)) {
+                        try {
+                            sandboxReconstructionOverlaySubmitted_
+                                = drawPlacedObservationTexture(
+                                    *drawList,
+                                    reconstructionTexture,
+                                    *observation,
+                                    viewProj,
+                                    rectMin,
+                                    rectSize,
+                                    reconstructionObservationId,
+                                    sandboxReconstructionOverlayDiagnostic_);
+                        } catch (const std::exception& error) {
+                            errorMessage_
+                                = "Placed reconstruction overlay failed: "
+                                + std::string(error.what());
+                            statusMessage_.clear();
+                        }
+                    } else {
+                        sandboxReconstructionOverlayDiagnostic_
+                            = "current reconstruction observation component is missing";
+                    }
+                } else {
+                    sandboxReconstructionOverlayDiagnostic_
+                        = "no current reconstruction texture matches the active experiment";
+                }
                 for (const auto& component : benchProject_.scene.components()) {
                     const glm::vec3 center(
                         static_cast<float>(component.transform.translationMetres.x),
@@ -8953,6 +9081,88 @@ int Application::run(const RunOptions& options) {
                 throw std::runtime_error(
                     "RGB Record/Reconstruct did not produce current placed evidence");
             }
+
+            camera_.setPresetView(render::CameraPresetView::FrontXY);
+            camera_.setTarget(glm::vec3(0.0F, 0.0F, 0.03F));
+            camera_.setDistance(0.3F);
+            ImGui_ImplOpenGL3_NewFrame();
+            ImGui_ImplSDL3_NewFrame();
+            ImGui::NewFrame();
+            ImGui::SetNextWindowPos(ImVec2(20.0F, 20.0F));
+            ImGui::SetNextWindowSize(ImVec2(680.0F, 540.0F));
+            ImGui::Begin(
+                "##placed-reconstruction-smoke",
+                nullptr,
+                ImGuiWindowFlags_NoDecoration
+                    | ImGuiWindowFlags_NoSavedSettings);
+            const ImVec2 smokeMinimum = ImGui::GetCursorScreenPos();
+            const ImVec2 smokeSize(640.0F, 480.0F);
+            ImGui::InvisibleButton(
+                "##placed-reconstruction-smoke-canvas", smokeSize);
+            const auto* smokeObservation = benchProject_.scene.find(
+                sandboxRgbReplay_->observationComponentId);
+            if (smokeObservation == nullptr) {
+                throw std::runtime_error(
+                    "RGB smoke observation component disappeared");
+            }
+            ImDrawList* smokeDrawList = ImGui::GetWindowDrawList();
+            if (smokeDrawList == nullptr) {
+                throw std::runtime_error(
+                    "RGB smoke overlay draw list is unavailable");
+            }
+            const glm::vec2 smokeRectMinimum(
+                smokeMinimum.x, smokeMinimum.y);
+            const glm::vec2 smokeRectSize(smokeSize.x, smokeSize.y);
+            const glm::mat4 smokeViewProjection
+                = camera_.projectionMatrix(smokeSize.x / smokeSize.y)
+                * camera_.viewMatrix();
+            smokeDrawList->PushClipRect(
+                smokeMinimum,
+                ImVec2(
+                    smokeMinimum.x + smokeSize.x,
+                    smokeMinimum.y + smokeSize.y),
+                true);
+            sandboxReconstructionOverlaySubmitted_
+                = drawPlacedObservationTexture(
+                    *smokeDrawList,
+                    sandboxRgbReplayTexture_->handle(),
+                    *smokeObservation,
+                    smokeViewProjection,
+                    smokeRectMinimum,
+                    smokeRectSize,
+                    sandboxRgbReplay_->observationComponentId,
+                    sandboxReconstructionOverlayDiagnostic_);
+            smokeDrawList->PopClipRect();
+            ImGui::End();
+            ImGui::Render();
+            const ImDrawData* drawData = ImGui::GetDrawData();
+            const ImTextureID expectedTexture
+                = toImTextureID(sandboxRgbReplayTexture_->handle());
+            bool replayTextureSubmitted = false;
+            if (drawData != nullptr) {
+                for (int listIndex = 0;
+                     listIndex < drawData->CmdListsCount; ++listIndex) {
+                    const ImDrawList* list = drawData->CmdLists[listIndex];
+                    for (const auto& command : list->CmdBuffer) {
+                        replayTextureSubmitted = replayTextureSubmitted
+                            || (command.ElemCount >= 6U
+                                && command.TexRef._TexData == nullptr
+                                && command.TexRef._TexID
+                                    == expectedTexture);
+                    }
+                }
+            }
+            if (!sandboxReconstructionOverlaySubmitted_
+                || !replayTextureSubmitted) {
+                throw std::runtime_error(
+                    std::string(
+                        "current reconstruction was not submitted on its placed Screen/Probe quad (overlay=")
+                    + (sandboxReconstructionOverlaySubmitted_ ? "yes" : "no")
+                    + ", texture="
+                    + (replayTextureSubmitted ? "yes" : "no") + "; "
+                    + sandboxReconstructionOverlayDiagnostic_ + ")");
+            }
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         } catch (const std::exception& ex) {
             SDL_Log(
                 "OpenGL smoke check failed: Bench experiment actions: %s",
