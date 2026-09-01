@@ -2,9 +2,9 @@
 
 ## Mission
 
-Build a physically credible, approachable **free-form 3D optical laboratory bench** that can grow from teaching software into a calibrated holographic-printing toolchain. The primary product interaction is placing and orienting optical components in the 3D workspace, observing the resulting beam paths and local fields, and saving the complete bench. Fixed parameter panels and headless pipelines are reference/diagnostic assets; they do not by themselves satisfy a Lab, lesson, or product milestone. The current source of truth for work status is `docs/PROJECT_STATE.md`, not the long-term project plan.
+Build a physically credible, approachable **free-form 3D optical laboratory digital twin** in which experiments emerge from reusable instruments and validated physical models, not hard-coded experiment screens. The primary product interaction is placing, assembling, and adjusting optical components in the 3D workspace, observing the resulting beam paths and local fields, measuring them with placed instruments, and saving the complete bench. Fixed parameter panels and headless pipelines are reference/diagnostic assets; they do not by themselves satisfy a Lab, lesson, or product milestone. The current source of truth for work status is `docs/PROJECT_STATE.md`, not the long-term project plan.
 
-The active product sequence is [M7](docs/milestones/M7_OPTICAL_BENCH_SANDBOX.md) free-form bench, [M8](docs/milestones/M8_HOLOGRAPHY_SANDBOX.md) transmission/reflection/RGB recording and reconstruction, then [M9](docs/milestones/M9_CHIMERA_AUTOMATION.md) automated CHIMERA-like construction, hogel/exposure generation, and reconstruction simulation. Steam, store, packaging, and distribution work are excluded until the user explicitly reopens that scope. Teaching workflows must guide manipulation of the shared bench rather than substitute form controls for the experiment.
+The accepted product sequence is [M7](docs/milestones/M7_OPTICAL_BENCH_SANDBOX.md) free-form bench, [M8](docs/milestones/M8_HOLOGRAPHY_SANDBOX.md) transmission/reflection/RGB recording and reconstruction, and [M9](docs/milestones/M9_CHIMERA_AUTOMATION.md) automated CHIMERA-like construction, hogel/exposure generation, and reconstruction simulation. The active next milestone is [M10](docs/milestones/M10_DIGITAL_TWIN_INSTRUMENTS.md): deterministic procedural instrument bodies, adjustable mechanical assemblies, explicit hidden optical proxies, calibration evidence, and general measurement interaction. Steam, store, packaging, and distribution work are excluded until the user explicitly reopens that scope. Teaching workflows must guide manipulation of the shared bench rather than substitute form controls for the experiment.
 
 ## Standard commands
 
@@ -27,6 +27,9 @@ Use `core-ci` when no display/OpenGL environment is available.
 - Do not make CUDA mandatory. Vendor-neutral and CPU paths remain viable.
 - Do not represent the full laboratory as a uniformly sampled 3D wave grid.
 - Derive optical routing from 3D component geometry and physical interactions; do not represent the bench as UI-only parameter wiring or hidden fixed pipelines.
+- Generate instrument appearance procedurally from validated optical and
+  mechanical parameters. Render triangles are disposable visual caches: never
+  infer optical surfaces, clear apertures, or calibration truth from a mesh.
 - Use fast rays for global layout and sampled 2D complex fields at local optical planes for wave analysis. Do not voxelize the room or silently pretend a fixed `+Z` chain is a free-form bench.
 - A beam splitter may create multiple deterministic branches. Branch power, wavelength, coherence identity, optical path, termination, and stale-result provenance must remain explicit.
 - Different wavelengths do not cross-interfere. An RGB holographic plate records wavelength channels independently from object/reference branches that actually reach the plate.

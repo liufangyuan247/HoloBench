@@ -15,6 +15,7 @@
 #include "optics/scene/NumericalAperture.hpp"
 #include "optics/scene/OpticalBenchScene.hpp"
 #include "render/Camera.hpp"
+#include "render/ProceduralInstrumentGeometry.hpp"
 #include "render/gl/Framebuffer.hpp"
 #include "render/gl/Shader.hpp"
 
@@ -69,14 +70,20 @@ public:
     [[nodiscard]] std::size_t vertexCount() const noexcept {
         const auto g = static_cast<std::size_t>(gridVertexCount_ > 0 ? gridVertexCount_ : 0);
         const auto s = static_cast<std::size_t>(sceneVertexCount_ > 0 ? sceneVertexCount_ : 0);
-        if (g > std::numeric_limits<std::size_t>::max() - s) {
+        const auto t = static_cast<std::size_t>(solidVertexCount_ > 0 ? solidVertexCount_ : 0);
+        if (g > std::numeric_limits<std::size_t>::max() - s
+            || g + s > std::numeric_limits<std::size_t>::max() - t) {
             return std::numeric_limits<std::size_t>::max();
         }
-        return g + s;
+        return g + s + t;
     }
 
     [[nodiscard]] GLsizei sceneVertexCount() const noexcept {
         return sceneVertexCount_;
+    }
+
+    [[nodiscard]] GLsizei solidVertexCount() const noexcept {
+        return solidVertexCount_;
     }
 
 private:
@@ -89,6 +96,7 @@ private:
     void uploadSceneBufferIfNeeded();
 
     gl::ShaderProgram shader_;
+    gl::ShaderProgram solidShader_;
     gl::Framebuffer framebuffer_;
 
     GLuint gridVao_ = 0;
@@ -100,8 +108,15 @@ private:
     GLsizei sceneVertexCount_ = 0;
     std::size_t sceneVboCapacityBytes_ = 0;
 
+    GLuint solidVao_ = 0;
+    GLuint solidVbo_ = 0;
+    GLsizei solidVertexCount_ = 0;
+    std::size_t solidVboCapacityBytes_ = 0;
+
     std::vector<BenchVertex> cpuSceneVertices_;
     std::vector<BenchVertex> stagingVertices_;
+    std::vector<InstrumentVertex> cpuSolidVertices_;
+    std::vector<InstrumentVertex> stagingSolidVertices_;
     bool sceneDirty_ = false;
 
     bool initialized_ = false;

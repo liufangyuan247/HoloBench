@@ -1,8 +1,10 @@
 # Project state
 
-Last updated: 2026-09-01
+Last updated: 2026-09-02
 
 ## Current milestone
+
+Active product milestone: **[M10 — Procedural digital-twin optical instruments](milestones/M10_DIGITAL_TWIN_INSTRUMENTS.md)** — parameter-driven instrument bodies, mechanical assemblies, optical proxies, calibration evidence, and measurement interaction
 
 **M1-M6 numerical/reference foundations: validated in their documented domains**
 
@@ -17,6 +19,36 @@ NVIDIA measurements and later real-hardware calibration are additive external
 validation, not unfinished virtual-sandbox implementation.
 
 Steam, store, packaging, and distribution work has been removed from project scope.
+
+The product north star is a general optical-instrument digital twin: experiments
+are assembled from reusable, adjustable, calibratable instruments rather than
+implemented as special-case screens. M10 replaces diagnostic line symbols with
+deterministic PCG solid bodies while preserving explicit hidden optical proxies
+as the only solver truth.
+
+## M10 implementation state (in progress)
+
+- **M10.1 PCG foundation implemented**: All 12 current Bench component kinds
+  generate finite bounded triangle solids from their validated component state.
+  The first library includes parameterized housings, cylinders, lens and aperture
+  rings, slit plates, frames, optical faces, posts, and bases. Pose, physical
+  extent, aperture shape, plate thickness, tessellation, and selection state
+  deterministically affect the generated result.
+- **Rendering layers separated**: Depth-tested solid triangles use world-space
+  normals and neutral lighting. Rays, optical proxy outlines, axes, and gizmos
+  remain an independent diagnostic line layer. Neither triangle positions nor
+  render normals are consumed by a solver.
+- **Bounded and testable**: PCG generation is headless, clamps radial
+  tessellation to 8-64 segments, limits each instrument to 50,000 vertices, and
+  limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
+  kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
+  exact rigid-pose following, determinism, and tessellation bounds.
+- **Acceptance evidence**: `dev` passes 578/578 tests; `core-ci` passes 576/576;
+  `app-ci` builds successfully; and the hardware OpenGL smoke now fails unless
+  ordinary and CHIMERA scenes both produce non-empty solid PCG geometry.
+- **Next slice**: M10.2 persists base/post/mount/stage assemblies and constrained
+  travel, yaw, and pitch. Direct adjustment of those mechanical parts must update
+  the explicit optical frame; regenerated triangles remain presentation output.
 
 ## Product rebaseline (2026-09-01)
 

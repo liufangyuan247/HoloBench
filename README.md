@@ -4,7 +4,11 @@ HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator
 
 **Milestone status**: M1-M6 physics/reference foundations, the M7/M8
 free-form holography sandbox, and the M9 CHIMERA virtual-printer automation are
-validated in their documented domains. The
+validated in their documented domains. M10 is active: HoloBench is becoming an
+extensible digital twin of an optical laboratory, with parameter-driven PCG
+instrument bodies, constrained mechanical assemblies, explicit optical proxies,
+and calibrated measurements. Instrument meshes are generated rather than fixed
+imported assets, and remain disposable visual caches rather than solver truth. The
 hardware interaction gate now assembles transmission, reflection/Denisyuk, and
 RGB full-colour experiments from an empty Bench through real shelf, transform,
 alignment, spectrum, Record, and Reconstruct input. The application includes an editable
@@ -256,6 +260,11 @@ independent optical wavelengths into linear camera RGB response.
 - **M9 — CHIMERA Automation (accepted)**: A versioned recipe compiles to an editable
   CHIMERA-like bench, generates hogel/angular and SLM data, creates RGB exposure
   events, and simulates bounded reconstruction. See [the M9 brief](docs/milestones/M9_CHIMERA_AUTOMATION.md).
+- **M10 — Procedural Digital-Twin Instruments (active)**: Every current Bench
+  component now has a bounded parameter-driven solid body rendered independently
+  from diagnostic rays and proxy outlines. The remaining slices add persisted
+  mechanical assemblies, direct instrument adjustments, calibration identity,
+  and general measurement closure. See [the M10 brief](docs/milestones/M10_DIGITAL_TWIN_INSTRUMENTS.md).
 
 The existing ten guided panel workflows, templates, localization/font,
 progress, history, and teaching benchmarks remain tested reference assets.

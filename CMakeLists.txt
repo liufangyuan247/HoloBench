@@ -335,6 +335,7 @@ if(HOLOBENCH_BUILD_APP)
         app/main.cpp
         app/Application.cpp
         render/Camera.cpp
+        render/ProceduralInstrumentGeometry.cpp
         render/gl/Shader.cpp
         render/gl/Framebuffer.cpp
         render/gl/Texture2D.cpp
@@ -501,8 +502,10 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/app/SlmInterferenceProjectTests.cpp
         tests/app/WaveWorkbenchProjectTests.cpp
         render/Camera.cpp
+        render/ProceduralInstrumentGeometry.cpp
         tests/render/CameraTests.cpp
         tests/render/GizmoTests.cpp
+        tests/render/ProceduralInstrumentGeometryTests.cpp
     )
     target_link_libraries(holobench_tests PRIVATE HoloBench::Core HoloBench::AppLogic HoloBench::Compute HoloBench::Optics doctest::doctest glm::glm)
     set(HOLOBENCH_WAVEPROP_GOLDEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/validation/waveprop/goldens")

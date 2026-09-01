@@ -11285,6 +11285,7 @@ int Application::run(const RunOptions& options) {
                 || benchTraceGraph_.interactions.empty()
                 || !renderer_
                 || renderer_->sceneVertexCount() <= 0
+                || renderer_->solidVertexCount() <= 0
                 || !redEvidence || !greenEvidence || !blueEvidence
                 || serializeBenchProject(restored) != serialized) {
                 throw std::runtime_error(
@@ -11464,6 +11465,7 @@ int Application::run(const RunOptions& options) {
                 || !renderer_->updateDynamicScene(
                     compiled.project.scene, trace, "chimera-plate")
                 || renderer_->sceneVertexCount() <= 0
+                || renderer_->solidVertexCount() <= 0
                 || serializeBenchProject(parseBenchProject(bytes)) != bytes) {
                 throw std::runtime_error(
                     "canonical recipe did not produce renderable ordinary bench evidence");

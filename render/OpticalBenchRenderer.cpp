@@ -42,6 +42,37 @@ void main() {
 }
 )";
 
+constexpr std::string_view kSolidVertexShaderSource = R"(#version 460 core
+layout (location = 0) in vec3 aPosition;
+layout (location = 1) in vec3 aNormal;
+layout (location = 2) in vec4 aColor;
+
+uniform mat4 uViewProjection;
+
+out vec3 vNormal;
+out vec4 vColor;
+
+void main() {
+    vNormal = normalize(aNormal);
+    vColor = aColor;
+    gl_Position = uViewProjection * vec4(aPosition, 1.0);
+}
+)";
+
+constexpr std::string_view kSolidFragmentShaderSource = R"(#version 460 core
+in vec3 vNormal;
+in vec4 vColor;
+out vec4 fragColor;
+
+void main() {
+    vec3 lightDirection = normalize(vec3(0.35, 0.82, 0.44));
+    float diffuse = abs(dot(normalize(vNormal), lightDirection));
+    float illumination = 0.30 + 0.70 * diffuse;
+    vec3 shaded = vColor.rgb * illumination;
+    fragColor = vec4(shaded, vColor.a);
+}
+)";
+
 struct GlRenderStateGuard {
     GLint prevDrawFbo = 0;
     GLint prevReadFbo = 0;
@@ -222,6 +253,7 @@ OpticalBenchRenderer::~OpticalBenchRenderer() {
 
 OpticalBenchRenderer::OpticalBenchRenderer(OpticalBenchRenderer&& other) noexcept
     : shader_(std::move(other.shader_))
+    , solidShader_(std::move(other.solidShader_))
     , framebuffer_(std::move(other.framebuffer_))
     , gridVao_(std::exchange(other.gridVao_, 0))
     , gridVbo_(std::exchange(other.gridVbo_, 0))
@@ -230,8 +262,14 @@ OpticalBenchRenderer::OpticalBenchRenderer(OpticalBenchRenderer&& other) noexcep
     , sceneVbo_(std::exchange(other.sceneVbo_, 0))
     , sceneVertexCount_(std::exchange(other.sceneVertexCount_, 0))
     , sceneVboCapacityBytes_(std::exchange(other.sceneVboCapacityBytes_, 0))
+    , solidVao_(std::exchange(other.solidVao_, 0))
+    , solidVbo_(std::exchange(other.solidVbo_, 0))
+    , solidVertexCount_(std::exchange(other.solidVertexCount_, 0))
+    , solidVboCapacityBytes_(std::exchange(other.solidVboCapacityBytes_, 0))
     , cpuSceneVertices_(std::move(other.cpuSceneVertices_))
     , stagingVertices_(std::move(other.stagingVertices_))
+    , cpuSolidVertices_(std::move(other.cpuSolidVertices_))
+    , stagingSolidVertices_(std::move(other.stagingSolidVertices_))
     , sceneDirty_(std::exchange(other.sceneDirty_, false))
     , initialized_(std::exchange(other.initialized_, false)) {}
 
@@ -239,6 +277,7 @@ OpticalBenchRenderer& OpticalBenchRenderer::operator=(OpticalBenchRenderer&& oth
     if (this != &other) {
         destroy();
         shader_ = std::move(other.shader_);
+        solidShader_ = std::move(other.solidShader_);
         framebuffer_ = std::move(other.framebuffer_);
         gridVao_ = std::exchange(other.gridVao_, 0);
         gridVbo_ = std::exchange(other.gridVbo_, 0);
@@ -247,8 +286,14 @@ OpticalBenchRenderer& OpticalBenchRenderer::operator=(OpticalBenchRenderer&& oth
         sceneVbo_ = std::exchange(other.sceneVbo_, 0);
         sceneVertexCount_ = std::exchange(other.sceneVertexCount_, 0);
         sceneVboCapacityBytes_ = std::exchange(other.sceneVboCapacityBytes_, 0);
+        solidVao_ = std::exchange(other.solidVao_, 0);
+        solidVbo_ = std::exchange(other.solidVbo_, 0);
+        solidVertexCount_ = std::exchange(other.solidVertexCount_, 0);
+        solidVboCapacityBytes_ = std::exchange(other.solidVboCapacityBytes_, 0);
         cpuSceneVertices_ = std::move(other.cpuSceneVertices_);
         stagingVertices_ = std::move(other.stagingVertices_);
+        cpuSolidVertices_ = std::move(other.cpuSolidVertices_);
+        stagingSolidVertices_ = std::move(other.stagingSolidVertices_);
         sceneDirty_ = std::exchange(other.sceneDirty_, false);
         initialized_ = std::exchange(other.initialized_, false);
     }
@@ -256,6 +301,14 @@ OpticalBenchRenderer& OpticalBenchRenderer::operator=(OpticalBenchRenderer&& oth
 }
 
 void OpticalBenchRenderer::destroy() noexcept {
+    if (solidVbo_ != 0) {
+        glDeleteBuffers(1, &solidVbo_);
+        solidVbo_ = 0;
+    }
+    if (solidVao_ != 0) {
+        glDeleteVertexArrays(1, &solidVao_);
+        solidVao_ = 0;
+    }
     if (sceneVbo_ != 0) {
         glDeleteBuffers(1, &sceneVbo_);
         sceneVbo_ = 0;
@@ -273,12 +326,17 @@ void OpticalBenchRenderer::destroy() noexcept {
         gridVao_ = 0;
     }
     shader_.destroy();
+    solidShader_.destroy();
     framebuffer_.destroy();
     gridVertexCount_ = 0;
     sceneVertexCount_ = 0;
     sceneVboCapacityBytes_ = 0;
+    solidVertexCount_ = 0;
+    solidVboCapacityBytes_ = 0;
     cpuSceneVertices_.clear();
     stagingVertices_.clear();
+    cpuSolidVertices_.clear();
+    stagingSolidVertices_.clear();
     sceneDirty_ = false;
     initialized_ = false;
 }
@@ -296,6 +354,17 @@ bool OpticalBenchRenderer::initialize() {
             errorMessage.c_str());
         return false;
     }
+    if (!solidShader_.compileAndLink(
+            kSolidVertexShaderSource,
+            kSolidFragmentShaderSource,
+            &errorMessage)) {
+        SDL_LogError(
+            SDL_LOG_CATEGORY_RENDER,
+            "OpticalBenchRenderer failed to compile solid shaders: %s",
+            errorMessage.c_str());
+        destroy();
+        return false;
+    }
 
     glGenVertexArrays(1, &gridVao_);
     glGenBuffers(1, &gridVbo_);
@@ -309,6 +378,14 @@ bool OpticalBenchRenderer::initialize() {
     glGenBuffers(1, &sceneVbo_);
     if (sceneVao_ == 0 || sceneVbo_ == 0) {
         SDL_LogError(SDL_LOG_CATEGORY_RENDER, "OpticalBenchRenderer failed to create scene VAO/VBO");
+        destroy();
+        return false;
+    }
+
+    glGenVertexArrays(1, &solidVao_);
+    glGenBuffers(1, &solidVbo_);
+    if (solidVao_ == 0 || solidVbo_ == 0) {
+        SDL_LogError(SDL_LOG_CATEGORY_RENDER, "OpticalBenchRenderer failed to create solid VAO/VBO");
         destroy();
         return false;
     }
@@ -336,6 +413,39 @@ bool OpticalBenchRenderer::initialize() {
             GL_FALSE,
             sizeof(BenchVertex),
             reinterpret_cast<const void*>(offsetof(BenchVertex, color)));
+    }
+
+    // Solid PCG geometry uses a separate triangle buffer. Its world-space
+    // normals are visual-only and never feed the optical solvers.
+    {
+        const GlBufferBindingGuard bindingGuard;
+        glBindVertexArray(solidVao_);
+        glBindBuffer(GL_ARRAY_BUFFER, solidVbo_);
+
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(
+            0,
+            3,
+            GL_FLOAT,
+            GL_FALSE,
+            sizeof(InstrumentVertex),
+            reinterpret_cast<const void*>(offsetof(InstrumentVertex, position)));
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(
+            1,
+            3,
+            GL_FLOAT,
+            GL_FALSE,
+            sizeof(InstrumentVertex),
+            reinterpret_cast<const void*>(offsetof(InstrumentVertex, normal)));
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(
+            2,
+            4,
+            GL_FLOAT,
+            GL_FALSE,
+            sizeof(InstrumentVertex),
+            reinterpret_cast<const void*>(offsetof(InstrumentVertex, color)));
     }
 
     if (!generateGridAndAxes()) {
@@ -937,6 +1047,8 @@ bool OpticalBenchRenderer::updateScene(
 
     // 5. Update CPU buffer via swap (guaranteeing buffer capacity reuse) and mark dirty
     cpuSceneVertices_.swap(stagingVertices_);
+    cpuSolidVertices_.clear();
+    stagingSolidVertices_.clear();
     sceneDirty_ = true;
     return true;
 }
@@ -971,6 +1083,18 @@ bool OpticalBenchRenderer::updateDynamicScene(
     stagingVertices_.clear();
     if (stagingVertices_.capacity() < estimate) {
         stagingVertices_.reserve(estimate);
+    }
+    constexpr std::size_t kSolidVerticesPerComponentEstimate = 1'024U;
+    constexpr std::size_t kMaximumSolidVertices = 5'000'000U;
+    if (scene.components().size()
+        > kMaximumSolidVertices / kSolidVerticesPerComponentEstimate) {
+        return false;
+    }
+    const std::size_t solidEstimate = scene.components().size()
+        * kSolidVerticesPerComponentEstimate;
+    stagingSolidVertices_.clear();
+    if (stagingSolidVertices_.capacity() < solidEstimate) {
+        stagingSolidVertices_.reserve(solidEstimate);
     }
 
     const auto addLine = [this](math::Vec3d start, math::Vec3d end, const glm::vec4& color) {
@@ -1017,6 +1141,22 @@ bool OpticalBenchRenderer::updateDynamicScene(
     };
 
     for (const auto& component : scene.components()) {
+        const auto solid = generateProceduralInstrumentMesh(
+            component,
+            {
+                .radialSegments = 24U,
+                .selected = component.id == selectedComponentId,
+            });
+        if (solid.triangles.size()
+            > kMaximumSolidVertices - stagingSolidVertices_.size()) {
+            stagingSolidVertices_.clear();
+            return false;
+        }
+        stagingSolidVertices_.insert(
+            stagingSolidVertices_.end(),
+            solid.triangles.begin(),
+            solid.triangles.end());
+
         const auto world = [&component](math::Vec3d local) {
             return math::transformPointLocalToWorld(component.transform, local);
         };
@@ -1199,49 +1339,91 @@ bool OpticalBenchRenderer::updateDynamicScene(
     if (stagingVertices_.size() > kMaxAllowedVertices
         || stagingVertices_.size() > static_cast<std::size_t>(std::numeric_limits<GLsizeiptr>::max()) / sizeof(BenchVertex)) {
         stagingVertices_.clear();
+        stagingSolidVertices_.clear();
+        return false;
+    }
+    if (stagingSolidVertices_.size() > kMaximumSolidVertices
+        || stagingSolidVertices_.size() > kMaxAllowedVertices
+        || stagingSolidVertices_.size()
+            > static_cast<std::size_t>(std::numeric_limits<GLsizeiptr>::max())
+                / sizeof(InstrumentVertex)) {
+        stagingVertices_.clear();
+        stagingSolidVertices_.clear();
         return false;
     }
     cpuSceneVertices_.swap(stagingVertices_);
+    cpuSolidVertices_.swap(stagingSolidVertices_);
     sceneDirty_ = true;
     return true;
 }
 
 void OpticalBenchRenderer::uploadSceneBufferIfNeeded() {
-    if (!sceneDirty_ || sceneVao_ == 0 || sceneVbo_ == 0) {
+    if (!sceneDirty_ || sceneVao_ == 0 || sceneVbo_ == 0
+        || solidVao_ == 0 || solidVbo_ == 0) {
         return;
     }
 
     const std::size_t vertexCount = cpuSceneVertices_.size();
+    const std::size_t solidVertexCount = cpuSolidVertices_.size();
     if (vertexCount > static_cast<std::size_t>(std::numeric_limits<GLsizei>::max())
-        || vertexCount > std::numeric_limits<std::size_t>::max() / sizeof(BenchVertex)) {
+        || vertexCount > std::numeric_limits<std::size_t>::max() / sizeof(BenchVertex)
+        || solidVertexCount > static_cast<std::size_t>(std::numeric_limits<GLsizei>::max())
+        || solidVertexCount
+            > std::numeric_limits<std::size_t>::max() / sizeof(InstrumentVertex)) {
         return;
     }
 
     const std::size_t byteSize = vertexCount * sizeof(BenchVertex);
-    if (byteSize > static_cast<std::size_t>(std::numeric_limits<GLsizeiptr>::max())) {
+    const std::size_t solidByteSize = solidVertexCount * sizeof(InstrumentVertex);
+    if (byteSize > static_cast<std::size_t>(std::numeric_limits<GLsizeiptr>::max())
+        || solidByteSize
+            > static_cast<std::size_t>(std::numeric_limits<GLsizeiptr>::max())) {
         return;
     }
 
-    const GlBufferBindingGuard bindingGuard;
-    glBindVertexArray(sceneVao_);
-    glBindBuffer(GL_ARRAY_BUFFER, sceneVbo_);
+    {
+        const GlBufferBindingGuard bindingGuard;
+        glBindVertexArray(sceneVao_);
+        glBindBuffer(GL_ARRAY_BUFFER, sceneVbo_);
 
-    if (byteSize > sceneVboCapacityBytes_) {
-        glBufferData(
-            GL_ARRAY_BUFFER,
-            static_cast<GLsizeiptr>(byteSize),
-            cpuSceneVertices_.data(),
-            GL_DYNAMIC_DRAW);
-        sceneVboCapacityBytes_ = byteSize;
-    } else if (byteSize > 0) {
-        glBufferSubData(
-            GL_ARRAY_BUFFER,
-            0,
-            static_cast<GLsizeiptr>(byteSize),
-            cpuSceneVertices_.data());
+        if (byteSize > sceneVboCapacityBytes_) {
+            glBufferData(
+                GL_ARRAY_BUFFER,
+                static_cast<GLsizeiptr>(byteSize),
+                cpuSceneVertices_.data(),
+                GL_DYNAMIC_DRAW);
+            sceneVboCapacityBytes_ = byteSize;
+        } else if (byteSize > 0) {
+            glBufferSubData(
+                GL_ARRAY_BUFFER,
+                0,
+                static_cast<GLsizeiptr>(byteSize),
+                cpuSceneVertices_.data());
+        }
+    }
+    {
+        const GlBufferBindingGuard bindingGuard;
+        glBindVertexArray(solidVao_);
+        glBindBuffer(GL_ARRAY_BUFFER, solidVbo_);
+
+        if (solidByteSize > solidVboCapacityBytes_) {
+            glBufferData(
+                GL_ARRAY_BUFFER,
+                static_cast<GLsizeiptr>(solidByteSize),
+                cpuSolidVertices_.data(),
+                GL_DYNAMIC_DRAW);
+            solidVboCapacityBytes_ = solidByteSize;
+        } else if (solidByteSize > 0) {
+            glBufferSubData(
+                GL_ARRAY_BUFFER,
+                0,
+                static_cast<GLsizeiptr>(solidByteSize),
+                cpuSolidVertices_.data());
+        }
     }
 
     sceneVertexCount_ = static_cast<GLsizei>(vertexCount);
+    solidVertexCount_ = static_cast<GLsizei>(solidVertexCount);
     sceneDirty_ = false;
 }
 
@@ -1295,7 +1477,16 @@ void OpticalBenchRenderer::render(int width, int height, const OrbitCamera& came
         glDrawArrays(GL_LINES, 0, gridVertexCount_);
     }
 
+    if (solidVertexCount_ > 0) {
+        solidShader_.use();
+        solidShader_.setMat4("uViewProjection", viewProj);
+        glBindVertexArray(solidVao_);
+        glDrawArrays(GL_TRIANGLES, 0, solidVertexCount_);
+    }
+
     if (sceneVertexCount_ > 0) {
+        shader_.use();
+        shader_.setMat4("uViewProjection", viewProj);
         glBindVertexArray(sceneVao_);
         glDrawArrays(GL_LINES, 0, sceneVertexCount_);
     }
