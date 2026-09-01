@@ -375,9 +375,9 @@ HogelDataset generateHogelDataset(
         for (std::size_t x = 0; x < recipe.hogels.countX; ++x) {
             const std::size_t hogelIndex = y * recipe.hogels.countX + x;
             for (const auto& view : result.sourceViews) {
-                const double slmX = recipe.relay.focalLengthMetres
+                const double slmX = -recipe.relay.focalLengthMetres
                     * std::tan(view.horizontalAngleRadians);
-                const double slmY = recipe.relay.focalLengthMetres
+                const double slmY = -recipe.relay.focalLengthMetres
                     * std::tan(view.verticalAngleRadians);
                 const bool inside = std::abs(slmX)
                         <= 0.5 * recipe.slm.widthMetres
@@ -437,8 +437,8 @@ HogelDataset generateHogelDataset(
                         .viewId = sample.viewId,
                         .column = sample.slmPixelColumn,
                         .row = sample.slmPixelRow,
-                        .normalizedAmplitude = channelValue(
-                            sample.linearRgb, channel),
+                        .normalizedAmplitude = std::sqrt(channelValue(
+                            sample.linearRgb, channel)),
                     });
                 }
                 result.slmCommands.push_back(std::move(command));
@@ -609,7 +609,8 @@ void validateHogelDataset(const HogelDataset& dataset) {
                 || pixel.column != sample.slmPixelColumn
                 || pixel.row != sample.slmPixelRow
                 || pixel.normalizedAmplitude
-                    != channelValue(sample.linearRgb, channelIndex)) {
+                    != std::sqrt(channelValue(
+                        sample.linearRgb, channelIndex))) {
                 throw std::invalid_argument(
                     "hogel SLM command pixel does not match its angular sample");
             }

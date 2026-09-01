@@ -18,7 +18,8 @@ branches, recording recipes, and local fields that a user can build manually.
   invalid physical domains reject.
 - Compiler version 1 deterministically emits an ordinary `BenchProject`. Each
   RGB object arm contains an object source, automation-origin placed SLM,
-  aligned relay lens, and stop. Each reference arm contains a laser, physical
+  aligned relay lens one focal length after the SLM, and stop. Each reference
+  arm contains a laser, physical
   fold mirror, and transmitting splitter. All arms reach one placed volume
   plate and reflection-side field probe.
 - The output contains three ordinary M8 volume recording recipes selected by

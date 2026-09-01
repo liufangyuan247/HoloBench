@@ -57,9 +57,9 @@ TEST_CASE("hogel angles use the analytic Fourier lens position and SLM pixel ora
         recipe, chimera::makeCanonicalPerspectiveViews(recipe));
     const auto& sample = findSample(dataset, "view-x4-y0", 0U, 0U);
 
-    const double expectedX = recipe.relay.focalLengthMetres
+    const double expectedX = -recipe.relay.focalLengthMetres
         * std::tan(0.5 * recipe.targetHorizontalFieldOfViewRadians);
-    const double expectedY = recipe.relay.focalLengthMetres
+    const double expectedY = -recipe.relay.focalLengthMetres
         * std::tan(-0.5 * recipe.targetVerticalFieldOfViewRadians);
     CHECK(sample.slmPositionXMetres == doctest::Approx(expectedX).epsilon(1e-13));
     CHECK(sample.slmPositionYMetres == doctest::Approx(expectedY).epsilon(1e-13));

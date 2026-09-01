@@ -20,13 +20,18 @@ wavefront command.
   not a claim that HoloBench has rendered a real scene. Future image adapters
   must resample real inputs into this explicit contract before generation.
 - View angles map to the ideal Fourier-lens plane with
-  `x = f tan(theta_x)` and `y = f tan(theta_y)`. Raster rows follow the shared
+  `x = -f tan(theta_x)` and `y = -f tan(theta_y)`. The sign matches the shared
+  Fourier-lens oracle whose output direction is `-x_slm/f`, so the requested
+  view angle is the outgoing reconstructed direction. Raster rows follow the shared
   SLM contract from negative physical Y toward positive Y. Samples outside the
   finite SLM reject rather than
   clamp into a valid-looking command.
 - Input views are sorted by vertical angle, horizontal angle, and stable view
   ID. Commands are emitted in row-major hogel order and fixed red, green, blue
   order, making the result independent of caller insertion order.
+- Source pixels are linear RGB intensities. Ideal amplitude-SLM commands store
+  their square roots so command magnitude squared reconstructs the intended
+  linear intensity before material efficiency and later display calibration.
 - The hash algorithm is named `fnv1a64-canonical-json-v1`. It detects accidental
   corruption and enforces byte-stable data products; it is not a cryptographic
   authenticity mechanism. Parsing is strict and recomputes the hash.

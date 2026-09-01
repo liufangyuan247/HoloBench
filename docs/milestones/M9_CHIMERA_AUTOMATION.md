@@ -19,7 +19,11 @@ adapters, bounded multi-hogel reconstruction, sweeps, and resumable batches
 remain open. Format-v1 virtual exposure plans and a
 single-hogel RGB executor now stage the editable bench, transfer sparse commands
 through the placed local-wave path, and invoke the M8 volume recorder; measured
-device timing and exposure-to-material-dose calibration remain open.
+device timing and exposure-to-material-dose calibration remain open. Ideal
+single- and bounded two-hogel directional reconstruction now combines the
+Fourier-lens sign oracle, independent M8 RGB efficiencies, and circular-stop
+Airy separation/cross-talk evidence; calibrated camera-image synthesis remains
+open.
 
 ## User-visible outcome
 
@@ -98,15 +102,15 @@ solver graph that cannot be represented by the shared bench document.
 
 ## Validation and acceptance
 
-- [ ] A canonical recipe deterministically builds a complete editable RGB
+- [x] A canonical recipe deterministically builds a complete editable RGB
   CHIMERA-like bench with no hidden components.
 - [ ] Ideal SLM-position-to-angle mapping agrees with the analytic Fourier-lens
   oracle, and sampling/NA violations are reported.
-- [ ] A single-hogel RGB exposure plan reuses the M8 recording path and is
+- [x] A single-hogel RGB exposure plan reuses the M8 recording path and is
   byte-stable across supported compilers.
-- [ ] Single-hogel reconstruction produces the requested directional samples
+- [x] Single-hogel reconstruction produces the requested directional samples
   within stated scalar/paraxial tolerances.
-- [ ] A bounded multi-hogel example reconstructs at least two distinguishable
+- [x] A bounded multi-hogel example reconstructs at least two distinguishable
   viewpoints and reports cross-talk/resolution evidence.
 - [ ] Parameter sweeps are deterministic and retain every constraint/metric
   used to select a candidate.

@@ -435,8 +435,9 @@ completion because it is primarily driven through fixed parameter panels:
 - **Hashed hogel/angular data product**: Format-v1 `HogelDataset` separates
   source perspective images, per-hogel angular samples, and sparse per-channel
   SLM commands with explicit SI/radian/index units and a canonical content
-  hash. The ideal Fourier-lens mapping uses `x=f*tan(theta_x)` and
-  `y=f*tan(theta_y)` with the tested shared -Y-to+Y row convention;
+  hash. The ideal Fourier-lens mapping uses `x=-f*tan(theta_x)` and
+  `y=-f*tan(theta_y)`, matching the shared `-x_slm/f` output-direction oracle,
+  with the tested shared -Y-to+Y row convention;
   out-of-SLM samples reject. Source view insertion order is canonicalized, and
   strict parsing rejects unknown fields, unsupported units, invalid grids, and
   payload/hash disagreement. The packaged 5x3 synthetic view grid is only a
@@ -454,12 +455,25 @@ completion because it is primarily driven through fixed parameter panels:
   real device settle/load latency, and exposure duration does not yet drive the
   configured material index modulation. See
   [ADR 0018](adr/0018-chimera-exposure-plan-and-sparse-slm-transfer.md).
+- **Single- and bounded multi-hogel directional reconstruction**: A versioned
+  reconstruction request selects stable view IDs and hogel coordinates. The
+  result closes the shared `theta=atan(-x_slm/f)` Fourier sign oracle, weights
+  independent linear RGB intensity by the actual per-channel M8 Kogelnik
+  efficiency, retains each staged hogel position, and reports nearest-view
+  separation, `1.22*lambda_max/D` angular resolution, circular-pupil Airy
+  cross-talk, and resolvability. Canonical tests cover one hogel/two views and
+  two hogels/two views without constructing a hidden 3D wave volume. It remains
+  an ideal scalar directional preview rather than a calibrated camera image.
+  See [ADR 0019](adr/0019-chimera-directional-reconstruction-preview.md).
 - **Current M9 validation**: Windows Clang warnings-as-errors core/application
-  builds pass; `core-ci` passes 519/519 and `dev` passes 521/521 including GPU
+  builds pass; `core-ci` passes 522/522 and `dev` passes 524/524 including GPU
   and font executables. Hidden OpenGL smoke renders and semantically
   round-trips the generated 23-component bench, finds its six plate branches,
-  and exits with no GL errors on AMD Radeon Pro 5300M. Remote MSVC/GCC evidence
-  remains required before accepting C9.1.
+  and exits with no GL errors on AMD Radeon Pro 5300M. GitHub Actions run
+  [33453934235](https://github.com/liufangyuan247/HoloBench/actions/runs/33453934235)
+  passes Windows/MSVC and Ubuntu/GCC core and application-compile jobs through
+  the hashed dataset, exposure-plan, sparse placed-SLM, and M8 execution slice.
+  Remote evidence for the new directional reconstruction slice remains pending.
 
 ## Known limitations (M1/M2)
 
@@ -471,10 +485,9 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Add single- and bounded multi-hogel reconstruction with view/cross-talk
-   evidence.
-2. Add deterministic parameter sweeps and best-candidate constraint evidence.
-3. Add real perspective-image adapters and calibrated material-dose hooks.
+1. Add deterministic parameter sweeps and best-candidate constraint evidence.
+2. Add real perspective-image adapters and calibrated material-dose hooks.
+3. Add spectral/pupil camera reconstruction and bounded image composition.
 4. Expose dataset, exposure-plan, preview, and batch controls in the Lab UI.
 5. Add resumable batch execution, corrupt-artifact rejection, named budgets,
    and cross-platform M9 acceptance gates.

@@ -625,6 +625,7 @@ ExecutedHogelExposure executeHogelExposure(
         - stageEvent->stageYMetres
             * stagedPlate.transform.localYAxisInWorld;
     workingProject.scene.replace("chimera-plate", std::move(stagedPlate));
+    const BenchProject stagedProject = workingProject;
     ExecutedHogelExposure result {
         .planId = plan.planId,
         .planHash = plan.contentHash,
@@ -650,7 +651,8 @@ ExecutedHogelExposure executeHogelExposure(
             throw std::invalid_argument(
                 "exposure event does not match its SLM command");
         }
-        const auto* currentSlm = workingProject.scene.find(
+        auto channelProject = stagedProject;
+        const auto* currentSlm = channelProject.scene.find(
             event.slmComponentId);
         if (currentSlm == nullptr
             || currentSlm->kind
@@ -667,14 +669,14 @@ ExecutedHogelExposure executeHogelExposure(
         parameters.modulationMode
             = optics::scene::SlmModulationMode::Amplitude;
         slm.parameters = std::move(parameters);
-        workingProject.scene.replace(event.slmComponentId, std::move(slm));
+        channelProject.scene.replace(event.slmComponentId, std::move(slm));
 
         const auto trace = optics::ray::traceDynamicBench(
-            workingProject.scene);
+            channelProject.scene);
         const auto fields = optics::holography::collectPlateIncidentFields(
-            workingProject.scene, trace, "chimera-plate");
+            channelProject.scene, trace, "chimera-plate");
         const auto& recordingRecipe = recordingRecipeFor(
-            workingProject, event.recordingRecipeId);
+            channelProject, event.recordingRecipeId);
         const auto resolved = resolveRecordingRecipe(fields, recordingRecipe);
         if (resolved.channels.size() != 1U) {
             throw std::logic_error(
@@ -695,7 +697,7 @@ ExecutedHogelExposure executeHogelExposure(
         sampling.centreXMetres = stageEvent->stageXMetres;
         sampling.centreYMetres = stageEvent->stageYMetres;
         const auto sampledObject = optics::holography::samplePlateIncidentField(
-            workingProject.scene,
+            channelProject.scene,
             fields,
             pair.objectBranchId,
             sampling,
@@ -712,7 +714,7 @@ ExecutedHogelExposure executeHogelExposure(
                 "placed sparse SLM command produced no sampled object field");
         }
         auto recording = optics::holography::recordVolumePlate(
-            workingProject.scene,
+            channelProject.scene,
             fields,
             pair.objectBranchId,
             pair.referenceBranchId,

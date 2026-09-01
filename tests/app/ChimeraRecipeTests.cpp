@@ -64,6 +64,12 @@ TEST_CASE("canonical CHIMERA recipe compiles to a feasible ordinary editable ben
     CHECK(slmParameters.commandOrigin == scene::SlmCommandOrigin::Automation);
     CHECK(slmParameters.commandId
         == "chimera-canonical-chimera-red-hogel-pending");
+    const auto* relayLens = first.project.scene.find("chimera-relay-lens-red");
+    REQUIRE(relayLens != nullptr);
+    CHECK(holobench::math::length(
+        slm->transform.translationMetres
+            - relayLens->transform.translationMetres)
+        == doctest::Approx(recipe.relay.focalLengthMetres).epsilon(1e-13));
 }
 
 TEST_CASE("compiled CHIMERA branches resolve three independent reflection recipes") {

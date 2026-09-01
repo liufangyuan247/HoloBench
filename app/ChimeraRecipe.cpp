@@ -427,6 +427,10 @@ CompileResult compileChimeraRecipe(const ChimeraRecipe& recipe) {
         const std::string coherence = "chimera-" + arm.channelId + "-recording";
 
         const math::Vec3d objectPosition {-0.03, armY, 0.30};
+        const math::Vec3d slmPosition = objectPosition * 0.80;
+        const math::Vec3d lensPosition = slmPosition
+            - math::normalized(slmPosition)
+                * recipe.relay.focalLengthMetres;
         auto object = component(
             scene::BenchComponentKind::ObjectWavefrontSource,
             componentId("object-source", arm.channelId),
@@ -446,7 +450,7 @@ CompileResult compileChimeraRecipe(const ChimeraRecipe& recipe) {
         auto slm = component(
             scene::BenchComponentKind::SpatialLightModulator,
             componentId("slm", arm.channelId),
-            aimedTransform(objectPosition * 0.80, {0.0, 0.0, 0.0}));
+            aimedTransform(slmPosition, {0.0, 0.0, 0.0}));
         auto slmParameters
             = std::get<scene::SpatialLightModulatorParameters>(slm.parameters);
         slmParameters.widthMetres = recipe.slm.widthMetres;
@@ -465,7 +469,7 @@ CompileResult compileChimeraRecipe(const ChimeraRecipe& recipe) {
         auto lens = component(
             scene::BenchComponentKind::IdealThinLens,
             componentId("relay-lens", arm.channelId),
-            aimedTransform(objectPosition * 0.60, {0.0, 0.0, 0.0}));
+            aimedTransform(lensPosition, {0.0, 0.0, 0.0}));
         auto lensParameters
             = std::get<scene::IdealThinLensParameters>(lens.parameters);
         lensParameters.focalLengthMetres = recipe.relay.focalLengthMetres;
