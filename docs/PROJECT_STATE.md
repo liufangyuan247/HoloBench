@@ -119,9 +119,13 @@ animated or silently approximated.
   approximation warnings. Independent bounded drag and settled sample-axis
   limits invalidate and recompute only the derived field cache; they do not
   edit the Bench or select behavior by hardware identity.
-- **M10.4 next slice**: add reusable interferometer/template entry points, then
-  resolve real-lens prescriptions into the shared service without weakening
-  other supported paths.
+- **M10.4 reusable interferometer entry point implemented and locally validated**: The shelf
+  loads the validated Mach-Zehnder arrangement as seven ordinary mounted,
+  editable instruments. The preset has no private solver graph: its two traced
+  branches, arm SLM phase, recombination, Inspector evidence, and Screen result
+  use the shared Bench services.
+- **M10.4 next slice**: resolve real-lens prescriptions into the shared service
+  without weakening other supported paths.
 
 ## Product rebaseline (2026-09-01)
 

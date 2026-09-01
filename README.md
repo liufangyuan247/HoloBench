@@ -113,6 +113,12 @@ boundary state, and approximation warnings. Separate bounded drag and settled
 sample-axis controls let probe motion trade temporary preview resolution for
 responsiveness without changing the settled result or Bench physics.
 
+The component shelf also offers an editable Mach-Zehnder starter bench assembled
+from one laser, two ordinary splitter/combiners, two mirrors, an arm SLM, and a
+placed Screen. It is a composition shortcut only: every instrument can be moved,
+removed, replaced, or adjusted, and the observed interference still comes from
+the same routed-field service used by user-built benches.
+
 For supported ray-routed paths, placed ideal lenses, mirror/splitter clear
 areas, apertures, pinholes, and SLM finite pixels/dead space now act on a
 beam-following local complex field before plate recording. Ideal mirror and

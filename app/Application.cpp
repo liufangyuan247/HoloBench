@@ -6215,6 +6215,14 @@ void Application::drawSandboxComponentShelf() {
     }
     captureLastItemBounds(sandboxUiEvidence_.doubleSlitPreset);
     ImGui::SameLine();
+    if (ImGui::Button("Mach-Zehnder")) {
+        selectedBenchComponentId_ = "mz-screen";
+        sandboxWaveObservationComponentId_ = "mz-screen";
+        static_cast<void>(applyDynamicBenchProject(
+            makeMachZehnderInterferometerPreset(),
+            "Loaded editable Mach-Zehnder interferometer bench"));
+    }
+    ImGui::SameLine();
     if (ImGui::Button("Single Slit Diffraction")) {
         selectedBenchComponentId_ = "wave-screen";
         sandboxWaveObservationComponentId_ = "wave-screen";

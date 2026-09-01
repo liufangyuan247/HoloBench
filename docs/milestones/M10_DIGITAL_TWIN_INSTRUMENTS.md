@@ -103,6 +103,9 @@ measurement planes. The selected observation Inspector exposes every branch's
 ordered path, OPL, working grid, segment count, applied transforms, retained
 warnings, and bounded drag/settled sampling controls. Unsupported incident paths
 reject the complete observation.
+The shelf's Mach-Zehnder starter is seven ordinary mounted instruments and uses
+the same routing, interaction, propagation, merge, and measurement services as a
+bench assembled from Empty; it is not an experiment-specific solver.
 See
 [ADR 0028](../adr/0028-revision-bound-placed-field-measurements.md) and
 [ADR 0029](../adr/0029-coherent-merge-and-independent-measurement-channels.md),

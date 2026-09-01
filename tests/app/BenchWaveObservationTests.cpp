@@ -425,92 +425,32 @@ TEST_CASE("placed observation follows lenses SLMs mirrors and splitter folds") {
 }
 
 TEST_CASE("placed Mach-Zehnder instruments recombine fields on one Screen") {
-    const auto makeInterferometer = [](double armPhaseRadians) {
-        constexpr double inverseSqrtTwo = 0.7071067811865475244;
-        const math::RigidTransform3d splitTransform {
-            .translationMetres = {0.0, 0.0, 1.0},
-            .localXAxisInWorld = {
-                inverseSqrtTwo, 0.0, inverseSqrtTwo},
-            .localYAxisInWorld = {0.0, 1.0, 0.0},
-            .localZAxisInWorld = {
-                -inverseSqrtTwo, 0.0, inverseSqrtTwo},
-        };
-        const math::RigidTransform3d turnZToX {
-            .translationMetres = {0.0, 0.0, 2.0},
-            .localXAxisInWorld = {
-                inverseSqrtTwo, 0.0, inverseSqrtTwo},
-            .localYAxisInWorld = {0.0, 1.0, 0.0},
-            .localZAxisInWorld = {
-                -inverseSqrtTwo, 0.0, inverseSqrtTwo},
-        };
-        const math::RigidTransform3d turnXToZ {
-            .translationMetres = {1.0, 0.0, 1.0},
-            .localXAxisInWorld = {
-                -inverseSqrtTwo, 0.0, -inverseSqrtTwo},
-            .localYAxisInWorld = {0.0, 1.0, 0.0},
-            .localZAxisInWorld = {
-                inverseSqrtTwo, 0.0, -inverseSqrtTwo},
-        };
-        auto recombinerTransform = splitTransform;
-        recombinerTransform.translationMetres = {1.0, 0.0, 2.0};
-
-        scene::BenchScene bench;
-        bench.add(scene::makeDefaultBenchComponent(
-            scene::BenchComponentKind::LaserSource, "mz-laser"));
-        bench.add(placedComponent(
-            scene::BenchComponentKind::BeamSplitterCombiner,
-            "mz-splitter",
-            splitTransform));
-        bench.add(placedComponent(
-            scene::BenchComponentKind::PlanarMirror,
-            "mz-mirror-a",
-            turnZToX));
-        bench.add(placedComponent(
-            scene::BenchComponentKind::PlanarMirror,
-            "mz-mirror-b",
-            turnXToZ));
-        auto armSlm = placedComponent(
-            scene::BenchComponentKind::SpatialLightModulator,
-            "mz-arm-phase",
-            {.translationMetres = {1.0, 0.0, 1.5}});
-        auto slmParameters
-            = std::get<scene::SpatialLightModulatorParameters>(
-                armSlm.parameters);
-        slmParameters.widthMetres = 0.05;
-        slmParameters.heightMetres = 0.05;
-        slmParameters.fillFactor = 1.0;
-        slmParameters.primaryCommand = armPhaseRadians == 0.0
-            ? 0.0 : 1.0;
-        slmParameters.phaseRangeRadians = armPhaseRadians == 0.0
-            ? 1.0 : armPhaseRadians;
-        armSlm.parameters = slmParameters;
-        bench.add(armSlm);
-        bench.add(placedComponent(
-            scene::BenchComponentKind::BeamSplitterCombiner,
-            "mz-recombiner",
-            recombinerTransform));
-        bench.add(placedComponent(
-            scene::BenchComponentKind::ScreenDetector,
-            "mz-screen",
-            {.translationMetres = {1.0, 0.0, 2.5}}));
-        return bench;
-    };
-
     fft::CpuFftBackend backend;
-    auto constructiveBench = makeInterferometer(0.0);
-    auto graph = ray::traceDynamicBench(constructiveBench);
+    auto constructiveProject = app::makeMachZehnderInterferometerPreset();
+    CHECK(constructiveProject.projectId == "preset-mach-zehnder");
+    REQUIRE(constructiveProject.scene.components().size() == 7U);
+    for (const auto& component : constructiveProject.scene.components()) {
+        CHECK(component.mechanicalAssembly.has_value());
+    }
+    auto graph = ray::traceDynamicBench(constructiveProject.scene);
     const auto constructive = app::observeBenchWavePattern(
-        constructiveBench, graph, "mz-screen", 128U, true, backend);
+        constructiveProject.scene, graph, "mz-screen", 128U, true, backend);
     REQUIRE(constructive.contributions.size() == 2U);
     CHECK(constructive.contributions[0].pathSampling.usedFoldedPath);
     CHECK(constructive.contributions[1].pathSampling.usedFoldedPath);
     CHECK(constructive.peakIntensityWattsPerSquareMetre > 0.0);
 
-    auto destructiveBench = makeInterferometer(
-        std::numbers::pi_v<double>);
-    graph = ray::traceDynamicBench(destructiveBench);
+    auto destructiveProject = constructiveProject;
+    auto armSlm = *destructiveProject.scene.find("mz-arm-phase");
+    auto slmParameters
+        = std::get<scene::SpatialLightModulatorParameters>(
+            armSlm.parameters);
+    slmParameters.primaryCommand = 0.5;
+    armSlm.parameters = slmParameters;
+    destructiveProject.scene.replace("mz-arm-phase", std::move(armSlm));
+    graph = ray::traceDynamicBench(destructiveProject.scene);
     const auto destructive = app::observeBenchWavePattern(
-        destructiveBench, graph, "mz-screen", 128U, true, backend);
+        destructiveProject.scene, graph, "mz-screen", 128U, true, backend);
     REQUIRE(destructive.contributions.size() == 2U);
     // The finite pixelated SLM clips and diffracts one arm, so its pi command
     // produces a deep physical null rather than pretending to be an ideal

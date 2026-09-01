@@ -1,5 +1,6 @@
 #include "app/BenchWavePresets.hpp"
 
+#include <numbers>
 #include <string>
 #include <utility>
 
@@ -61,6 +62,16 @@ scene::BenchComponent makeAperture() {
     return aperture;
 }
 
+scene::BenchComponent makeMountedComponent(
+    scene::BenchComponentKind kind,
+    std::string id,
+    const math::RigidTransform3d& transform) {
+    auto component = scene::makeDefaultBenchComponent(kind, std::move(id));
+    component.transform = transform;
+    mountOnOpticalTable(component);
+    return component;
+}
+
 } // namespace
 
 BenchProject makeDoubleSlitExperimentPreset() {
@@ -105,6 +116,94 @@ BenchProject makeCircularDiffractionPreset() {
     parameters.heightMetres = 0.25e-3;
     aperture.parameters = parameters;
     result.scene.add(std::move(aperture));
+    return result;
+}
+
+BenchProject makeMachZehnderInterferometerPreset() {
+    constexpr double inverseSqrtTwo = 0.7071067811865475244;
+    const math::RigidTransform3d splitTransform {
+        .translationMetres = {0.0, 0.0, 1.0},
+        .localXAxisInWorld = {
+            inverseSqrtTwo, 0.0, inverseSqrtTwo},
+        .localYAxisInWorld = {0.0, 1.0, 0.0},
+        .localZAxisInWorld = {
+            -inverseSqrtTwo, 0.0, inverseSqrtTwo},
+    };
+    const math::RigidTransform3d turnZToX {
+        .translationMetres = {0.0, 0.0, 2.0},
+        .localXAxisInWorld = {
+            inverseSqrtTwo, 0.0, inverseSqrtTwo},
+        .localYAxisInWorld = {0.0, 1.0, 0.0},
+        .localZAxisInWorld = {
+            -inverseSqrtTwo, 0.0, inverseSqrtTwo},
+    };
+    const math::RigidTransform3d turnXToZ {
+        .translationMetres = {1.0, 0.0, 1.0},
+        .localXAxisInWorld = {
+            -inverseSqrtTwo, 0.0, -inverseSqrtTwo},
+        .localYAxisInWorld = {0.0, 1.0, 0.0},
+        .localZAxisInWorld = {
+            inverseSqrtTwo, 0.0, -inverseSqrtTwo},
+    };
+    auto recombinerTransform = splitTransform;
+    recombinerTransform.translationMetres = {1.0, 0.0, 2.0};
+
+    BenchProject result;
+    result.projectId = "preset-mach-zehnder";
+    result.name = "Mach-Zehnder Interferometer Bench";
+
+    auto laser = makeMountedComponent(
+        scene::BenchComponentKind::LaserSource,
+        "mz-laser",
+        {.translationMetres = {0.0, 0.0, 0.0}});
+    auto laserParameters = std::get<scene::LaserSourceParameters>(
+        laser.parameters);
+    laserParameters.profile = scene::LaserBeamProfile::Gaussian;
+    laserParameters.beamRadiusMetres = 0.004;
+    laserParameters.channels = {{
+        .wavelengthMetres = 532e-9,
+        .powerWatts = 0.050,
+        .coherenceId = "mz-green",
+    }};
+    laser.parameters = laserParameters;
+    result.scene.add(std::move(laser));
+
+    result.scene.add(makeMountedComponent(
+        scene::BenchComponentKind::BeamSplitterCombiner,
+        "mz-splitter",
+        splitTransform));
+    result.scene.add(makeMountedComponent(
+        scene::BenchComponentKind::PlanarMirror,
+        "mz-mirror-a",
+        turnZToX));
+    result.scene.add(makeMountedComponent(
+        scene::BenchComponentKind::PlanarMirror,
+        "mz-mirror-b",
+        turnXToZ));
+
+    auto armSlm = makeMountedComponent(
+        scene::BenchComponentKind::SpatialLightModulator,
+        "mz-arm-phase",
+        {.translationMetres = {1.0, 0.0, 1.5}});
+    auto slmParameters
+        = std::get<scene::SpatialLightModulatorParameters>(
+            armSlm.parameters);
+    slmParameters.widthMetres = 0.05;
+    slmParameters.heightMetres = 0.05;
+    slmParameters.fillFactor = 1.0;
+    slmParameters.primaryCommand = 0.0;
+    slmParameters.phaseRangeRadians = 2.0 * std::numbers::pi_v<double>;
+    armSlm.parameters = slmParameters;
+    result.scene.add(std::move(armSlm));
+
+    result.scene.add(makeMountedComponent(
+        scene::BenchComponentKind::BeamSplitterCombiner,
+        "mz-recombiner",
+        recombinerTransform));
+    result.scene.add(makeMountedComponent(
+        scene::BenchComponentKind::ScreenDetector,
+        "mz-screen",
+        {.translationMetres = {1.0, 0.0, 2.5}}));
     return result;
 }
 
