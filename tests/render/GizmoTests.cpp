@@ -149,6 +149,20 @@ TEST_CASE("computeAxisProjection correctly identifies degenerate views") {
     CHECK(deltaZ == 0.0);
 }
 
+TEST_CASE("gizmo snapping quantizes accumulated translation and rotation") {
+    namespace gizmo = holobench::app::gizmo;
+    CHECK(gizmo::quantizeGizmoDelta(0.00149, 0.001)
+        == doctest::Approx(0.001));
+    CHECK(gizmo::quantizeGizmoDelta(0.00151, 0.001)
+        == doctest::Approx(0.002));
+    CHECK(gizmo::quantizeGizmoDelta(-0.00151, 0.001)
+        == doctest::Approx(-0.002));
+    CHECK(gizmo::quantizeGizmoDelta(0.123, 0.0)
+        == doctest::Approx(0.123));
+    CHECK(std::isnan(gizmo::quantizeGizmoDelta(
+        std::numeric_limits<double>::quiet_NaN(), 0.001)));
+}
+
 TEST_CASE("hitTestHandle accurately tests click position against projected handle") {
     holobench::app::gizmo::ProjectedPoint pt;
     pt.screenPos = glm::vec2(300.0F, 400.0F);

@@ -66,6 +66,26 @@ bool containsAsciiCaseInsensitive(
         != text.end();
 }
 
+int sandboxConstraintAxisIndex(SandboxGizmoConstraint constraint) noexcept {
+    switch (constraint) {
+    case SandboxGizmoConstraint::AxisX: return 0;
+    case SandboxGizmoConstraint::AxisY: return 1;
+    case SandboxGizmoConstraint::AxisZ: return 2;
+    case SandboxGizmoConstraint::None:
+    case SandboxGizmoConstraint::ViewPlane: return -1;
+    }
+    return -1;
+}
+
+gizmo::LocalRotationAxis localRotationAxisForIndex(int index) {
+    switch (index) {
+    case 0: return gizmo::LocalRotationAxis::X;
+    case 1: return gizmo::LocalRotationAxis::Y;
+    case 2: return gizmo::LocalRotationAxis::Z;
+    default: throw std::logic_error("invalid sandbox gizmo axis index");
+    }
+}
+
 GLADapiproc loadOpenGlProcedure(const char* name) {
     return reinterpret_cast<GLADapiproc>(SDL_GL_GetProcAddress(name));
 }
@@ -4921,6 +4941,15 @@ void Application::drawSandboxInspector() {
         selected = benchProject_.scene.find(selectedBenchComponentId_);
         if (selected != nullptr) {
             ImGui::SeparatorText("Transform");
+            ImGui::DragFloat(
+                "Viewport move snap (mm)",
+                &sandboxTranslationSnapMillimetres_,
+                0.25F,
+                0.0F,
+                100.0F,
+                "%.2f");
+            ImGui::TextDisabled(
+                "0 disables snapping; X/Y/Z handles use world axes in Move mode");
             float translationMm[3] {
                 static_cast<float>(selected->transform.translationMetres.x * 1000.0),
                 static_cast<float>(selected->transform.translationMetres.y * 1000.0),
@@ -6796,6 +6825,78 @@ void Application::drawWorkspace() {
                 }
             }
 
+            std::array<glm::vec3, 3> gizmoAxisDirections {
+                glm::vec3(1.0F, 0.0F, 0.0F),
+                glm::vec3(0.0F, 1.0F, 0.0F),
+                glm::vec3(0.0F, 0.0F, 1.0F),
+            };
+            std::array<gizmo::ProjectedPoint, 3> gizmoAxisEndpoints {};
+            std::array<gizmo::AxisProjection, 3> gizmoAxisProjections {};
+            gizmo::ProjectedPoint selectedComponentProjection {};
+            SandboxGizmoConstraint hoveredGizmoConstraint
+                = SandboxGizmoConstraint::None;
+            if (const auto* selectedComponent
+                = benchProject_.scene.find(selectedBenchComponentId_)) {
+                const auto& transform = selectedComponent->transform;
+                const glm::vec3 centre(
+                    static_cast<float>(transform.translationMetres.x),
+                    static_cast<float>(transform.translationMetres.y),
+                    static_cast<float>(transform.translationMetres.z));
+                selectedComponentProjection = gizmo::projectWorldToViewport(
+                    centre, viewProj, rectMin, rectSize);
+                if (sandboxGizmoMode_ == SandboxGizmoMode::Rotate) {
+                    gizmoAxisDirections = {
+                        glm::vec3(
+                            static_cast<float>(transform.localXAxisInWorld.x),
+                            static_cast<float>(transform.localXAxisInWorld.y),
+                            static_cast<float>(transform.localXAxisInWorld.z)),
+                        glm::vec3(
+                            static_cast<float>(transform.localYAxisInWorld.x),
+                            static_cast<float>(transform.localYAxisInWorld.y),
+                            static_cast<float>(transform.localYAxisInWorld.z)),
+                        glm::vec3(
+                            static_cast<float>(transform.localZAxisInWorld.x),
+                            static_cast<float>(transform.localZAxisInWorld.y),
+                            static_cast<float>(transform.localZAxisInWorld.z)),
+                    };
+                }
+                const float axisLength = std::clamp(
+                    0.08F * camera_.distance(), 0.025F, 0.25F);
+                float nearestHandleDistance
+                    = std::numeric_limits<float>::max();
+                for (std::size_t axis = 0; axis < gizmoAxisDirections.size();
+                     ++axis) {
+                    gizmoAxisEndpoints[axis] = gizmo::projectWorldToViewport(
+                        centre + gizmoAxisDirections[axis] * axisLength,
+                        viewProj,
+                        rectMin,
+                        rectSize);
+                    gizmoAxisProjections[axis] = gizmo::computeAxisProjection(
+                        centre,
+                        gizmoAxisDirections[axis],
+                        axisLength,
+                        viewProj,
+                        rectMin,
+                        rectSize);
+                    if (!gizmo::hitTestHandle(
+                            mousePosition, gizmoAxisEndpoints[axis], 11.0F)) {
+                        continue;
+                    }
+                    const float distance = std::hypot(
+                        mousePosition.x
+                            - gizmoAxisEndpoints[axis].screenPos.x,
+                        mousePosition.y
+                            - gizmoAxisEndpoints[axis].screenPos.y);
+                    if (distance < nearestHandleDistance) {
+                        nearestHandleDistance = distance;
+                        hoveredGizmoConstraint = static_cast<
+                            SandboxGizmoConstraint>(
+                                static_cast<int>(SandboxGizmoConstraint::AxisX)
+                                + static_cast<int>(axis));
+                    }
+                }
+            }
+
             if (sandboxGizmoDragging_) {
                 if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
                     auto candidate = benchProject_.scene;
@@ -6818,27 +6919,84 @@ void Application::drawWorkspace() {
                     auto candidate = benchProject_.scene;
                     auto edited = *component;
                     if (sandboxGizmoMode_ == SandboxGizmoMode::Translate) {
-                        const double metresPerPixel = 0.00045
-                            * static_cast<double>(camera_.distance());
-                        const glm::vec3 deltaWorld = camera_.rightVector()
-                                * (io.MouseDelta.x * static_cast<float>(metresPerPixel))
-                            + camera_.upVector()
-                                * (-io.MouseDelta.y * static_cast<float>(metresPerPixel));
-                        edited.transform.translationMetres = edited.transform.translationMetres
-                            + math::Vec3d {
+                        const int axisIndex = sandboxConstraintAxisIndex(
+                            sandboxGizmoConstraint_);
+                        math::Vec3d delta;
+                        if (axisIndex >= 0) {
+                            const double axisDelta
+                                = gizmo::computeGizmoDeltaZ(
+                                    {io.MouseDelta.x, io.MouseDelta.y},
+                                    gizmoAxisProjections[
+                                        static_cast<std::size_t>(axisIndex)]);
+                            const glm::vec3 axis = gizmoAxisDirections[
+                                static_cast<std::size_t>(axisIndex)];
+                            delta = {
+                                static_cast<double>(axis.x) * axisDelta,
+                                static_cast<double>(axis.y) * axisDelta,
+                                static_cast<double>(axis.z) * axisDelta,
+                            };
+                        } else {
+                            const double metresPerPixel = 0.00045
+                                * static_cast<double>(camera_.distance());
+                            const glm::vec3 deltaWorld = camera_.rightVector()
+                                    * (io.MouseDelta.x
+                                        * static_cast<float>(metresPerPixel))
+                                + camera_.upVector()
+                                    * (-io.MouseDelta.y
+                                        * static_cast<float>(metresPerPixel));
+                            delta = {
                                 static_cast<double>(deltaWorld.x),
                                 static_cast<double>(deltaWorld.y),
                                 static_cast<double>(deltaWorld.z),
                             };
+                        }
+                        sandboxDragAccumulatedTranslationMetres_
+                            = sandboxDragAccumulatedTranslationMetres_ + delta;
+                        const double snapMetres
+                            = static_cast<double>(
+                                sandboxTranslationSnapMillimetres_) * 1e-3;
+                        const math::Vec3d snapped {
+                            gizmo::quantizeGizmoDelta(
+                                sandboxDragAccumulatedTranslationMetres_.x,
+                                snapMetres),
+                            gizmo::quantizeGizmoDelta(
+                                sandboxDragAccumulatedTranslationMetres_.y,
+                                snapMetres),
+                            gizmo::quantizeGizmoDelta(
+                                sandboxDragAccumulatedTranslationMetres_.z,
+                                snapMetres),
+                        };
+                        edited.transform = sandboxDragInitialTransform_;
+                        edited.transform.translationMetres
+                            = edited.transform.translationMetres + snapped;
                     } else {
-                        edited.transform = gizmo::rotateRigidTransformLocally(
-                            edited.transform,
-                            gizmo::LocalRotationAxis::Y,
-                            static_cast<double>(io.MouseDelta.x) * 0.01);
-                        edited.transform = gizmo::rotateRigidTransformLocally(
-                            edited.transform,
-                            gizmo::LocalRotationAxis::X,
-                            static_cast<double>(-io.MouseDelta.y) * 0.01);
+                        const int axisIndex = sandboxConstraintAxisIndex(
+                            sandboxGizmoConstraint_);
+                        if (axisIndex >= 0) {
+                            sandboxDragAccumulatedAngleRadians_
+                                += static_cast<double>(
+                                    io.MouseDelta.x - io.MouseDelta.y) * 0.01;
+                            const double stepRadians = static_cast<double>(
+                                sandboxRotationStepDegrees_)
+                                * std::numbers::pi_v<double> / 180.0;
+                            const double snappedAngle
+                                = gizmo::quantizeGizmoDelta(
+                                    sandboxDragAccumulatedAngleRadians_,
+                                    stepRadians);
+                            edited.transform = gizmo::rotateRigidTransformLocally(
+                                sandboxDragInitialTransform_,
+                                localRotationAxisForIndex(axisIndex),
+                                snappedAngle);
+                        } else {
+                            edited.transform = gizmo::rotateRigidTransformLocally(
+                                edited.transform,
+                                gizmo::LocalRotationAxis::Y,
+                                static_cast<double>(io.MouseDelta.x) * 0.01);
+                            edited.transform = gizmo::rotateRigidTransformLocally(
+                                edited.transform,
+                                gizmo::LocalRotationAxis::X,
+                                static_cast<double>(-io.MouseDelta.y) * 0.01);
+                        }
                     }
                     candidate.replace(edited.id, edited);
                     sandboxGizmoChanged_ = applyBenchScene(
@@ -6868,12 +7026,27 @@ void Application::drawWorkspace() {
                     isPanning_ = true;
                 }
                 if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                    selectedBenchComponentId_ = hoveredComponentId;
-                    if (!selectedBenchComponentId_.empty()) {
+                    if (hoveredGizmoConstraint
+                        != SandboxGizmoConstraint::None) {
+                        sandboxGizmoConstraint_ = hoveredGizmoConstraint;
                         sandboxDragInitialTransform_ = benchProject_.scene
                             .find(selectedBenchComponentId_)->transform;
                         sandboxGizmoDragging_ = true;
                         sandboxGizmoChanged_ = false;
+                        sandboxDragAccumulatedTranslationMetres_ = {};
+                        sandboxDragAccumulatedAngleRadians_ = 0.0;
+                    } else {
+                        selectedBenchComponentId_ = hoveredComponentId;
+                        if (!selectedBenchComponentId_.empty()) {
+                            sandboxGizmoConstraint_
+                                = SandboxGizmoConstraint::ViewPlane;
+                            sandboxDragInitialTransform_ = benchProject_.scene
+                                .find(selectedBenchComponentId_)->transform;
+                            sandboxGizmoDragging_ = true;
+                            sandboxGizmoChanged_ = false;
+                            sandboxDragAccumulatedTranslationMetres_ = {};
+                            sandboxDragAccumulatedAngleRadians_ = 0.0;
+                        }
                     }
                     static_cast<void>(showSandboxViewport());
                 }
@@ -6927,13 +7100,55 @@ void Application::drawWorkspace() {
                             component.id.c_str());
                     }
                 }
+                if (selectedComponentProjection.visible) {
+                    constexpr std::array<ImU32, 3> kAxisColors {
+                        IM_COL32(238, 82, 83, 255),
+                        IM_COL32(78, 201, 112, 255),
+                        IM_COL32(74, 144, 245, 255),
+                    };
+                    constexpr std::array<const char*, 3> kAxisLabels {
+                        "X", "Y", "Z"};
+                    for (std::size_t axis = 0;
+                         axis < gizmoAxisEndpoints.size();
+                         ++axis) {
+                        if (!gizmoAxisEndpoints[axis].visible) {
+                            continue;
+                        }
+                        const auto constraint = static_cast<
+                            SandboxGizmoConstraint>(
+                                static_cast<int>(SandboxGizmoConstraint::AxisX)
+                                + static_cast<int>(axis));
+                        const bool active = sandboxGizmoDragging_
+                            && sandboxGizmoConstraint_ == constraint;
+                        const bool hovered
+                            = hoveredGizmoConstraint == constraint;
+                        const ImU32 color = active || hovered
+                            ? IM_COL32(255, 226, 96, 255)
+                            : kAxisColors[axis];
+                        const ImVec2 start(
+                            selectedComponentProjection.screenPos.x,
+                            selectedComponentProjection.screenPos.y);
+                        const ImVec2 end(
+                            gizmoAxisEndpoints[axis].screenPos.x,
+                            gizmoAxisEndpoints[axis].screenPos.y);
+                        drawList->AddLine(
+                            start, end, color, active ? 4.0F : 2.5F);
+                        drawList->AddCircleFilled(
+                            end, active || hovered ? 7.0F : 5.0F,
+                            color, 20);
+                        drawList->AddText(
+                            ImVec2(end.x + 7.0F, end.y - 7.0F),
+                            color,
+                            kAxisLabels[axis]);
+                    }
+                }
                 const char* modeName = sandboxGizmoMode_ == SandboxGizmoMode::Translate
-                    ? "Translate" : "Rotate";
+                    ? "Move (world axes)" : "Rotate (local axes)";
                 const std::string hud = std::string("SANDBOX | ") + modeName
-                    + " [W/E] | LMB component/edit | RMB orbit | MMB pan | wheel zoom";
+                    + " [W/E] | drag axis or body | RMB orbit | MMB pan | wheel zoom";
                 drawList->AddRectFilled(
                     ImVec2(imagePosMin.x + 10.0F, imagePosMin.y + 10.0F),
-                    ImVec2(imagePosMin.x + 570.0F, imagePosMin.y + 34.0F),
+                    ImVec2(imagePosMin.x + 650.0F, imagePosMin.y + 34.0F),
                     IM_COL32(8, 15, 25, 205), 4.0F);
                 drawList->AddText(
                     ImVec2(imagePosMin.x + 17.0F, imagePosMin.y + 15.0F),

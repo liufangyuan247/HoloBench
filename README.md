@@ -25,7 +25,10 @@ The free-form viewport now has an always-visible searchable component shelf.
 Clicking places a component at the current table view centre; dragging a
 component into the viewport intersects the camera ray with the horizontal
 optical table and places it at that physical location. The Inspector remains
-available for exact transforms and physical parameters.
+available for exact transforms and physical parameters. A selected component
+shows colour-coded X/Y/Z handles: Move constrains to world axes, Rotate uses
+the component's local axes, and configurable translation/rotation snapping
+supports repeatable optical alignment.
 
 For supported ray-routed paths, placed ideal lenses, mirror/splitter clear
 areas, apertures, pinholes, and SLM finite pixels/dead space now act on a

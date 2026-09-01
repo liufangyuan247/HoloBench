@@ -221,6 +221,19 @@ struct PlaneIntersection {
     return static_cast<double>(deltaPx) * axisProj.metresPerPixel;
 }
 
+[[nodiscard]] inline double quantizeGizmoDelta(
+    double value,
+    double step) noexcept {
+    if (!std::isfinite(value) || !std::isfinite(step) || step <= 0.0) {
+        return value;
+    }
+    const double scaled = value / step;
+    if (!std::isfinite(scaled)) {
+        return value;
+    }
+    return std::round(scaled) * step;
+}
+
 [[nodiscard]] inline bool hitTestHandle(
     const glm::vec2& mousePos,
     const ProjectedPoint& projPoint,
@@ -375,6 +388,14 @@ enum class SandboxGizmoMode {
     Rotate,
 };
 
+enum class SandboxGizmoConstraint {
+    None,
+    ViewPlane,
+    AxisX,
+    AxisY,
+    AxisZ,
+};
+
 struct RunOptions {
     int smokeFrameLimit = 0;
     int benchmarkFrames = 0;
@@ -483,13 +504,18 @@ private:
 
     ViewportMode viewportMode_ = ViewportMode::Sandbox;
     SandboxGizmoMode sandboxGizmoMode_ = SandboxGizmoMode::Translate;
+    SandboxGizmoConstraint sandboxGizmoConstraint_
+        = SandboxGizmoConstraint::ViewPlane;
     bool sandboxGizmoDragging_ = false;
     bool sandboxGizmoChanged_ = false;
     math::RigidTransform3d sandboxDragInitialTransform_ {};
+    math::Vec3d sandboxDragAccumulatedTranslationMetres_ {};
+    double sandboxDragAccumulatedAngleRadians_ = 0.0;
     std::string selectedBenchComponentId_;
     std::size_t sandboxNextComponentOrdinal_ = 1;
     int sandboxLibraryKindIndex_ = 0;
     char sandboxComponentSearch_[64] {};
+    float sandboxTranslationSnapMillimetres_ = 1.0F;
     float sandboxRotationStepDegrees_ = 5.0F;
     int sandboxPlateSampleSize_ = 256;
     float sandboxPlateWindowMillimetres_ = 1.0F;
