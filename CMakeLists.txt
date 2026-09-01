@@ -101,6 +101,7 @@ add_library(holobench_optics STATIC
     optics/ray/ThinLens.cpp
     optics/scene/GeometricComponents.cpp
     optics/scene/BenchInteraction.cpp
+    optics/scene/BenchPathEvidence.cpp
     optics/scene/BenchScene.cpp
     optics/scene/InstrumentCalibration.cpp
     optics/scene/NumericalAperture.cpp
@@ -109,6 +110,7 @@ add_library(holobench_optics STATIC
     optics/wave/FieldElements.cpp
     optics/wave/FieldSources.cpp
     optics/wave/CoherentInterference.cpp
+    optics/wave/BeamFollowingField.cpp
 )
 add_library(HoloBench::Optics ALIAS holobench_optics)
 target_include_directories(holobench_optics PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

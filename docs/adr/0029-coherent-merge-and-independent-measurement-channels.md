@@ -30,17 +30,14 @@ field channel:
 - changing the selected display channel rerenders the cached result without
   advancing the Bench revision or propagating again.
 
-The current producer completely supports one or more direct
-`Laser -> Aperture -> Screen/Probe` branches, with any number of non-blocking
-Field Probes after the aperture. If any branch reaching the selected plane
-contains an optical component whose local wave transform is not yet connected
-to this producer, the whole observation fails explicitly. It never displays a
-partial field while silently omitting that branch.
-
-The next producer extension reuses the existing beam-following local-wave path
-transforms for mirrors, splitters, lenses, spatial filters, and SLMs. This
-changes the set of accepted contributing paths, not the channel or measurement
-semantics fixed here.
+At adoption the producer supported direct
+`Laser -> Aperture -> Screen/Probe` branches, with non-blocking Field Probes
+after the aperture. ADR 0030 subsequently connects the shared beam-following
+path transforms for mirror/splitter folds, apertures, aligned ideal lenses,
+spatial-filter pinholes, and SLMs. This broadens accepted contributing paths but
+does not change the channel or measurement semantics fixed here. Any unsupported
+incident branch still rejects the whole observation; partial light is never
+displayed.
 
 ## Consequences
 

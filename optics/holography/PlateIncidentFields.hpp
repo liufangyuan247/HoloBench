@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "optics/scene/BenchInteraction.hpp"
+#include "optics/scene/BenchPathEvidence.hpp"
 #include "optics/scene/BenchScene.hpp"
 
 namespace holobench::optics::holography {
@@ -13,15 +13,7 @@ enum class RecordingBranchRole { Object, Reference };
 enum class PlateIncidenceSide { NegativeLocalZ, PositiveLocalZ };
 enum class PlateRecordingGeometry { Transmission, Reflection };
 
-struct PlatePathInteraction final {
-    std::string componentId;
-    math::Vec3d hitPointMetres {};
-    scene::BeamState incidentBeam;
-    bool hasOutgoingBeam = false;
-    scene::BeamState outgoingBeam;
-
-    bool operator==(const PlatePathInteraction&) const = default;
-};
+using PlatePathInteraction = scene::BenchPathInteraction;
 
 struct PlateIncidentBranch final {
     RecordingBranchRole role = RecordingBranchRole::Reference;

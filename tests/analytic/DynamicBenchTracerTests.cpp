@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "optics/ray/DynamicBenchTracer.hpp"
+#include "optics/scene/BenchPathEvidence.hpp"
 
 namespace math = holobench::math;
 namespace ray = holobench::optics::ray;
@@ -102,6 +103,64 @@ TEST_CASE("dynamic splitter produces deterministic conserved branches reaching t
     CHECK(transmitted.provenance.parentBranchId == 1);
     CHECK(reflected.provenance.branchId != transmitted.provenance.branchId);
     CHECK(graph.terminations.size() == 2);
+
+    for (const auto& terminal : graph.interactions) {
+        if (terminal.componentId != "screen-reflected"
+            && terminal.componentId != "screen-transmitted") {
+            continue;
+        }
+        const auto path = scene::collectBenchPathInteractions(
+            graph, terminal);
+        REQUIRE(path.size() == 2U);
+        CHECK(path[0].componentId == "splitter");
+        CHECK(path[0].hasOutgoingBeam);
+        CHECK(path[0].outgoingBeam.provenance.branchId
+            == terminal.incidentBeam.provenance.branchId);
+        CHECK(path[1].componentId == terminal.componentId);
+        CHECK_FALSE(path[1].hasOutgoingBeam);
+    }
+}
+
+TEST_CASE("ordered Bench path rejects evidence that is absent or ambiguous") {
+    scene::BenchScene bench;
+    bench.add(scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource, "path-laser"));
+    bench.add(placed(
+        scene::BenchComponentKind::Aperture,
+        "path-aperture",
+        {.translationMetres = {0.0, 0.0, 0.5}}));
+    bench.add(placed(
+        scene::BenchComponentKind::ScreenDetector,
+        "path-screen",
+        {.translationMetres = {0.0, 0.0, 1.0}}));
+    const auto graph = ray::traceDynamicBench(bench);
+    const auto terminal = std::find_if(
+        graph.interactions.begin(), graph.interactions.end(),
+        [](const scene::OpticalInteraction& interaction) {
+            return interaction.componentId == "path-screen";
+        });
+    REQUIRE(terminal != graph.interactions.end());
+    const auto path = scene::collectBenchPathInteractions(graph, *terminal);
+    REQUIRE(path.size() == 2U);
+    CHECK(path[0].componentId == "path-aperture");
+    CHECK(path[1].componentId == "path-screen");
+
+    auto missing = graph;
+    missing.interactions.erase(missing.interactions.begin());
+    CHECK_THROWS_WITH_AS(
+        static_cast<void>(scene::collectBenchPathInteractions(
+            missing, *terminal)),
+        doctest::Contains("missing connected"),
+        std::invalid_argument);
+
+    auto ambiguous = graph;
+    ambiguous.interactions.insert(
+        ambiguous.interactions.begin(), graph.interactions.front());
+    CHECK_THROWS_WITH_AS(
+        static_cast<void>(scene::collectBenchPathInteractions(
+            ambiguous, *terminal)),
+        doctest::Contains("ambiguous connected"),
+        std::invalid_argument);
 }
 
 TEST_CASE("dynamic trace graph is independent of component insertion order") {

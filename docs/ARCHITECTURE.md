@@ -115,3 +115,5 @@ The following wave and Fourier-optics architecture decisions are locked:
 - Exact wavelength/coherence channel partitioning, optical-path-aware coherent
   branch addition, retained contribution diagnostics, and no partial result for
   unsupported incident paths (ADR 0029).
+- Scene-level ordered branch evidence and one shared beam-following local-field
+  service for placed Screens, Field Probes, and Holographic Plates (ADR 0030).

@@ -118,13 +118,15 @@
   prescription IDs can be resolved into sequential assemblies. A placed
   Screen/Probe now exposes intensity, peak-relative dB, validity-masked phase,
   complex cursor values, and physical cross-sections. Its live-wave producer
-  accepts multiple direct `Laser -> Aperture -> Screen/Probe` branches, adds
-  exact wavelength/coherence matches as complex fields with accumulated-path
-  phase, and retains other wavelength/coherence pairs as independent channels.
-  Post-aperture Field Probes are non-blocking. Mirrors, splitters, lenses,
-  spatial filters, and SLMs are not yet connected to this observation producer;
-  if any such branch reaches the selected plane, the complete measurement is
-  rejected rather than silently omitting it. A plate can
+  accepts traced Laser/Object source paths, adds exact wavelength/coherence
+  matches as complex fields, and retains other pairs as independent channels.
+  The shared beam-following producer applies mirror/splitter folds, clear areas,
+  apertures, aligned ideal thin lenses, explicit spatial-filter pinholes, and
+  persisted SLM pixels/commands before sampling the actual Screen/Probe tangent
+  plane. Post-path Field Probes remain non-blocking. Real-lens prescriptions,
+  tilted powered lenses, grazing planes, thick/vector/polarization and high-NA
+  longitudinal fields still reject the complete measurement rather than
+  silently omitting a branch. A plate can
   now sample source envelopes into local complex fields and record a
   same-side thin transmission exposure over an explicit ROI. A 2x-padded
   beam-following envelope applies ASM per routed segment, finite mirror/splitter

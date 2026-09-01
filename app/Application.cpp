@@ -6529,13 +6529,14 @@ void Application::drawSandboxWaveBar() {
             const auto& contribution = result.contributions.front();
             ImGui::TextColored(
                 statusColor,
-                "%s %zux%zu | z %.4f m | offset (%.4f, %.4f) m",
+                "%s %zux%zu | OPL %.4f m | %zu path interactions%s",
                 result.interactivePreview ? "DRAG PREVIEW" : "CURRENT",
                 result.fieldAtObservation.width(),
                 result.fieldAtObservation.height(),
-                contribution.signedPropagationDistanceMetres,
-                contribution.observationOffsetXMetres,
-                contribution.observationOffsetYMetres);
+                contribution.accumulatedOpticalPathMetres,
+                contribution.pathComponentIds.size(),
+                contribution.pathSampling.usedFoldedPath
+                    ? " | folded" : "");
         } else {
             ImGui::TextColored(
                 statusColor,

@@ -6,10 +6,9 @@
 #include <string>
 #include <vector>
 
-#include "compute/propagation/AngularSpectrumPropagator.hpp"
-#include "compute/propagation/TiltedPlanePropagator.hpp"
 #include "core/field/ComplexField2D.hpp"
 #include "optics/scene/BenchInteraction.hpp"
+#include "optics/wave/BeamFollowingField.hpp"
 
 namespace holobench::compute::fft {
 class IFftBackend;
@@ -19,15 +18,10 @@ namespace holobench::app {
 
 struct BenchWaveContribution final {
     std::string sourceComponentId;
-    std::string apertureComponentId;
     std::uint64_t branchId = 0;
-    double signedPropagationDistanceMetres = 0.0;
-    double observationOffsetXMetres = 0.0;
-    double observationOffsetYMetres = 0.0;
-    bool usedShiftedPaddedPropagation = false;
-    bool usedTiltedPlanePropagation = false;
-    compute::propagation::AngularSpectrumDiagnostics propagation;
-    compute::propagation::TiltedPlaneDiagnostics tiltedPropagation;
+    double accumulatedOpticalPathMetres = 0.0;
+    std::vector<std::string> pathComponentIds;
+    optics::wave::BeamFollowingFieldDiagnostics pathSampling;
 };
 
 struct BenchWaveObservationResult final {

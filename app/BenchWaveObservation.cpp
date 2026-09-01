@@ -11,14 +11,11 @@
 
 #include "compute/fft/IFftBackend.hpp"
 #include "core/field/FieldObservables.hpp"
-#include "optics/wave/FieldElements.hpp"
 
 namespace holobench::app {
 namespace {
 
 namespace scene = optics::scene;
-
-constexpr double kParallelTolerance = 2e-12;
 
 [[nodiscard]] double finiteIntensity(
     const std::complex<double>& sample) {
@@ -97,39 +94,11 @@ struct ObservationSampling final {
     return result;
 }
 
-[[nodiscard]] const scene::SpectralChannel& findSourceChannel(
-    const scene::BenchComponent& source,
-    const scene::BeamState& beam) {
-    const auto& parameters = std::get<scene::LaserSourceParameters>(
-        source.parameters);
-    const auto channel = std::find_if(
-        parameters.channels.begin(), parameters.channels.end(),
-        [&](const scene::SpectralChannel& candidate) {
-            return candidate.wavelengthMetres == beam.wavelengthMetres
-                && candidate.coherenceId == beam.coherenceId;
-        });
-    if (channel == parameters.channels.end()) {
-        throw std::invalid_argument(
-            "routed wave channel is missing from its laser source");
-    }
-    return *channel;
-}
-
 struct ObservationRoute final {
     const scene::BenchComponent* source = nullptr;
-    const scene::BenchComponent* aperture = nullptr;
-    const scene::OpticalInteraction* apertureInteraction = nullptr;
     const scene::OpticalInteraction* observationInteraction = nullptr;
+    std::vector<scene::BenchPathInteraction> pathInteractions;
 };
-
-[[nodiscard]] bool pathEqualsPrefix(
-    const std::vector<std::string>& candidate,
-    const std::vector<std::string>& path,
-    std::size_t prefixSize) {
-    return candidate.size() == prefixSize
-        && path.size() >= prefixSize
-        && std::equal(candidate.begin(), candidate.end(), path.begin());
-}
 
 [[nodiscard]] std::vector<ObservationRoute> collectObservationRoutes(
     const scene::BenchScene& bench,
@@ -143,60 +112,28 @@ struct ObservationRoute final {
         scene::validateBeamState(observationInteraction.incidentBeam);
         const auto& path
             = observationInteraction.incidentBeam.provenance.componentPath;
-        if (path.size() < 3U || path.back() != observationComponentId) {
+        if (path.size() < 2U || path.back() != observationComponentId) {
             throw std::invalid_argument(
                 "selected observation receives a branch with incomplete path evidence");
         }
         const auto* source = bench.find(path.front());
         if (source == nullptr
-            || source->kind != scene::BenchComponentKind::LaserSource) {
+            || (source->kind != scene::BenchComponentKind::LaserSource
+                && source->kind
+                    != scene::BenchComponentKind::ObjectWavefrontSource)) {
             throw std::invalid_argument(
                 "selected observation receives a branch from an unsupported source model");
         }
-        const auto* aperture = bench.find(path[1]);
-        if (aperture == nullptr
-            || aperture->kind != scene::BenchComponentKind::Aperture) {
-            throw std::invalid_argument(
-                "selected observation requires a fully modeled Laser -> Aperture wave path");
-        }
-        for (std::size_t pathIndex = 2U; pathIndex + 1U < path.size();
-             ++pathIndex) {
-            const auto* intermediate = bench.find(path[pathIndex]);
-            if (intermediate == nullptr
-                || intermediate->kind != scene::BenchComponentKind::FieldProbe) {
-                throw std::invalid_argument(
-                    "selected observation branch contains an unsupported post-aperture wave component");
-            }
-        }
-        const auto apertureInteraction = std::find_if(
-            traceGraph.interactions.begin(),
-            traceGraph.interactions.end(),
-            [&](const scene::OpticalInteraction& candidate) {
-                return candidate.componentId == aperture->id
-                    && candidate.incidentBeam.provenance.branchId
-                        == observationInteraction.incidentBeam.provenance.branchId
-                    && pathEqualsPrefix(
-                        candidate.incidentBeam.provenance.componentPath,
-                        path,
-                        2U);
-            });
-        if (apertureInteraction == traceGraph.interactions.end()
-            || apertureInteraction->outgoing.size() != 1U) {
-            throw std::invalid_argument(
-                "selected observation branch is missing connected aperture evidence");
-        }
-        static_cast<void>(findSourceChannel(
-            *source, apertureInteraction->incidentBeam));
         routes.push_back({
             .source = source,
-            .aperture = aperture,
-            .apertureInteraction = &*apertureInteraction,
             .observationInteraction = &observationInteraction,
+            .pathInteractions = scene::collectBenchPathInteractions(
+                traceGraph, observationInteraction),
         });
     }
     if (routes.empty()) {
         throw std::invalid_argument(
-            "live wave screen requires a supported downstream Laser -> Aperture branch reaching the selected plane");
+            "live wave screen requires a traced source branch reaching the selected plane");
     }
     std::sort(routes.begin(), routes.end(), [](const auto& first, const auto& second) {
         const auto& firstBeam = first.observationInteraction->incidentBeam;
@@ -213,161 +150,49 @@ struct ObservationRoute final {
     return routes;
 }
 
-void initializeIncidentField(
-    field::ComplexField2D& field,
-    const scene::LaserSourceParameters& laser,
-    const scene::BeamState& beam,
-    const scene::BenchComponent& aperture) {
-    const double radius = laser.beamRadiusMetres;
-    const double uniformAmplitude = std::sqrt(
-        beam.powerWatts / (std::numbers::pi_v<double> * radius * radius));
-    const double gaussianAmplitude = std::sqrt(
-        2.0 * beam.powerWatts
-        / (std::numbers::pi_v<double> * radius * radius));
-    const auto localDirection = math::transformDirectionWorldToLocal(
-        aperture.transform, beam.direction);
-    const auto localBeamCentre = math::transformPointWorldToLocal(
-        aperture.transform, beam.originMetres);
-    const double wavenumber = field.mediumWavenumberRadiansPerMetre();
-    for (std::size_t y = 0; y < field.height(); ++y) {
-        const double yMetres = field.yCoordinateMetres(y);
-        for (std::size_t x = 0; x < field.width(); ++x) {
-            const double xMetres = field.xCoordinateMetres(x);
-            const double relativeX = xMetres - localBeamCentre.x;
-            const double relativeY = yMetres - localBeamCentre.y;
-            const double radiusSquared
-                = relativeX * relativeX + relativeY * relativeY;
-            double amplitude = 0.0;
-            if (laser.profile == scene::LaserBeamProfile::Gaussian) {
-                amplitude = gaussianAmplitude
-                    * std::exp(-radiusSquared / (radius * radius));
-            } else if (radiusSquared <= radius * radius) {
-                amplitude = uniformAmplitude;
-            }
-            const double phase = std::fma(
-                wavenumber,
-                beam.accumulatedOpticalPathMetres,
-                beam.phaseRadians)
-                + wavenumber * (localDirection.x * relativeX
-                    + localDirection.y * relativeY);
-            field.at(x, y) = std::polar(
-                amplitude,
-                std::remainder(phase, 2.0 * std::numbers::pi_v<double>));
-        }
-    }
-}
-
-void applyAperture(
-    field::ComplexField2D& field,
-    const scene::ApertureParameters& aperture) {
-    switch (aperture.shape) {
-    case scene::ApertureShape::Circular:
-        static_cast<void>(optics::wave::applyEllipticalAperture(field, {
-            .halfWidthMetres = 0.5 * aperture.widthMetres,
-            .halfHeightMetres = 0.5 * aperture.heightMetres,
-        }));
-        break;
-    case scene::ApertureShape::Rectangular:
-        static_cast<void>(optics::wave::applyRectangularAperture(field, {
-            .halfWidthMetres = 0.5 * aperture.widthMetres,
-            .halfHeightMetres = 0.5 * aperture.heightMetres,
-        }));
-        break;
-    case scene::ApertureShape::DoubleSlit:
-        static_cast<void>(optics::wave::applyDoubleSlit(field, {
-            .slitWidthMetres = aperture.slitWidthMetres,
-            .slitHeightMetres = aperture.slitHeightMetres,
-            .centerSeparationMetres = aperture.slitSeparationMetres,
-        }));
-        break;
-    }
-}
-
 struct SampledObservationContribution final {
     field::ComplexField2D field;
     BenchWaveContribution diagnostics;
 };
 
 [[nodiscard]] SampledObservationContribution sampleObservationRoute(
+    const scene::BenchScene& bench,
     const ObservationRoute& route,
-    const scene::BenchComponent& observation,
     const ObservationSampling& sampling,
     std::size_t width,
     std::size_t height,
     compute::fft::IFftBackend& fftBackend) {
-    const auto& apertureBeam = route.apertureInteraction->incidentBeam;
     const auto& observationBeam
         = route.observationInteraction->incidentBeam;
-    const auto& laser = std::get<scene::LaserSourceParameters>(
-        route.source->parameters);
-    field::ComplexField2D sampled(
-        width,
-        height,
-        sampling.widthMetres / static_cast<double>(width),
-        sampling.heightMetres / static_cast<double>(height),
-        apertureBeam.wavelengthMetres);
-    initializeIncidentField(
-        sampled, laser, apertureBeam, *route.aperture);
-    applyAperture(
-        sampled,
-        std::get<scene::ApertureParameters>(route.aperture->parameters));
-
-    const auto observerCentre = math::transformPointWorldToLocal(
-        route.aperture->transform,
-        observation.transform.translationMetres);
-    const auto localDirection = math::transformDirectionWorldToLocal(
-        route.aperture->transform, observationBeam.direction);
-    if (observerCentre.z * localDirection.z <= 1e-9) {
-        throw std::invalid_argument(
-            "live wave screen must be separated from and downstream of every contributing aperture");
+    auto sampled = optics::wave::sampleBeamFollowingField(
+        bench,
+        observationBeam,
+        route.pathInteractions,
+        {
+            .sampleWidth = width,
+            .sampleHeight = height,
+            .extentWidthMetres = sampling.widthMetres,
+            .extentHeightMetres = sampling.heightMetres,
+            .centreXMetres = 0.0,
+            .centreYMetres = 0.0,
+            .refractiveIndex = 1.0,
+        },
+        fftBackend);
+    std::vector<std::string> pathComponentIds;
+    pathComponentIds.reserve(route.pathInteractions.size());
+    for (const auto& interaction : route.pathInteractions) {
+        pathComponentIds.push_back(interaction.componentId);
     }
-    const double xAlignment = math::dot(
-        route.aperture->transform.localXAxisInWorld,
-        observation.transform.localXAxisInWorld);
-    const double yAlignment = math::dot(
-        route.aperture->transform.localYAxisInWorld,
-        observation.transform.localYAxisInWorld);
-    const double normalAlignment = math::dot(
-        route.aperture->transform.localZAxisInWorld,
-        observation.transform.localZAxisInWorld);
-    const bool parallelAxisAligned
-        = xAlignment >= 1.0 - kParallelTolerance
-        && yAlignment >= 1.0 - kParallelTolerance
-        && normalAlignment >= 1.0 - kParallelTolerance;
-    if (!parallelAxisAligned
-        && std::abs(math::dot(
-            observation.transform.localZAxisInWorld,
-            observationBeam.direction)) <= 1e-8) {
-        throw std::invalid_argument(
-            "live wave screen is grazing a routed propagation direction");
-    }
-
     BenchWaveContribution diagnostics {
         .sourceComponentId = route.source->id,
-        .apertureComponentId = route.aperture->id,
         .branchId = observationBeam.provenance.branchId,
-        .signedPropagationDistanceMetres = observerCentre.z,
-        .observationOffsetXMetres = observerCentre.x,
-        .observationOffsetYMetres = observerCentre.y,
-        .usedShiftedPaddedPropagation = parallelAxisAligned,
-        .usedTiltedPlanePropagation = !parallelAxisAligned,
-        .propagation = {},
-        .tiltedPropagation = {},
+        .accumulatedOpticalPathMetres
+            = observationBeam.accumulatedOpticalPathMetres,
+        .pathComponentIds = std::move(pathComponentIds),
+        .pathSampling = std::move(sampled.diagnostics),
     };
-    if (parallelAxisAligned) {
-        compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
-        diagnostics.propagation = propagator.propagateShiftedPaddedInPlace(
-            sampled, observerCentre.z, observerCentre.x, observerCentre.y);
-    } else {
-        compute::propagation::TiltedPlanePropagator propagator(fftBackend);
-        diagnostics.tiltedPropagation = propagator.propagatePaddedInPlace(
-            sampled,
-            route.aperture->transform,
-            observation.transform,
-            observationBeam.direction);
-    }
     return {
-        .field = std::move(sampled),
+        .field = std::move(sampled.fieldAtTarget),
         .diagnostics = std::move(diagnostics),
     };
 }
@@ -422,12 +247,18 @@ bool BenchWaveObservationResult::isStaleFor(
             [&](const BenchWaveContribution& contribution) {
                 const auto* source = bench.find(
                     contribution.sourceComponentId);
-                const auto* aperture = bench.find(
-                    contribution.apertureComponentId);
                 return source == nullptr
-                    || source->kind != scene::BenchComponentKind::LaserSource
-                    || aperture == nullptr
-                    || aperture->kind != scene::BenchComponentKind::Aperture;
+                    || (source->kind
+                            != scene::BenchComponentKind::LaserSource
+                        && source->kind
+                            != scene::BenchComponentKind::ObjectWavefrontSource)
+                    || contribution.pathComponentIds.empty()
+                    || std::any_of(
+                        contribution.pathComponentIds.begin(),
+                        contribution.pathComponentIds.end(),
+                        [&](const std::string& componentId) {
+                            return bench.find(componentId) == nullptr;
+                        });
             });
 }
 
@@ -571,8 +402,8 @@ std::vector<BenchWaveObservationResult> observeBenchWaveChannels(
     for (const auto& route : routes) {
         const auto& beam = route.observationInteraction->incidentBeam;
         auto sampled = sampleObservationRoute(
+            bench,
             route,
-            *observation,
             observerSampling,
             width,
             height,

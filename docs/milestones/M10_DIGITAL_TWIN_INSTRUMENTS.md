@@ -94,14 +94,16 @@ coordinates, amplitude, W/m^2 intensity, peak-relative dB, phase validity,
 wavelength/coherence identity, integrated power, and horizontal/vertical
 intensity sections. The same cached field switches between intensity, dB, and
 wrapped-phase textures without re-propagation. Multiple direct
-`Laser -> Aperture -> observation` branches now partition into exact
-wavelength/coherence channels; contributors within one channel add as complex
-fields with accumulated-path phase, while channel switching only rerenders the
-cache. Unsupported incident paths reject the complete observation. Connecting
-the existing mirror/splitter/lens/filter/SLM local-wave transforms to this
-channel producer remains open. See
+source-to-observation branches now partition into exact wavelength/coherence
+channels; contributors within one channel add as complex fields, while channel
+switching only rerenders the cache. One shared beam-following service now
+applies mirror/splitter folds, apertures, aligned ideal lenses, explicit
+spatial-filter pinholes, and finite SLM commands for both plates and placed
+measurement planes. Unsupported incident paths reject the complete observation.
+See
 [ADR 0028](../adr/0028-revision-bound-placed-field-measurements.md) and
-[ADR 0029](../adr/0029-coherent-merge-and-independent-measurement-channels.md).
+[ADR 0029](../adr/0029-coherent-merge-and-independent-measurement-channels.md),
+plus [ADR 0030](../adr/0030-shared-beam-following-field-paths.md).
 
 ## Platform extensibility acceptance
 

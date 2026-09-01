@@ -8,6 +8,7 @@
 
 #include "core/field/ComplexField2D.hpp"
 #include "optics/holography/PlateIncidentFields.hpp"
+#include "optics/wave/BeamFollowingField.hpp"
 
 namespace holobench::compute::fft {
 class IFftBackend;
@@ -19,30 +20,13 @@ class CalibratedSlmResponse;
 
 namespace holobench::optics::holography {
 
-struct PlacedSlmSparsePixel final {
-    std::size_t column = 0;
-    std::size_t row = 0;
-    double normalizedCommand = 0.0;
-
-    bool operator==(const PlacedSlmSparsePixel&) const = default;
-};
+using PlacedSlmSparsePixel = wave::PlacedSlmSparsePixel;
 
 // Transient data-product override for one persisted placed SLM. It preserves
 // the ordinary bench and command provenance without serializing a potentially
 // large raster into every component. Pixels are canonical row-major, unique,
 // and all unspecified pixels use defaultNormalizedCommand.
-struct PlacedSlmSparseCommand final {
-    std::string componentId;
-    std::string commandId;
-    std::size_t pixelWidth = 0;
-    std::size_t pixelHeight = 0;
-    double defaultNormalizedCommand = 0.0;
-    std::string calibrationId;
-    const optics::slm::CalibratedSlmResponse* calibratedResponse = nullptr;
-    std::vector<PlacedSlmSparsePixel> pixels;
-
-    bool operator==(const PlacedSlmSparseCommand&) const = default;
-};
+using PlacedSlmSparseCommand = wave::PlacedSlmSparseCommand;
 
 struct PlateFieldSamplingOptions final {
     std::size_t sampleWidth = 128;

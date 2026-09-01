@@ -3,16 +3,14 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <iterator>
 #include <limits>
 #include <numbers>
 #include <set>
 #include <stdexcept>
-#include <string_view>
 #include <utility>
 
 #include "compute/fft/IFftBackend.hpp"
-#include "compute/propagation/AngularSpectrumPropagator.hpp"
-#include "optics/slm/SlmResponse.hpp"
 
 namespace holobench::optics::holography {
 namespace {
@@ -130,18 +128,7 @@ double sourceNormalizationAreaSquareMetres(
 }
 
 bool requiresWaveRefinement(scene::BenchComponentKind kind) noexcept {
-    switch (kind) {
-    case scene::BenchComponentKind::PlanarMirror:
-    case scene::BenchComponentKind::BeamSplitterCombiner:
-    case scene::BenchComponentKind::IdealThinLens:
-    case scene::BenchComponentKind::RealLensAssembly:
-    case scene::BenchComponentKind::Aperture:
-    case scene::BenchComponentKind::SpatialFilter:
-    case scene::BenchComponentKind::SpatialLightModulator:
-        return true;
-    default:
-        return false;
-    }
+    return wave::requiresBeamFollowingWaveTransform(kind);
 }
 
 bool hasWaveRefinementComponent(
@@ -178,163 +165,6 @@ std::complex<double> finitePhasor(double phaseRadians) {
     return std::polar(
         1.0,
         std::remainder(phaseRadians, 2.0 * std::numbers::pi));
-}
-
-bool approximatelyAligned(math::Vec3d first, math::Vec3d second) {
-    constexpr double kAlignmentTolerance = 1e-10;
-    return math::dot(math::normalized(first), math::normalized(second))
-        >= 1.0 - kAlignmentTolerance;
-}
-
-bool approximatelyParallel(math::Vec3d first, math::Vec3d second) {
-    constexpr double kAlignmentTolerance = 1e-10;
-    return std::abs(math::dot(math::normalized(first), math::normalized(second)))
-        >= 1.0 - kAlignmentTolerance;
-}
-
-bool supportsLocalWavePath(
-    const scene::BenchScene& bench,
-    const scene::BenchComponent& source,
-    const PlateIncidentBranch& branch,
-    std::string& reason) {
-    if (branch.pathInteractions.empty()) {
-        reason = "ordered source-to-plate interaction evidence is unavailable";
-        return false;
-    }
-    math::Vec3d pathDirection = source.transform.localZAxisInWorld;
-    for (const auto& interaction : branch.pathInteractions) {
-        const auto* component = bench.find(interaction.componentId);
-        if (component == nullptr) {
-            reason = "a traced component no longer exists";
-            return false;
-        }
-        if (component->kind == scene::BenchComponentKind::RealLensAssembly) {
-            reason = "real-lens prescription wave propagation is not available";
-            return false;
-        }
-        if (!approximatelyAligned(interaction.incidentBeam.direction, pathDirection)) {
-            reason = "traced interaction directions are not connected in path order";
-            return false;
-        }
-        if (requiresWaveRefinement(component->kind)) {
-            const double incidenceCosine = std::abs(math::dot(
-                math::normalized(pathDirection),
-                component->transform.localZAxisInWorld));
-            if (incidenceCosine <= 1e-6) {
-                reason = "a local optical plane is grazing the sampled path";
-                return false;
-            }
-            if (component->kind == scene::BenchComponentKind::IdealThinLens
-                && !approximatelyParallel(
-                    component->transform.localZAxisInWorld, pathDirection)) {
-                reason = "an ideal powered lens is tilted relative to its incident centre ray";
-                return false;
-            }
-        }
-        if (interaction.hasOutgoingBeam) {
-            const auto outgoing = math::normalized(
-                interaction.outgoingBeam.direction);
-            if (!approximatelyAligned(outgoing, pathDirection)
-                && component->kind != scene::BenchComponentKind::PlanarMirror
-                && component->kind
-                    != scene::BenchComponentKind::BeamSplitterCombiner) {
-                reason = "a powered or unsupported component changes the centre-ray direction";
-                return false;
-            }
-            pathDirection = outgoing;
-        }
-    }
-    return true;
-}
-
-math::Vec3d reflectVector(math::Vec3d value, math::Vec3d normal) {
-    return value - normal * (2.0 * math::dot(value, normal));
-}
-
-math::Vec3d projectedLocalPoint(
-    const math::RigidTransform3d& fieldFrame,
-    const scene::BenchComponent& component,
-    math::Vec3d propagationDirection,
-    double xMetres,
-    double yMetres) {
-    const math::Vec3d point = fieldFrame.translationMetres
-        + fieldFrame.localXAxisInWorld * xMetres
-        + fieldFrame.localYAxisInWorld * yMetres;
-    const double denominator = math::dot(
-        propagationDirection, component.transform.localZAxisInWorld);
-    if (!std::isfinite(denominator) || std::abs(denominator) <= 1e-6) {
-        throw std::invalid_argument(
-            "local field cannot be projected onto a grazing optical plane");
-    }
-    const double distance = math::dot(
-        component.transform.translationMetres - point,
-        component.transform.localZAxisInWorld) / denominator;
-    if (!std::isfinite(distance)) {
-        throw std::overflow_error(
-            "local field projection distance is not representable");
-    }
-    return math::transformPointWorldToLocal(
-        component.transform, point + propagationDirection * distance);
-}
-
-struct SlmPixelLocation final {
-    bool active = false;
-    std::size_t column = 0;
-    std::size_t row = 0;
-};
-
-SlmPixelLocation locateSlmPixel(
-    const scene::SpatialLightModulatorParameters& parameters,
-    double localXMetres,
-    double localYMetres) {
-    const double pitchX = parameters.widthMetres
-        / static_cast<double>(parameters.pixelWidth);
-    const double pitchY = parameters.heightMetres
-        / static_cast<double>(parameters.pixelHeight);
-    const double gridX = (localXMetres + 0.5 * parameters.widthMetres) / pitchX;
-    const double gridY = (localYMetres + 0.5 * parameters.heightMetres) / pitchY;
-    if (gridX < 0.0 || gridY < 0.0
-        || gridX >= static_cast<double>(parameters.pixelWidth)
-        || gridY >= static_cast<double>(parameters.pixelHeight)) {
-        return {};
-    }
-    const auto column = static_cast<std::size_t>(std::floor(gridX));
-    const auto row = static_cast<std::size_t>(std::floor(gridY));
-    const double pixelX = gridX - std::floor(gridX) - 0.5;
-    const double pixelY = gridY - std::floor(gridY) - 0.5;
-    return {
-        .active = std::abs(pixelX) < 0.5 * parameters.fillFactor
-            && std::abs(pixelY) < 0.5 * parameters.fillFactor,
-        .column = column,
-        .row = row,
-    };
-}
-
-std::string_view slmPatternName(scene::SlmCommandPattern pattern) noexcept {
-    switch (pattern) {
-    case scene::SlmCommandPattern::Uniform: return "uniform";
-    case scene::SlmCommandPattern::LinearRamp: return "linear ramp";
-    case scene::SlmCommandPattern::Checkerboard: return "checkerboard";
-    }
-    return "unknown";
-}
-
-std::string_view slmOriginName(scene::SlmCommandOrigin origin) noexcept {
-    switch (origin) {
-    case scene::SlmCommandOrigin::Manual: return "manual";
-    case scene::SlmCommandOrigin::Automation: return "automation";
-    }
-    return "unknown";
-}
-
-const PlacedSlmSparseCommand* sparseCommandFor(
-    std::span<const PlacedSlmSparseCommand> commands,
-    std::string_view componentId) {
-    const auto found = std::find_if(
-        commands.begin(), commands.end(), [&](const auto& command) {
-            return command.componentId == componentId;
-        });
-    return found == commands.end() ? nullptr : &*found;
 }
 
 void validateSparseSlmCommands(
@@ -390,289 +220,6 @@ void validateSparseSlmCommands(
     }
 }
 
-double evaluateSparseCommand(
-    const PlacedSlmSparseCommand& command,
-    std::size_t column,
-    std::size_t row) {
-    const std::pair coordinate {row, column};
-    const auto found = std::lower_bound(
-        command.pixels.begin(), command.pixels.end(), coordinate,
-        [](const auto& pixel, const auto& target) {
-            return std::pair {pixel.row, pixel.column} < target;
-        });
-    if (found != command.pixels.end()
-        && found->row == row && found->column == column) {
-        return found->normalizedCommand;
-    }
-    return command.defaultNormalizedCommand;
-}
-
-void applyProjectedElement(
-    field::ComplexField2D& value,
-    const scene::BenchComponent& component,
-    const math::RigidTransform3d& fieldFrame,
-    math::Vec3d propagationDirection,
-    PlateFieldSamplingDiagnostics& diagnostics,
-    std::span<const PlacedSlmSparseCommand> slmCommands) {
-    if (!requiresWaveRefinement(component.kind)
-        || component.kind == scene::BenchComponentKind::RealLensAssembly) {
-        return;
-    }
-    const double incidenceCosine = std::abs(math::dot(
-        math::normalized(propagationDirection),
-        component.transform.localZAxisInWorld));
-    if (incidenceCosine < 1.0 - 1e-10) {
-        diagnostics.usedTiltedElementProjection = true;
-    }
-    auto transformed = value;
-    const double phaseCoefficient = component.kind
-            == scene::BenchComponentKind::IdealThinLens
-        ? (-0.5 * value.mediumWavenumberRadiansPerMetre())
-            / std::get<scene::IdealThinLensParameters>(component.parameters)
-                .focalLengthMetres
-        : 0.0;
-    for (std::size_t y = 0; y < transformed.height(); ++y) {
-        for (std::size_t x = 0; x < transformed.width(); ++x) {
-            const auto local = projectedLocalPoint(
-                fieldFrame,
-                component,
-                propagationDirection,
-                transformed.xCoordinateMetres(x),
-                transformed.yCoordinateMetres(y));
-            bool transmitted = true;
-            double phase = 0.0;
-            double amplitudeTransmission = 1.0;
-            switch (component.kind) {
-            case scene::BenchComponentKind::PlanarMirror: {
-                const auto& p = std::get<scene::PlanarMirrorParameters>(
-                    component.parameters);
-                transmitted = std::abs(local.x) <= 0.5 * p.widthMetres
-                    && std::abs(local.y) <= 0.5 * p.heightMetres;
-                break;
-            }
-            case scene::BenchComponentKind::BeamSplitterCombiner: {
-                const auto& p = std::get<scene::BeamSplitterParameters>(
-                    component.parameters);
-                transmitted = std::abs(local.x) <= 0.5 * p.widthMetres
-                    && std::abs(local.y) <= 0.5 * p.heightMetres;
-                break;
-            }
-            case scene::BenchComponentKind::IdealThinLens: {
-                const auto& p = std::get<scene::IdealThinLensParameters>(
-                    component.parameters);
-                transmitted = std::hypot(local.x, local.y)
-                    <= 0.5 * p.clearApertureDiameterMetres;
-                phase = phaseCoefficient
-                    * (local.x * local.x + local.y * local.y);
-                break;
-            }
-            case scene::BenchComponentKind::Aperture: {
-                const auto& p = std::get<scene::ApertureParameters>(
-                    component.parameters);
-                if (p.shape == scene::ApertureShape::Circular) {
-                    const double nx = local.x / (0.5 * p.widthMetres);
-                    const double ny = local.y / (0.5 * p.heightMetres);
-                    transmitted = nx * nx + ny * ny <= 1.0;
-                } else if (p.shape == scene::ApertureShape::DoubleSlit) {
-                    const double halfSeparation
-                        = 0.5 * p.slitSeparationMetres;
-                    transmitted = std::abs(
-                            std::abs(local.x) - halfSeparation)
-                            <= 0.5 * p.slitWidthMetres
-                        && std::abs(local.y)
-                            <= 0.5 * p.slitHeightMetres;
-                } else {
-                    transmitted = std::abs(local.x) <= 0.5 * p.widthMetres
-                        && std::abs(local.y) <= 0.5 * p.heightMetres;
-                }
-                break;
-            }
-            case scene::BenchComponentKind::SpatialFilter: {
-                const auto& p = std::get<scene::SpatialFilterParameters>(
-                    component.parameters);
-                transmitted = std::hypot(local.x, local.y)
-                    <= 0.5 * p.pinholeDiameterMetres;
-                break;
-            }
-            case scene::BenchComponentKind::SpatialLightModulator: {
-                const auto& p
-                    = std::get<scene::SpatialLightModulatorParameters>(
-                        component.parameters);
-                const auto location = locateSlmPixel(p, local.x, local.y);
-                transmitted = location.active;
-                if (transmitted) {
-                    const auto* sparse = sparseCommandFor(
-                        slmCommands, component.id);
-                    const double command = sparse == nullptr
-                        ? scene::evaluateSlmNormalizedCommand(
-                            p, location.column, location.row)
-                        : evaluateSparseCommand(
-                            *sparse, location.column, location.row);
-                    if (sparse != nullptr
-                        && sparse->calibratedResponse != nullptr) {
-                        const auto response
-                            = sparse->calibratedResponse->evaluate(
-                                value.vacuumWavelengthMetres(), command);
-                        amplitudeTransmission
-                            = response.amplitudeTransmission;
-                        phase = response.unwrappedPhaseDelayRadians;
-                    } else if (p.modulationMode
-                        == scene::SlmModulationMode::Amplitude) {
-                        amplitudeTransmission = command;
-                    } else {
-                        phase = command * p.phaseRangeRadians;
-                    }
-                }
-                break;
-            }
-            default:
-                break;
-            }
-            if (!transmitted) {
-                transformed.at(x, y) = {0.0, 0.0};
-            } else {
-                if (!std::isfinite(phase)) {
-                    throw std::overflow_error(
-                        "projected thin-element phase is not representable");
-                }
-                transformed.at(x, y) *= amplitudeTransmission
-                    * finitePhasor(phase);
-            }
-        }
-    }
-    value = std::move(transformed);
-    if (component.kind == scene::BenchComponentKind::SpatialFilter) {
-        diagnostics.warnings.push_back(
-            component.id
-            + ": modeled as its explicit pinhole plane; the compound focusing objective requires separately placed lenses");
-    } else if (component.kind
-        == scene::BenchComponentKind::SpatialLightModulator) {
-        const auto* sparse = sparseCommandFor(slmCommands, component.id);
-        diagnostics.warnings.push_back(
-            component.id
-            + ": applied "
-            + (sparse == nullptr
-                ? std::string(slmPatternName(std::get<
-                    scene::SpatialLightModulatorParameters>(
-                        component.parameters).commandPattern))
-                : std::string("sparse raster"))
-            + " command "
-            + std::get<scene::SpatialLightModulatorParameters>(
-                component.parameters).commandId
-            + " from "
-            + std::string(slmOriginName(std::get<
-                scene::SpatialLightModulatorParameters>(
-                    component.parameters).commandOrigin))
-            + " provenance");
-        diagnostics.appliedSlmCommandIds.push_back(
-            std::get<scene::SpatialLightModulatorParameters>(
-                component.parameters).commandId);
-        if (sparse != nullptr && sparse->calibratedResponse != nullptr) {
-            diagnostics.appliedSlmCalibrationIds.push_back(
-                sparse->calibrationId);
-        }
-    }
-    diagnostics.appliedWaveComponentIds.push_back(component.id);
-}
-
-void reflectFieldFrameAtFold(
-    field::ComplexField2D& value,
-    math::RigidTransform3d& fieldFrame,
-    math::Vec3d mirrorNormal,
-    math::Vec3d outgoingDirection) {
-    auto reflected = value;
-    for (std::size_t y = 0; y < value.height(); ++y) {
-        for (std::size_t x = 0; x < value.width(); ++x) {
-            reflected.at(x, y) = value.at(
-                (value.width() - x) % value.width(), y);
-        }
-    }
-    value = std::move(reflected);
-    fieldFrame.localXAxisInWorld = -1.0 * reflectVector(
-        fieldFrame.localXAxisInWorld, mirrorNormal);
-    fieldFrame.localYAxisInWorld = reflectVector(
-        fieldFrame.localYAxisInWorld, mirrorNormal);
-    fieldFrame.localZAxisInWorld = math::normalized(outgoingDirection);
-    math::validateRigidTransform(fieldFrame);
-}
-
-std::complex<double> bilinearSample(
-    const field::ComplexField2D& value,
-    double xMetres,
-    double yMetres) {
-    const double xIndex = xMetres / value.pitchXMetres()
-        + static_cast<double>(value.width() / 2U);
-    const double yIndex = yMetres / value.pitchYMetres()
-        + static_cast<double>(value.height() / 2U);
-    if (!std::isfinite(xIndex) || !std::isfinite(yIndex)) {
-        throw std::overflow_error(
-            "plate tangent-plane sample coordinate is not representable");
-    }
-    const auto x0 = static_cast<long long>(std::floor(xIndex));
-    const auto y0 = static_cast<long long>(std::floor(yIndex));
-    const double tx = xIndex - static_cast<double>(x0);
-    const double ty = yIndex - static_cast<double>(y0);
-    const auto sample = [&](long long x, long long y) {
-        if (x < 0 || y < 0
-            || x >= static_cast<long long>(value.width())
-            || y >= static_cast<long long>(value.height())) {
-            return std::complex<double> {0.0, 0.0};
-        }
-        return value.at(static_cast<std::size_t>(x), static_cast<std::size_t>(y));
-    };
-    return (1.0 - tx) * (1.0 - ty) * sample(x0, y0)
-        + tx * (1.0 - ty) * sample(x0 + 1, y0)
-        + (1.0 - tx) * ty * sample(x0, y0 + 1)
-        + tx * ty * sample(x0 + 1, y0 + 1);
-}
-
-field::ComplexField2D sampleOnPlateTangentPlane(
-    const field::ComplexField2D& envelope,
-    const math::RigidTransform3d& fieldFrame,
-    math::Vec3d propagationDirection,
-    const scene::BenchComponent& plate,
-    const PlateFieldSamplingOptions& options,
-    double extentWidth,
-    double extentHeight,
-    PlateFieldSamplingDiagnostics& diagnostics) {
-    field::ComplexField2D result(
-        options.sampleWidth,
-        options.sampleHeight,
-        extentWidth / static_cast<double>(options.sampleWidth),
-        extentHeight / static_cast<double>(options.sampleHeight),
-        envelope.vacuumWavelengthMetres(),
-        envelope.refractiveIndex());
-    const double alignment = std::abs(math::dot(
-        math::normalized(propagationDirection),
-        plate.transform.localZAxisInWorld));
-    diagnostics.usedPlateTangentProjection = alignment < 1.0 - 1e-10;
-    for (std::size_t y = 0; y < result.height(); ++y) {
-        for (std::size_t x = 0; x < result.width(); ++x) {
-            const math::Vec3d localPoint {
-                result.xCoordinateMetres(x) + options.centreXMetres,
-                result.yCoordinateMetres(y) + options.centreYMetres,
-                0.0,
-            };
-            const math::Vec3d worldPoint = math::transformPointLocalToWorld(
-                plate.transform, localPoint);
-            const math::Vec3d displacement
-                = worldPoint - fieldFrame.translationMetres;
-            const double transverseX = math::dot(
-                displacement, fieldFrame.localXAxisInWorld);
-            const double transverseY = math::dot(
-                displacement, fieldFrame.localYAxisInWorld);
-            const double longitudinal = math::dot(
-                displacement, propagationDirection);
-            result.at(x, y) = bilinearSample(
-                envelope, transverseX, transverseY)
-                * finitePhasor(
-                    envelope.mediumWavenumberRadiansPerMetre()
-                    * longitudinal);
-        }
-    }
-    return result;
-}
-
 SampledPlateIncidentField sampleLocalWavePath(
     const scene::BenchScene& bench,
     const PlateIncidentBranch& branch,
@@ -680,98 +227,48 @@ SampledPlateIncidentField sampleLocalWavePath(
     compute::fft::IFftBackend& fftBackend,
     SampledPlateIncidentField baseline,
     std::span<const PlacedSlmSparseCommand> slmCommands) {
-    const auto& source = requireSource(bench, branch);
     const double extentWidth = baseline.diagnostics.sampledExtentWidthMetres;
     const double extentHeight = baseline.diagnostics.sampledExtentHeightMetres;
-    if (options.sampleWidth > kMaximumSamplesPerAxis / 2U
-        || options.sampleHeight > kMaximumSamplesPerAxis / 2U) {
-        throw std::invalid_argument(
-            "beam-following local path requires a 2x padded grid no larger than 4096 samples per axis");
-    }
-    field::ComplexField2D propagated(
-        options.sampleWidth * 2U,
-        options.sampleHeight * 2U,
-        extentWidth / static_cast<double>(options.sampleWidth),
-        extentHeight / static_cast<double>(options.sampleHeight),
-        branch.beam.wavelengthMetres,
-        options.refractiveIndex);
-
-    const double amplitudeScale = std::sqrt(
-        branch.beam.powerWatts / sourceNormalizationAreaSquareMetres(source));
-    const auto sourcePhase = finitePhasor(branch.beam.phaseRadians);
-    for (std::size_t y = 0; y < propagated.height(); ++y) {
-        for (std::size_t x = 0; x < propagated.width(); ++x) {
-            const auto envelope = sourceEnvelope(
-                source,
-                propagated.xCoordinateMetres(x),
-                propagated.yCoordinateMetres(y));
-            propagated.at(x, y) = envelope.amplitude
-                * amplitudeScale * sourcePhase;
-        }
-    }
-
-    compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
-    math::Vec3d previousPoint = source.transform.translationMetres;
-    math::Vec3d propagationDirection = source.transform.localZAxisInWorld;
-    math::RigidTransform3d fieldFrame = source.transform;
-    const scene::BenchComponent* plate = nullptr;
-    for (const auto& interaction : branch.pathInteractions) {
-        const double distance = math::length(
-            interaction.hitPointMetres - previousPoint);
-        static_cast<void>(propagator.propagateInPlace(propagated, distance));
-        const auto* component = bench.find(interaction.componentId);
-        if (component == nullptr) {
-            throw std::logic_error(
-                "local wave path component disappeared during sampling");
-        }
-        fieldFrame.translationMetres = interaction.hitPointMetres;
-        if (component->kind != scene::BenchComponentKind::HolographicPlate) {
-            applyProjectedElement(
-                propagated,
-                *component,
-                fieldFrame,
-                propagationDirection,
-                baseline.diagnostics,
-                slmCommands);
-        } else {
-            plate = component;
-        }
-        if (interaction.hasOutgoingBeam) {
-            const math::Vec3d outgoing = math::normalized(
-                interaction.outgoingBeam.direction);
-            if (!approximatelyAligned(outgoing, propagationDirection)) {
-                reflectFieldFrameAtFold(
-                    propagated,
-                    fieldFrame,
-                    component->transform.localZAxisInWorld,
-                    outgoing);
-                baseline.diagnostics.usedFoldedPath = true;
-                baseline.diagnostics.foldedWaveComponentIds.push_back(
-                    component->id);
-            }
-            propagationDirection = outgoing;
-        }
-        previousPoint = interaction.hitPointMetres;
-    }
-
-    if (plate == nullptr) {
-        throw std::logic_error(
-            "local wave path did not terminate on its holographic plate");
-    }
-    baseline.field = sampleOnPlateTangentPlane(
-        propagated,
-        fieldFrame,
-        propagationDirection,
-        *plate,
-        options,
-        extentWidth,
-        extentHeight,
-        baseline.diagnostics);
+    auto sampled = wave::sampleBeamFollowingField(
+        bench,
+        branch.beam,
+        branch.pathInteractions,
+        {
+            .sampleWidth = options.sampleWidth,
+            .sampleHeight = options.sampleHeight,
+            .extentWidthMetres = extentWidth,
+            .extentHeightMetres = extentHeight,
+            .centreXMetres = options.centreXMetres,
+            .centreYMetres = options.centreYMetres,
+            .refractiveIndex = options.refractiveIndex,
+        },
+        fftBackend,
+        slmCommands);
+    baseline.field = std::move(sampled.fieldAtTarget);
+    baseline.diagnostics.usedTiltedElementProjection
+        = sampled.diagnostics.usedTiltedElementProjection;
+    baseline.diagnostics.usedFoldedPath
+        = sampled.diagnostics.usedFoldedPath;
+    baseline.diagnostics.usedPlateTangentProjection
+        = sampled.diagnostics.usedTargetTangentProjection;
+    baseline.diagnostics.supportTouchesPlateBoundary
+        = sampled.diagnostics.supportTouchesBoundary;
+    baseline.diagnostics.appliedWaveComponentIds
+        = std::move(sampled.diagnostics.appliedWaveComponentIds);
+    baseline.diagnostics.foldedWaveComponentIds
+        = std::move(sampled.diagnostics.foldedWaveComponentIds);
+    baseline.diagnostics.appliedSlmCommandIds
+        = std::move(sampled.diagnostics.appliedSlmCommandIds);
+    baseline.diagnostics.appliedSlmCalibrationIds
+        = std::move(sampled.diagnostics.appliedSlmCalibrationIds);
+    baseline.diagnostics.warnings.insert(
+        baseline.diagnostics.warnings.end(),
+        std::make_move_iterator(sampled.diagnostics.warnings.begin()),
+        std::make_move_iterator(sampled.diagnostics.warnings.end()));
     baseline.diagnostics.appliedLocalWavePath = true;
     baseline.diagnostics.usesApproximateSourceEnvelope = false;
     baseline.diagnostics.illuminatedSampleCount = 0U;
     baseline.diagnostics.integratedPowerWatts = 0.0;
-    baseline.diagnostics.supportTouchesPlateBoundary = false;
     baseline.diagnostics.warnings.erase(
         std::remove_if(
             baseline.diagnostics.warnings.begin(),
@@ -800,26 +297,7 @@ SampledPlateIncidentField sampleLocalWavePath(
             if (intensity > 0.0) {
                 ++baseline.diagnostics.illuminatedSampleCount;
             }
-            if (isBoundarySample(
-                    x, y, baseline.field.width(), baseline.field.height())
-                && intensity > kBoundaryEnvelopeThreshold
-                    * kBoundaryEnvelopeThreshold * amplitudeScale
-                    * amplitudeScale) {
-                baseline.diagnostics.supportTouchesPlateBoundary = true;
-            }
         }
-    }
-    if (baseline.diagnostics.supportTouchesPlateBoundary) {
-        baseline.diagnostics.warnings.emplace_back(
-            "propagated field reaches the sampled boundary; periodic FFT wrap may contaminate this window");
-    }
-    if (baseline.diagnostics.usedTiltedElementProjection) {
-        baseline.diagnostics.warnings.emplace_back(
-            "tilted zero-thickness element footprints use carrier-tracked beam-normal projection; vector, polarization, thickness, and high-NA longitudinal effects are not modeled");
-    }
-    if (baseline.diagnostics.usedPlateTangentProjection) {
-        baseline.diagnostics.warnings.emplace_back(
-            "the oblique plate tangent projection restores the exact centre carrier but treats envelope evolution across the tilted window paraxially");
     }
     return baseline;
 }
@@ -1015,11 +493,13 @@ SampledPlateIncidentField samplePlateIncidentField(
     if (!hasWaveRefinementComponent(bench, branch)) {
         return baseline;
     }
-    const auto& source = requireSource(bench, branch);
-    std::string reason;
-    if (!supportsLocalWavePath(bench, source, branch, reason)) {
+    try {
+        wave::validateBeamFollowingFieldPath(
+            bench, branch.beam, branch.pathInteractions);
+    } catch (const std::invalid_argument& error) {
         baseline.diagnostics.warnings.push_back(
-            "local wave refinement skipped: " + reason);
+            "local wave refinement skipped: "
+            + std::string(error.what()));
         return baseline;
     }
     return sampleLocalWavePath(

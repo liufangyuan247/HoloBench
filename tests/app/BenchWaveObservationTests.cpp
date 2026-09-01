@@ -1,9 +1,11 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numbers>
 #include <stdexcept>
+#include <utility>
 
 #include "app/BenchWaveObservation.hpp"
 #include "app/BenchWavePresets.hpp"
@@ -12,6 +14,7 @@
 
 namespace app = holobench::app;
 namespace field = holobench::field;
+namespace math = holobench::math;
 namespace scene = holobench::optics::scene;
 namespace ray = holobench::optics::ray;
 namespace fft = holobench::compute::fft;
@@ -23,6 +26,15 @@ double peakIntensity(const field::ComplexField2D& value) {
     for (const auto& sample : value.samples()) {
         result = std::max(result, std::norm(sample));
     }
+    return result;
+}
+
+scene::BenchComponent placedComponent(
+    scene::BenchComponentKind kind,
+    const char* id,
+    math::RigidTransform3d transform) {
+    auto result = scene::makeDefaultBenchComponent(kind, id);
+    result.transform = transform;
     return result;
 }
 
@@ -86,7 +98,9 @@ TEST_CASE("single-slit circular and bounded drag preview use the same placed scr
         CHECK(result.fieldAtObservation.width() == 256U);
         CHECK(result.fieldAtObservation.height() == 256U);
         REQUIRE(result.contributions.size() == 1U);
-        CHECK(result.contributions.front().usedShiftedPaddedPropagation);
+        CHECK_FALSE(result.contributions.front()
+            .pathSampling.usedTargetTangentProjection);
+        CHECK_FALSE(result.contributions.front().pathComponentIds.empty());
         CHECK(peakIntensity(result.fieldAtObservation) > 0.0);
     }
 }
@@ -106,12 +120,9 @@ TEST_CASE("live wave screen follows decentered and rotated free placement") {
         project.scene, graph, "wave-screen", 128U, true, backend);
     REQUIRE(shifted.contributions.size() == 1U);
     const auto& shiftedContribution = shifted.contributions.front();
-    CHECK(shiftedContribution.usedShiftedPaddedPropagation);
-    CHECK_FALSE(shiftedContribution.usedTiltedPlanePropagation);
-    CHECK(shiftedContribution.observationOffsetXMetres
-        == doctest::Approx(0.50e-3));
-    CHECK(shiftedContribution.observationOffsetYMetres
-        == doctest::Approx(-0.25e-3));
+    CHECK_FALSE(
+        shiftedContribution.pathSampling.usedTargetTangentProjection);
+    CHECK(shiftedContribution.pathComponentIds.back() == "wave-screen");
     CHECK(peakIntensity(shifted.fieldAtObservation) > 0.0);
 
     screen = *project.scene.find("wave-screen");
@@ -129,10 +140,8 @@ TEST_CASE("live wave screen follows decentered and rotated free placement") {
         project.scene, graph, "wave-screen", 256U, true, backend);
     REQUIRE(tilted.contributions.size() == 1U);
     const auto& tiltedContribution = tilted.contributions.front();
-    CHECK_FALSE(tiltedContribution.usedShiftedPaddedPropagation);
-    CHECK(tiltedContribution.usedTiltedPlanePropagation);
-    CHECK(tiltedContribution.tiltedPropagation.propagatingOutputBinCount > 0U);
-    CHECK(tiltedContribution.tiltedPropagation.interpolatedOutputBinCount > 0U);
+    CHECK(tiltedContribution.pathSampling.usedTargetTangentProjection);
+    CHECK_FALSE(tiltedContribution.pathSampling.warnings.empty());
     CHECK(peakIntensity(tilted.fieldAtObservation) > 0.0);
 }
 
@@ -294,7 +303,7 @@ TEST_CASE("live wave screen rejects stale incomplete and upstream observations")
     CHECK_THROWS_WITH_AS(
         static_cast<void>(app::observeBenchWavePattern(
             upstreamScene, graph, "wave-screen", 128U, true, backend)),
-        doctest::Contains("downstream"),
+        doctest::Contains("traced source branch"),
         std::invalid_argument);
 
     auto unsupportedScene = project.scene;
@@ -306,6 +315,13 @@ TEST_CASE("live wave screen rejects stale incomplete and upstream observations")
     REQUIRE(unsupportedAperture != nullptr);
     lens.transform = unsupportedAperture->transform;
     lens.transform.translationMetres.z = 0.25;
+    constexpr double lensTiltRadians = 5.0
+        * std::numbers::pi_v<double> / 180.0;
+    lens.transform.localXAxisInWorld = {
+        std::cos(lensTiltRadians), 0.0, -std::sin(lensTiltRadians)};
+    lens.transform.localYAxisInWorld = {0.0, 1.0, 0.0};
+    lens.transform.localZAxisInWorld = {
+        std::sin(lensTiltRadians), 0.0, std::cos(lensTiltRadians)};
     unsupportedScene.add(lens);
     graph = ray::traceDynamicBench(unsupportedScene);
     CHECK_THROWS_WITH_AS(
@@ -316,8 +332,185 @@ TEST_CASE("live wave screen rejects stale incomplete and upstream observations")
             128U,
             true,
             backend)),
-        doctest::Contains("unsupported post-aperture"),
+        doctest::Contains("tilted relative"),
         std::invalid_argument);
+}
+
+TEST_CASE("placed observation follows lenses SLMs mirrors and splitter folds") {
+    fft::CpuFftBackend backend;
+
+    scene::BenchScene straight;
+    straight.add(scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource, "routed-laser"));
+    auto lens = placedComponent(
+        scene::BenchComponentKind::IdealThinLens,
+        "routed-lens",
+        {.translationMetres = {0.0, 0.0, 0.20}});
+    auto lensParameters = std::get<scene::IdealThinLensParameters>(
+        lens.parameters);
+    lensParameters.focalLengthMetres = 0.30;
+    lens.parameters = lensParameters;
+    straight.add(lens);
+    straight.add(placedComponent(
+        scene::BenchComponentKind::SpatialLightModulator,
+        "routed-slm",
+        {.translationMetres = {0.0, 0.0, 0.30}}));
+    straight.add(placedComponent(
+        scene::BenchComponentKind::ScreenDetector,
+        "routed-screen",
+        {.translationMetres = {0.0, 0.0, 0.50}}));
+    auto graph = ray::traceDynamicBench(straight);
+    const auto straightResult = app::observeBenchWavePattern(
+        straight, graph, "routed-screen", 128U, true, backend);
+    REQUIRE(straightResult.contributions.size() == 1U);
+    const auto& straightDiagnostics
+        = straightResult.contributions.front().pathSampling;
+    CHECK(std::find(
+        straightDiagnostics.appliedWaveComponentIds.begin(),
+        straightDiagnostics.appliedWaveComponentIds.end(),
+        "routed-lens")
+        != straightDiagnostics.appliedWaveComponentIds.end());
+    CHECK(std::find(
+        straightDiagnostics.appliedWaveComponentIds.begin(),
+        straightDiagnostics.appliedWaveComponentIds.end(),
+        "routed-slm")
+        != straightDiagnostics.appliedWaveComponentIds.end());
+    CHECK(straightDiagnostics.appliedSlmCommandIds.size() == 1U);
+    CHECK(peakIntensity(straightResult.fieldAtObservation) > 0.0);
+
+    constexpr double inverseSqrtTwo = 0.7071067811865475244;
+    const math::RigidTransform3d foldTransform {
+        .translationMetres = {0.0, 0.0, 0.50},
+        .localXAxisInWorld = {
+            inverseSqrtTwo, 0.0, inverseSqrtTwo},
+        .localYAxisInWorld = {0.0, 1.0, 0.0},
+        .localZAxisInWorld = {
+            -inverseSqrtTwo, 0.0, inverseSqrtTwo},
+    };
+    const math::RigidTransform3d xFacingScreen {
+        .translationMetres = {0.50, 0.0, 0.50},
+        .localXAxisInWorld = {0.0, 0.0, -1.0},
+        .localYAxisInWorld = {0.0, 1.0, 0.0},
+        .localZAxisInWorld = {1.0, 0.0, 0.0},
+    };
+    for (const auto [kind, id] : std::array {
+             std::pair {scene::BenchComponentKind::PlanarMirror,
+                        "routed-mirror"},
+             std::pair {scene::BenchComponentKind::BeamSplitterCombiner,
+                        "routed-splitter"}}) {
+        scene::BenchScene folded;
+        folded.add(scene::makeDefaultBenchComponent(
+            scene::BenchComponentKind::LaserSource, "folded-laser"));
+        folded.add(placedComponent(kind, id, foldTransform));
+        folded.add(placedComponent(
+            scene::BenchComponentKind::ScreenDetector,
+            "folded-screen",
+            xFacingScreen));
+        graph = ray::traceDynamicBench(folded);
+        const auto foldedResult = app::observeBenchWavePattern(
+            folded, graph, "folded-screen", 128U, true, backend);
+        REQUIRE(foldedResult.contributions.size() == 1U);
+        const auto& contribution = foldedResult.contributions.front();
+        CHECK(contribution.pathSampling.usedFoldedPath);
+        CHECK(contribution.pathSampling.foldedWaveComponentIds
+            == std::vector<std::string> {id});
+        CHECK(peakIntensity(foldedResult.fieldAtObservation) > 0.0);
+    }
+}
+
+TEST_CASE("placed Mach-Zehnder instruments recombine fields on one Screen") {
+    const auto makeInterferometer = [](double armPhaseRadians) {
+        constexpr double inverseSqrtTwo = 0.7071067811865475244;
+        const math::RigidTransform3d splitTransform {
+            .translationMetres = {0.0, 0.0, 1.0},
+            .localXAxisInWorld = {
+                inverseSqrtTwo, 0.0, inverseSqrtTwo},
+            .localYAxisInWorld = {0.0, 1.0, 0.0},
+            .localZAxisInWorld = {
+                -inverseSqrtTwo, 0.0, inverseSqrtTwo},
+        };
+        const math::RigidTransform3d turnZToX {
+            .translationMetres = {0.0, 0.0, 2.0},
+            .localXAxisInWorld = {
+                inverseSqrtTwo, 0.0, inverseSqrtTwo},
+            .localYAxisInWorld = {0.0, 1.0, 0.0},
+            .localZAxisInWorld = {
+                -inverseSqrtTwo, 0.0, inverseSqrtTwo},
+        };
+        const math::RigidTransform3d turnXToZ {
+            .translationMetres = {1.0, 0.0, 1.0},
+            .localXAxisInWorld = {
+                -inverseSqrtTwo, 0.0, -inverseSqrtTwo},
+            .localYAxisInWorld = {0.0, 1.0, 0.0},
+            .localZAxisInWorld = {
+                inverseSqrtTwo, 0.0, -inverseSqrtTwo},
+        };
+        auto recombinerTransform = splitTransform;
+        recombinerTransform.translationMetres = {1.0, 0.0, 2.0};
+
+        scene::BenchScene bench;
+        bench.add(scene::makeDefaultBenchComponent(
+            scene::BenchComponentKind::LaserSource, "mz-laser"));
+        bench.add(placedComponent(
+            scene::BenchComponentKind::BeamSplitterCombiner,
+            "mz-splitter",
+            splitTransform));
+        bench.add(placedComponent(
+            scene::BenchComponentKind::PlanarMirror,
+            "mz-mirror-a",
+            turnZToX));
+        bench.add(placedComponent(
+            scene::BenchComponentKind::PlanarMirror,
+            "mz-mirror-b",
+            turnXToZ));
+        auto armSlm = placedComponent(
+            scene::BenchComponentKind::SpatialLightModulator,
+            "mz-arm-phase",
+            {.translationMetres = {1.0, 0.0, 1.5}});
+        auto slmParameters
+            = std::get<scene::SpatialLightModulatorParameters>(
+                armSlm.parameters);
+        slmParameters.widthMetres = 0.05;
+        slmParameters.heightMetres = 0.05;
+        slmParameters.fillFactor = 1.0;
+        slmParameters.primaryCommand = armPhaseRadians == 0.0
+            ? 0.0 : 1.0;
+        slmParameters.phaseRangeRadians = armPhaseRadians == 0.0
+            ? 1.0 : armPhaseRadians;
+        armSlm.parameters = slmParameters;
+        bench.add(armSlm);
+        bench.add(placedComponent(
+            scene::BenchComponentKind::BeamSplitterCombiner,
+            "mz-recombiner",
+            recombinerTransform));
+        bench.add(placedComponent(
+            scene::BenchComponentKind::ScreenDetector,
+            "mz-screen",
+            {.translationMetres = {1.0, 0.0, 2.5}}));
+        return bench;
+    };
+
+    fft::CpuFftBackend backend;
+    auto constructiveBench = makeInterferometer(0.0);
+    auto graph = ray::traceDynamicBench(constructiveBench);
+    const auto constructive = app::observeBenchWavePattern(
+        constructiveBench, graph, "mz-screen", 128U, true, backend);
+    REQUIRE(constructive.contributions.size() == 2U);
+    CHECK(constructive.contributions[0].pathSampling.usedFoldedPath);
+    CHECK(constructive.contributions[1].pathSampling.usedFoldedPath);
+    CHECK(constructive.peakIntensityWattsPerSquareMetre > 0.0);
+
+    auto destructiveBench = makeInterferometer(
+        std::numbers::pi_v<double>);
+    graph = ray::traceDynamicBench(destructiveBench);
+    const auto destructive = app::observeBenchWavePattern(
+        destructiveBench, graph, "mz-screen", 128U, true, backend);
+    REQUIRE(destructive.contributions.size() == 2U);
+    // The finite pixelated SLM clips and diffracts one arm, so its pi command
+    // produces a deep physical null rather than pretending to be an ideal
+    // global phase scalar with exact cancellation everywhere.
+    CHECK(destructive.peakIntensityWattsPerSquareMetre
+        < 0.30 * constructive.peakIntensityWattsPerSquareMetre);
 }
 
 TEST_CASE("same wavelength and coherence branches merge as complex fields") {
