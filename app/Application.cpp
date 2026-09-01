@@ -5377,6 +5377,14 @@ void Application::drawSandboxComponentShelf() {
             }
             if (kind == bench::BenchComponentKind::LaserSource) {
                 captureLastItemBounds(sandboxUiEvidence_.laserShelf);
+            } else if (kind
+                == bench::BenchComponentKind::ObjectWavefrontSource) {
+                captureLastItemBounds(sandboxUiEvidence_.objectSourceShelf);
+            } else if (kind
+                == bench::BenchComponentKind::ScreenDetector) {
+                captureLastItemBounds(sandboxUiEvidence_.screenShelf);
+            } else if (kind == bench::BenchComponentKind::FieldProbe) {
+                captureLastItemBounds(sandboxUiEvidence_.probeShelf);
             } else if (kind == bench::BenchComponentKind::HolographicPlate) {
                 captureLastItemBounds(sandboxUiEvidence_.plateShelf);
             }
@@ -9103,12 +9111,14 @@ void Application::runSandboxInteractionSmoke() {
                 std::string(name) + " is not visible in the Bench UI");
         }
     };
-    const auto click = [&](UiItemBounds bounds, std::string_view name) {
-        requireBounds(bounds, name);
-        const glm::vec2 point = bounds.centre();
+    const auto clickPoint = [&](const glm::vec2& point) {
         drawInputFrame(point, 0);
         drawInputFrame(point, 1);
         drawInputFrame(point, 0);
+    };
+    const auto click = [&](UiItemBounds bounds, std::string_view name) {
+        requireBounds(bounds, name);
+        clickPoint(bounds.centre());
     };
     const auto dragPoints = [&](const glm::vec2& origin,
                                 const glm::vec2& destination,
@@ -9171,6 +9181,44 @@ void Application::runSandboxInteractionSmoke() {
         }
         throw std::runtime_error(
             "controlled interaction camera exposes no optical-table drop point");
+    };
+    const auto projectWorldToCurrentViewport = [&](const math::Vec3d& world) {
+        const UiItemBounds currentViewport = sandboxUiEvidence_.viewport;
+        requireBounds(currentViewport, "3D Bench viewport");
+        const glm::vec2 extent
+            = currentViewport.maximum - currentViewport.minimum;
+        const glm::mat4 viewProjection
+            = camera_.projectionMatrix(extent.x / extent.y)
+            * camera_.viewMatrix();
+        const auto projected = gizmo::projectWorldToViewport(
+            {
+                static_cast<float>(world.x),
+                static_cast<float>(world.y),
+                static_cast<float>(world.z),
+            },
+            viewProjection,
+            currentViewport.minimum,
+            extent);
+        if (!projected.visible) {
+            throw std::runtime_error(
+                "controlled world point is outside the current 3D Bench viewport");
+        }
+        return projected.screenPos;
+    };
+    const auto dropAtWorld = [&](UiItemBounds shelfItem,
+                                 const math::Vec3d& world,
+                                 std::string_view name) {
+        drag(shelfItem, projectWorldToCurrentViewport(world), name);
+        drawInputFrame({-1000.0F, -1000.0F}, 0);
+        if (selectedBenchComponentId_.empty()) {
+            throw std::runtime_error(
+                std::string(name) + " drop created no selected component");
+        }
+        return selectedBenchComponentId_;
+    };
+    const auto selectWorldComponent = [&](const math::Vec3d& world) {
+        clickPoint(projectWorldToCurrentViewport(world));
+        drawInputFrame({-1000.0F, -1000.0F}, 0);
     };
     const glm::vec2 laserDrop = tableDropAt(0.42F);
     const glm::vec2 plateDrop = tableDropAt(0.58F);
@@ -9334,37 +9382,148 @@ void Application::runSandboxInteractionSmoke() {
             "W key input did not restore world-axis translation handles");
     }
 
-    click(sandboxUiEvidence_.transmissionPreset, "Transmission action");
+    const auto prepareEmptyTopBench = [&] {
+        click(sandboxUiEvidence_.emptyBench, "Empty Bench action");
+        camera_.setPresetView(render::CameraPresetView::TopXZ);
+        camera_.setTarget({0.0F, 0.0F, 0.0F});
+        camera_.setDistance(0.55F);
+        drawInputFrame({-1000.0F, -1000.0F}, 0);
+        if (!benchProject_.scene.components().empty()
+            || sandboxExperimentMode_ != SandboxExperimentMode::Auto) {
+            throw std::runtime_error(
+                "Empty Bench did not reset scene and experiment auto-selection");
+        }
+    };
+    const auto requireSelectedKind = [&](const std::string& id,
+                                         bench::BenchComponentKind kind,
+                                         std::string_view context) {
+        const auto* component = benchProject_.scene.find(id);
+        if (component == nullptr || component->kind != kind) {
+            throw std::runtime_error(
+                std::string(context) + " created the wrong component kind");
+        }
+    };
+
+    prepareEmptyTopBench();
+    const std::string transmissionPlate = dropAtWorld(
+        sandboxUiEvidence_.plateShelf,
+        {0.0, 0.0, 0.0},
+        "Transmission plate shelf item");
+    requireSelectedKind(
+        transmissionPlate,
+        bench::BenchComponentKind::HolographicPlate,
+        "Transmission plate drop");
+    static_cast<void>(dropAtWorld(
+        sandboxUiEvidence_.screenShelf,
+        {0.0, 0.0, 0.03},
+        "Transmission screen shelf item"));
+    static_cast<void>(dropAtWorld(
+        sandboxUiEvidence_.laserShelf,
+        {0.004, 0.0, -0.20},
+        "Transmission reference shelf item"));
+    static_cast<void>(dropAtWorld(
+        sandboxUiEvidence_.objectSourceShelf,
+        {-0.002, 0.0, -0.20},
+        "Transmission object shelf item"));
+    selectWorldComponent({0.0, 0.0, 0.0});
+    if (selectedBenchComponentId_ != transmissionPlate) {
+        throw std::runtime_error(
+            "could not select the placed transmission plate in the viewport");
+    }
     click(sandboxUiEvidence_.record, "Record action");
     click(sandboxUiEvidence_.reconstruct, "Reconstruct action");
     if (!sandboxPlateRecording_ || !sandboxPlateReplay_
         || sandboxPlateReplay_->isStaleFor(benchProject_.scene)) {
         throw std::runtime_error(
-            "transmission UI clicks did not produce current reconstruction (project="
-            + benchProject_.projectId + ", selected="
-            + selectedBenchComponentId_ + ", recording="
-            + (sandboxPlateRecording_ ? "yes" : "no") + ", replay="
-            + (sandboxPlateReplay_ ? "yes" : "no") + ", status="
+            "empty-Bench transmission assembly did not reconstruct (status="
             + statusMessage_ + ", error=" + errorMessage_ + ")");
     }
 
-    click(sandboxUiEvidence_.reflectionPreset, "Reflection action");
+    prepareEmptyTopBench();
+    const std::string reflectionPlate = dropAtWorld(
+        sandboxUiEvidence_.plateShelf,
+        {0.0, 0.0, 0.0},
+        "Reflection plate shelf item");
+    static_cast<void>(dropAtWorld(
+        sandboxUiEvidence_.probeShelf,
+        {0.0, 0.0, -0.03},
+        "Reflection probe shelf item"));
+    static_cast<void>(dropAtWorld(
+        sandboxUiEvidence_.laserShelf,
+        {0.003, 0.0, -0.15},
+        "Reflection reference shelf item"));
+    const std::string reflectionObject = dropAtWorld(
+        sandboxUiEvidence_.objectSourceShelf,
+        {0.0, 0.0, 0.15},
+        "Reflection object shelf item");
+    requireSelectedKind(
+        reflectionObject,
+        bench::BenchComponentKind::ObjectWavefrontSource,
+        "Reflection object drop");
+    click(sandboxUiEvidence_.aimAtTarget, "Reflection Aim +Z action");
+    selectWorldComponent({0.0, 0.0, 0.0});
+    if (selectedBenchComponentId_ != reflectionPlate) {
+        throw std::runtime_error(
+            "could not select the placed reflection plate in the viewport");
+    }
     click(sandboxUiEvidence_.record, "Record action");
     click(sandboxUiEvidence_.reconstruct, "Reconstruct action");
     if (!sandboxVolumeRecording_ || !sandboxVolumeObservationReplay_
         || sandboxVolumeObservationReplay_->isStaleFor(
             benchProject_.scene)) {
         throw std::runtime_error(
-            "reflection UI clicks did not produce current reconstruction");
+            "empty-Bench reflection assembly did not reconstruct (status="
+            + statusMessage_ + ", error=" + errorMessage_ + ")");
     }
 
-    click(sandboxUiEvidence_.rgbPreset, "RGB action");
+    prepareEmptyTopBench();
+    const std::string rgbPlate = dropAtWorld(
+        sandboxUiEvidence_.plateShelf,
+        {0.0, 0.0, 0.0},
+        "RGB plate shelf item");
+    static_cast<void>(dropAtWorld(
+        sandboxUiEvidence_.screenShelf,
+        {0.0, 0.0, 0.03},
+        "RGB screen shelf item"));
+    const std::string rgbLaser = dropAtWorld(
+        sandboxUiEvidence_.laserShelf,
+        {0.003, 0.0, -0.20},
+        "RGB reference shelf item");
+    click(sandboxUiEvidence_.sourceRgb, "RGB laser spectrum action");
+    const auto* rgbLaserComponent = benchProject_.scene.find(rgbLaser);
+    if (rgbLaserComponent == nullptr
+        || std::get<bench::LaserSourceParameters>(
+            rgbLaserComponent->parameters).channels.size() != 3U) {
+        throw std::runtime_error(
+            "RGB laser spectrum action did not create three channels");
+    }
+    static_cast<void>(dropAtWorld(
+        sandboxUiEvidence_.objectSourceShelf,
+        {-0.006, 0.0, -0.20},
+        "Red object shelf item"));
+    click(sandboxUiEvidence_.sourceRed, "Red object spectrum action");
+    static_cast<void>(dropAtWorld(
+        sandboxUiEvidence_.objectSourceShelf,
+        {0.0, 0.0, -0.20},
+        "Green object shelf item"));
+    click(sandboxUiEvidence_.sourceGreen, "Green object spectrum action");
+    static_cast<void>(dropAtWorld(
+        sandboxUiEvidence_.objectSourceShelf,
+        {0.006, 0.0, -0.20},
+        "Blue object shelf item"));
+    click(sandboxUiEvidence_.sourceBlue, "Blue object spectrum action");
+    selectWorldComponent({0.0, 0.0, 0.0});
+    if (selectedBenchComponentId_ != rgbPlate) {
+        throw std::runtime_error(
+            "could not select the placed RGB plate in the viewport");
+    }
     click(sandboxUiEvidence_.record, "Record action");
     click(sandboxUiEvidence_.reconstruct, "Reconstruct action");
     if (!sandboxRgbRecording_ || !sandboxRgbReplay_
         || sandboxRgbReplay_->isStaleFor(benchProject_.scene)) {
         throw std::runtime_error(
-            "RGB UI clicks did not produce current reconstruction");
+            "empty-Bench RGB assembly did not reconstruct (status="
+            + statusMessage_ + ", error=" + errorMessage_ + ")");
     }
 
     const std::uint64_t reconstructionRevision

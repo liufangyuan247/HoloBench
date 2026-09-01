@@ -2,10 +2,11 @@
 
 HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator, and a long-term R&D tool for CHIMERA-like holographic printing.
 
-**Milestone status**: M1-M6 physics/reference foundations are validated in
-their documented domains. M7/M8 backend foundations exist, but their product
-milestones are reopened until the intended direct-manipulation workflow passes
-user-facing acceptance. The application currently includes an editable
+**Milestone status**: M1-M6 physics/reference foundations and the M7/M8
+free-form holography sandbox are validated in their documented domains. The
+hardware interaction gate now assembles transmission, reflection/Denisyuk, and
+RGB full-colour experiments from an empty Bench through real shelf, transform,
+alignment, spectrum, Record, and Reconstruct input. The application includes an editable
 3D bench with typed placeable components, geometry-derived branched rays,
 ordinary transmission/reflection/RGB presets, placed thin-hologram recording,
 and reconstruction on placed Screen/Probe components. Reflection-volume
@@ -13,10 +14,9 @@ recording derives the grating from the actual opposite-side plate branches and
 reconstructs a Bragg-weighted sampled field on a placed reflection-side
 Screen/Probe. The RGB preset records and replays three independent spectral
 channels and combines only their display intensities. The active priority is
-to make those capabilities operable as one spatial optical experiment: place
-and align components in the viewport, record a plate, switch to replay, and
-observe reconstruction on a placed Screen/Probe. M9 CHIMERA data-path work is
-retained and follows that sandbox closure. Steam/store/distribution work is
+M9: connect the retained CHIMERA recipe, hogel/SLM exposure, reconstruction
+camera, scan, and batch contracts to this same accepted Bench interaction.
+Steam/store/distribution work is
 removed from scope. For the current repository state and roadmap, see
 [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and
 [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
@@ -62,9 +62,10 @@ The hardware OpenGL smoke drives these controls with real ImGui mouse events:
 it clears the Bench, drags a laser and plate from the shelf onto camera-derived
 table positions, drags a constrained world-axis handle, clicks Aim +Z and
 checks the resulting physical frame, presses E and drags a local rotation
-handle, clicks Snap to beam, presses W to restore movement, clicks Record and
-Reconstruct for all three holography examples, then performs another shelf edit
-and requires the reconstruction to become stale and disappear.
+handle, clicks Snap to beam, and presses W to restore movement. It then clears
+the Bench three times and assembles transmission, reflection/Denisyuk, and RGB
+full-colour experiments entirely from shelf components before Record and
+Reconstruct; a later shelf edit must stale and hide the RGB result.
 
 A current reconstruction is drawn back onto the actual placed Screen/Probe as
 a corner-projected texture quad using that component's physical extent and rigid

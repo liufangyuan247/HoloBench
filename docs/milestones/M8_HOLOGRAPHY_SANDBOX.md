@@ -8,13 +8,12 @@ coherence, optical path, apertures, and plate incidence come from components
 that the user actually placed; no separate fixed holography form may substitute
 for the experiment.
 
-Status (reopened 2026-09-01): transmission, reflection/Denisyuk, RGB, recipe,
-and persistence solvers are validated in their documented scalar domains. The
-product milestone remains open until a user can carry out each complete
-record/reconstruct experiment through direct manipulation of the shared 3D
-bench. A contextual Bench action bar now closes Record/Reconstruct for the
-three ordinary presets and unambiguous user layouts, but preset loading alone
-and Inspector-only controls do not satisfy empty-bench assembly acceptance.
+Status (accepted 2026-09-01): transmission, reflection/Denisyuk, RGB, recipe,
+and persistence solvers are validated in their documented scalar domains. A
+hardware input gate clears the Bench three times and assembles each complete
+record/reconstruct experiment through ordinary shelf placement, contextual
+alignment/spectrum actions, plate Record, and placed Screen/Probe Reconstruct.
+Preset loading and Inspector-only controls are not used as substitutes.
 
 ## User-visible outcome
 
@@ -105,7 +104,7 @@ stale until recomputation.
 
 ## Delivery slices
 
-Physics foundation validated 2026-09-01; product acceptance reopened. M8.1 is implemented; M8.2 has an
+Physics foundation and direct workflow accepted 2026-09-01. M8.1 is implemented; M8.2 has an
 end-to-end placed thin-transmission record/replay path; M8.3 records the full
 placed reflection grating vector and evaluates wavelength/angle/material Bragg
 selectivity, then reconstructs a Bragg-weighted sampled field on the physical
@@ -145,10 +144,11 @@ Reconstruct, and stale/current state. New thin/RGB recipes use a measured
 response preflight: if the configured upper response bound would clip, the
 relative `I=1` reference is scaled with headroom and persisted before the final
 recording. This does not change physical source powers, response bounds, or
-independent wavelength computation. Hidden OpenGL smoke performs all three
-preset Record/Reconstruct paths through real ImGui clicks on these application
-actions. Each directly visible preset also sets its matching experiment mode;
-switching from RGB to transmission cannot retain an incompatible mode.
+independent wavelength computation. Hidden OpenGL smoke clears the Bench and
+performs all three from-shelf Record/Reconstruct paths through real ImGui
+mouse/key input on these application actions. Each directly visible preset also
+sets its matching experiment mode; switching from RGB to transmission cannot
+retain an incompatible mode.
 
 Current reconstruction imagery is also mapped onto the physical four corners
 of the chosen Screen/Probe in the 3D Bench. Its projected outline follows the placed
@@ -214,13 +214,13 @@ propagation used to compute the image.
 
 ## Acceptance checklist
 
-- [ ] A transmission hologram can be assembled from an empty bench through the
+- [x] A transmission hologram can be assembled from an empty bench through the
   direct viewport workflow, recorded,
   replayed, and observed on a placed Screen / Probe.
-- [ ] A reflection/Denisyuk-style hologram can be assembled through the direct
+- [x] A reflection/Denisyuk-style hologram can be assembled through the direct
   viewport workflow with beams on
   opposite plate sides and reconstructed through the reflection Bragg path.
-- [ ] An RGB full-colour hologram can be assembled through the direct viewport
+- [x] An RGB full-colour hologram can be assembled through the direct viewport
   workflow, recorded per wavelength,
   replayed per wavelength, and viewed as a labelled combined result.
 - [x] Every result is tied to the exact bench revision and becomes stale after
@@ -232,5 +232,5 @@ propagation used to compute the image.
 
 Completion tag: `m8-holography-sandbox`.
 
-The completion tag is withheld until the three reopened interactive workflow
-items pass; the remaining checked items retain their validated backend status.
+All checklist items pass in the documented scalar/display domains; M9 may reuse
+the same Bench actions without reopening a fixed-form holography workflow.

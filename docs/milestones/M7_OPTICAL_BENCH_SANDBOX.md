@@ -11,12 +11,11 @@ M7 is a blocking product rebaseline. The validated M1-M6 solvers remain the
 physics foundation, but their existing fixed workbench panels are reference and
 diagnostic surfaces, not the final Lab interaction.
 
-Status (reopened 2026-09-01): the scene, routing, persistence, placed-wave, and
-holography adapters, direct placement/transform gizmos, and explicit
-target/beam alignment actions are implemented and numerically validated.
-Product acceptance remains open because the complete empty-bench
-user-operated experiment workflow has not yet met the outcome below.
-Do not infer completion from presets, Inspector controls, or headless APIs.
+Status (accepted 2026-09-01): the scene, routing, persistence, placed-wave, and
+holography adapters, direct placement/transform gizmos, explicit target/beam
+alignment, and real input-driven empty-Bench workflows are implemented and
+validated. Acceptance is based on shelf/viewport/Bench actions, not inferred
+from presets, Inspector controls, or headless APIs.
 
 ## User-visible outcome
 
@@ -193,9 +192,9 @@ commit and must never block viewport rendering indefinitely.
   uses real ImGui mouse events to clear the Bench, drag a laser and plate onto
   camera-derived table points, drag a constrained world-axis handle, click the
   contextual Aim +Z action and verify its frame, switch to and drag a local
-  rotation handle, snap to a traced beam, switch back to movement, run all three
-  holography Record/Reconstruct examples, and prove that a later shelf edit
-  stales the visible replay.
+  rotation handle, snap to a traced beam, switch back to movement, assemble all
+  three holography experiments from Empty through shelf/Bench actions, and prove
+  that a later shelf edit stales the visible replay.
 
 ## Performance budget
 
@@ -210,20 +209,20 @@ commit and must never block viewport rendering indefinitely.
 
 ## Acceptance checklist
 
-- [ ] An empty project can be populated entirely through the 3D component
+- [x] An empty project can be populated entirely through the 3D component
   library without editing a fixed experiment configuration panel.
-- [ ] At least twelve required component kinds can be placed, selected,
+- [x] At least twelve required component kinds can be placed, selected,
   translated, rotated, duplicated, deleted, and inspected.
-- [ ] A beam splitter visibly and numerically creates conserved branches; a
+- [x] A beam splitter visibly and numerically creates conserved branches; a
   reciprocal layout can bring branches to a shared detector or plate.
-- [ ] Screens/probes show results derived from their actual spatial placement.
-- [ ] One unified project saves and reloads the complete bench byte-stably.
-- [ ] A user can build or load transmission, reflection, and full-colour
+- [x] Screens/probes show results derived from their actual spatial placement.
+- [x] One unified project saves and reloads the complete bench byte-stably.
+- [x] A user can build or load transmission, reflection, and full-colour
   holography-ready layouts and identify every object/reference branch arriving
   at each plate; M8 owns their record/reconstruct acceptance.
-- [ ] Moving a relevant component invalidates stale observations and produces
+- [x] Moving a relevant component invalidates stale observations and produces
   updated path/result evidence.
-- [ ] The end-to-end preset passes deterministic CPU reference, renderer smoke,
+- [x] The end-to-end preset passes deterministic CPU reference, renderer smoke,
   cross-compiler CI, and named performance gates.
 
 M7 must pass before M8 holography workflows or any teaching UI can claim
@@ -231,5 +230,4 @@ product completion.
 
 Completion tag: `m7-optical-bench-sandbox`.
 
-The completion tag is withheld until every checklist item passes the reopened
-direct-manipulation acceptance gate.
+All checklist items pass; M9 may build on this accepted interaction contract.

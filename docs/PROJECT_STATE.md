@@ -6,18 +6,18 @@ Last updated: 2026-09-01
 
 **M1-M6 numerical/reference foundations: validated in their documented domains**
 
-Active product milestone: **[M7 - Free-form 3D Optical Bench Sandbox](milestones/M7_OPTICAL_BENCH_SANDBOX.md)** — direct-manipulation acceptance reopened
+Completed product milestone: **[M7 - Free-form 3D Optical Bench Sandbox](milestones/M7_OPTICAL_BENCH_SANDBOX.md)** — direct-manipulation acceptance passed
 
-Next product milestone: **[M8 - Transmission, reflection, and RGB holography sandbox](milestones/M8_HOLOGRAPHY_SANDBOX.md)** — solver foundation validated, interactive experiment acceptance reopened
+Completed product milestone: **[M8 - Transmission, reflection, and RGB holography sandbox](milestones/M8_HOLOGRAPHY_SANDBOX.md)** — empty-Bench Record/Reconstruct acceptance passed
 
-Following milestone: **[M9 - automated CHIMERA construction and reconstruction](milestones/M9_CHIMERA_AUTOMATION.md)** — existing virtual-printer data path retained; new product work follows M7/M8 closure
+Active product milestone: **[M9 - automated CHIMERA construction and reconstruction](milestones/M9_CHIMERA_AUTOMATION.md)** — integrate the retained virtual-printer data path into the accepted shared Bench
 
 Steam, store, packaging, and distribution work has been removed from project scope.
 
 ## Product rebaseline (2026-09-01)
 
-The existing application is not yet the intended optical experiment bench. It
-contains a fixed-axis source/lens/aperture/screen scene plus separate parameter
+The rebaseline identified that the application was not yet the intended optical
+experiment bench. It contained a fixed-axis source/lens/aperture/screen scene plus separate parameter
 panels for wave, Fourier, SLM, and holography pipelines. Those surfaces provide
 validated solver evidence, but they do not let a user freely place, orient,
 split, combine, and observe a complete spatial optical path.
@@ -32,14 +32,14 @@ rebuilt on the shared bench.
 
 ### Product acceptance correction
 
-The M7/M8 physics and document foundations passed their numerical gates, but
-the earlier "accepted" label was too broad. Direct shelf placement, constrained
-viewport transforms, explicit multi-component/beam alignment, and a compact
-plate experiment bar are now implemented, but a user-facing test has not yet
-proved that an empty bench can be assembled, aligned,
-recorded, changed to replay illumination, and observed as one understandable
-spatial experiment. M7 and M8 are therefore reopened for product acceptance;
-their validated backend evidence is retained and must not be rewritten.
+The M7/M8 physics and document foundations had passed their numerical gates,
+but the earlier "accepted" label was too broad. That gap is now closed: the
+hardware OpenGL gate uses real ImGui mouse/key input to assemble transmission,
+reflection/Denisyuk, and RGB full-colour experiments from an empty Bench,
+align their components, record their placed plate, reconstruct to a placed
+Screen/Probe, and invalidate the result after a later edit. M7 and M8 direct
+manipulation acceptance therefore passed on 2026-09-01; their scalar and
+display limitations remain explicit rather than being widened by acceptance.
 
 The required interaction is now explicit:
 
@@ -77,7 +77,8 @@ The required interaction is now explicit:
   handle, click the Bench Aim +Z action with exact frame verification, press E
   and drag a local-axis rotation handle, click nearest-beam snap, and press W
   to restore movement. The interaction primitives now have hardware input
-  coverage; complete empty-bench experiment assembly remains the product gate.
+  coverage. The same gate then performs all three complete empty-Bench
+  holography assemblies described under M8.
 - **Default interactive sandbox**: the application now opens on the unified
   dynamic bench instead of the fixed-axis reference scene. The starter project
   contains an RGB laser, splitter, two routed arms, an ideal lens, two screens,
@@ -207,8 +208,8 @@ The required interaction is now explicit:
   SLM command/provenance behavior. Named M8 performance scenes and remote
   Windows/Linux cross-compiler validation pass. The unresolved real-lens wave
   adapter and vector/high-NA physics remain explicit scope limits rather than
-  hidden claims. This is validated solver and scene-foundation evidence, not
-  yet M7/M8 direct-manipulation product acceptance.
+  hidden claims. Real input-driven empty-Bench assembly, placed reconstruction,
+  and stale invalidation now add direct-manipulation product evidence.
 
 ## Completed
 
@@ -434,9 +435,10 @@ completion because it is primarily driven through fixed parameter panels:
   unchanged. Empty, transmission, reflection/Denisyuk, RGB, and CHIMERA entry
   points are directly visible above the 3D viewport; each holography example
   selects its matching experiment mode. Hidden OpenGL smoke uses real ImGui
-  mouse press/release events to select every example and execute all three
-  Record-to-placed-Reconstruct paths, then performs a shelf drag edit and
-  requires the RGB replay to become stale and disappear.
+  mouse/key events to clear and assemble all three experiments from ordinary
+  shelf components, execute every Record-to-placed-Reconstruct path, then
+  perform a shelf drag edit and require the RGB replay to become stale and
+  disappear.
 - **Contextual alignment bar**: Selecting any component in a multi-component
   Bench exposes target selection, Aim +Z, Coaxial, Same height, signed
   target-axis placement, and nearest-beam snap directly above the 3D viewport.
@@ -501,8 +503,8 @@ completion because it is primarily driven through fixed parameter panels:
   [33450034341](https://github.com/liufangyuan247/HoloBench/actions/runs/33450034341)
   pass Windows/Ubuntu core and complete application-compile jobs with the named
   M8 performance gates and atomic recovery cases. These runs validate the
-  solver/persistence foundation; interactive M7/M8 product acceptance remains
-  reopened.
+  solver/persistence foundation. Local hardware OpenGL interaction evidence now
+  additionally closes the three empty-Bench M7/M8 workflows.
 
 ## M9 CHIMERA automation state
 
@@ -642,13 +644,12 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Use the passing shelf/transform/alignment/Record/Reconstruct gestures to
-   close user-facing empty-bench assembly acceptance for
-   transmission, reflection/Denisyuk, and RGB full-colour experiments.
-2. Integrate the retained CHIMERA recipe, image/dataset, exposure,
+1. Integrate the retained CHIMERA recipe, image/dataset, exposure,
    reconstruction-camera, and sweep contracts into that same bench workflow.
-3. Add multi-selection and equal-spacing tools for larger optical layouts.
-4. Resume calibrated-sweep performance reuse and resumable/corruption-safe
-   CHIMERA batches only after the sandbox interaction gate is closed.
-5. Run capability-driven NVIDIA parity and named performance validation without
+2. Add multi-selection and equal-spacing tools for larger optical layouts.
+3. Resume calibrated-sweep performance reuse and resumable/corruption-safe
+   CHIMERA batches through the accepted sandbox interaction path.
+4. Run capability-driven NVIDIA parity and named performance validation without
    introducing any vendor/model/driver identity branch.
+5. Close camera distortion/defocus/noise and final cross-platform CHIMERA
+   acceptance in the explicitly supported scalar domains.
