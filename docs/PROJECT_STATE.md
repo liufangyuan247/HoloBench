@@ -436,14 +436,26 @@ completion because it is primarily driven through fixed parameter panels:
   source perspective images, per-hogel angular samples, and sparse per-channel
   SLM commands with explicit SI/radian/index units and a canonical content
   hash. The ideal Fourier-lens mapping uses `x=f*tan(theta_x)` and
-  `y=f*tan(theta_y)` with a tested positive-Y-to-decreasing-row convention;
+  `y=f*tan(theta_y)` with the tested shared -Y-to+Y row convention;
   out-of-SLM samples reject. Source view insertion order is canonicalized, and
   strict parsing rejects unknown fields, unsupported units, invalid grids, and
   payload/hash disagreement. The packaged 5x3 synthetic view grid is only a
   deterministic data-chain oracle, not a real scene renderer. See
   [ADR 0017](adr/0017-chimera-hogel-angular-dataset.md).
+- **Deterministic virtual exposure sequence**: Format-v1 `ExposurePlan`
+  generates row-major hogel stage moves and ordered RGB SLM-load, beam-gate,
+  exposure, and gate-off events with source dataset/bench provenance and a
+  canonical content hash. Single-hogel execution uses the caller's editable
+  bench, stages its physical plate, transfers collision-free sparse amplitude
+  commands through the placed M8 local-wave path, requires non-zero sampled
+  object-field evidence, and invokes three independent M8 volume recordings.
+  Interactive execution defaults to a bounded 256x256 preview; the canonical
+  1024x1024 request remains an offline batch target. The ideal timeline excludes
+  real device settle/load latency, and exposure duration does not yet drive the
+  configured material index modulation. See
+  [ADR 0018](adr/0018-chimera-exposure-plan-and-sparse-slm-transfer.md).
 - **Current M9 validation**: Windows Clang warnings-as-errors core/application
-  builds pass; `core-ci` passes 515/515 and `dev` passes 517/517 including GPU
+  builds pass; `core-ci` passes 519/519 and `dev` passes 521/521 including GPU
   and font executables. Hidden OpenGL smoke renders and semantically
   round-trips the generated 23-component bench, finds its six plate branches,
   and exits with no GL errors on AMD Radeon Pro 5300M. Remote MSVC/GCC evidence
@@ -459,11 +471,10 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Generate deterministic stage/SLM/RGB exposure events that invoke the three
-   compiled M8 recording recipes.
-2. Add single- and bounded multi-hogel reconstruction with view/cross-talk
+1. Add single- and bounded multi-hogel reconstruction with view/cross-talk
    evidence.
-3. Add deterministic parameter sweeps and best-candidate constraint evidence.
-4. Add real perspective-image adapters and calibrated-raster interface hooks.
+2. Add deterministic parameter sweeps and best-candidate constraint evidence.
+3. Add real perspective-image adapters and calibrated material-dose hooks.
+4. Expose dataset, exposure-plan, preview, and batch controls in the Lab UI.
 5. Add resumable batch execution, corrupt-artifact rejection, named budgets,
    and cross-platform M9 acceptance gates.

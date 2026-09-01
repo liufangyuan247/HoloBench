@@ -20,8 +20,9 @@ wavefront command.
   not a claim that HoloBench has rendered a real scene. Future image adapters
   must resample real inputs into this explicit contract before generation.
 - View angles map to the ideal Fourier-lens plane with
-  `x = f tan(theta_x)` and `y = f tan(theta_y)`. Positive physical Y maps to
-  decreasing raster row. Samples outside the finite SLM reject rather than
+  `x = f tan(theta_x)` and `y = f tan(theta_y)`. Raster rows follow the shared
+  SLM contract from negative physical Y toward positive Y. Samples outside the
+  finite SLM reject rather than
   clamp into a valid-looking command.
 - Input views are sorted by vertical angle, horizontal angle, and stable view
   ID. Commands are emitted in row-major hogel order and fixed red, green, blue

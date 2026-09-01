@@ -65,7 +65,7 @@ TEST_CASE("hogel angles use the analytic Fourier lens position and SLM pixel ora
     CHECK(sample.slmPositionYMetres == doctest::Approx(expectedY).epsilon(1e-13));
 
     const double normalizedX = expectedX / recipe.slm.widthMetres + 0.5;
-    const double normalizedY = 0.5 - expectedY / recipe.slm.heightMetres;
+    const double normalizedY = expectedY / recipe.slm.heightMetres + 0.5;
     const auto expectedColumn = static_cast<std::size_t>(std::floor(
         normalizedX * static_cast<double>(recipe.slm.pixelWidth)));
     const auto expectedRow = static_cast<std::size_t>(std::floor(

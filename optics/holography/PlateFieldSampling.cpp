@@ -5,6 +5,7 @@
 #include <complex>
 #include <limits>
 #include <numbers>
+#include <set>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
@@ -325,12 +326,86 @@ std::string_view slmOriginName(scene::SlmCommandOrigin origin) noexcept {
     return "unknown";
 }
 
+const PlacedSlmSparseCommand* sparseCommandFor(
+    std::span<const PlacedSlmSparseCommand> commands,
+    std::string_view componentId) {
+    const auto found = std::find_if(
+        commands.begin(), commands.end(), [&](const auto& command) {
+            return command.componentId == componentId;
+        });
+    return found == commands.end() ? nullptr : &*found;
+}
+
+void validateSparseSlmCommands(
+    const scene::BenchScene& bench,
+    std::span<const PlacedSlmSparseCommand> commands) {
+    std::set<std::string> componentIds;
+    for (const auto& command : commands) {
+        const auto* component = bench.find(command.componentId);
+        if (!scene::isStableBenchId(command.componentId)
+            || !scene::isStableBenchId(command.commandId)
+            || !componentIds.insert(command.componentId).second
+            || component == nullptr
+            || component->kind
+                != scene::BenchComponentKind::SpatialLightModulator) {
+            throw std::invalid_argument(
+                "placed sparse SLM command component identity is invalid");
+        }
+        const auto& parameters
+            = std::get<scene::SpatialLightModulatorParameters>(
+                component->parameters);
+        if (command.commandId != parameters.commandId
+            || command.pixelWidth != parameters.pixelWidth
+            || command.pixelHeight != parameters.pixelHeight
+            || !std::isfinite(command.defaultNormalizedCommand)
+            || command.defaultNormalizedCommand < 0.0
+            || command.defaultNormalizedCommand > 1.0) {
+            throw std::invalid_argument(
+                "placed sparse SLM command does not match its component");
+        }
+        std::pair<std::size_t, std::size_t> previous {};
+        bool first = true;
+        for (const auto& pixel : command.pixels) {
+            const std::pair coordinate {pixel.row, pixel.column};
+            if (pixel.column >= command.pixelWidth
+                || pixel.row >= command.pixelHeight
+                || !std::isfinite(pixel.normalizedCommand)
+                || pixel.normalizedCommand < 0.0
+                || pixel.normalizedCommand > 1.0
+                || (!first && coordinate <= previous)) {
+                throw std::invalid_argument(
+                    "placed sparse SLM pixels must be unique canonical normalized coordinates");
+            }
+            previous = coordinate;
+            first = false;
+        }
+    }
+}
+
+double evaluateSparseCommand(
+    const PlacedSlmSparseCommand& command,
+    std::size_t column,
+    std::size_t row) {
+    const std::pair coordinate {row, column};
+    const auto found = std::lower_bound(
+        command.pixels.begin(), command.pixels.end(), coordinate,
+        [](const auto& pixel, const auto& target) {
+            return std::pair {pixel.row, pixel.column} < target;
+        });
+    if (found != command.pixels.end()
+        && found->row == row && found->column == column) {
+        return found->normalizedCommand;
+    }
+    return command.defaultNormalizedCommand;
+}
+
 void applyProjectedElement(
     field::ComplexField2D& value,
     const scene::BenchComponent& component,
     const math::RigidTransform3d& fieldFrame,
     math::Vec3d propagationDirection,
-    PlateFieldSamplingDiagnostics& diagnostics) {
+    PlateFieldSamplingDiagnostics& diagnostics,
+    std::span<const PlacedSlmSparseCommand> slmCommands) {
     if (!requiresWaveRefinement(component.kind)
         || component.kind == scene::BenchComponentKind::RealLensAssembly) {
         return;
@@ -410,8 +485,13 @@ void applyProjectedElement(
                 const auto location = locateSlmPixel(p, local.x, local.y);
                 transmitted = location.active;
                 if (transmitted) {
-                    const double command = scene::evaluateSlmNormalizedCommand(
-                        p, location.column, location.row);
+                    const auto* sparse = sparseCommandFor(
+                        slmCommands, component.id);
+                    const double command = sparse == nullptr
+                        ? scene::evaluateSlmNormalizedCommand(
+                            p, location.column, location.row)
+                        : evaluateSparseCommand(
+                            *sparse, location.column, location.row);
                     if (p.modulationMode
                         == scene::SlmModulationMode::Amplitude) {
                         amplitudeTransmission = command;
@@ -443,12 +523,15 @@ void applyProjectedElement(
             + ": modeled as its explicit pinhole plane; the compound focusing objective requires separately placed lenses");
     } else if (component.kind
         == scene::BenchComponentKind::SpatialLightModulator) {
+        const auto* sparse = sparseCommandFor(slmCommands, component.id);
         diagnostics.warnings.push_back(
             component.id
             + ": applied "
-            + std::string(slmPatternName(std::get<
-                scene::SpatialLightModulatorParameters>(
-                    component.parameters).commandPattern))
+            + (sparse == nullptr
+                ? std::string(slmPatternName(std::get<
+                    scene::SpatialLightModulatorParameters>(
+                        component.parameters).commandPattern))
+                : std::string("sparse raster"))
             + " command "
             + std::get<scene::SpatialLightModulatorParameters>(
                 component.parameters).commandId
@@ -567,7 +650,8 @@ SampledPlateIncidentField sampleLocalWavePath(
     const PlateIncidentBranch& branch,
     const PlateFieldSamplingOptions& options,
     compute::fft::IFftBackend& fftBackend,
-    SampledPlateIncidentField baseline) {
+    SampledPlateIncidentField baseline,
+    std::span<const PlacedSlmSparseCommand> slmCommands) {
     const auto& source = requireSource(bench, branch);
     const double extentWidth = baseline.diagnostics.sampledExtentWidthMetres;
     const double extentHeight = baseline.diagnostics.sampledExtentHeightMetres;
@@ -619,7 +703,8 @@ SampledPlateIncidentField sampleLocalWavePath(
                 *component,
                 fieldFrame,
                 propagationDirection,
-                baseline.diagnostics);
+                baseline.diagnostics,
+                slmCommands);
         } else {
             plate = component;
         }
@@ -893,7 +978,9 @@ SampledPlateIncidentField samplePlateIncidentField(
     const PlateIncidentFieldSet& fields,
     std::uint64_t branchId,
     const PlateFieldSamplingOptions& options,
-    compute::fft::IFftBackend& fftBackend) {
+    compute::fft::IFftBackend& fftBackend,
+    std::span<const PlacedSlmSparseCommand> slmCommands) {
+    validateSparseSlmCommands(bench, slmCommands);
     auto baseline = samplePlateIncidentField(
         bench, fields, branchId, options);
     const auto& branch = requireBranch(fields, branchId);
@@ -912,7 +999,8 @@ SampledPlateIncidentField samplePlateIncidentField(
         branch,
         options,
         fftBackend,
-        std::move(baseline));
+        std::move(baseline),
+        slmCommands);
 }
 
 } // namespace holobench::optics::holography

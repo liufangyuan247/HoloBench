@@ -388,7 +388,7 @@ HogelDataset generateHogelDataset(
                 }
                 const double columnCoordinate = (slmX / recipe.slm.widthMetres + 0.5)
                     * static_cast<double>(recipe.slm.pixelWidth);
-                const double rowCoordinate = (0.5 - slmY / recipe.slm.heightMetres)
+                const double rowCoordinate = (slmY / recipe.slm.heightMetres + 0.5)
                     * static_cast<double>(recipe.slm.pixelHeight);
                 const std::size_t column = std::min(
                     static_cast<std::size_t>(std::floor(columnCoordinate)),

@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -13,6 +14,29 @@ class IFftBackend;
 }
 
 namespace holobench::optics::holography {
+
+struct PlacedSlmSparsePixel final {
+    std::size_t column = 0;
+    std::size_t row = 0;
+    double normalizedCommand = 0.0;
+
+    bool operator==(const PlacedSlmSparsePixel&) const = default;
+};
+
+// Transient data-product override for one persisted placed SLM. It preserves
+// the ordinary bench and command provenance without serializing a potentially
+// large raster into every component. Pixels are canonical row-major, unique,
+// and all unspecified pixels use defaultNormalizedCommand.
+struct PlacedSlmSparseCommand final {
+    std::string componentId;
+    std::string commandId;
+    std::size_t pixelWidth = 0;
+    std::size_t pixelHeight = 0;
+    double defaultNormalizedCommand = 0.0;
+    std::vector<PlacedSlmSparsePixel> pixels;
+
+    bool operator==(const PlacedSlmSparseCommand&) const = default;
+};
 
 struct PlateFieldSamplingOptions final {
     std::size_t sampleWidth = 128;
@@ -91,6 +115,7 @@ struct SampledPlateIncidentField final {
     const PlateIncidentFieldSet& fields,
     std::uint64_t branchId,
     const PlateFieldSamplingOptions& options,
-    compute::fft::IFftBackend& fftBackend);
+    compute::fft::IFftBackend& fftBackend,
+    std::span<const PlacedSlmSparseCommand> slmCommands = {});
 
 } // namespace holobench::optics::holography
