@@ -31,6 +31,7 @@
 #include "optics/io/LensPrescriptionIO.hpp"
 #include "optics/slm/SlmResponseIO.hpp"
 #include "app/HolographyProject.hpp"
+#include "app/BenchAlignment.hpp"
 #include "app/BenchHolographyPresets.hpp"
 #include "app/BenchRecordingRecipe.hpp"
 #include "app/SlmInterferenceProject.hpp"
@@ -5717,6 +5718,154 @@ void Application::drawSandboxInspector() {
                     selected->transform.localZAxisInWorld.x,
                     selected->transform.localZAxisInWorld.y,
                     selected->transform.localZAxisInWorld.z);
+
+                ImGui::SeparatorText("Optical Alignment");
+                const auto* alignmentTarget = benchProject_.scene.find(
+                    sandboxAlignmentTargetComponentId_);
+                if (alignmentTarget == nullptr
+                    || alignmentTarget->id == selectedBenchComponentId_) {
+                    sandboxAlignmentTargetComponentId_.clear();
+                    alignmentTarget = nullptr;
+                }
+                const char* targetPreview = alignmentTarget == nullptr
+                    ? "Choose target component"
+                    : alignmentTarget->id.c_str();
+                if (ImGui::BeginCombo("Alignment target", targetPreview)) {
+                    for (const auto& component
+                         : benchProject_.scene.components()) {
+                        if (component.id == selectedBenchComponentId_) {
+                            continue;
+                        }
+                        const bool isTarget
+                            = sandboxAlignmentTargetComponentId_
+                            == component.id;
+                        const std::string label = component.id + "  ["
+                            + std::string(
+                                bench::benchComponentDisplayName(
+                                    component.kind))
+                            + "]";
+                        if (ImGui::Selectable(label.c_str(), isTarget)) {
+                            sandboxAlignmentTargetComponentId_ = component.id;
+                        }
+                        if (isTarget) {
+                            ImGui::SetItemDefaultFocus();
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+                const auto applyTargetAlignment
+                    = [this](auto makeTransform, std::string message) {
+                        try {
+                            const auto* current = benchProject_.scene.find(
+                                selectedBenchComponentId_);
+                            const auto* target = benchProject_.scene.find(
+                                sandboxAlignmentTargetComponentId_);
+                            if (current == nullptr || target == nullptr
+                                || current->id == target->id) {
+                                throw std::invalid_argument(
+                                    "choose a different alignment target");
+                            }
+                            auto candidate = benchProject_.scene;
+                            auto edited = *current;
+                            edited.transform = makeTransform(
+                                current->transform, target->transform);
+                            candidate.replace(edited.id, edited);
+                            static_cast<void>(applyBenchScene(
+                                std::move(candidate), std::move(message)));
+                        } catch (const std::exception& error) {
+                            errorMessage_ = "Optical alignment failed: "
+                                + std::string(error.what());
+                            statusMessage_.clear();
+                        }
+                    };
+                ImGui::BeginDisabled(alignmentTarget == nullptr);
+                if (ImGui::Button("Aim +Z at target")) {
+                    applyTargetAlignment(
+                        [](const auto& current, const auto& target) {
+                            return alignment::aimAt(
+                                current, target.translationMetres);
+                        },
+                        "Aimed component at alignment target");
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Make coaxial")) {
+                    applyTargetAlignment(
+                        [](const auto& current, const auto& target) {
+                            return alignment::makeCoaxialWith(
+                                current, target);
+                        },
+                        "Aligned component to target optical axis");
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Match height")) {
+                    applyTargetAlignment(
+                        [](const auto& current, const auto& target) {
+                            return alignment::matchHeight(current, target);
+                        },
+                        "Matched component height to target");
+                }
+                ImGui::DragFloat(
+                    "Target-axis spacing (mm)",
+                    &sandboxAlignmentSpacingMillimetres_,
+                    1.0F,
+                    -5000.0F,
+                    5000.0F,
+                    "%.2f");
+                if (ImGui::Button("Place at target-axis spacing")) {
+                    const double spacingMetres = static_cast<double>(
+                        sandboxAlignmentSpacingMillimetres_) * 1e-3;
+                    applyTargetAlignment(
+                        [spacingMetres](
+                            const auto& current, const auto& target) {
+                            return alignment::placeAlongTargetAxis(
+                                current, target, spacingMetres);
+                        },
+                        "Placed component at target-axis spacing");
+                }
+                ImGui::EndDisabled();
+                ImGui::DragFloat(
+                    "Beam snap radius (mm)",
+                    &sandboxBeamSnapDistanceMillimetres_,
+                    1.0F,
+                    0.01F,
+                    5000.0F,
+                    "%.2f");
+                if (ImGui::Button("Snap to nearest visible beam")) {
+                    try {
+                        const auto* current = benchProject_.scene.find(
+                            selectedBenchComponentId_);
+                        if (current == nullptr) {
+                            throw std::invalid_argument(
+                                "select a component before beam snapping");
+                        }
+                        const auto snapped = alignment::snapToNearestBeam(
+                            current->transform,
+                            benchTraceGraph_.segments,
+                            static_cast<double>(
+                                sandboxBeamSnapDistanceMillimetres_) * 1e-3);
+                        auto candidate = benchProject_.scene;
+                        auto edited = *current;
+                        edited.transform = snapped.transform;
+                        candidate.replace(edited.id, edited);
+                        static_cast<void>(applyBenchScene(
+                            std::move(candidate),
+                            "Snapped component to beam branch #"
+                                + std::to_string(snapped.branchId)));
+                    } catch (const std::exception& error) {
+                        errorMessage_ = "Beam alignment failed: "
+                            + std::string(error.what());
+                        statusMessage_.clear();
+                    }
+                }
+                ImGui::TextDisabled(
+                    "Alignment writes ordinary position/orientation edits; no hidden connection is created.");
+
+                selected = benchProject_.scene.find(
+                    selectedBenchComponentId_);
+                if (selected == nullptr) {
+                    throw std::runtime_error(
+                        "selected component disappeared during alignment");
+                }
 
                 ImGui::SeparatorText("Physical Parameters");
                 const auto commitParameters = [this](bench::BenchComponent edited) {

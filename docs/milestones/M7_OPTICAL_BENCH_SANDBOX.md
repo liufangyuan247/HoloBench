@@ -12,9 +12,10 @@ physics foundation, but their existing fixed workbench panels are reference and
 diagnostic surfaces, not the final Lab interaction.
 
 Status (reopened 2026-09-01): the scene, routing, persistence, placed-wave, and
-holography adapters are implemented and numerically validated. Product
-acceptance remains open because direct viewport placement/alignment and the
-complete user-operated experiment workflow have not yet met the outcome below.
+holography adapters, direct placement/transform gizmos, and explicit
+target/beam alignment actions are implemented and numerically validated.
+Product acceptance remains open because the complete empty-bench
+user-operated experiment workflow has not yet met the outcome below.
 Do not infer completion from presets, Inspector controls, or headless APIs.
 
 ## User-visible outcome
@@ -23,6 +24,9 @@ Do not infer completion from presets, Inspector controls, or headless APIs.
 - Drag components from a searchable library into the 3D viewport.
 - Select, translate, rotate, duplicate, and delete components with viewport
   gizmos; use the Inspector for exact SI-derived numeric entry.
+- Aim at another component, become co-axial, match height, use signed
+  target-axis spacing, or snap onto a visible finite beam segment; each action
+  remains a normal editable transform rather than a hidden connection.
 - See laser paths update through reflection, transmission, splitting, clipping,
   focusing, and interception.
 - Switch between fast ray-layout evidence and explicit local wave analysis.

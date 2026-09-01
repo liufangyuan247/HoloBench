@@ -30,6 +30,12 @@ shows colour-coded X/Y/Z handles: Move constrains to world axes, Rotate uses
 the component's local axes, and configurable translation/rotation snapping
 supports repeatable optical alignment.
 
+The Inspector's alignment section operates on those same ordinary transforms:
+aim local +Z at another component, project onto and copy a target optical axis,
+match height, place at a signed target-axis spacing, or snap to the nearest
+finite visible beam segment. Each action retraces the bench and participates in
+history/autosave; it creates no hidden optical connection.
+
 Selecting a holographic plate now opens a compact experiment bar in the
 Optical Bench itself. It reports the object/reference incidence and available
 transmission, reflection, and strict RGB pairings, then provides Record,

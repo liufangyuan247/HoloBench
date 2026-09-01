@@ -34,8 +34,8 @@ rebuilt on the shared bench.
 
 The M7/M8 physics and document foundations passed their numerical gates, but
 the earlier "accepted" label was too broad. Direct shelf placement, constrained
-viewport transforms, and a compact plate experiment bar are now implemented,
-but multi-component optical alignment and a user-facing test have not yet
+viewport transforms, explicit multi-component/beam alignment, and a compact
+plate experiment bar are now implemented, but a user-facing test has not yet
 proved that an empty bench can be assembled, aligned,
 recorded, changed to replay illumination, and observed as one understandable
 spatial experiment. M7 and M8 are therefore reopened for product acceptance;
@@ -67,8 +67,12 @@ The required interaction is now explicit:
   rays reject safely. Selected components expose colour-coded X/Y/Z handles;
   translation uses world axes, rotation uses component-local axes, and both use
   accumulated motion before configurable snapping so sub-step mouse movements
-  are not lost. Multi-component alignment aids and an automated input-gesture
-  smoke remain open.
+  are not lost. Target-based aim, co-axial projection/orientation, equal-height,
+  signed target-axis spacing, and nearest-visible-beam snapping all write
+  ordinary transforms through the same history, trace, and autosave path.
+  Degenerate, off-radius, or equally-near ambiguous beam snapping rejects
+  explicitly and creates no hidden connection. An automated input-gesture
+  smoke remains open.
 - **Default interactive sandbox**: the application now opens on the unified
   dynamic bench instead of the fixed-axis reference scene. The starter project
   contains an RGB laser, splitter, two routed arms, an ideal lens, two screens,
@@ -562,8 +566,8 @@ completion because it is primarily driven through fixed parameter panels:
   selection evidence. See
   [ADR 0020](adr/0020-chimera-deterministic-parameter-sweep.md).
 - **Current M9 validation**: Windows Clang warnings-as-errors core/application
-  builds pass; `core-ci` passes 546/546 and `dev` passes 548/548. The updated
-  development build, targeted gizmo tests, and OpenGL smoke pass. The
+  builds pass; `core-ci` passes 549/549 and `dev` passes 551/551. The updated
+  development build, targeted gizmo/alignment tests, and OpenGL smoke pass. The
   development gate includes GPU and font executables. Hidden OpenGL smoke
   executes the compact Bench Record/Reconstruct actions for transmission,
   reflection/Denisyuk, and RGB presets, requires current placed observation
@@ -596,15 +600,14 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Add multi-component optical alignment actions: co-axial alignment, aim at a
-   target, snap onto a visible beam path, equal height, and spacing, all as
-   ordinary transforms without hidden routing.
-2. Close user-facing end-to-end acceptance for ordinary transmission,
+1. Close user-facing end-to-end acceptance for ordinary transmission,
    reflection/Denisyuk, and RGB full-colour benches assembled through the same
    direct-manipulation workflow; add automated interaction smoke coverage.
-3. Bind reconstructed images visibly to the selected placed Screen/Probe in the
+2. Bind reconstructed images visibly to the selected placed Screen/Probe in the
    3D bench, while retaining the detailed Inspector diagnostics.
-4. Integrate the retained CHIMERA recipe, image/dataset, exposure,
+3. Integrate the retained CHIMERA recipe, image/dataset, exposure,
    reconstruction-camera, and sweep contracts into that same bench workflow.
+4. Add multi-selection/equal-spacing tools and an input-gesture regression for
+   shelf drag/drop, transform handles, target alignment, Record, and Reconstruct.
 5. Resume calibrated-sweep performance reuse and resumable/corruption-safe
    CHIMERA batches only after the sandbox interaction gate is closed.

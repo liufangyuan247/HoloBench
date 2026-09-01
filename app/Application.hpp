@@ -529,11 +529,14 @@ private:
     math::Vec3d sandboxDragAccumulatedTranslationMetres_ {};
     double sandboxDragAccumulatedAngleRadians_ = 0.0;
     std::string selectedBenchComponentId_;
+    std::string sandboxAlignmentTargetComponentId_;
     std::size_t sandboxNextComponentOrdinal_ = 1;
     int sandboxLibraryKindIndex_ = 0;
     char sandboxComponentSearch_[64] {};
     float sandboxTranslationSnapMillimetres_ = 1.0F;
     float sandboxRotationStepDegrees_ = 5.0F;
+    float sandboxAlignmentSpacingMillimetres_ = 50.0F;
+    float sandboxBeamSnapDistanceMillimetres_ = 25.0F;
     int sandboxPlateSampleSize_ = 256;
     float sandboxPlateWindowMillimetres_ = 1.0F;
     float sandboxPlateRelativeReferenceKilowattsPerSquareMetre_ = 100.0F;

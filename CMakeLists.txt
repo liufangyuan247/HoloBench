@@ -122,6 +122,7 @@ holobench_set_warnings(holobench_optics)
 # solver-independent optical models with numerical backends without making
 # either lower-level library depend on the other implementation layer.
 add_library(holobench_app_logic STATIC
+    app/BenchAlignment.cpp
     app/BenchEditHistory.cpp
     app/BenchHolographyPresets.cpp
     app/BenchProject.cpp
@@ -452,6 +453,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/validation/OptilandCrossValidationTests.cpp
         tests/validation/WavepropCrossValidationTests.cpp
         tests/app/WaveDetectorUiStateTests.cpp
+        tests/app/BenchAlignmentTests.cpp
         tests/app/BenchEditHistoryTests.cpp
         tests/app/BenchHolographyPresetsTests.cpp
         tests/app/BenchProjectTests.cpp
