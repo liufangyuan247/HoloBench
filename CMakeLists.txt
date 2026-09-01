@@ -128,6 +128,7 @@ add_library(holobench_app_logic STATIC
     app/BenchSourceSpectrum.cpp
     app/BenchProject.cpp
     app/BenchRecordingRecipe.cpp
+    app/ChimeraBenchWorkflow.cpp
     app/ChimeraExposurePlan.cpp
     app/ChimeraCameraImage.cpp
     app/ChimeraHogelDataset.cpp
@@ -461,6 +462,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/app/BenchSourceSpectrumTests.cpp
         tests/app/BenchProjectTests.cpp
         tests/app/BenchRecordingRecipeTests.cpp
+        tests/app/ChimeraBenchWorkflowTests.cpp
         tests/app/ChimeraExposurePlanTests.cpp
         tests/app/ChimeraCameraImageTests.cpp
         tests/app/ChimeraHogelDatasetTests.cpp

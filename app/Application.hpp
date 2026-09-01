@@ -17,6 +17,7 @@
 #include "app/WaveWorkbenchProject.hpp"
 #include "app/BenchEditHistory.hpp"
 #include "app/BenchProject.hpp"
+#include "app/ChimeraBenchWorkflow.hpp"
 #include "app/ChimeraRecipe.hpp"
 #include "app/LessonEditHistory.hpp"
 #include "app/HolographyLabPipeline.hpp"
@@ -454,6 +455,9 @@ struct SandboxUiEvidence final {
     UiItemBounds sourceGreen;
     UiItemBounds sourceBlue;
     UiItemBounds sourceRgb;
+    UiItemBounds chimeraPrepare;
+    UiItemBounds chimeraExpose;
+    UiItemBounds chimeraReconstruct;
     UiItemBounds viewport;
     gizmo::ProjectedPoint selectedComponent;
     std::array<gizmo::ProjectedPoint, 3> gizmoEndpoints {};
@@ -538,6 +542,7 @@ private:
     void drawSandboxSourceBar();
     void drawSandboxAlignmentBar();
     void drawSandboxExperimentBar();
+    void drawChimeraAutomationBar();
     void drawSandboxInspector();
     void applySandboxTargetAlignment(SandboxAlignmentAction action);
     void snapSandboxSelectedToNearestBeam();
@@ -548,6 +553,9 @@ private:
     void buildChimeraBench(
         const chimera::ChimeraRecipe& recipe,
         std::string sourceLabel);
+    void prepareChimeraAutomation();
+    void executeSelectedChimeraHogel();
+    void reconstructSelectedChimeraHogel();
     void recomputeRecordingRecipe(
         const optics::holography::PlateIncidentFieldSet& fields,
         const HologramRecordingRecipe& recipe);
@@ -607,6 +615,12 @@ private:
     float sandboxVolumeReplayWavelengthNanometres_ = 532.0F;
     float sandboxVolumeReplayAngleDegrees_ = 0.0F;
     std::vector<chimera::ConstraintReportEntry> chimeraConstraintReport_;
+    chimera::ChimeraRecipe chimeraRecipe_ = chimera::makeCanonicalChimeraRecipe();
+    std::unique_ptr<chimera::ChimeraBenchWorkflow> chimeraWorkflow_;
+    int chimeraHogelX_ = 3;
+    int chimeraHogelY_ = 2;
+    int chimeraViewIndex_ = 7;
+    float chimeraCameraDisplayGamma_ = 2.2F;
 
     GizmoTarget selectedTarget_ = GizmoTarget::None;
     GizmoTarget draggedTarget_ = GizmoTarget::None;
@@ -633,6 +647,7 @@ private:
     std::unique_ptr<render::gl::Texture2D> sandboxReplayTexture_;
     std::unique_ptr<render::gl::Texture2D> sandboxVolumeReplayTexture_;
     std::unique_ptr<render::gl::Texture2D> sandboxRgbReplayTexture_;
+    std::unique_ptr<render::gl::Texture2D> chimeraCameraTexture_;
     std::unique_ptr<wave::WaveDetectorResult> detectorResult_;
     std::unique_ptr<samplingdebug::SamplingDebuggerResult> samplingDebuggerResult_;
     std::unique_ptr<reallens::RealLensWorkbenchResult> realLensResult_;

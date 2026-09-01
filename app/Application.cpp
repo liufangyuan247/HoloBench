@@ -36,6 +36,7 @@
 #include "app/BenchObservationOverlay.hpp"
 #include "app/BenchRecordingRecipe.hpp"
 #include "app/BenchSourceSpectrum.hpp"
+#include "app/ChimeraBenchWorkflow.hpp"
 #include "app/SlmInterferenceProject.hpp"
 #include "app/UiFont.hpp"
 #include "app/lessons/LessonProgress.hpp"
@@ -53,6 +54,15 @@ namespace {
 
 constexpr const char* kBenchComponentDragPayload
     = "HOLOBENCH_BENCH_COMPONENT_KIND";
+
+optics::sensor::CalibratedCameraSpectralResponse
+makeNominalChimeraCameraResponse() {
+    return {"nominal-rgb-camera-preview-v1", {
+        {450e-9, {0.05, 0.15, 1.0}},
+        {532e-9, {0.10, 1.0, 0.10}},
+        {638e-9, {1.0, 0.10, 0.05}},
+    }};
+}
 
 bool containsAsciiCaseInsensitive(
     std::string_view text,
@@ -597,6 +607,7 @@ Application::Application()
     , sandboxReplayTexture_(std::make_unique<render::gl::Texture2D>())
     , sandboxVolumeReplayTexture_(std::make_unique<render::gl::Texture2D>())
     , sandboxRgbReplayTexture_(std::make_unique<render::gl::Texture2D>())
+    , chimeraCameraTexture_(std::make_unique<render::gl::Texture2D>())
     , reflectionRefractionResult_(
           reflection::evaluateReflectionRefraction(
               reflectionRefractionConfig_))
@@ -877,15 +888,137 @@ void Application::buildChimeraBench(
         const bool feasible = compiled.feasible();
         chimeraConstraintReport_ = compiled.constraints;
         selectedBenchComponentId_ = "chimera-plate";
+        sandboxObservationComponentId_ = "chimera-reconstruction-probe";
         const std::string status = "Compiled " + std::move(sourceLabel)
             + " to an editable CHIMERA-like bench"
             + (feasible ? "" : " with unsupported constraints");
-        static_cast<void>(applyDynamicBenchProject(
-            std::move(compiled.project), status));
+        if (applyDynamicBenchProject(std::move(compiled.project), status)) {
+            chimeraRecipe_ = recipe;
+            chimeraWorkflow_.reset();
+            sandboxRecordedExperiment_ = SandboxRecordedExperiment::None;
+            sandboxPlateRecording_.reset();
+            sandboxPlateReplay_.reset();
+            sandboxVolumeRecording_.reset();
+            sandboxVolumeReplay_.reset();
+            sandboxVolumeObservationReplay_.reset();
+            sandboxRgbRecording_.reset();
+            sandboxRgbReplay_.reset();
+            if (chimeraCameraTexture_) {
+                chimeraCameraTexture_->destroy();
+            }
+        }
     } catch (const std::exception& error) {
         errorMessage_ = error.what();
         statusMessage_.clear();
     }
+}
+
+void Application::prepareChimeraAutomation() {
+    auto workflow = chimera::prepareChimeraBenchWorkflow(
+        chimeraRecipe_, benchProject_);
+    chimeraHogelX_ = std::clamp(
+        chimeraHogelX_, 0,
+        static_cast<int>(chimeraRecipe_.hogels.countX - 1U));
+    chimeraHogelY_ = std::clamp(
+        chimeraHogelY_, 0,
+        static_cast<int>(chimeraRecipe_.hogels.countY - 1U));
+    chimeraViewIndex_ = std::clamp(
+        chimeraViewIndex_, 0,
+        static_cast<int>(workflow.dataset.sourceViews.size() - 1U));
+    const std::size_t eventCount = workflow.plan.events.size();
+    const std::string datasetHash = workflow.dataset.contentHash;
+    chimeraWorkflow_ = std::make_unique<chimera::ChimeraBenchWorkflow>(
+        std::move(workflow));
+    if (chimeraCameraTexture_) {
+        chimeraCameraTexture_->destroy();
+    }
+    errorMessage_.clear();
+    statusMessage_ = "Prepared CHIMERA dataset " + datasetHash
+        + " and " + std::to_string(eventCount)
+        + " deterministic exposure events from the current Bench";
+}
+
+void Application::executeSelectedChimeraHogel() {
+    if (!chimeraWorkflow_ || !detectorFftBackend_) {
+        throw std::runtime_error(
+            "prepare CHIMERA data and an FFT backend before exposure");
+    }
+    const auto x = static_cast<std::size_t>(std::clamp(
+        chimeraHogelX_, 0,
+        static_cast<int>(chimeraRecipe_.hogels.countX - 1U)));
+    const auto y = static_cast<std::size_t>(std::clamp(
+        chimeraHogelY_, 0,
+        static_cast<int>(chimeraRecipe_.hogels.countY - 1U)));
+    chimera::executeChimeraHogel(
+        *chimeraWorkflow_, benchProject_, *detectorFftBackend_, x, y);
+    const auto& channels = chimeraWorkflow_->exposures.back().channels;
+    const bool m8Evidence = channels.size() == 3U
+        && std::all_of(channels.begin(), channels.end(), [](const auto& channel) {
+            return channel.m8VolumeRecordingInvoked
+                && channel.sparseSlmRasterTransferredToPlacedWavePath;
+        });
+    if (!m8Evidence) {
+        throw std::runtime_error(
+            "selected CHIMERA hogel produced incomplete RGB M8 recording evidence");
+    }
+    errorMessage_.clear();
+    statusMessage_ = "Exposed hogel (" + std::to_string(x) + ", "
+        + std::to_string(y)
+        + ") through three independent RGB M8 volume recordings";
+}
+
+void Application::reconstructSelectedChimeraHogel() {
+    if (!chimeraWorkflow_) {
+        throw std::runtime_error("prepare and expose a CHIMERA hogel first");
+    }
+    const auto x = static_cast<std::size_t>(std::clamp(
+        chimeraHogelX_, 0,
+        static_cast<int>(chimeraRecipe_.hogels.countX - 1U)));
+    const auto y = static_cast<std::size_t>(std::clamp(
+        chimeraHogelY_, 0,
+        static_cast<int>(chimeraRecipe_.hogels.countY - 1U)));
+    const int maximumView = static_cast<int>(
+        chimeraWorkflow_->dataset.sourceViews.size() - 1U);
+    chimeraViewIndex_ = std::clamp(chimeraViewIndex_, 0, maximumView);
+    const auto& view = chimeraWorkflow_->dataset.sourceViews[
+        static_cast<std::size_t>(chimeraViewIndex_)];
+    const std::array hogels {chimera::HogelSelection {.x = x, .y = y}};
+    const std::array views {view.viewId};
+    chimera::reconstructChimeraViews(
+        *chimeraWorkflow_, benchProject_, hogels, views);
+
+    chimera::CameraImageRequest request;
+    request.jobId = "chimera-bench-camera-preview";
+    request.pupilPlaneDistanceMetres = 0.03;
+    request.pupilCentreXMetres = request.pupilPlaneDistanceMetres
+        * std::tan(view.horizontalAngleRadians);
+    request.pupilCentreYMetres = request.pupilPlaneDistanceMetres
+        * std::tan(view.verticalAngleRadians);
+    request.pupilDiameterMetres = 2e-3;
+    request.focalLengthMetres = 2.5e-3;
+    request.pixelWidth = 129U;
+    request.pixelHeight = 129U;
+    request.pixelPitchXMetres = 10e-6;
+    request.pixelPitchYMetres = 10e-6;
+    chimera::captureChimeraCameraImage(
+        *chimeraWorkflow_,
+        benchProject_,
+        request,
+        makeNominalChimeraCameraResponse(),
+        sandboxObservationComponentId_);
+    const auto display = chimera::renderChimeraCameraImage(
+        *chimeraWorkflow_->cameraImage,
+        {1.0, 1.0, 1.0},
+        static_cast<double>(chimeraCameraDisplayGamma_));
+    if (!chimeraCameraTexture_
+        || !chimeraCameraTexture_->uploadImage(display)) {
+        throw std::runtime_error(
+            "OpenGL rejected the CHIMERA camera reconstruction texture");
+    }
+    errorMessage_.clear();
+    statusMessage_ = "Reconstructed " + view.viewId + " from hogel ("
+        + std::to_string(x) + ", " + std::to_string(y)
+        + ") on placed observation " + sandboxObservationComponentId_;
 }
 
 void Application::recomputeRecordingRecipe(
@@ -1865,6 +1998,9 @@ void Application::shutdown() noexcept {
     if (sandboxRgbReplayTexture_) {
         sandboxRgbReplayTexture_->destroy();
     }
+    if (chimeraCameraTexture_) {
+        chimeraCameraTexture_->destroy();
+    }
     detectorResult_.reset();
     samplingDebuggerResult_.reset();
     realLensResult_.reset();
@@ -1877,6 +2013,7 @@ void Application::shutdown() noexcept {
     sandboxVolumeObservationReplay_.reset();
     sandboxRgbRecording_.reset();
     sandboxRgbReplay_.reset();
+    chimeraWorkflow_.reset();
     if (imguiGlInitialized_) {
         ImGui_ImplOpenGL3_Shutdown();
         imguiGlInitialized_ = false;
@@ -5849,6 +5986,155 @@ void Application::drawSandboxExperimentBar() {
     ImGui::EndChild();
 }
 
+void Application::drawChimeraAutomationBar() {
+    if (benchProject_.projectId != "chimera-" + chimeraRecipe_.recipeId) {
+        return;
+    }
+
+    const bool prepared = chimeraWorkflow_ != nullptr;
+    const bool current = prepared
+        && chimera::isChimeraBenchWorkflowCurrent(
+            *chimeraWorkflow_, benchProject_);
+    ImGui::BeginChild(
+        "##chimera_automation_bar",
+        ImVec2(0.0F, 116.0F),
+        ImGuiChildFlags_Borders);
+    ImGui::TextUnformatted("CHIMERA Automation on this editable Bench");
+    ImGui::SameLine();
+    if (!prepared) {
+        ImGui::TextColored(
+            ImVec4(1.0F, 0.68F, 0.28F, 1.0F), "DATA NOT PREPARED");
+    } else if (!current) {
+        ImGui::TextColored(
+            ImVec4(1.0F, 0.45F, 0.25F, 1.0F), "STALE AFTER BENCH EDIT");
+    } else {
+        ImGui::TextColored(
+            ImVec4(0.35F, 0.9F, 0.45F, 1.0F), "CURRENT");
+        ImGui::SameLine();
+        ImGui::TextDisabled(
+            "dataset %s | %zu events | %zu/%zu hogels exposed",
+            chimeraWorkflow_->dataset.contentHash.c_str(),
+            chimeraWorkflow_->plan.events.size(),
+            chimeraWorkflow_->exposures.size(),
+            chimeraRecipe_.hogels.countX * chimeraRecipe_.hogels.countY);
+    }
+
+    if (ImGui::Button("Generate Dataset + Exposure Plan")) {
+        try {
+            prepareChimeraAutomation();
+        } catch (const std::exception& error) {
+            errorMessage_ = "CHIMERA preparation failed: "
+                + std::string(error.what());
+            statusMessage_.clear();
+        }
+    }
+    captureLastItemBounds(sandboxUiEvidence_.chimeraPrepare);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(72.0F);
+    ImGui::InputInt("Hogel X", &chimeraHogelX_);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(72.0F);
+    ImGui::InputInt("Hogel Y", &chimeraHogelY_);
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!current);
+    if (ImGui::Button("Expose selected RGB hogel")) {
+        try {
+            executeSelectedChimeraHogel();
+        } catch (const std::exception& error) {
+            errorMessage_ = "CHIMERA exposure failed: "
+                + std::string(error.what());
+            statusMessage_.clear();
+        }
+    }
+    captureLastItemBounds(sandboxUiEvidence_.chimeraExpose);
+    ImGui::EndDisabled();
+
+    const char* viewPreview = "Prepare data first";
+    if (prepared && !chimeraWorkflow_->dataset.sourceViews.empty()) {
+        chimeraViewIndex_ = std::clamp(
+            chimeraViewIndex_, 0,
+            static_cast<int>(
+                chimeraWorkflow_->dataset.sourceViews.size() - 1U));
+        viewPreview = chimeraWorkflow_->dataset.sourceViews[
+            static_cast<std::size_t>(chimeraViewIndex_)].viewId.c_str();
+    }
+    ImGui::SetNextItemWidth(180.0F);
+    if (prepared && ImGui::BeginCombo("View", viewPreview)) {
+        for (std::size_t index = 0;
+             index < chimeraWorkflow_->dataset.sourceViews.size();
+             ++index) {
+            const bool selected
+                = static_cast<int>(index) == chimeraViewIndex_;
+            const auto& view = chimeraWorkflow_->dataset.sourceViews[index];
+            if (ImGui::Selectable(view.viewId.c_str(), selected)) {
+                chimeraViewIndex_ = static_cast<int>(index);
+            }
+            if (selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    const char* observationPreview = sandboxObservationComponentId_.empty()
+        ? "No Screen / Probe"
+        : sandboxObservationComponentId_.c_str();
+    ImGui::SetNextItemWidth(210.0F);
+    if (ImGui::BeginCombo("Observation", observationPreview)) {
+        for (const auto& component : benchProject_.scene.components()) {
+            if (component.kind
+                    != optics::scene::BenchComponentKind::ScreenDetector
+                && component.kind
+                    != optics::scene::BenchComponentKind::FieldProbe) {
+                continue;
+            }
+            const bool selected
+                = component.id == sandboxObservationComponentId_;
+            if (ImGui::Selectable(component.id.c_str(), selected)) {
+                sandboxObservationComponentId_ = component.id;
+            }
+            if (selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    const bool selectedExposed = current
+        && std::any_of(
+            chimeraWorkflow_->exposures.begin(),
+            chimeraWorkflow_->exposures.end(),
+            [this](const auto& exposure) {
+                return exposure.hogelX
+                        == static_cast<std::size_t>(std::max(0, chimeraHogelX_))
+                    && exposure.hogelY
+                        == static_cast<std::size_t>(std::max(0, chimeraHogelY_));
+            });
+    ImGui::BeginDisabled(
+        !selectedExposed || sandboxObservationComponentId_.empty());
+    if (ImGui::Button("Reconstruct View to Probe")) {
+        try {
+            reconstructSelectedChimeraHogel();
+        } catch (const std::exception& error) {
+            errorMessage_ = "CHIMERA reconstruction failed: "
+                + std::string(error.what());
+            statusMessage_.clear();
+        }
+    }
+    captureLastItemBounds(sandboxUiEvidence_.chimeraReconstruct);
+    ImGui::EndDisabled();
+    if (current && chimeraWorkflow_->reconstruction) {
+        ImGui::SameLine();
+        const auto& metrics = chimeraWorkflow_->reconstruction->metrics;
+        ImGui::TextDisabled(
+            "%zu direction(s) | worst cross-talk %.4f | %s",
+            metrics.reconstructedDirectionalSampleCount,
+            metrics.maximumNearestViewCrosstalkFraction,
+            metrics.allRequestedViewsResolvable ? "resolvable" : "unresolved");
+    }
+    ImGui::EndChild();
+}
+
 void Application::drawSandboxInspector() {
     namespace bench = optics::scene;
     if (!ImGui::CollapsingHeader("3D Optical Sandbox", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -7916,6 +8202,7 @@ void Application::drawWorkspace() {
         drawSandboxSourceBar();
         drawSandboxAlignmentBar();
         drawSandboxExperimentBar();
+        drawChimeraAutomationBar();
     }
     const ImVec2 contentSize = ImGui::GetContentRegionAvail();
 
@@ -8287,7 +8574,17 @@ void Application::drawWorkspace() {
                     true);
                 GLuint reconstructionTexture = 0U;
                 std::string_view reconstructionObservationId;
-                if (sandboxRecordedExperiment_
+                if (chimeraWorkflow_
+                    && chimera::isChimeraBenchWorkflowCurrent(
+                        *chimeraWorkflow_, benchProject_)
+                    && chimeraWorkflow_->cameraImage
+                    && !chimeraWorkflow_->observationComponentId.empty()
+                    && chimeraCameraTexture_
+                    && chimeraCameraTexture_->isValid()) {
+                    reconstructionTexture = chimeraCameraTexture_->handle();
+                    reconstructionObservationId
+                        = chimeraWorkflow_->observationComponentId;
+                } else if (sandboxRecordedExperiment_
                         == SandboxRecordedExperiment::ThinTransmission
                     && sandboxPlateReplay_
                     && !sandboxPlateReplay_->isStaleFor(benchProject_.scene)
@@ -9538,6 +9835,53 @@ void Application::runSandboxInteractionSmoke() {
         || sandboxReconstructionOverlaySubmitted_) {
         throw std::runtime_error(
             "post-reconstruction shelf edit did not stale and hide RGB evidence");
+    }
+
+    click(sandboxUiEvidence_.chimeraPreset, "CHIMERA Bench action");
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    if (benchProject_.projectId != "chimera-canonical-chimera"
+        || benchProject_.scene.components().size() != 23U
+        || selectedBenchComponentId_ != "chimera-plate") {
+        throw std::runtime_error(
+            "CHIMERA action did not build the ordinary editable 23-component Bench");
+    }
+    click(
+        sandboxUiEvidence_.chimeraPrepare,
+        "Generate CHIMERA dataset and exposure plan action");
+    if (!chimeraWorkflow_
+        || !chimera::isChimeraBenchWorkflowCurrent(
+            *chimeraWorkflow_, benchProject_)
+        || chimeraWorkflow_->dataset.sourceViews.size() != 15U
+        || chimeraWorkflow_->plan.events.size() != 624U) {
+        throw std::runtime_error(
+            "CHIMERA preparation action did not bind deterministic artifacts to the current Bench");
+    }
+    click(
+        sandboxUiEvidence_.chimeraExpose,
+        "Expose selected CHIMERA RGB hogel action");
+    if (chimeraWorkflow_->exposures.size() != 1U
+        || chimeraWorkflow_->exposures.front().channels.size() != 3U) {
+        throw std::runtime_error(
+            "CHIMERA exposure action did not produce three RGB M8 recordings");
+    }
+    camera_.setPresetView(render::CameraPresetView::FrontXY);
+    camera_.setTarget({0.0F, 0.0F, 0.0F});
+    camera_.setDistance(0.25F);
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    click(
+        sandboxUiEvidence_.chimeraReconstruct,
+        "Reconstruct CHIMERA view to placed Probe action");
+    if (!chimeraWorkflow_->reconstruction
+        || !chimeraWorkflow_->cameraImage
+        || chimeraWorkflow_->observationComponentId
+            != "chimera-reconstruction-probe"
+        || !chimeraCameraTexture_
+        || !chimeraCameraTexture_->isValid()
+        || !sandboxReconstructionOverlaySubmitted_) {
+        throw std::runtime_error(
+            "CHIMERA reconstruction action did not submit current camera evidence on the placed Probe (status="
+            + statusMessage_ + ", error=" + errorMessage_ + ", overlay="
+            + sandboxReconstructionOverlayDiagnostic_ + ")");
     }
 
     glFinish();

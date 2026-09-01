@@ -508,6 +508,20 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## M9 CHIMERA automation state
 
+- **Shared-Bench automation workflow**: The generated 23-component ordinary
+  Bench now exposes contextual Generate Dataset/Plan, Expose Selected RGB Hogel,
+  and Reconstruct View to Probe actions. Product workflow state binds recipe,
+  dataset hash, 624-event canonical plan, accumulated hogel exposures,
+  directional reconstruction, camera image, project identity, and exact scene
+  revision. Moving any ordinary component makes all derived automation stale.
+  A selected hogel executes three independent M8 volume recordings through its
+  placed SLM/object/reference paths. A selected view then passes through the
+  bounded finite-pupil, wavelength-specific Airy camera model and its relative
+  RGB image is drawn on the physical generated reconstruction Probe. The
+  hardware OpenGL gate clicks this complete path with real ImGui mouse input
+  and requires the placed Probe texture submission. The bundled camera LUT is
+  clearly identified as a nominal preview rather than measured calibration.
+
 - **Versioned construction recipe**: Strict format-v1 `ChimeraRecipe` persists
   hogel pitch/count, target FOV, ordered RGB sources, SLM, relay/stop,
   folded-reference, plate/material, and exposure sampling. Canonical bytes

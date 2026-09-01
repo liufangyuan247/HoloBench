@@ -8,11 +8,9 @@ holographic printer. The first release is a virtual printer and reconstruction
 simulator, not a claim to reproduce proprietary CHIMERA optics or calibrated
 hardware.
 
-Priority note (2026-09-01): the implemented virtual-printer contracts and tests
-are retained, but new M9 product expansion follows reopened M7/M8
-direct-manipulation acceptance. CHIMERA automation must appear as construction
-and execution on the same visible editable bench, not as another replacement
-parameter workbench.
+Priority note (2026-09-01): M7/M8 direct-manipulation acceptance is closed.
+CHIMERA automation now expands on the same visible editable bench, not as a
+replacement parameter workbench.
 
 Current implementation status (2026-09-01): C9.1 format-v1 recipe parsing,
 validation, deterministic recipe-to-bench compiler, stable generated-component
@@ -48,6 +46,17 @@ their own circular-pupil Airy kernels, and a strict measured spectral LUT maps
 optical intensity into linear sensor RGB with explicit edge-loss and work
 accounting. Distortion, defocus, noise, and absolute camera calibration remain
 open rather than hidden behind display colour.
+
+The first shared-Bench product slice is now operational. The contextual
+`CHIMERA Automation` bar binds a canonical perspective dataset and deterministic
+exposure plan to the exact current Bench revision, executes a selected hogel as
+three independent RGB M8 volume recordings, reconstructs a selected directional
+view, applies a finite-pupil wavelength-specific Airy camera preview, and draws
+that image on the physical generated reconstruction Probe. Any ordinary
+component edit makes the complete automation state stale. Hardware OpenGL smoke
+drives the three actions with real ImGui mouse events and verifies the submitted
+Probe texture. The bundled camera response is explicitly a nominal relative
+preview, not measured calibration.
 
 ## User-visible outcome
 
