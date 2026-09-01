@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -46,6 +47,24 @@
 
 namespace holobench::app {
 namespace {
+
+constexpr const char* kBenchComponentDragPayload
+    = "HOLOBENCH_BENCH_COMPONENT_KIND";
+
+bool containsAsciiCaseInsensitive(
+    std::string_view text,
+    std::string_view query) {
+    if (query.empty()) {
+        return true;
+    }
+    const auto lower = [](char value) {
+        return static_cast<char>(std::tolower(
+            static_cast<unsigned char>(value)));
+    };
+    return std::search(text.begin(), text.end(), query.begin(), query.end(),
+        [lower](char lhs, char rhs) { return lower(lhs) == lower(rhs); })
+        != text.end();
+}
 
 GLADapiproc loadOpenGlProcedure(const char* name) {
     return reinterpret_cast<GLADapiproc>(SDL_GL_GetProcAddress(name));
@@ -553,6 +572,29 @@ bool Application::applyBenchScene(
     candidateProject.scene = std::move(candidateScene);
     return applyDynamicBenchProject(
         std::move(candidateProject), std::move(newStatusMessage), recordHistory);
+}
+
+bool Application::placeSandboxComponent(
+    optics::scene::BenchComponentKind kind,
+    const math::Vec3d& positionMetres,
+    std::string statusMessage) {
+    namespace bench = optics::scene;
+    auto candidate = benchProject_.scene;
+    std::string newId;
+    do {
+        newId = std::string(bench::benchComponentKindName(kind))
+            + "-" + std::to_string(sandboxNextComponentOrdinal_++);
+    } while (candidate.find(newId) != nullptr);
+    auto component = bench::makeDefaultBenchComponent(kind, newId);
+    component.transform.translationMetres = positionMetres;
+    candidate.add(component);
+    const std::string previousSelection = selectedBenchComponentId_;
+    selectedBenchComponentId_ = newId;
+    if (!applyBenchScene(std::move(candidate), std::move(statusMessage))) {
+        selectedBenchComponentId_ = previousSelection;
+        return false;
+    }
+    return true;
 }
 
 bool Application::applyDynamicBenchProject(
@@ -4623,6 +4665,73 @@ void Application::drawLearnPanel() {
     ImGui::End();
 }
 
+void Application::drawSandboxComponentShelf() {
+    namespace bench = optics::scene;
+    ImGui::BeginChild(
+        "##sandbox_component_shelf",
+        ImVec2(0.0F, 126.0F),
+        ImGuiChildFlags_Borders,
+        ImGuiWindowFlags_NoScrollbar);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Components");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(220.0F);
+    ImGui::InputTextWithHint(
+        "##sandbox_component_search",
+        "Search laser, lens, plate...",
+        sandboxComponentSearch_,
+        sizeof(sandboxComponentSearch_));
+    ImGui::SameLine();
+    ImGui::TextDisabled("Click: place at view centre | Drag: place on table");
+
+    const auto& kinds = bench::requiredBenchComponentKinds();
+    constexpr int kShelfColumns = 4;
+    if (ImGui::BeginTable(
+            "##sandbox_component_shelf_table",
+            kShelfColumns,
+            ImGuiTableFlags_SizingStretchSame)) {
+        int visibleIndex = 0;
+        for (std::size_t index = 0; index < kinds.size(); ++index) {
+            const auto kind = kinds[index];
+            const std::string_view label = bench::benchComponentDisplayName(kind);
+            if (!containsAsciiCaseInsensitive(
+                    label, sandboxComponentSearch_)) {
+                continue;
+            }
+            ImGui::TableNextColumn();
+            ImGui::PushID(static_cast<int>(index));
+            const float buttonWidth = std::max(
+                80.0F, ImGui::GetContentRegionAvail().x);
+            if (ImGui::Button(label.data(), ImVec2(buttonWidth, 0.0F))) {
+                const glm::vec3 target = camera_.target();
+                static_cast<void>(placeSandboxComponent(
+                    kind,
+                    {static_cast<double>(target.x), 0.0,
+                        static_cast<double>(target.z)},
+                    "Placed " + std::string(label) + " from component shelf"));
+            }
+            const int payloadIndex = static_cast<int>(index);
+            if (ImGui::BeginDragDropSource(
+                    ImGuiDragDropFlags_SourceAllowNullID)) {
+                ImGui::SetDragDropPayload(
+                    kBenchComponentDragPayload,
+                    &payloadIndex,
+                    sizeof(payloadIndex));
+                ImGui::Text("Place %s on optical table", label.data());
+                ImGui::EndDragDropSource();
+            }
+            ImGui::PopID();
+            ++visibleIndex;
+        }
+        if (visibleIndex == 0) {
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled("No matching components");
+        }
+        ImGui::EndTable();
+    }
+    ImGui::EndChild();
+}
+
 void Application::drawSandboxInspector() {
     namespace bench = optics::scene;
     if (!ImGui::CollapsingHeader("3D Optical Sandbox", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -4681,27 +4790,13 @@ void Application::drawSandboxInspector() {
         ImGui::EndCombo();
     }
     if (ImGui::Button("Add to Bench")) {
-        auto candidate = benchProject_.scene;
         const auto kind = kinds[static_cast<std::size_t>(sandboxLibraryKindIndex_)];
-        std::string newId;
-        do {
-            newId = std::string(bench::benchComponentKindName(kind))
-                + "-" + std::to_string(sandboxNextComponentOrdinal_++);
-        } while (candidate.find(newId) != nullptr);
-        auto component = bench::makeDefaultBenchComponent(kind, newId);
         const glm::vec3 target = camera_.target();
-        component.transform.translationMetres = {
-            static_cast<double>(target.x),
-            static_cast<double>(target.y),
-            static_cast<double>(target.z),
-        };
-        candidate.add(component);
-        const std::string previousSelection = selectedBenchComponentId_;
-        selectedBenchComponentId_ = newId;
-        if (!applyBenchScene(std::move(candidate),
-                "Placed " + std::string(bench::benchComponentDisplayName(kind)))) {
-            selectedBenchComponentId_ = previousSelection;
-        }
+        static_cast<void>(placeSandboxComponent(
+            kind,
+            {static_cast<double>(target.x), 0.0,
+                static_cast<double>(target.z)},
+            "Placed " + std::string(bench::benchComponentDisplayName(kind))));
     }
     ImGui::SameLine();
     if (ImGui::Button("Empty Bench")) {
@@ -6590,6 +6685,9 @@ void Application::drawWorkspace() {
     }
 
     ImGui::Begin(docking::DockLayoutConfig::kOpticalBenchWindowName);
+    if (viewportMode_ == ViewportMode::Sandbox && !isBenchmark_) {
+        drawSandboxComponentShelf();
+    }
     const ImVec2 contentSize = ImGui::GetContentRegionAvail();
 
     int fboWidth = 0;
@@ -6636,6 +6734,50 @@ void Application::drawWorkspace() {
                 : (16.0F / 9.0F);
             const glm::mat4 viewProj = camera_.projectionMatrix(aspect) * camera_.viewMatrix();
             const glm::vec2 mousePosition(io.MousePos.x, io.MousePos.y);
+
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
+                        kBenchComponentDragPayload)) {
+                    if (payload->Data != nullptr
+                        && payload->DataSize == sizeof(int)) {
+                        const int kindIndex
+                            = *static_cast<const int*>(payload->Data);
+                        const auto& kinds
+                            = optics::scene::requiredBenchComponentKinds();
+                        if (kindIndex >= 0
+                            && static_cast<std::size_t>(kindIndex)
+                                < kinds.size()) {
+                            const auto tableHit
+                                = gizmo::unprojectScreenToHorizontalPlane(
+                                    mousePosition,
+                                    0.0F,
+                                    viewProj,
+                                    rectMin,
+                                    rectSize);
+                            if (!tableHit.hit) {
+                                errorMessage_
+                                    = "Cannot place on the horizontal optical table from this view; orbit to a perspective or top view";
+                                statusMessage_.clear();
+                            } else {
+                                const math::Vec3d position {
+                                    static_cast<double>(tableHit.worldPosition.x),
+                                    0.0,
+                                    static_cast<double>(tableHit.worldPosition.z),
+                                };
+                                const auto kind = kinds[
+                                    static_cast<std::size_t>(kindIndex)];
+                                static_cast<void>(placeSandboxComponent(
+                                    kind,
+                                    position,
+                                    "Placed " + std::string(
+                                        optics::scene::benchComponentDisplayName(kind))
+                                        + " on optical table"));
+                            }
+                        }
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
 
             std::string hoveredComponentId;
             float hoveredDepth = std::numeric_limits<float>::max();

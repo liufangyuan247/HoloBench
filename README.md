@@ -21,6 +21,12 @@ removed from scope. For the current repository state and roadmap, see
 [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and
 [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
 
+The free-form viewport now has an always-visible searchable component shelf.
+Clicking places a component at the current table view centre; dragging a
+component into the viewport intersects the camera ray with the horizontal
+optical table and places it at that physical location. The Inspector remains
+available for exact transforms and physical parameters.
+
 For supported ray-routed paths, placed ideal lenses, mirror/splitter clear
 areas, apertures, pinholes, and SLM finite pixels/dead space now act on a
 beam-following local complex field before plate recording. Ideal mirror and

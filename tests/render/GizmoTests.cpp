@@ -58,6 +58,45 @@ TEST_CASE("projectWorldToViewport strictly rejects points behind camera and outs
     CHECK_FALSE(resNan.visible);
 }
 
+TEST_CASE("viewport drop unprojects onto the horizontal optical table") {
+    holobench::render::OrbitCamera camera;
+    camera.reset();
+    camera.setViewportSize(1280, 720);
+    const glm::mat4 viewProj = camera.viewProjectionMatrix();
+    const glm::vec2 rectMin(80.0F, 120.0F);
+    const glm::vec2 rectSize(1280.0F, 720.0F);
+    const glm::vec3 tablePoint(0.23F, 0.0F, 0.81F);
+    const auto projected = holobench::app::gizmo::projectWorldToViewport(
+        tablePoint, viewProj, rectMin, rectSize);
+    REQUIRE(projected.visible);
+
+    const auto intersection
+        = holobench::app::gizmo::unprojectScreenToHorizontalPlane(
+            projected.screenPos, 0.0F, viewProj, rectMin, rectSize);
+    REQUIRE(intersection.hit);
+    CHECK(intersection.worldPosition.x
+        == doctest::Approx(tablePoint.x).epsilon(2e-5));
+    CHECK(intersection.worldPosition.y == doctest::Approx(0.0F));
+    CHECK(intersection.worldPosition.z
+        == doctest::Approx(tablePoint.z).epsilon(2e-5));
+}
+
+TEST_CASE("viewport drop rejects parallel rays and invalid rectangles") {
+    holobench::render::OrbitCamera camera;
+    camera.setPresetView(holobench::render::CameraPresetView::FrontXY);
+    const glm::vec2 rectMin(0.0F, 0.0F);
+    const glm::vec2 rectSize(800.0F, 600.0F);
+    CHECK_FALSE(holobench::app::gizmo::unprojectScreenToHorizontalPlane(
+        {400.0F, 300.0F}, 0.0F, camera.viewProjectionMatrix(),
+        rectMin, rectSize).hit);
+    CHECK_FALSE(holobench::app::gizmo::unprojectScreenToHorizontalPlane(
+        {-1.0F, 300.0F}, 0.0F, glm::mat4(1.0F),
+        rectMin, rectSize).hit);
+    CHECK_FALSE(holobench::app::gizmo::unprojectScreenToHorizontalPlane(
+        {0.0F, 0.0F}, 0.0F, glm::mat4(1.0F),
+        rectMin, {0.0F, 0.0F}).hit);
+}
+
 TEST_CASE("computeAxisProjection and computeGizmoDeltaZ convert screen delta to world +Z movement") {
     holobench::render::OrbitCamera cam;
     cam.reset();

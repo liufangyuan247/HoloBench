@@ -73,6 +73,11 @@ struct AxisProjection {
     bool isDegenerate = true;
 };
 
+struct PlaneIntersection {
+    glm::vec3 worldPosition {0.0F, 0.0F, 0.0F};
+    bool hit = false;
+};
+
 [[nodiscard]] inline ProjectedPoint projectWorldToViewport(
     const glm::vec3& worldPos,
     const glm::mat4& viewProj,
@@ -102,6 +107,58 @@ struct AxisProjection {
     const float v = (1.0F - ndc.y) * 0.5F;
     const glm::vec2 screenPos(rectMin.x + u * rectSize.x, rectMin.y + v * rectSize.y);
     return {.screenPos = screenPos, .depth = clip.w, .visible = true};
+}
+
+[[nodiscard]] inline PlaneIntersection unprojectScreenToHorizontalPlane(
+    const glm::vec2& screenPosition,
+    float planeY,
+    const glm::mat4& viewProj,
+    const glm::vec2& rectMin,
+    const glm::vec2& rectSize) noexcept {
+    if (!std::isfinite(screenPosition.x) || !std::isfinite(screenPosition.y)
+        || !std::isfinite(planeY)
+        || !std::isfinite(rectMin.x) || !std::isfinite(rectMin.y)
+        || !std::isfinite(rectSize.x) || !std::isfinite(rectSize.y)
+        || rectSize.x <= 0.0F || rectSize.y <= 0.0F
+        || screenPosition.x < rectMin.x || screenPosition.y < rectMin.y
+        || screenPosition.x > rectMin.x + rectSize.x
+        || screenPosition.y > rectMin.y + rectSize.y) {
+        return {};
+    }
+    const float determinant = glm::determinant(viewProj);
+    if (!std::isfinite(determinant) || std::abs(determinant) < 1e-12F) {
+        return {};
+    }
+    const glm::mat4 inverseViewProj = glm::inverse(viewProj);
+    const float ndcX = 2.0F * (screenPosition.x - rectMin.x) / rectSize.x - 1.0F;
+    const float ndcY = 1.0F - 2.0F * (screenPosition.y - rectMin.y) / rectSize.y;
+    glm::vec4 nearWorld = inverseViewProj * glm::vec4(ndcX, ndcY, -1.0F, 1.0F);
+    glm::vec4 farWorld = inverseViewProj * glm::vec4(ndcX, ndcY, 1.0F, 1.0F);
+    if (!std::isfinite(nearWorld.x) || !std::isfinite(nearWorld.y)
+        || !std::isfinite(nearWorld.z) || !std::isfinite(nearWorld.w)
+        || !std::isfinite(farWorld.x) || !std::isfinite(farWorld.y)
+        || !std::isfinite(farWorld.z) || !std::isfinite(farWorld.w)
+        || std::abs(nearWorld.w) < 1e-12F
+        || std::abs(farWorld.w) < 1e-12F) {
+        return {};
+    }
+    nearWorld /= nearWorld.w;
+    farWorld /= farWorld.w;
+    const glm::vec3 direction = glm::vec3(farWorld - nearWorld);
+    if (!std::isfinite(direction.x) || !std::isfinite(direction.y)
+        || !std::isfinite(direction.z) || std::abs(direction.y) < 1e-7F) {
+        return {};
+    }
+    const float distance = (planeY - nearWorld.y) / direction.y;
+    if (!std::isfinite(distance) || distance < 0.0F) {
+        return {};
+    }
+    const glm::vec3 result = glm::vec3(nearWorld) + direction * distance;
+    if (!std::isfinite(result.x) || !std::isfinite(result.y)
+        || !std::isfinite(result.z)) {
+        return {};
+    }
+    return {.worldPosition = result, .hit = true};
 }
 
 [[nodiscard]] inline AxisProjection computeAxisProjection(
@@ -395,6 +452,11 @@ private:
     [[nodiscard]] bool restoreBenchEditState(const BenchProject& state);
     bool showSandboxViewport();
     bool showLegacyViewport();
+    bool placeSandboxComponent(
+        optics::scene::BenchComponentKind kind,
+        const math::Vec3d& positionMetres,
+        std::string statusMessage);
+    void drawSandboxComponentShelf();
     void drawSandboxInspector();
     void loadBenchProjectFromPath();
     void saveBenchProjectToPath();
@@ -427,6 +489,7 @@ private:
     std::string selectedBenchComponentId_;
     std::size_t sandboxNextComponentOrdinal_ = 1;
     int sandboxLibraryKindIndex_ = 0;
+    char sandboxComponentSearch_[64] {};
     float sandboxRotationStepDegrees_ = 5.0F;
     int sandboxPlateSampleSize_ = 256;
     float sandboxPlateWindowMillimetres_ = 1.0F;

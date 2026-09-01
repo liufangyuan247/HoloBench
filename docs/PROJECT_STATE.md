@@ -59,6 +59,14 @@ The required interaction is now explicit:
 
 ## M7 implementation progress
 
+- **Direct component shelf and table placement**: The free-form viewport now
+  owns an always-visible searchable shelf for all twelve component kinds.
+  Clicking places at the current table view centre; drag/drop unprojects the
+  cursor through the actual camera and intersects the horizontal optical table,
+  then creates/selects the ordinary scene component through the same history,
+  trace, renderer, and autosave path. Degenerate, parallel, and out-of-viewport
+  rays reject safely. Axis-specific gizmos, snapping, alignment aids, and an
+  automated input-gesture smoke remain open.
 - **Default interactive sandbox**: the application now opens on the unified
   dynamic bench instead of the fixed-axis reference scene. The starter project
   contains an RGB laser, splitter, two routed arms, an ideal lens, two screens,
@@ -540,7 +548,8 @@ completion because it is primarily driven through fixed parameter panels:
   selection evidence. See
   [ADR 0020](adr/0020-chimera-deterministic-parameter-sweep.md).
 - **Current M9 validation**: Windows Clang warnings-as-errors core/application
-  builds pass; `core-ci` passes 543/543 and `dev` passes 545/545 including GPU
+  builds pass; `core-ci` passes 545/545 and `dev` passes 547/547. The updated
+  development gate includes the two table-drop projection tests, GPU
   and font executables. Hidden OpenGL smoke renders and semantically
   round-trips the generated 23-component bench, finds its six plate branches,
   and exits with no GL errors on AMD Radeon Pro 5300M. GitHub Actions run
