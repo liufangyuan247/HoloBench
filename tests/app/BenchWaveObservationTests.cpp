@@ -396,7 +396,7 @@ TEST_CASE("placed observation follows lenses SLMs mirrors and splitter folds") {
         .localYAxisInWorld = {0.0, 1.0, 0.0},
         .localZAxisInWorld = {1.0, 0.0, 0.0},
     };
-    for (const auto [kind, id] : std::array {
+    for (const auto& [kind, id] : std::array {
              std::pair {scene::BenchComponentKind::PlanarMirror,
                         "routed-mirror"},
              std::pair {scene::BenchComponentKind::BeamSplitterCombiner,

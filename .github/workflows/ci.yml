@@ -20,33 +20,8 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
       - name: Configure
         run: cmake --preset core-ci
-      - name: Build (Windows)
-        if: runner.os == 'Windows'
-        run: cmake --build --preset core-ci --parallel 2
-      - name: Build (Linux)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set +e
-          cmake --build --preset core-ci --parallel 2 2>&1 | tee ubuntu-core-build.log
-          build_status=${PIPESTATUS[0]}
-          set -e
-          if [ "$build_status" -ne 0 ]; then
-            python3 - <<'PY'
-          from pathlib import Path
-
-          lines = Path("ubuntu-core-build.log").read_text(
-              encoding="utf-8", errors="replace").splitlines()[-10:]
-          for index, line in enumerate(lines, start=1):
-              diagnostic = line.replace("%", "%25")
-              diagnostic = diagnostic.replace("\r", "%0D")
-              diagnostic = diagnostic.replace("\n", "%0A")
-              print(
-                  f"::error title=Ubuntu core build tail {index}/{len(lines)}::"
-                  f"{diagnostic}")
-          PY
-          fi
-          exit "$build_status"
+      - name: Build
+        run: cmake --build --preset core-ci
       - name: Test
         run: ctest --preset core-ci
       - name: Run M6 CPU performance gate (Windows)
