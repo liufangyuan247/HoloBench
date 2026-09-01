@@ -11,6 +11,12 @@ M7 is a blocking product rebaseline. The validated M1-M6 solvers remain the
 physics foundation, but their existing fixed workbench panels are reference and
 diagnostic surfaces, not the final Lab interaction.
 
+Status (reopened 2026-09-01): the scene, routing, persistence, placed-wave, and
+holography adapters are implemented and numerically validated. Product
+acceptance remains open because direct viewport placement/alignment and the
+complete user-operated experiment workflow have not yet met the outcome below.
+Do not infer completion from presets, Inspector controls, or headless APIs.
+
 ## User-visible outcome
 
 - Start with an empty or preset optical table.
@@ -211,3 +217,6 @@ M7 must pass before M8 holography workflows or any teaching UI can claim
 product completion.
 
 Completion tag: `m7-optical-bench-sandbox`.
+
+The completion tag is withheld until every checklist item passes the reopened
+direct-manipulation acceptance gate.

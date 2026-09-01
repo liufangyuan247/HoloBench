@@ -8,6 +8,13 @@ coherence, optical path, apertures, and plate incidence come from components
 that the user actually placed; no separate fixed holography form may substitute
 for the experiment.
 
+Status (reopened 2026-09-01): transmission, reflection/Denisyuk, RGB, recipe,
+and persistence solvers are validated in their documented scalar domains. The
+product milestone remains open until a user can carry out each complete
+record/reconstruct experiment through direct manipulation of the shared 3D
+bench. Preset loading and Inspector-only buttons do not by themselves satisfy
+that acceptance.
+
 ## User-visible outcome
 
 The user can build or load three ordinary bench presets:
@@ -97,7 +104,7 @@ stale until recomputation.
 
 ## Delivery slices
 
-Accepted 2026-09-01. M8.1 is implemented; M8.2 has an
+Physics foundation validated 2026-09-01; product acceptance reopened. M8.1 is implemented; M8.2 has an
 end-to-end placed thin-transmission record/replay path; M8.3 records the full
 placed reflection grating vector and evaluates wavelength/angle/material Bragg
 selectivity, then reconstructs a Bragg-weighted sampled field on the physical
@@ -182,11 +189,14 @@ failure and never substitutes another branch.
 
 ## Acceptance checklist
 
-- [x] A transmission hologram can be assembled from an empty bench, recorded,
+- [ ] A transmission hologram can be assembled from an empty bench through the
+  direct viewport workflow, recorded,
   replayed, and observed on a placed Screen / Probe.
-- [x] A reflection/Denisyuk-style hologram can be assembled with beams on
+- [ ] A reflection/Denisyuk-style hologram can be assembled through the direct
+  viewport workflow with beams on
   opposite plate sides and reconstructed through the reflection Bragg path.
-- [x] An RGB full-colour hologram can be assembled, recorded per wavelength,
+- [ ] An RGB full-colour hologram can be assembled through the direct viewport
+  workflow, recorded per wavelength,
   replayed per wavelength, and viewed as a labelled combined result.
 - [x] Every result is tied to the exact bench revision and becomes stale after
   any relevant component edit.
@@ -196,3 +206,6 @@ failure and never substitutes another branch.
   smoke, and Windows/Linux CI pass.
 
 Completion tag: `m8-holography-sandbox`.
+
+The completion tag is withheld until the three reopened interactive workflow
+items pass; the remaining checked items retain their validated backend status.

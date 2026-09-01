@@ -6,13 +6,13 @@ Last updated: 2026-09-01
 
 **M1-M6 numerical/reference foundations: validated in their documented domains**
 
-Operational product foundation: **[M7 - Free-form 3D Optical Bench Sandbox](milestones/M7_OPTICAL_BENCH_SANDBOX.md)**
+Active product milestone: **[M7 - Free-form 3D Optical Bench Sandbox](milestones/M7_OPTICAL_BENCH_SANDBOX.md)** — direct-manipulation acceptance reopened
 
-Accepted product physics: **[M8 - Transmission, reflection, and RGB holography sandbox](milestones/M8_HOLOGRAPHY_SANDBOX.md)**
+Next product milestone: **[M8 - Transmission, reflection, and RGB holography sandbox](milestones/M8_HOLOGRAPHY_SANDBOX.md)** — solver foundation validated, interactive experiment acceptance reopened
 
-Active development: **[M9 - automated CHIMERA construction and reconstruction](milestones/M9_CHIMERA_AUTOMATION.md)**
+Following milestone: **[M9 - automated CHIMERA construction and reconstruction](milestones/M9_CHIMERA_AUTOMATION.md)** — existing virtual-printer data path retained; new product work follows M7/M8 closure
 
-Distribution/store milestones have been removed from the active roadmap.
+Steam, store, packaging, and distribution work has been removed from project scope.
 
 ## Product rebaseline (2026-09-01)
 
@@ -29,6 +29,33 @@ components; M9 adds recipe-driven CHIMERA-like bench construction, hogel and
 exposure generation, and bounded reconstruction simulation. The former guided
 panel workflows are retained only as regression/reference assets until they are
 rebuilt on the shared bench.
+
+### Product acceptance correction
+
+The M7/M8 physics and document foundations passed their numerical gates, but
+the earlier "accepted" label was too broad. The current application still
+places components from an Inspector combo, uses basic whole-object viewport
+dragging instead of a clear placement/alignment toolchain, and exposes
+hologram recording/replay inside a long plate parameter surface. A user-facing
+test has not yet proved that an empty bench can be assembled, aligned,
+recorded, changed to replay illumination, and observed as one understandable
+spatial experiment. M7 and M8 are therefore reopened for product acceptance;
+their validated backend evidence is retained and must not be rewritten.
+
+The required interaction is now explicit:
+
+1. choose or drag a laser, mirror, splitter/combiner, lens, aperture, SLM,
+   screen/probe, object source, or holographic plate directly into the 3D bench;
+2. translate, rotate, align, duplicate, and delete in the viewport, with the
+   Inspector used only for precision entry and physical properties;
+3. see beam branches, clipping, wavelength, power, coherence, and invalid paths
+   update from geometry;
+4. select a placed plate and perform Record, then configure replay illumination
+   and perform Reconstruct from a compact experiment action surface;
+5. see field/image evidence at the actual placed Screen/Probe and keep every
+   result bound to the exact bench revision; and
+6. complete transmission, reflection/Denisyuk, and RGB full-colour workflows
+   without switching to a legacy fixed-axis workbench.
 
 ## M7 implementation progress
 
@@ -153,7 +180,8 @@ rebuilt on the shared bench.
   SLM command/provenance behavior. Named M8 performance scenes and remote
   Windows/Linux cross-compiler validation pass. The unresolved real-lens wave
   adapter and vector/high-NA physics remain explicit scope limits rather than
-  hidden claims; M7/M8 are accepted in their documented scalar domains.
+  hidden claims. This is validated solver and scene-foundation evidence, not
+  yet M7/M8 direct-manipulation product acceptance.
 
 ## Completed
 
@@ -405,7 +433,9 @@ completion because it is primarily driven through fixed parameter panels:
   and
   [33450034341](https://github.com/liufangyuan247/HoloBench/actions/runs/33450034341)
   pass Windows/Ubuntu core and complete application-compile jobs with the named
-  M8 performance gates and atomic recovery cases. M8 is accepted; M9 is active.
+  M8 performance gates and atomic recovery cases. These runs validate the
+  solver/persistence foundation; interactive M7/M8 product acceptance remains
+  reopened.
 
 ## M9 CHIMERA automation state
 
@@ -540,9 +570,17 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Expose real image import, dataset, exposure, reconstruction camera, sweep, and batch controls in the Lab UI.
-2. Add deterministic calibrated-sweep performance evidence and reuse of exposure-invariant field samples.
-3. Add camera distortion/defocus/noise adapters without weakening the bounded ideal reference.
-4. Add resumable batch execution, corrupt-artifact rejection, named budgets,
-   and cross-platform M9 acceptance gates.
-5. Complete the M9 virtual-printer acceptance audit and documentation.
+1. Replace Inspector-first placement with an always-visible searchable component
+   shelf, direct viewport drop/placement, axis-aware transform gizmos, snapping,
+   and clear selection/alignment feedback.
+2. Add a compact contextual experiment action surface for a selected plate:
+   branch assignment, Record, replay-source selection, Reconstruct, staleness,
+   and Screen/Probe result selection, while keeping advanced parameters in the
+   Inspector.
+3. Close user-facing end-to-end acceptance for ordinary transmission,
+   reflection/Denisyuk, and RGB full-colour benches assembled through the same
+   direct-manipulation workflow; add automated interaction smoke coverage.
+4. Integrate the retained CHIMERA recipe, image/dataset, exposure,
+   reconstruction-camera, and sweep contracts into that same bench workflow.
+5. Resume calibrated-sweep performance reuse and resumable/corruption-safe
+   CHIMERA batches only after the sandbox interaction gate is closed.

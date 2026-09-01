@@ -4,7 +4,7 @@
 
 Build a physically credible, approachable **free-form 3D optical laboratory bench** that can grow from teaching software into a calibrated holographic-printing toolchain. The primary product interaction is placing and orienting optical components in the 3D workspace, observing the resulting beam paths and local fields, and saving the complete bench. Fixed parameter panels and headless pipelines are reference/diagnostic assets; they do not by themselves satisfy a Lab, lesson, or product milestone. The current source of truth for work status is `docs/PROJECT_STATE.md`, not the long-term project plan.
 
-The active product sequence is [M7](docs/milestones/M7_OPTICAL_BENCH_SANDBOX.md) free-form bench, [M8](docs/milestones/M8_HOLOGRAPHY_SANDBOX.md) transmission/reflection/RGB recording and reconstruction, then [M9](docs/milestones/M9_CHIMERA_AUTOMATION.md) automated CHIMERA-like construction, hogel/exposure generation, and reconstruction simulation. Distribution/store integration is not an active goal. Teaching workflows must guide manipulation of the shared bench rather than substitute form controls for the experiment.
+The active product sequence is [M7](docs/milestones/M7_OPTICAL_BENCH_SANDBOX.md) free-form bench, [M8](docs/milestones/M8_HOLOGRAPHY_SANDBOX.md) transmission/reflection/RGB recording and reconstruction, then [M9](docs/milestones/M9_CHIMERA_AUTOMATION.md) automated CHIMERA-like construction, hogel/exposure generation, and reconstruction simulation. Steam, store, packaging, and distribution work are excluded until the user explicitly reopens that scope. Teaching workflows must guide manipulation of the shared bench rather than substitute form controls for the experiment.
 
 ## Standard commands
 
@@ -52,6 +52,8 @@ Use `core-ci` when no display/OpenGL environment is available.
 ## Definition of done
 
 A feature is not complete until it builds, has deterministic tests, documents physical assumptions and limitations, has a validation result, and preserves project save/load compatibility when applicable. Performance claims require a named benchmark scene and hardware profile.
+
+M7 and M8 product completion additionally requires direct-manipulation acceptance in the shared 3D bench. Backend APIs, presets, Inspector forms, and headless tests are necessary evidence but cannot close the milestone unless a user can place and align the experiment, see the routed beams, record the plate, change to replay illumination, and inspect reconstruction at a placed Screen/Probe without switching to a legacy fixed workbench.
 
 ## Dependency policy
 

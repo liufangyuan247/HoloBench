@@ -8,6 +8,12 @@ holographic printer. The first release is a virtual printer and reconstruction
 simulator, not a claim to reproduce proprietary CHIMERA optics or calibrated
 hardware.
 
+Priority note (2026-09-01): the implemented virtual-printer contracts and tests
+are retained, but new M9 product expansion follows reopened M7/M8
+direct-manipulation acceptance. CHIMERA automation must appear as construction
+and execution on the same visible editable bench, not as another replacement
+parameter workbench.
+
 Current implementation status (2026-09-01): C9.1 format-v1 recipe parsing,
 validation, deterministic recipe-to-bench compiler, stable generated-component
 provenance, constraint report, three independent M8 reflection recording

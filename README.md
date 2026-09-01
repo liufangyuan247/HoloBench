@@ -3,19 +3,21 @@
 HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator, and a long-term R&D tool for CHIMERA-like holographic printing.
 
 **Milestone status**: M1-M6 physics/reference foundations are validated in
-their documented domains, and M7 provides the operational free-form bench
-foundation. The application now includes an editable free-form
+their documented domains. M7/M8 backend foundations exist, but their product
+milestones are reopened until the intended direct-manipulation workflow passes
+user-facing acceptance. The application currently includes an editable
 3D bench with typed placeable components, geometry-derived branched rays,
 ordinary transmission/reflection/RGB presets, placed thin-hologram recording,
 and reconstruction on placed Screen/Probe components. Reflection-volume
 recording derives the grating from the actual opposite-side plate branches and
 reconstructs a Bragg-weighted sampled field on a placed reflection-side
 Screen/Probe. The RGB preset records and replays three independent spectral
-channels and combines only their display intensities. **M8
-(transmission/reflection/RGB holography sandbox)** is accepted. **M9
-(automated CHIMERA construction and reconstruction)** is now the active
-product milestone. Distribution/store integration is outside the active
-roadmap. For the current repository state and roadmap, see
+channels and combines only their display intensities. The active priority is
+to make those capabilities operable as one spatial optical experiment: place
+and align components in the viewport, record a plate, switch to replay, and
+observe reconstruction on a placed Screen/Probe. M9 CHIMERA data-path work is
+retained and follows that sandbox closure. Steam/store/distribution work is
+removed from scope. For the current repository state and roadmap, see
 [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and
 [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
 
