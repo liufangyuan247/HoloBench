@@ -49,8 +49,8 @@ animated or silently approximated.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: `dev` passes 585/585 tests and `core-ci` passes
-  583/583. Clang and MSVC core/application builds pass with warnings as errors;
+- **Acceptance evidence**: `dev` passes 587/587 tests and `core-ci` passes
+  585/585. Clang and MSVC core/application builds pass with warnings as errors;
   the packaged CJK font validates. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
   smoke passes real shelf placement, constrained whole-instrument edits,
   post/XYZ and yaw/pitch mechanical drags, optical-frame updates, all M7/M8
@@ -94,10 +94,18 @@ animated or silently approximated.
   smoke exercises cursor/section measurement plus all three views on a placed
   virtual probe. See
   [ADR 0028](adr/0028-revision-bound-placed-field-measurements.md).
-- **M10.4 next slice**: replace the current single unambiguous
-  `Laser -> Aperture` producer with reusable same-wavelength coherent field
-  merging and independent spectral channels through arbitrary supported routed
-  components.
+- **M10.4 channel and coherent-merge foundation implemented**: Every supported
+  branch reaching the selected plane is canonically partitioned by exact
+  wavelength and coherence ID. A channel adds its contributors as complex
+  fields after accumulated optical-path phase; distinct pairs remain
+  independently selectable. Per-branch source/aperture/route diagnostics are
+  retained, channel/view changes rerender without a scene edit or propagation,
+  and any unsupported incident branch rejects the complete measurement. The
+  hardware smoke switches all three RGB channels on the placed plane. See
+  [ADR 0029](adr/0029-coherent-merge-and-independent-measurement-channels.md).
+- **M10.4 next slice**: reuse the existing beam-following local field transforms
+  so mirrors, splitters, lenses, spatial filters, and SLMs can contribute to the
+  same channel contract through arbitrary supported routed paths.
 
 ## Product rebaseline (2026-09-01)
 

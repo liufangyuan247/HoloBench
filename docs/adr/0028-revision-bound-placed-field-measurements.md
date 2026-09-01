@@ -36,11 +36,10 @@ phase from the same cached field without propagating again. Display changes do
 not advance the scene revision. Any physical scene edit makes the observation
 stale and removes it from the measurement surface until recomputed.
 
-The current placed-wave adapter resolves one unambiguous single-wavelength
-`Laser -> Aperture -> Screen/Probe` route. This ADR establishes the measurement
-contract; general same-wavelength coherent merging and independent
-multi-wavelength channels extend the producer without changing the observable
-semantics.
+At adoption, the placed-wave adapter resolved one unambiguous single-wavelength
+`Laser -> Aperture -> Screen/Probe` route. ADR 0029 subsequently adds coherent
+multi-branch merging and independent wavelength/coherence channels without
+changing the observable semantics established here.
 
 ## Consequences
 

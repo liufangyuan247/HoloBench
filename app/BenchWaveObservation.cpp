@@ -115,34 +115,102 @@ struct ObservationSampling final {
     return *channel;
 }
 
-[[nodiscard]] const scene::OpticalInteraction& selectApertureRoute(
+struct ObservationRoute final {
+    const scene::BenchComponent* source = nullptr;
+    const scene::BenchComponent* aperture = nullptr;
+    const scene::OpticalInteraction* apertureInteraction = nullptr;
+    const scene::OpticalInteraction* observationInteraction = nullptr;
+};
+
+[[nodiscard]] bool pathEqualsPrefix(
+    const std::vector<std::string>& candidate,
+    const std::vector<std::string>& path,
+    std::size_t prefixSize) {
+    return candidate.size() == prefixSize
+        && path.size() >= prefixSize
+        && std::equal(candidate.begin(), candidate.end(), path.begin());
+}
+
+[[nodiscard]] std::vector<ObservationRoute> collectObservationRoutes(
     const scene::BenchScene& bench,
-    const scene::BenchTraceGraph& traceGraph) {
-    std::vector<const scene::OpticalInteraction*> candidates;
-    for (const auto& interaction : traceGraph.interactions) {
-        const auto* component = bench.find(interaction.componentId);
-        if (component == nullptr
-            || component->kind != scene::BenchComponentKind::Aperture
-            || interaction.outgoing.size() != 1U
-            || interaction.incidentBeam.provenance.componentPath.empty()) {
+    const scene::BenchTraceGraph& traceGraph,
+    std::string_view observationComponentId) {
+    std::vector<ObservationRoute> routes;
+    for (const auto& observationInteraction : traceGraph.interactions) {
+        if (observationInteraction.componentId != observationComponentId) {
             continue;
         }
-        const auto* source = bench.find(
-            interaction.incidentBeam.provenance.componentPath.front());
-        if (source != nullptr
-            && source->kind == scene::BenchComponentKind::LaserSource) {
-            candidates.push_back(&interaction);
+        scene::validateBeamState(observationInteraction.incidentBeam);
+        const auto& path
+            = observationInteraction.incidentBeam.provenance.componentPath;
+        if (path.size() < 3U || path.back() != observationComponentId) {
+            throw std::invalid_argument(
+                "selected observation receives a branch with incomplete path evidence");
         }
+        const auto* source = bench.find(path.front());
+        if (source == nullptr
+            || source->kind != scene::BenchComponentKind::LaserSource) {
+            throw std::invalid_argument(
+                "selected observation receives a branch from an unsupported source model");
+        }
+        const auto* aperture = bench.find(path[1]);
+        if (aperture == nullptr
+            || aperture->kind != scene::BenchComponentKind::Aperture) {
+            throw std::invalid_argument(
+                "selected observation requires a fully modeled Laser -> Aperture wave path");
+        }
+        for (std::size_t pathIndex = 2U; pathIndex + 1U < path.size();
+             ++pathIndex) {
+            const auto* intermediate = bench.find(path[pathIndex]);
+            if (intermediate == nullptr
+                || intermediate->kind != scene::BenchComponentKind::FieldProbe) {
+                throw std::invalid_argument(
+                    "selected observation branch contains an unsupported post-aperture wave component");
+            }
+        }
+        const auto apertureInteraction = std::find_if(
+            traceGraph.interactions.begin(),
+            traceGraph.interactions.end(),
+            [&](const scene::OpticalInteraction& candidate) {
+                return candidate.componentId == aperture->id
+                    && candidate.incidentBeam.provenance.branchId
+                        == observationInteraction.incidentBeam.provenance.branchId
+                    && pathEqualsPrefix(
+                        candidate.incidentBeam.provenance.componentPath,
+                        path,
+                        2U);
+            });
+        if (apertureInteraction == traceGraph.interactions.end()
+            || apertureInteraction->outgoing.size() != 1U) {
+            throw std::invalid_argument(
+                "selected observation branch is missing connected aperture evidence");
+        }
+        static_cast<void>(findSourceChannel(
+            *source, apertureInteraction->incidentBeam));
+        routes.push_back({
+            .source = source,
+            .aperture = aperture,
+            .apertureInteraction = &*apertureInteraction,
+            .observationInteraction = &observationInteraction,
+        });
     }
-    if (candidates.empty()) {
+    if (routes.empty()) {
         throw std::invalid_argument(
-            "live wave screen requires a routed Laser -> Aperture path");
+            "live wave screen requires a supported downstream Laser -> Aperture branch reaching the selected plane");
     }
-    if (candidates.size() != 1U) {
-        throw std::invalid_argument(
-            "live wave screen route is ambiguous; keep exactly one laser channel reaching one aperture");
-    }
-    return *candidates.front();
+    std::sort(routes.begin(), routes.end(), [](const auto& first, const auto& second) {
+        const auto& firstBeam = first.observationInteraction->incidentBeam;
+        const auto& secondBeam = second.observationInteraction->incidentBeam;
+        if (firstBeam.wavelengthMetres != secondBeam.wavelengthMetres) {
+            return firstBeam.wavelengthMetres < secondBeam.wavelengthMetres;
+        }
+        if (firstBeam.coherenceId != secondBeam.coherenceId) {
+            return firstBeam.coherenceId < secondBeam.coherenceId;
+        }
+        return firstBeam.provenance.branchId
+            < secondBeam.provenance.branchId;
+    });
+    return routes;
 }
 
 void initializeIncidentField(
@@ -176,8 +244,11 @@ void initializeIncidentField(
             } else if (radiusSquared <= radius * radius) {
                 amplitude = uniformAmplitude;
             }
-            const double phase = beam.phaseRadians + wavenumber
-                * (localDirection.x * relativeX
+            const double phase = std::fma(
+                wavenumber,
+                beam.accumulatedOpticalPathMetres,
+                beam.phaseRadians)
+                + wavenumber * (localDirection.x * relativeX
                     + localDirection.y * relativeY);
             field.at(x, y) = std::polar(
                 amplitude,
@@ -212,20 +283,152 @@ void applyAperture(
     }
 }
 
+struct SampledObservationContribution final {
+    field::ComplexField2D field;
+    BenchWaveContribution diagnostics;
+};
+
+[[nodiscard]] SampledObservationContribution sampleObservationRoute(
+    const ObservationRoute& route,
+    const scene::BenchComponent& observation,
+    const ObservationSampling& sampling,
+    std::size_t width,
+    std::size_t height,
+    compute::fft::IFftBackend& fftBackend) {
+    const auto& apertureBeam = route.apertureInteraction->incidentBeam;
+    const auto& observationBeam
+        = route.observationInteraction->incidentBeam;
+    const auto& laser = std::get<scene::LaserSourceParameters>(
+        route.source->parameters);
+    field::ComplexField2D sampled(
+        width,
+        height,
+        sampling.widthMetres / static_cast<double>(width),
+        sampling.heightMetres / static_cast<double>(height),
+        apertureBeam.wavelengthMetres);
+    initializeIncidentField(
+        sampled, laser, apertureBeam, *route.aperture);
+    applyAperture(
+        sampled,
+        std::get<scene::ApertureParameters>(route.aperture->parameters));
+
+    const auto observerCentre = math::transformPointWorldToLocal(
+        route.aperture->transform,
+        observation.transform.translationMetres);
+    const auto localDirection = math::transformDirectionWorldToLocal(
+        route.aperture->transform, observationBeam.direction);
+    if (observerCentre.z * localDirection.z <= 1e-9) {
+        throw std::invalid_argument(
+            "live wave screen must be separated from and downstream of every contributing aperture");
+    }
+    const double xAlignment = math::dot(
+        route.aperture->transform.localXAxisInWorld,
+        observation.transform.localXAxisInWorld);
+    const double yAlignment = math::dot(
+        route.aperture->transform.localYAxisInWorld,
+        observation.transform.localYAxisInWorld);
+    const double normalAlignment = math::dot(
+        route.aperture->transform.localZAxisInWorld,
+        observation.transform.localZAxisInWorld);
+    const bool parallelAxisAligned
+        = xAlignment >= 1.0 - kParallelTolerance
+        && yAlignment >= 1.0 - kParallelTolerance
+        && normalAlignment >= 1.0 - kParallelTolerance;
+    if (!parallelAxisAligned
+        && std::abs(math::dot(
+            observation.transform.localZAxisInWorld,
+            observationBeam.direction)) <= 1e-8) {
+        throw std::invalid_argument(
+            "live wave screen is grazing a routed propagation direction");
+    }
+
+    BenchWaveContribution diagnostics {
+        .sourceComponentId = route.source->id,
+        .apertureComponentId = route.aperture->id,
+        .branchId = observationBeam.provenance.branchId,
+        .signedPropagationDistanceMetres = observerCentre.z,
+        .observationOffsetXMetres = observerCentre.x,
+        .observationOffsetYMetres = observerCentre.y,
+        .usedShiftedPaddedPropagation = parallelAxisAligned,
+        .usedTiltedPlanePropagation = !parallelAxisAligned,
+        .propagation = {},
+        .tiltedPropagation = {},
+    };
+    if (parallelAxisAligned) {
+        compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
+        diagnostics.propagation = propagator.propagateShiftedPaddedInPlace(
+            sampled, observerCentre.z, observerCentre.x, observerCentre.y);
+    } else {
+        compute::propagation::TiltedPlanePropagator propagator(fftBackend);
+        diagnostics.tiltedPropagation = propagator.propagatePaddedInPlace(
+            sampled,
+            route.aperture->transform,
+            observation.transform,
+            observationBeam.direction);
+    }
+    return {
+        .field = std::move(sampled),
+        .diagnostics = std::move(diagnostics),
+    };
+}
+
+void addCoherentField(
+    field::ComplexField2D& destination,
+    const field::ComplexField2D& contribution) {
+    if (destination.width() != contribution.width()
+        || destination.height() != contribution.height()
+        || destination.pitchXMetres() != contribution.pitchXMetres()
+        || destination.pitchYMetres() != contribution.pitchYMetres()
+        || destination.vacuumWavelengthMetres()
+            != contribution.vacuumWavelengthMetres()
+        || destination.refractiveIndex() != contribution.refractiveIndex()) {
+        throw std::logic_error(
+            "coherent Bench field contributions do not share one sampling grid");
+    }
+    for (std::size_t index = 0; index < destination.samples().size(); ++index) {
+        const auto sum = destination.samples()[index]
+            + contribution.samples()[index];
+        if (!std::isfinite(sum.real()) || !std::isfinite(sum.imag())) {
+            throw std::overflow_error(
+                "coherent Bench field merge exceeds double precision");
+        }
+        destination.samples()[index] = sum;
+    }
+}
+
+void finishObservationMetrics(BenchWaveObservationResult& result) {
+    const auto intensity = field::computeIntensity(result.fieldAtObservation);
+    const double peakIntensity = *std::max_element(
+        intensity.samples().begin(), intensity.samples().end());
+    if (!std::isfinite(peakIntensity) || peakIntensity < 0.0) {
+        throw std::runtime_error(
+            "live wave observation channel intensity is invalid");
+    }
+    result.peakIntensityWattsPerSquareMetre = peakIntensity;
+    result.integratedPowerWatts = field::computeIntegratedIntensity(intensity);
+}
+
 } // namespace
 
 bool BenchWaveObservationResult::isStaleFor(
     const scene::BenchScene& bench) const noexcept {
-    const auto* source = bench.find(sourceComponentId);
-    const auto* aperture = bench.find(apertureComponentId);
     const auto* observation = bench.find(observationComponentId);
     return sourceRevision != bench.revision()
-        || source == nullptr
-        || source->kind != scene::BenchComponentKind::LaserSource
-        || aperture == nullptr
-        || aperture->kind != scene::BenchComponentKind::Aperture
         || observation == nullptr
-        || !isWaveObservationPlane(observation->kind);
+        || !isWaveObservationPlane(observation->kind)
+        || contributions.empty()
+        || std::any_of(
+            contributions.begin(), contributions.end(),
+            [&](const BenchWaveContribution& contribution) {
+                const auto* source = bench.find(
+                    contribution.sourceComponentId);
+                const auto* aperture = bench.find(
+                    contribution.apertureComponentId);
+                return source == nullptr
+                    || source->kind != scene::BenchComponentKind::LaserSource
+                    || aperture == nullptr
+                    || aperture->kind != scene::BenchComponentKind::Aperture;
+            });
 }
 
 BenchFieldSampleMeasurement measureBenchWaveSample(
@@ -249,15 +452,16 @@ BenchFieldSampleMeasurement measureBenchWaveSample(
             "Bench field measurement cursor is outside the sampled plane");
     }
     if (!std::isfinite(observation.peakIntensityWattsPerSquareMetre)
-        || observation.peakIntensityWattsPerSquareMetre <= 0.0) {
+        || observation.peakIntensityWattsPerSquareMetre < 0.0) {
         throw std::invalid_argument(
-            "Bench field measurement requires a positive finite peak intensity");
+            "Bench field measurement requires a finite non-negative peak intensity");
     }
     const auto sample = observation.fieldAtObservation.at(xIndex, yIndex);
     const double magnitude = std::abs(sample);
     const double intensity = finiteIntensity(sample);
     double decibels = decibelFloor;
-    if (magnitude > 0.0) {
+    if (magnitude > 0.0
+        && observation.peakIntensityWattsPerSquareMetre > 0.0) {
         decibels = std::max(
             decibelFloor,
             20.0 * std::log10(magnitude)
@@ -335,7 +539,7 @@ BenchFieldCrossSection measureBenchWaveCrossSection(
     return result;
 }
 
-BenchWaveObservationResult observeBenchWavePattern(
+std::vector<BenchWaveObservationResult> observeBenchWaveChannels(
     const scene::BenchScene& bench,
     const scene::BenchTraceGraph& traceGraph,
     std::string observationComponentId,
@@ -352,20 +556,6 @@ BenchWaveObservationResult observeBenchWavePattern(
             "live wave observation must be an ordinary placed Screen / Detector or virtual Field Probe");
     }
     const auto observerSampling = observationSampling(*observation);
-    const auto& route = selectApertureRoute(bench, traceGraph);
-    const auto* aperture = bench.find(route.componentId);
-    const auto& sourceId
-        = route.incidentBeam.provenance.componentPath.front();
-    const auto* source = bench.find(sourceId);
-    if (aperture == nullptr || source == nullptr) {
-        throw std::invalid_argument("live wave route components are missing");
-    }
-    const auto& laser = std::get<scene::LaserSourceParameters>(
-        source->parameters);
-    static_cast<void>(findSourceChannel(*source, route.incidentBeam));
-    const auto& apertureParameters
-        = std::get<scene::ApertureParameters>(aperture->parameters);
-
     const std::size_t width = boundedPowerOfTwo(
         observerSampling.sampleWidth, maximumSamplesPerAxis);
     const std::size_t height = boundedPowerOfTwo(
@@ -374,87 +564,68 @@ BenchWaveObservationResult observeBenchWavePattern(
         throw std::invalid_argument(
             "FFT backend does not support the padded live wave-screen grid");
     }
-    field::ComplexField2D field(
-        width,
-        height,
-        observerSampling.widthMetres / static_cast<double>(width),
-        observerSampling.heightMetres / static_cast<double>(height),
-        route.incidentBeam.wavelengthMetres);
-    initializeIncidentField(
-        field, laser, route.incidentBeam, *aperture);
-    applyAperture(field, apertureParameters);
+    const auto routes = collectObservationRoutes(
+        bench, traceGraph, observationComponentId);
+    std::vector<BenchWaveObservationResult> results;
+    results.reserve(routes.size());
+    for (const auto& route : routes) {
+        const auto& beam = route.observationInteraction->incidentBeam;
+        auto sampled = sampleObservationRoute(
+            route,
+            *observation,
+            observerSampling,
+            width,
+            height,
+            fftBackend);
+        const bool startsNewChannel = results.empty()
+            || results.back().fieldAtObservation.vacuumWavelengthMetres()
+                != beam.wavelengthMetres
+            || results.back().coherenceId != beam.coherenceId;
+        if (startsNewChannel) {
+            std::vector<BenchWaveContribution> contributions;
+            contributions.push_back(std::move(sampled.diagnostics));
+            results.push_back({
+                .observationComponentId = observationComponentId,
+                .sourceRevision = bench.revision(),
+                .interactivePreview = interactivePreview,
+                .coherenceId = beam.coherenceId,
+                .peakIntensityWattsPerSquareMetre = 0.0,
+                .integratedPowerWatts = 0.0,
+                .fieldAtObservation = std::move(sampled.field),
+                .contributions = std::move(contributions),
+            });
+        } else {
+            addCoherentField(
+                results.back().fieldAtObservation, sampled.field);
+            results.back().contributions.push_back(
+                std::move(sampled.diagnostics));
+        }
+    }
+    for (auto& result : results) {
+        finishObservationMetrics(result);
+    }
+    return results;
+}
 
-    const auto observerCentre = math::transformPointWorldToLocal(
-        aperture->transform, observation->transform.translationMetres);
-    const auto localDirection = math::transformDirectionWorldToLocal(
-        aperture->transform, route.outgoing.front().beam.direction);
-    if (observerCentre.z * localDirection.z <= 1e-9) {
+BenchWaveObservationResult observeBenchWavePattern(
+    const scene::BenchScene& bench,
+    const scene::BenchTraceGraph& traceGraph,
+    std::string observationComponentId,
+    std::size_t maximumSamplesPerAxis,
+    bool interactivePreview,
+    compute::fft::IFftBackend& fftBackend) {
+    auto channels = observeBenchWaveChannels(
+        bench,
+        traceGraph,
+        std::move(observationComponentId),
+        maximumSamplesPerAxis,
+        interactivePreview,
+        fftBackend);
+    if (channels.size() != 1U) {
         throw std::invalid_argument(
-            "live wave screen must be separated from and downstream of the aperture");
+            "single-channel observation requires exactly one wavelength and coherence identity");
     }
-    const double xAlignment = math::dot(
-        aperture->transform.localXAxisInWorld,
-        observation->transform.localXAxisInWorld);
-    const double yAlignment = math::dot(
-        aperture->transform.localYAxisInWorld,
-        observation->transform.localYAxisInWorld);
-    const double normalAlignment = math::dot(
-        aperture->transform.localZAxisInWorld,
-        observation->transform.localZAxisInWorld);
-    const bool parallelAxisAligned = xAlignment >= 1.0 - kParallelTolerance
-        && yAlignment >= 1.0 - kParallelTolerance
-        && normalAlignment >= 1.0 - kParallelTolerance;
-    if (!parallelAxisAligned
-        && std::abs(math::dot(
-            observation->transform.localZAxisInWorld,
-            route.outgoing.front().beam.direction)) <= 1e-8) {
-        throw std::invalid_argument(
-            "live wave screen is grazing the routed propagation direction");
-    }
-
-    compute::propagation::AngularSpectrumDiagnostics propagation;
-    compute::propagation::TiltedPlaneDiagnostics tiltedPropagation;
-    if (parallelAxisAligned) {
-        compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
-        propagation = propagator.propagateShiftedPaddedInPlace(
-            field, observerCentre.z, observerCentre.x, observerCentre.y);
-    } else {
-        compute::propagation::TiltedPlanePropagator propagator(fftBackend);
-        tiltedPropagation = propagator.propagatePaddedInPlace(
-            field,
-            aperture->transform,
-            observation->transform,
-            route.outgoing.front().beam.direction);
-    }
-
-    const auto intensity = field::computeIntensity(field);
-    const double peakIntensity = *std::max_element(
-        intensity.samples().begin(), intensity.samples().end());
-    if (!std::isfinite(peakIntensity) || peakIntensity <= 0.0) {
-        throw std::runtime_error(
-            "live wave observation has no finite measurable intensity");
-    }
-    const double integratedPower = field::computeIntegratedIntensity(
-        intensity);
-
-    return {
-        .sourceComponentId = source->id,
-        .apertureComponentId = aperture->id,
-        .observationComponentId = std::move(observationComponentId),
-        .sourceRevision = bench.revision(),
-        .interactivePreview = interactivePreview,
-        .signedPropagationDistanceMetres = observerCentre.z,
-        .observationOffsetXMetres = observerCentre.x,
-        .observationOffsetYMetres = observerCentre.y,
-        .usedShiftedPaddedPropagation = parallelAxisAligned,
-        .usedTiltedPlanePropagation = !parallelAxisAligned,
-        .coherenceId = route.incidentBeam.coherenceId,
-        .peakIntensityWattsPerSquareMetre = peakIntensity,
-        .integratedPowerWatts = integratedPower,
-        .fieldAtObservation = std::move(field),
-        .propagation = propagation,
-        .tiltedPropagation = tiltedPropagation,
-    };
+    return std::move(channels.front());
 }
 
 } // namespace holobench::app

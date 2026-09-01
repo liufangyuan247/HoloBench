@@ -17,6 +17,7 @@
 #include "app/WaveWorkbenchProject.hpp"
 #include "app/BenchEditHistory.hpp"
 #include "app/BenchProject.hpp"
+#include "app/BenchWaveObservation.hpp"
 #include "app/ChimeraBenchWorkflow.hpp"
 #include "app/ChimeraBatch.hpp"
 #include "app/ChimeraParameterSweep.hpp"
@@ -60,8 +61,6 @@ struct WaveDetectorResult;
 }
 
 namespace holobench::app {
-
-struct BenchWaveObservationResult;
 
 class UiFontAsset;
 
@@ -594,6 +593,10 @@ private:
     void loadSceneFromPath(const char* pathStr);
     void saveSceneToPath(const char* pathStr);
     void updateSandboxWaveObservation();
+    [[nodiscard]] BenchWaveObservationResult*
+    activeSandboxWaveObservation() noexcept;
+    [[nodiscard]] const BenchWaveObservationResult*
+    activeSandboxWaveObservation() const noexcept;
 
     SDL_Window* window_ = nullptr;
     SDL_GLContextState* glContext_ = nullptr;
@@ -659,6 +662,7 @@ private:
     bool sandboxLiveWavePlane_ = true;
     std::string sandboxWaveObservationDiagnostic_;
     std::string sandboxWaveMeasurementComponentId_;
+    int sandboxWaveChannelIndex_ = 0;
     int sandboxWaveViewModeIndex_ = 0;
     bool sandboxWaveTextureDirty_ = true;
     float sandboxWaveDecibelFloor_ = -60.0F;
@@ -742,7 +746,7 @@ private:
         sandboxRgbVolumeRecording_;
     std::unique_ptr<optics::holography::RgbVolumePlateReplayResult>
         sandboxRgbVolumeReplay_;
-    std::unique_ptr<BenchWaveObservationResult> sandboxWaveObservation_;
+    std::vector<BenchWaveObservationResult> sandboxWaveObservations_;
     reflection::ReflectionRefractionConfig reflectionRefractionConfig_;
     reflection::ReflectionRefractionResult reflectionRefractionResult_;
     project::ProjectProvenance reflectionProjectProvenance_;

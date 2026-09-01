@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <complex>
 #include <string>
 #include <vector>
@@ -16,23 +17,28 @@ class IFftBackend;
 
 namespace holobench::app {
 
-struct BenchWaveObservationResult final {
+struct BenchWaveContribution final {
     std::string sourceComponentId;
     std::string apertureComponentId;
-    std::string observationComponentId;
-    optics::scene::SceneRevision sourceRevision = 0;
-    bool interactivePreview = false;
+    std::uint64_t branchId = 0;
     double signedPropagationDistanceMetres = 0.0;
     double observationOffsetXMetres = 0.0;
     double observationOffsetYMetres = 0.0;
     bool usedShiftedPaddedPropagation = false;
     bool usedTiltedPlanePropagation = false;
+    compute::propagation::AngularSpectrumDiagnostics propagation;
+    compute::propagation::TiltedPlaneDiagnostics tiltedPropagation;
+};
+
+struct BenchWaveObservationResult final {
+    std::string observationComponentId;
+    optics::scene::SceneRevision sourceRevision = 0;
+    bool interactivePreview = false;
     std::string coherenceId;
     double peakIntensityWattsPerSquareMetre = 0.0;
     double integratedPowerWatts = 0.0;
     field::ComplexField2D fieldAtObservation;
-    compute::propagation::AngularSpectrumDiagnostics propagation;
-    compute::propagation::TiltedPlaneDiagnostics tiltedPropagation;
+    std::vector<BenchWaveContribution> contributions;
 
     [[nodiscard]] bool isStaleFor(
         const optics::scene::BenchScene& bench) const noexcept;
@@ -79,10 +85,21 @@ struct BenchFieldCrossSection final {
     BenchFieldCrossSectionAxis axis,
     std::size_t fixedIndex);
 
-// Observes a current Laser -> Aperture route on an ordinary freely placed
-// Screen / Detector or non-destructive Field Probe. Rays establish the global
-// route; the aperture and free-space propagation are evaluated as a bounded
-// local 2-D complex field.
+// Observes every supported branch reaching one ordinary placed Screen /
+// Detector or non-destructive Field Probe. Results are canonical independent
+// (wavelength, coherence-ID) channels. Contributions inside one channel are
+// added as complex fields; distinct channels are never assigned a false phase
+// relationship.
+[[nodiscard]] std::vector<BenchWaveObservationResult>
+observeBenchWaveChannels(
+    const optics::scene::BenchScene& bench,
+    const optics::scene::BenchTraceGraph& traceGraph,
+    std::string observationComponentId,
+    std::size_t maximumSamplesPerAxis,
+    bool interactivePreview,
+    compute::fft::IFftBackend& fftBackend);
+
+// Convenience for callers that require exactly one physical channel.
 [[nodiscard]] BenchWaveObservationResult observeBenchWavePattern(
     const optics::scene::BenchScene& bench,
     const optics::scene::BenchTraceGraph& traceGraph,

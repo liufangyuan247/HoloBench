@@ -117,10 +117,14 @@
   collect it as recording input. Real-lens components stop explicitly until their persisted
   prescription IDs can be resolved into sequential assemblies. A placed
   Screen/Probe now exposes intensity, peak-relative dB, validity-masked phase,
-  complex cursor values, and physical cross-sections, but its live-wave
-  producer still requires one unambiguous single-wavelength
-  `Laser -> Aperture` route. Complete same-wavelength coherent merging and
-  independent multi-wavelength measurement channels remain open. A plate can
+  complex cursor values, and physical cross-sections. Its live-wave producer
+  accepts multiple direct `Laser -> Aperture -> Screen/Probe` branches, adds
+  exact wavelength/coherence matches as complex fields with accumulated-path
+  phase, and retains other wavelength/coherence pairs as independent channels.
+  Post-aperture Field Probes are non-blocking. Mirrors, splitters, lenses,
+  spatial filters, and SLMs are not yet connected to this observation producer;
+  if any such branch reaches the selected plane, the complete measurement is
+  rejected rather than silently omitting it. A plate can
   now sample source envelopes into local complex fields and record a
   same-side thin transmission exposure over an explicit ROI. A 2x-padded
   beam-following envelope applies ASM per routed segment, finite mirror/splitter

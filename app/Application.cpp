@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <numeric>
@@ -58,6 +59,18 @@ namespace {
 
 constexpr const char* kBenchComponentDragPayload
     = "HOLOBENCH_BENCH_COMPONENT_KIND";
+
+[[nodiscard]] std::string waveChannelLabel(
+    const BenchWaveObservationResult& observation) {
+    std::array<char, 256> label {};
+    std::snprintf(
+        label.data(),
+        label.size(),
+        "%.3f nm | %s",
+        observation.fieldAtObservation.vacuumWavelengthMetres() * 1e9,
+        observation.coherenceId.c_str());
+    return label.data();
+}
 
 template <std::size_t Size>
 void copyTextToBuffer(std::string_view text, char (&buffer)[Size]) noexcept {
@@ -2505,7 +2518,7 @@ void Application::shutdown() noexcept {
     sandboxRgbReplay_.reset();
     sandboxRgbVolumeRecording_.reset();
     sandboxRgbVolumeReplay_.reset();
-    sandboxWaveObservation_.reset();
+    sandboxWaveObservations_.clear();
     chimeraWorkflow_.reset();
     chimeraBatch_.reset();
     chimeraSweepResult_.reset();
@@ -2551,6 +2564,28 @@ void Application::shutdown() noexcept {
     }
 }
 
+BenchWaveObservationResult*
+Application::activeSandboxWaveObservation() noexcept {
+    if (sandboxWaveChannelIndex_ < 0
+        || static_cast<std::size_t>(sandboxWaveChannelIndex_)
+            >= sandboxWaveObservations_.size()) {
+        return nullptr;
+    }
+    return &sandboxWaveObservations_[
+        static_cast<std::size_t>(sandboxWaveChannelIndex_)];
+}
+
+const BenchWaveObservationResult*
+Application::activeSandboxWaveObservation() const noexcept {
+    if (sandboxWaveChannelIndex_ < 0
+        || static_cast<std::size_t>(sandboxWaveChannelIndex_)
+            >= sandboxWaveObservations_.size()) {
+        return nullptr;
+    }
+    return &sandboxWaveObservations_[
+        static_cast<std::size_t>(sandboxWaveChannelIndex_)];
+}
+
 void Application::updateSandboxWaveObservation() {
     namespace bench = optics::scene;
     const auto* selected = benchProject_.scene.find(
@@ -2565,7 +2600,8 @@ void Application::updateSandboxWaveObservation() {
     if (!sandboxLiveWavePlane_ || observation == nullptr
         || (observation->kind != bench::BenchComponentKind::ScreenDetector
             && observation->kind != bench::BenchComponentKind::FieldProbe)) {
-        sandboxWaveObservation_.reset();
+        sandboxWaveObservations_.clear();
+        sandboxWaveChannelIndex_ = 0;
         sandboxWaveObservationDiagnostic_.clear();
         sandboxWaveTextureDirty_ = true;
         if (sandboxWaveTexture_) {
@@ -2574,12 +2610,13 @@ void Application::updateSandboxWaveObservation() {
         return;
     }
 
-    const bool current = sandboxWaveObservation_
-        && !sandboxWaveObservation_->isStaleFor(benchProject_.scene)
-        && sandboxWaveObservation_->observationComponentId
+    const auto* activeObservation = activeSandboxWaveObservation();
+    const bool current = activeObservation
+        && !activeObservation->isStaleFor(benchProject_.scene)
+        && activeObservation->observationComponentId
             == observation->id;
     const bool needsFullResolution = current
-        && sandboxWaveObservation_->interactivePreview
+        && activeObservation->interactivePreview
         && !sandboxGizmoDragging_;
 
     try {
@@ -2593,7 +2630,9 @@ void Application::updateSandboxWaveObservation() {
                 options.floorDecibels = sandboxWaveDecibelFloor_;
                 options.maxDecibels = 0.0;
                 options.decibelReferenceIntensity
-                    = result.peakIntensityWattsPerSquareMetre;
+                    = result.peakIntensityWattsPerSquareMetre > 0.0
+                    ? result.peakIntensityWattsPerSquareMetre
+                    : 1.0;
             } else if (sandboxWaveViewModeIndex_ == 2) {
                 viewMode = field::FieldViewMode::WrappedPhase;
                 options.colormap = field::ColormapKind::CyclicPhase;
@@ -2614,7 +2653,7 @@ void Application::updateSandboxWaveObservation() {
         };
         if (current && !needsFullResolution) {
             if (sandboxWaveTextureDirty_) {
-                renderObservation(*sandboxWaveObservation_);
+                renderObservation(*activeObservation);
                 sandboxWaveTextureDirty_ = false;
             }
             return;
@@ -2623,20 +2662,42 @@ void Application::updateSandboxWaveObservation() {
             throw std::runtime_error("CPU FFT backend is unavailable");
         }
         const bool preview = sandboxGizmoDragging_;
-        auto result = observeBenchWavePattern(
+        const auto* previousChannel = activeSandboxWaveObservation();
+        const double previousWavelength = previousChannel
+            ? previousChannel->fieldAtObservation.vacuumWavelengthMetres()
+            : 0.0;
+        const std::string previousCoherence = previousChannel
+            ? previousChannel->coherenceId
+            : std::string {};
+        auto results = observeBenchWaveChannels(
             benchProject_.scene,
             benchTraceGraph_,
             observation->id,
             preview ? 256U : 512U,
             preview,
             *detectorFftBackend_);
-        renderObservation(result);
-        sandboxWaveObservation_ = std::make_unique<
-            BenchWaveObservationResult>(std::move(result));
+        const auto previous = std::find_if(
+            results.begin(), results.end(),
+            [&](const BenchWaveObservationResult& candidate) {
+                return candidate.fieldAtObservation.vacuumWavelengthMetres()
+                        == previousWavelength
+                    && candidate.coherenceId == previousCoherence;
+            });
+        sandboxWaveChannelIndex_ = previous == results.end()
+            ? 0
+            : static_cast<int>(std::distance(results.begin(), previous));
+        sandboxWaveObservations_ = std::move(results);
+        activeObservation = activeSandboxWaveObservation();
+        if (activeObservation == nullptr) {
+            throw std::logic_error(
+                "live wave observation produced no selectable channel");
+        }
+        renderObservation(*activeObservation);
         sandboxWaveTextureDirty_ = false;
         sandboxWaveObservationDiagnostic_.clear();
     } catch (const std::exception& error) {
-        sandboxWaveObservation_.reset();
+        sandboxWaveObservations_.clear();
+        sandboxWaveChannelIndex_ = 0;
         sandboxWaveObservationDiagnostic_ = error.what();
         sandboxWaveTextureDirty_ = true;
         if (sandboxWaveTexture_) {
@@ -6377,9 +6438,10 @@ void Application::drawSandboxWaveBar() {
         return;
     }
 
-    const bool current = sandboxWaveObservation_
-        && !sandboxWaveObservation_->isStaleFor(benchProject_.scene)
-        && sandboxWaveObservation_->observationComponentId
+    auto* waveObservation = activeSandboxWaveObservation();
+    bool current = waveObservation
+        && !waveObservation->isStaleFor(benchProject_.scene)
+        && waveObservation->observationComponentId
             == observation->id;
     ImGui::BeginChild(
         "##sandbox_wave_bar",
@@ -6395,6 +6457,34 @@ void Application::drawSandboxWaveBar() {
         observation->id.c_str());
     ImGui::SameLine();
     ImGui::Checkbox("Observe light field", &sandboxLiveWavePlane_);
+    if (current && sandboxWaveObservations_.size() > 1U) {
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(190.0F);
+        const std::string currentChannelLabel
+            = waveChannelLabel(*waveObservation);
+        if (ImGui::BeginCombo(
+                "##bench-wave-channel", currentChannelLabel.c_str())) {
+            for (std::size_t index = 0;
+                 index < sandboxWaveObservations_.size(); ++index) {
+                const auto& candidate = sandboxWaveObservations_[index];
+                const std::string label = waveChannelLabel(candidate);
+                const bool selectedChannel
+                    = index == static_cast<std::size_t>(
+                        sandboxWaveChannelIndex_);
+                if (ImGui::Selectable(
+                        label.c_str(), selectedChannel)) {
+                    sandboxWaveChannelIndex_ = static_cast<int>(index);
+                    sandboxWaveTextureDirty_ = true;
+                    waveObservation = activeSandboxWaveObservation();
+                    current = waveObservation != nullptr;
+                }
+                if (selectedChannel) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+    }
     ImGui::SameLine();
     constexpr std::array<const char*, 3> waveViewNames {
         "Intensity", "dB", "Phase"};
@@ -6431,18 +6521,30 @@ void Application::drawSandboxWaveBar() {
         }
     }
     if (current) {
-        const auto& result = *sandboxWaveObservation_;
-        ImGui::TextColored(
-            result.interactivePreview
+        const auto& result = *waveObservation;
+        const ImVec4 statusColor = result.interactivePreview
                 ? ImVec4(1.0F, 0.72F, 0.24F, 1.0F)
-                : ImVec4(0.35F, 0.9F, 0.45F, 1.0F),
-            "%s %zux%zu | z %.4f m | offset (%.4f, %.4f) m",
-            result.interactivePreview ? "DRAG PREVIEW" : "CURRENT",
-            result.fieldAtObservation.width(),
-            result.fieldAtObservation.height(),
-            result.signedPropagationDistanceMetres,
-            result.observationOffsetXMetres,
-            result.observationOffsetYMetres);
+                : ImVec4(0.35F, 0.9F, 0.45F, 1.0F);
+        if (result.contributions.size() == 1U) {
+            const auto& contribution = result.contributions.front();
+            ImGui::TextColored(
+                statusColor,
+                "%s %zux%zu | z %.4f m | offset (%.4f, %.4f) m",
+                result.interactivePreview ? "DRAG PREVIEW" : "CURRENT",
+                result.fieldAtObservation.width(),
+                result.fieldAtObservation.height(),
+                contribution.signedPropagationDistanceMetres,
+                contribution.observationOffsetXMetres,
+                contribution.observationOffsetYMetres);
+        } else {
+            ImGui::TextColored(
+                statusColor,
+                "%s %zux%zu | %zu coherent branch contributions",
+                result.interactivePreview ? "DRAG PREVIEW" : "CURRENT",
+                result.fieldAtObservation.width(),
+                result.fieldAtObservation.height(),
+                result.contributions.size());
+        }
     } else if (!sandboxWaveObservationDiagnostic_.empty()) {
         ImGui::TextColored(
             ImVec4(1.0F, 0.55F, 0.25F, 1.0F),
@@ -8259,17 +8361,19 @@ void Application::drawSandboxInspector() {
                     || selected->kind
                         == bench::BenchComponentKind::FieldProbe)) {
                 ImGui::SeparatorText("Complex Field Measurement");
-                const bool measurementCurrent = sandboxWaveObservation_
-                    && !sandboxWaveObservation_->isStaleFor(
+                const auto* waveObservation
+                    = activeSandboxWaveObservation();
+                const bool measurementCurrent = waveObservation
+                    && !waveObservation->isStaleFor(
                         benchProject_.scene)
-                    && sandboxWaveObservation_->observationComponentId
+                    && waveObservation->observationComponentId
                         == selected->id;
                 if (!measurementCurrent) {
                     ImGui::TextDisabled(
-                        "Enable Observe light field for this selected plane and provide one unambiguous Laser -> Aperture route.");
+                        "Enable Observe light field and provide fully supported routed branches to this selected plane.");
                 } else {
                     const auto& observationResult
-                        = *sandboxWaveObservation_;
+                        = *waveObservation;
                     const auto& measuredField
                         = observationResult.fieldAtObservation;
                     if (sandboxWaveMeasurementComponentId_ != selected->id) {
@@ -8294,6 +8398,9 @@ void Application::drawSandboxInspector() {
                         observationResult.coherenceId.c_str(),
                         static_cast<unsigned long long>(
                             observationResult.sourceRevision));
+                    ImGui::Text(
+                        "Contributing coherent branches: %zu",
+                        observationResult.contributions.size());
                     ImGui::Text(
                         "Peak %.7g W/m^2 | integrated %.7g W",
                         observationResult
@@ -10561,14 +10668,15 @@ void Application::drawWorkspace() {
                         = sandboxRgbReplayTexture_->handle();
                     reconstructionObservationId
                         = sandboxRgbVolumeReplay_->observationComponentId;
-                } else if (sandboxWaveObservation_
-                    && !sandboxWaveObservation_->isStaleFor(
-                        benchProject_.scene)
+                } else if (const auto* waveObservation
+                           = activeSandboxWaveObservation();
+                    waveObservation
+                    && !waveObservation->isStaleFor(benchProject_.scene)
                     && sandboxWaveTexture_
                     && sandboxWaveTexture_->isValid()) {
                     reconstructionTexture = sandboxWaveTexture_->handle();
                     reconstructionObservationId
-                        = sandboxWaveObservation_->observationComponentId;
+                        = waveObservation->observationComponentId;
                 }
                 if (reconstructionTexture != 0U) {
                     if (const auto* observation = benchProject_.scene.find(
@@ -12042,10 +12150,11 @@ void Application::runSandboxInteractionSmoke() {
         sandboxUiEvidence_.doubleSlitPreset,
         "Double Slit Bench action");
     drawInputFrame({-1000.0F, -1000.0F}, 0);
+    const auto* waveObservation = activeSandboxWaveObservation();
     if (benchProject_.projectId != "preset-double-slit"
-        || !sandboxWaveObservation_
-        || sandboxWaveObservation_->isStaleFor(benchProject_.scene)
-        || sandboxWaveObservation_->interactivePreview
+        || !waveObservation
+        || waveObservation->isStaleFor(benchProject_.scene)
+        || waveObservation->interactivePreview
         || !sandboxWaveTexture_
         || !sandboxWaveTexture_->isValid()
         || !sandboxReconstructionOverlaySubmitted_) {
@@ -12053,16 +12162,81 @@ void Application::runSandboxInteractionSmoke() {
             "Double Slit action did not submit a current full-resolution field on the placed screen (status="
             + statusMessage_ + ", wave="
             + sandboxWaveObservationDiagnostic_ + ", result="
-            + (sandboxWaveObservation_ ? "yes" : "no")
+            + (waveObservation ? "yes" : "no")
             + ", preview="
-            + (sandboxWaveObservation_
-                    && sandboxWaveObservation_->interactivePreview
+            + (waveObservation
+                    && waveObservation->interactivePreview
                 ? "yes" : "no")
             + ", texture="
             + (sandboxWaveTexture_ && sandboxWaveTexture_->isValid()
                 ? "yes" : "no")
             + ", overlay="
             + sandboxReconstructionOverlayDiagnostic_ + ")");
+    }
+    auto rgbWaveScene = benchProject_.scene;
+    const auto* waveLaser = rgbWaveScene.find("wave-laser-green");
+    if (waveLaser == nullptr) {
+        throw std::runtime_error(
+            "Double Slit Bench is missing its spectral source");
+    }
+    auto rgbWaveLaser = applySourceSpectrumPreset(
+        *waveLaser, BenchSourceSpectrumPreset::Rgb);
+    rgbWaveScene.replace(rgbWaveLaser.id, rgbWaveLaser);
+    if (!applyBenchScene(
+            std::move(rgbWaveScene),
+            "Smoke applied RGB wave channels")) {
+        throw std::runtime_error(
+            "RGB wave-channel scene edit was rejected");
+    }
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    if (sandboxWaveObservations_.size() != 3U) {
+        throw std::runtime_error(
+            "placed wave observation did not expose three independent RGB channels");
+    }
+    const std::uint64_t channelSwitchRevision
+        = benchProject_.scene.revision();
+    double previousChannelWavelength = 0.0;
+    for (std::size_t index = 0;
+         index < sandboxWaveObservations_.size(); ++index) {
+        sandboxWaveChannelIndex_ = static_cast<int>(index);
+        sandboxWaveTextureDirty_ = true;
+        drawInputFrame({-1000.0F, -1000.0F}, 0);
+        waveObservation = activeSandboxWaveObservation();
+        if (waveObservation == nullptr
+            || waveObservation->fieldAtObservation
+                    .vacuumWavelengthMetres()
+                <= previousChannelWavelength
+            || sandboxWaveTextureDirty_
+            || !sandboxWaveTexture_
+            || !sandboxWaveTexture_->isValid()
+            || benchProject_.scene.revision() != channelSwitchRevision) {
+            throw std::runtime_error(
+                "RGB placed-field channel switching changed physics or failed to render");
+        }
+        previousChannelWavelength = waveObservation->fieldAtObservation
+            .vacuumWavelengthMetres();
+    }
+    auto greenWaveScene = benchProject_.scene;
+    waveLaser = greenWaveScene.find("wave-laser-green");
+    if (waveLaser == nullptr) {
+        throw std::runtime_error(
+            "RGB channel test lost its wave source");
+    }
+    auto greenWaveLaser = applySourceSpectrumPreset(
+        *waveLaser, BenchSourceSpectrumPreset::Green);
+    greenWaveScene.replace(greenWaveLaser.id, greenWaveLaser);
+    if (!applyBenchScene(
+            std::move(greenWaveScene),
+            "Smoke restored one wave channel")) {
+        throw std::runtime_error(
+            "single-channel wave scene restore was rejected");
+    }
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    waveObservation = activeSandboxWaveObservation();
+    if (sandboxWaveObservations_.size() != 1U
+        || waveObservation == nullptr) {
+        throw std::runtime_error(
+            "placed wave observation did not return to one physical channel");
     }
     const std::uint64_t waveRevision = benchProject_.scene.revision();
     std::size_t waveDragAxis = 2U;
@@ -12092,25 +12266,26 @@ void Application::runSandboxInteractionSmoke() {
         waveDragDestination,
         "Double Slit screen axis");
     drawInputFrame({-1000.0F, -1000.0F}, 0);
+    waveObservation = activeSandboxWaveObservation();
     if (benchProject_.scene.revision() <= waveRevision
-        || !sandboxWaveObservation_
-        || sandboxWaveObservation_->isStaleFor(benchProject_.scene)
-        || sandboxWaveObservation_->interactivePreview
-        || sandboxWaveObservation_->fieldAtObservation.width() != 512U
+        || !waveObservation
+        || waveObservation->isStaleFor(benchProject_.scene)
+        || waveObservation->interactivePreview
+        || waveObservation->fieldAtObservation.width() != 512U
         || !sandboxReconstructionOverlaySubmitted_) {
         throw std::runtime_error(
             "moved Double Slit screen did not settle to a current 512-sample field (revision="
             + std::to_string(benchProject_.scene.revision())
             + ", initial=" + std::to_string(waveRevision)
-            + ", result=" + (sandboxWaveObservation_ ? "yes" : "no")
+            + ", result=" + (waveObservation ? "yes" : "no")
             + ", preview="
-            + (sandboxWaveObservation_
-                    && sandboxWaveObservation_->interactivePreview
+            + (waveObservation
+                    && waveObservation->interactivePreview
                 ? "yes" : "no")
             + ", samples="
-            + (sandboxWaveObservation_
+            + (waveObservation
                 ? std::to_string(
-                    sandboxWaveObservation_->fieldAtObservation.width())
+                    waveObservation->fieldAtObservation.width())
                 : "0")
             + ", wave=" + sandboxWaveObservationDiagnostic_
             + ", overlay=" + sandboxReconstructionOverlayDiagnostic_ + ")");
@@ -12122,12 +12297,13 @@ void Application::runSandboxInteractionSmoke() {
         "Virtual Field Probe shelf item");
     drawInputFrame({-1000.0F, -1000.0F}, 0);
     const auto* virtualProbe = benchProject_.scene.find(virtualProbeId);
+    waveObservation = activeSandboxWaveObservation();
     if (virtualProbe == nullptr
         || virtualProbe->kind != bench::BenchComponentKind::FieldProbe
-        || !sandboxWaveObservation_
-        || sandboxWaveObservation_->isStaleFor(benchProject_.scene)
-        || sandboxWaveObservation_->observationComponentId != virtualProbeId
-        || sandboxWaveObservation_->fieldAtObservation.width() != 256U
+        || !waveObservation
+        || waveObservation->isStaleFor(benchProject_.scene)
+        || waveObservation->observationComponentId != virtualProbeId
+        || waveObservation->fieldAtObservation.width() != 256U
         || !sandboxReconstructionOverlaySubmitted_) {
         throw std::runtime_error(
             "virtual Field Probe did not display a current non-destructive light-field plane (wave="
@@ -12135,20 +12311,20 @@ void Application::runSandboxInteractionSmoke() {
             + sandboxReconstructionOverlayDiagnostic_ + ")");
     }
     const auto probeSample = measureBenchWaveSample(
-        *sandboxWaveObservation_,
-        sandboxWaveObservation_->fieldAtObservation.width() / 2U,
-        sandboxWaveObservation_->fieldAtObservation.height() / 2U,
-        sandboxWaveObservation_->peakIntensityWattsPerSquareMetre * 1e-6,
+        *waveObservation,
+        waveObservation->fieldAtObservation.width() / 2U,
+        waveObservation->fieldAtObservation.height() / 2U,
+        waveObservation->peakIntensityWattsPerSquareMetre * 1e-6,
         -60.0);
     const auto probeSection = measureBenchWaveCrossSection(
-        *sandboxWaveObservation_,
+        *waveObservation,
         BenchFieldCrossSectionAxis::HorizontalX,
-        sandboxWaveObservation_->fieldAtObservation.height() / 2U);
-    if (sandboxWaveObservation_->peakIntensityWattsPerSquareMetre <= 0.0
-        || sandboxWaveObservation_->integratedPowerWatts <= 0.0
+        waveObservation->fieldAtObservation.height() / 2U);
+    if (waveObservation->peakIntensityWattsPerSquareMetre <= 0.0
+        || waveObservation->integratedPowerWatts <= 0.0
         || !std::isfinite(probeSample.intensityWattsPerSquareMetre)
         || probeSection.intensitiesWattsPerSquareMetre.size()
-            != sandboxWaveObservation_->fieldAtObservation.width()) {
+            != waveObservation->fieldAtObservation.width()) {
         throw std::runtime_error(
             "virtual Field Probe did not expose finite cursor and cross-section measurements");
     }

@@ -85,7 +85,8 @@ TEST_CASE("single-slit circular and bounded drag preview use the same placed scr
         CHECK(result.interactivePreview);
         CHECK(result.fieldAtObservation.width() == 256U);
         CHECK(result.fieldAtObservation.height() == 256U);
-        CHECK(result.usedShiftedPaddedPropagation);
+        REQUIRE(result.contributions.size() == 1U);
+        CHECK(result.contributions.front().usedShiftedPaddedPropagation);
         CHECK(peakIntensity(result.fieldAtObservation) > 0.0);
     }
 }
@@ -103,11 +104,13 @@ TEST_CASE("live wave screen follows decentered and rotated free placement") {
     auto graph = ray::traceDynamicBench(project.scene);
     const auto shifted = app::observeBenchWavePattern(
         project.scene, graph, "wave-screen", 128U, true, backend);
-    CHECK(shifted.usedShiftedPaddedPropagation);
-    CHECK_FALSE(shifted.usedTiltedPlanePropagation);
-    CHECK(shifted.observationOffsetXMetres
+    REQUIRE(shifted.contributions.size() == 1U);
+    const auto& shiftedContribution = shifted.contributions.front();
+    CHECK(shiftedContribution.usedShiftedPaddedPropagation);
+    CHECK_FALSE(shiftedContribution.usedTiltedPlanePropagation);
+    CHECK(shiftedContribution.observationOffsetXMetres
         == doctest::Approx(0.50e-3));
-    CHECK(shifted.observationOffsetYMetres
+    CHECK(shiftedContribution.observationOffsetYMetres
         == doctest::Approx(-0.25e-3));
     CHECK(peakIntensity(shifted.fieldAtObservation) > 0.0);
 
@@ -124,10 +127,12 @@ TEST_CASE("live wave screen follows decentered and rotated free placement") {
     graph = ray::traceDynamicBench(project.scene);
     const auto tilted = app::observeBenchWavePattern(
         project.scene, graph, "wave-screen", 256U, true, backend);
-    CHECK_FALSE(tilted.usedShiftedPaddedPropagation);
-    CHECK(tilted.usedTiltedPlanePropagation);
-    CHECK(tilted.tiltedPropagation.propagatingOutputBinCount > 0U);
-    CHECK(tilted.tiltedPropagation.interpolatedOutputBinCount > 0U);
+    REQUIRE(tilted.contributions.size() == 1U);
+    const auto& tiltedContribution = tilted.contributions.front();
+    CHECK_FALSE(tiltedContribution.usedShiftedPaddedPropagation);
+    CHECK(tiltedContribution.usedTiltedPlanePropagation);
+    CHECK(tiltedContribution.tiltedPropagation.propagatingOutputBinCount > 0U);
+    CHECK(tiltedContribution.tiltedPropagation.interpolatedOutputBinCount > 0U);
     CHECK(peakIntensity(tilted.fieldAtObservation) > 0.0);
 }
 
@@ -251,9 +256,19 @@ TEST_CASE("placed probe exposes complex cursor and physical cross-section measur
             static_cast<app::BenchFieldCrossSectionAxis>(-1),
             0U)),
         std::invalid_argument);
+
+    auto dark = result;
+    dark.fieldAtObservation.fill({0.0, 0.0});
+    dark.peakIntensityWattsPerSquareMetre = 0.0;
+    dark.integratedPowerWatts = 0.0;
+    const auto darkSample = app::measureBenchWaveSample(
+        dark, 0U, 0U, 0.0, -90.0);
+    CHECK(darkSample.intensityWattsPerSquareMetre == 0.0);
+    CHECK(darkSample.decibelsRelativeToPeak == -90.0);
+    CHECK_FALSE(darkSample.phaseValid);
 }
 
-TEST_CASE("live wave screen rejects stale ambiguous and upstream observations") {
+TEST_CASE("live wave screen rejects stale incomplete and upstream observations") {
     fft::CpuFftBackend backend;
     auto project = app::makeDoubleSlitExperimentPreset();
     auto graph = ray::traceDynamicBench(project.scene);
@@ -269,17 +284,6 @@ TEST_CASE("live wave screen rejects stale ambiguous and upstream observations") 
             staleScene, graph, "wave-screen", 128U, true, backend)),
         std::invalid_argument);
 
-    auto ambiguousScene = project.scene;
-    auto secondLaser = *ambiguousScene.find("wave-laser-green");
-    secondLaser.id = "wave-laser-second";
-    ambiguousScene.add(secondLaser);
-    graph = ray::traceDynamicBench(ambiguousScene);
-    CHECK_THROWS_WITH_AS(
-        static_cast<void>(app::observeBenchWavePattern(
-            ambiguousScene, graph, "wave-screen", 128U, true, backend)),
-        doctest::Contains("ambiguous"),
-        std::invalid_argument);
-
     auto upstreamScene = project.scene;
     screen = *upstreamScene.find("wave-screen");
     desiredTransform = screen.transform;
@@ -292,4 +296,159 @@ TEST_CASE("live wave screen rejects stale ambiguous and upstream observations") 
             upstreamScene, graph, "wave-screen", 128U, true, backend)),
         doctest::Contains("downstream"),
         std::invalid_argument);
+
+    auto unsupportedScene = project.scene;
+    auto lens = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::IdealThinLens,
+        "wave-intermediate-lens");
+    const auto* unsupportedAperture
+        = unsupportedScene.find("wave-aperture");
+    REQUIRE(unsupportedAperture != nullptr);
+    lens.transform = unsupportedAperture->transform;
+    lens.transform.translationMetres.z = 0.25;
+    unsupportedScene.add(lens);
+    graph = ray::traceDynamicBench(unsupportedScene);
+    CHECK_THROWS_WITH_AS(
+        static_cast<void>(app::observeBenchWaveChannels(
+            unsupportedScene,
+            graph,
+            "wave-screen",
+            128U,
+            true,
+            backend)),
+        doctest::Contains("unsupported post-aperture"),
+        std::invalid_argument);
+}
+
+TEST_CASE("same wavelength and coherence branches merge as complex fields") {
+    fft::CpuFftBackend backend;
+    auto project = app::makeDoubleSlitExperimentPreset();
+    const auto baselineGraph = ray::traceDynamicBench(project.scene);
+    const auto baseline = app::observeBenchWavePattern(
+        project.scene, baselineGraph, "wave-screen", 128U, true, backend);
+
+    auto secondLaser = *project.scene.find("wave-laser-green");
+    secondLaser.id = "wave-laser-second";
+    project.scene.add(secondLaser);
+    const auto graph = ray::traceDynamicBench(project.scene);
+    const auto channels = app::observeBenchWaveChannels(
+        project.scene, graph, "wave-screen", 128U, true, backend);
+
+    REQUIRE(channels.size() == 1U);
+    const auto& merged = channels.front();
+    CHECK(merged.coherenceId == "wave-green");
+    REQUIRE(merged.contributions.size() == 2U);
+    CHECK(merged.contributions[0].branchId
+        < merged.contributions[1].branchId);
+    CHECK(merged.peakIntensityWattsPerSquareMetre
+        == doctest::Approx(
+            4.0 * baseline.peakIntensityWattsPerSquareMetre)
+            .epsilon(1e-11));
+    CHECK(merged.integratedPowerWatts
+        == doctest::Approx(4.0 * baseline.integratedPowerWatts)
+            .epsilon(1e-11));
+
+    auto quadratureProject = app::makeDoubleSlitExperimentPreset();
+    auto quadratureLaser
+        = *quadratureProject.scene.find("wave-laser-green");
+    quadratureLaser.id = "wave-laser-quadrature";
+    auto quadratureTransform = quadratureLaser.transform;
+    quadratureTransform.translationMetres.z -= 0.25 * 532e-9;
+    scene::rebaseMechanicalAssembly(
+        quadratureLaser, quadratureTransform);
+    quadratureProject.scene.add(quadratureLaser);
+    const auto quadratureGraph
+        = ray::traceDynamicBench(quadratureProject.scene);
+    const auto quadratureChannels = app::observeBenchWaveChannels(
+        quadratureProject.scene,
+        quadratureGraph,
+        "wave-screen",
+        128U,
+        true,
+        backend);
+    REQUIRE(quadratureChannels.size() == 1U);
+    CHECK(quadratureChannels.front().peakIntensityWattsPerSquareMetre
+        == doctest::Approx(
+            2.0 * baseline.peakIntensityWattsPerSquareMetre)
+            .epsilon(2e-7));
+
+    auto destructiveProject = app::makeDoubleSlitExperimentPreset();
+    auto destructiveLaser
+        = *destructiveProject.scene.find("wave-laser-green");
+    destructiveLaser.id = "wave-laser-destructive";
+    auto destructiveTransform = destructiveLaser.transform;
+    destructiveTransform.translationMetres.z -= 0.5 * 532e-9;
+    scene::rebaseMechanicalAssembly(
+        destructiveLaser, destructiveTransform);
+    destructiveProject.scene.add(destructiveLaser);
+    const auto destructiveGraph
+        = ray::traceDynamicBench(destructiveProject.scene);
+    const auto destructiveChannels = app::observeBenchWaveChannels(
+        destructiveProject.scene,
+        destructiveGraph,
+        "wave-screen",
+        128U,
+        true,
+        backend);
+    REQUIRE(destructiveChannels.size() == 1U);
+    CHECK(destructiveChannels.front().peakIntensityWattsPerSquareMetre
+        < baseline.peakIntensityWattsPerSquareMetre * 1e-16);
+}
+
+TEST_CASE("wavelength and coherence identities remain independent channels") {
+    fft::CpuFftBackend backend;
+    auto project = app::makeDoubleSlitExperimentPreset();
+    auto secondLaser = *project.scene.find("wave-laser-green");
+    secondLaser.id = "wave-laser-independent";
+    auto& secondParameters = std::get<scene::LaserSourceParameters>(
+        secondLaser.parameters);
+    secondParameters.channels.front().coherenceId = "independent-green";
+    project.scene.add(secondLaser);
+    auto graph = ray::traceDynamicBench(project.scene);
+    auto channels = app::observeBenchWaveChannels(
+        project.scene, graph, "wave-screen", 128U, true, backend);
+    REQUIRE(channels.size() == 2U);
+    CHECK(channels[0].fieldAtObservation.vacuumWavelengthMetres()
+        == doctest::Approx(532e-9));
+    CHECK(channels[1].fieldAtObservation.vacuumWavelengthMetres()
+        == doctest::Approx(532e-9));
+    CHECK(channels[0].coherenceId == "independent-green");
+    CHECK(channels[1].coherenceId == "wave-green");
+    CHECK_THROWS_WITH_AS(
+        static_cast<void>(app::observeBenchWavePattern(
+            project.scene, graph, "wave-screen", 128U, true, backend)),
+        doctest::Contains("exactly one wavelength and coherence"),
+        std::invalid_argument);
+
+    auto spectralProject = app::makeDoubleSlitExperimentPreset();
+    auto spectralLaser = *spectralProject.scene.find("wave-laser-green");
+    auto& spectralParameters = std::get<scene::LaserSourceParameters>(
+        spectralLaser.parameters);
+    spectralParameters.channels = {
+        {.wavelengthMetres = 638e-9,
+         .powerWatts = 0.20,
+         .coherenceId = "spectral-red"},
+        {.wavelengthMetres = 450e-9,
+         .powerWatts = 0.20,
+         .coherenceId = "spectral-blue"},
+        {.wavelengthMetres = 532e-9,
+         .powerWatts = 0.20,
+         .coherenceId = "spectral-green"},
+    };
+    spectralProject.scene.replace(spectralLaser.id, spectralLaser);
+    graph = ray::traceDynamicBench(spectralProject.scene);
+    channels = app::observeBenchWaveChannels(
+        spectralProject.scene,
+        graph,
+        "wave-screen",
+        128U,
+        true,
+        backend);
+    REQUIRE(channels.size() == 3U);
+    CHECK(channels[0].fieldAtObservation.vacuumWavelengthMetres()
+        == doctest::Approx(450e-9));
+    CHECK(channels[1].fieldAtObservation.vacuumWavelengthMetres()
+        == doctest::Approx(532e-9));
+    CHECK(channels[2].fieldAtObservation.vacuumWavelengthMetres()
+        == doctest::Approx(638e-9));
 }

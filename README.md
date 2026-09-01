@@ -96,6 +96,15 @@ W/m^2 intensity, integrated power, wavelength, coherence identity, and
 horizontal/vertical profiles; they never sample the rendered 8-bit texture as
 measurement truth.
 
+Every branch reaching that plane is classified by exact wavelength and
+coherence identity. Fully modeled branches in one channel add as complex
+amplitudes with accumulated optical-path phase; different wavelengths or
+coherence identities remain independently selectable. Each channel retains its
+contributing branch evidence, and switching intensity/dB/phase or channel only
+rerenders the cached field. If an incident branch contains an optical transform
+not yet connected to the placed-wave producer, measurement fails explicitly
+instead of silently drawing a partial result.
+
 For supported ray-routed paths, placed ideal lenses, mirror/splitter clear
 areas, apertures, pinholes, and SLM finite pixels/dead space now act on a
 beam-following local complex field before plate recording. Ideal mirror and

@@ -93,10 +93,15 @@ Field Probe now exposes revision-bound complex cursor samples, local physical
 coordinates, amplitude, W/m^2 intensity, peak-relative dB, phase validity,
 wavelength/coherence identity, integrated power, and horizontal/vertical
 intensity sections. The same cached field switches between intensity, dB, and
-wrapped-phase textures without re-propagation. The current producer is still
-the explicit single-channel `Laser -> Aperture -> observation` adapter; general
-coherent merging and independent spectral-channel selection remain open. See
-[ADR 0028](../adr/0028-revision-bound-placed-field-measurements.md).
+wrapped-phase textures without re-propagation. Multiple direct
+`Laser -> Aperture -> observation` branches now partition into exact
+wavelength/coherence channels; contributors within one channel add as complex
+fields with accumulated-path phase, while channel switching only rerenders the
+cache. Unsupported incident paths reject the complete observation. Connecting
+the existing mirror/splitter/lens/filter/SLM local-wave transforms to this
+channel producer remains open. See
+[ADR 0028](../adr/0028-revision-bound-placed-field-measurements.md) and
+[ADR 0029](../adr/0029-coherent-merge-and-independent-measurement-channels.md).
 
 ## Platform extensibility acceptance
 

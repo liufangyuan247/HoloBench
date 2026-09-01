@@ -112,3 +112,6 @@ The following wave and Fourier-optics architecture decisions are locked:
 - Revision-bound complex-field measurements on placed Screen/Probe instruments,
   validity-masked phase, peak-relative dB, cursor and physical cross-section
   semantics (ADR 0028).
+- Exact wavelength/coherence channel partitioning, optical-path-aware coherent
+  branch addition, retained contribution diagnostics, and no partial result for
+  unsupported incident paths (ADR 0029).
