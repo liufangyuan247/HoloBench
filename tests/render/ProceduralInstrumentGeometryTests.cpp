@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <limits>
+#include <string>
 
 #include <doctest/doctest.h>
 #include <glm/geometric.hpp>
@@ -26,7 +27,7 @@ TEST_CASE("every Bench component produces bounded finite PCG solid geometry") {
             kind, "pcg-component-" + std::to_string(componentIndex++));
         const auto mesh = generateProceduralInstrumentMesh(component);
 
-        CAPTURE(scene::benchComponentDisplayName(kind));
+        CAPTURE(std::string(scene::benchComponentDisplayName(kind)));
         CHECK(mesh.triangleCount() > 0U);
         CHECK(mesh.triangles.size() % 3U == 0U);
         CHECK(mesh.triangles.size() <= 50'000U);
