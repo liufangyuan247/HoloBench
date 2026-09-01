@@ -1574,6 +1574,11 @@ Milestone Acceptance
 
 # 26B. 软件 Milestone 总表
 
+截至 2026-09-01，M0-M9 软件里程碑均已在各自文档声明的精度域内完成。
+当前软件基线是自由 3D Bench、三类全息沙箱与 CHIMERA 虚拟打印/重建；
+Steam、商店、打包和发行不在项目范围。后续 NVIDIA 实机复验和真实光机
+标定属于外部硬件阶段，不回退或改写已经验收的软件物理边界。
+
 ## M0 — Repository & Engineering Foundation
 
 **目标工期：3–7 天**
@@ -1818,7 +1823,7 @@ H2 Replay
 
 ## M7 — Free-form 3D Optical Bench Sandbox
 
-**优先级：当前最高，阻断 M8/M9**
+**状态：已验收（2026-09-01）**
 
 ### Deliverables
 
@@ -1842,6 +1847,8 @@ H2 Replay
 ---
 
 ## M8 — Holography Recording and Reconstruction Sandbox
+
+**状态：已验收（2026-09-01）**
 
 ### Deliverables
 
@@ -1869,6 +1876,8 @@ H2 Replay
 ---
 
 ## M9 — Automated CHIMERA Construction and Reconstruction
+
+**状态：已验收（2026-09-01）**
 
 ### Deliverables
 

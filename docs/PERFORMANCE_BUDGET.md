@@ -41,6 +41,8 @@ Performance claims are accepted only when they identify hardware, build type, sc
 - `fourier/sampling_debugger_256_square_cpu_refresh` — Validated on Intel Core i7-9750H (M3)
 - `fourier/four_f_1024_square_gpu_recompute` — Validated on AMD Radeon Pro 5300M (M3)
 - `ray/real_lens_default_729_refresh` — Validated on Intel Core i7-9750H (M4)
+- `chimera/selected_hogel_rgb_record_reconstruct_camera_cpu` — Validated on Intel Core i7-9750H (M9)
+- `chimera/editable_23_component_bench_renderer` — Validated on AMD Radeon Pro 5300M (M9)
 - `wave/asm_2048_square_single_step` — Target for M2 Angular Spectrum Method
 - `project/load_reference_scene` — Target for scene load latency
 
@@ -60,6 +62,10 @@ Performance claims are accepted only when they identify hardware, build type, sc
 | Max recompute | **35.990 ms** | Informational | Recorded |
 
 NVIDIA results must be appended with renderer/driver identity and the observed twiddle source. The same capability probe applies to every device; identity must never select the path.
+
+An optimized `app-ci` revalidation on 2026-09-01 recorded p50 **28.332 ms**,
+p95 **30.335 ms**, and max **30.515 ms**. A Debug build was intentionally
+excluded from performance acceptance.
 
 ## M3 Verified Fourier and Sampling Benchmarks
 
@@ -211,5 +217,33 @@ workaround, precision reduction, or hardware-specific performance cap.
 These are explicit record/reconstruct actions, not per-frame rendering targets.
 The CPU reference contains no GPU dispatch, vendor/model branch, speculative
 compatibility workaround, precision reduction, or hardware-specific cap.
-Windows MSVC and Ubuntu GCC results remain to be recorded from the first remote
-CI run of this gate; both use the same platform-neutral budgets.
+Windows MSVC and Ubuntu GCC execute the same platform-neutral gates in CI;
+GitHub Actions run 33471184614 passes both Core jobs.
+
+## M9 CHIMERA Automation Benchmarks
+
+### Benchmark profile: `chimera/selected_hogel_rgb_record_reconstruct_camera_cpu`
+
+- **Hardware Profile**: Intel Core i7-9750H, Windows 10 19045, optimized
+  `core-ci` build.
+- **Workload**: One 256x256 selected hogel passes through three independent RGB
+  M8 volume recordings, directional reconstruction, finite-pupil Airy response,
+  and relative linear camera synthesis.
+- **Result**: **1161.105 ms** against a **30000 ms** ceiling; canonical artifact
+  **1,273,819 bytes**; conservative peak estimate **13,856,731 bytes** against
+  **64 MiB**.
+
+### Benchmark profile: `chimera/editable_23_component_bench_renderer`
+
+- **Hardware Profile**: AMD Radeon Pro 5300M, OpenGL 4.6 Core / GLSL 4.60,
+  optimized `app-ci` application.
+- **Workload**: The canonical 23-component ordinary editable CHIMERA Bench at
+  1920x1080 with 128 displayed ray segments.
+- **Execution Parameters**: 60 warm-up and 120 measured frames, VSync disabled,
+  per-frame GPU synchronization.
+- **Result**: average **555.24 FPS**, p50 **1.681 ms**, p95 **2.503 ms**, max
+  **3.033 ms**, meeting the p95 **< 33.333 ms** target.
+
+Both gates are vendor-neutral. NVIDIA evidence is appended after user-hardware
+validation; it does not change code paths, precision, dispatch caps, or budgets
+for other GPUs.

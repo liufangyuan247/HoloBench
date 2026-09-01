@@ -2,8 +2,9 @@
 
 HoloBench is an interactive 3D optical bench, a multi-fidelity physics simulator, and a long-term R&D tool for CHIMERA-like holographic printing.
 
-**Milestone status**: M1-M6 physics/reference foundations and the M7/M8
-free-form holography sandbox are validated in their documented domains. The
+**Milestone status**: M1-M6 physics/reference foundations, the M7/M8
+free-form holography sandbox, and the M9 CHIMERA virtual-printer automation are
+validated in their documented domains. The
 hardware interaction gate now assembles transmission, reflection/Denisyuk, and
 RGB full-colour experiments from an empty Bench through real shelf, transform,
 alignment, spectrum, Record, and Reconstruct input. The application includes an editable
@@ -13,13 +14,17 @@ and reconstruction on placed Screen/Probe components. Reflection-volume
 recording derives the grating from the actual opposite-side plate branches and
 reconstructs a Bragg-weighted sampled field on a placed reflection-side
 Screen/Probe. The RGB preset records and replays three independent spectral
-channels and combines only their display intensities. The active priority is
-M9: connect the retained CHIMERA recipe, hogel/SLM exposure, reconstruction
-camera, scan, and batch contracts to this same accepted Bench interaction.
-Steam/store/distribution work is
-removed from scope. For the current repository state and roadmap, see
+channels and combines only their display intensities. CHIMERA recipes now build
+an ordinary editable 23-component Bench and drive hashed view/hogel data,
+selected or resumable RGB exposure, bounded reconstruction, camera preview,
+and transparent parameter sweeps on that same scene. Steam/store/distribution
+work is removed from scope. For the current repository state and roadmap, see
 [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and
 [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
+
+For a direct, Bench-first walkthrough of free placement, transmission,
+reflection/Denisyuk, RGB full-colour, and CHIMERA workflows, see the
+[Optical Bench operation guide](docs/OPTICAL_BENCH_GUIDE.md).
 
 The free-form viewport now has an always-visible searchable component shelf.
 The same Bench header exposes Empty, Transmission, Reflection/Denisyuk, RGB,
@@ -237,18 +242,18 @@ independent optical wavelengths into linear camera RGB response.
   p95 values are **38.675 / 51.780 / 43.410 ms**, all below the platform-neutral
   150 ms budget with identical checksum `1512.57504282`.
 
-## Active sandbox roadmap
+## Accepted sandbox milestones
 
-- **M7 — Free-form 3D Optical Bench**: One dynamic project with a placeable
+- **M7 — Free-form 3D Optical Bench (accepted)**: One dynamic project with a placeable
   component library, arbitrary rigid transforms, viewport editing, and
   deterministic branching/merging optical paths. RGB lasers, mirrors,
   splitters/combiners, lenses, apertures, spatial filters, SLMs, screens,
   probes, and holographic plates must interact through their actual 3D
   placement. See [the M7 brief](docs/milestones/M7_OPTICAL_BENCH_SANDBOX.md).
-- **M8 — Holography Sandbox**: Transmission, reflection/Denisyuk, and RGB
+- **M8 — Holography Sandbox (accepted)**: Transmission, reflection/Denisyuk, and RGB
   full-colour hologram recording and reconstruction are driven by coherent
   branches reaching placed plates. See [the M8 brief](docs/milestones/M8_HOLOGRAPHY_SANDBOX.md).
-- **M9 — CHIMERA Automation**: A versioned recipe compiles to an editable
+- **M9 — CHIMERA Automation (accepted)**: A versioned recipe compiles to an editable
   CHIMERA-like bench, generates hogel/angular and SLM data, creates RGB exposure
   events, and simulates bounded reconstruction. See [the M9 brief](docs/milestones/M9_CHIMERA_AUTOMATION.md).
 
@@ -275,7 +280,7 @@ Dependencies are pinned and fetched automatically via CMake FetchContent.
 
 ## Build and Test
 
-Standard dev build and test suite (504 deterministic CPU/application cases,
+Standard dev build and test suite (563 deterministic CPU/application cases,
 including the OpenGL GPU test executable):
 
 ```powershell
@@ -284,7 +289,7 @@ cmake --build --preset dev
 ctest --preset dev
 ```
 
-Headless core/physics build and test (no display/OpenGL required, 502/502 tests passing):
+Headless core/physics build and test (no display/OpenGL required, 561/561 tests passing):
 
 ```powershell
 cmake --preset core-ci
@@ -326,6 +331,20 @@ gates (256x256 CPU reference fields):
 ./out/build/dev/holobench_m8_benchmark.exe
 ```
 
+Named M9 selected-hogel RGB exposure/reconstruction/camera resource gate
+(use the optimized `core-ci` build for performance results):
+
+```powershell
+./out/build/core-ci/holobench_m9_benchmark.exe
+```
+
+Named 1920x1080 CHIMERA editable-Bench renderer gate (optimized application
+build, 60 warm-ups plus the requested measured frames):
+
+```powershell
+./out/build/app-ci/HoloBench.exe --chimera-benchmark-frames 120
+```
+
 Automated 3D viewport throughput benchmark (disables VSync, forces per-frame `glFinish`):
 
 ```powershell
@@ -349,7 +368,14 @@ Tested on AMD Radeon Pro 5300M (OpenGL 4.6.0 Core, GLSL 4.60):
 
 *Note*: The benchmark measures raw GPU rendering throughput with VSync disabled and synchronous CPU-GPU sync. In normal interactive mode (`vsync=1`), the application syncs to display refresh (e.g. 60 Hz). Earlier ~32 FPS observations on certain displays were due to window compositor swap pacing rather than GPU rendering bottlenecks.
 
-The M2 wave benchmark on the same AMD Radeon Pro 5300M records p50 = **29.294 ms**, p95 = **33.139 ms**, and max = **35.990 ms**, meeting the p95 < 50 ms budget. Twiddle selection is capability-driven: each newly generated shader table is read back once and checked against the CPU reference, with CPU-generated twiddles used only if the active implementation fails that numerical probe. NVIDIA and other unavailable GPU measurements will be added when hardware is available and do not block releases; vendor/model workarounds are prohibited.
+The optimized M2 wave benchmark on the same AMD Radeon Pro 5300M was
+revalidated on 2026-09-01 at p50 = **28.332 ms**, p95 = **30.335 ms**, and
+max = **30.515 ms**, meeting the p95 < 50 ms budget. Debug builds are not
+performance evidence. Twiddle selection is capability-driven: each newly
+generated shader table is read back once and checked against the CPU reference,
+with CPU-generated twiddles used only if the active implementation fails that
+numerical probe. NVIDIA measurements remain an additive user-hardware
+validation; vendor/model workarounds are prohibited.
 
 ## CI & Automated Workflows
 

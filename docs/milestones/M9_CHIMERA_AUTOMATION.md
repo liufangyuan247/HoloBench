@@ -12,6 +12,12 @@ Priority note (2026-09-01): M7/M8 direct-manipulation acceptance is closed.
 CHIMERA automation now expands on the same visible editable bench, not as a
 replacement parameter workbench.
 
+Status (accepted 2026-09-01): C9.1-C9.5 and the shared-Bench product gate are
+complete in the documented scalar/paraxial virtual-printer domain. Real
+hardware control, proprietary CHIMERA prescription fidelity, high-NA vector
+physics, and absolute radiometric calibration are later hardware/digital-twin
+work, not hidden claims or blockers for this virtual milestone.
+
 Current implementation status (2026-09-01): C9.1 format-v1 recipe parsing,
 validation, deterministic recipe-to-bench compiler, stable generated-component
 provenance, constraint report, three independent M8 reflection recording
@@ -20,15 +26,13 @@ recipes, and Lab build controls are implemented. The canonical output is a
 deterministic synthetic perspective-view oracles, Fourier-lens position
 mapping, and sparse RGB SLM commands are implemented. Decoder-neutral real
 perspective rasters, strict P3/P6 inputs, explicit linear/sRGB transfer, and
-area resampling into the hogel grid are implemented. Calibrated camera/renderer
-plugins and resumable batches remain open. Format-v1 virtual exposure plans
+area resampling into the hogel grid are implemented. Format-v1 virtual exposure plans
 and a single-hogel RGB executor now stage the editable bench, transfer sparse
 commands through the placed local-wave path, and invoke the M8 volume recorder;
-measured device timing and exposure-to-material-dose calibration remain open. Ideal
+measured device timing remains outside the virtual milestone. Ideal
 single- and bounded two-hogel directional reconstruction now combines the
 Fourier-lens sign oracle, independent M8 RGB efficiencies, and circular-stop
-Airy separation/cross-talk evidence; calibrated camera-image synthesis remains
-open. C9.5 deterministic parameter sweeps retain every recipe, constraint,
+Airy separation/cross-talk evidence. C9.5 deterministic parameter sweeps retain every recipe, constraint,
 SLM diagnostic, M8 RGB efficiency/crossing angle, Airy metric, timeline, and
 artifact-size value used for transparent best-candidate selection. A varied
 exposure axis suppresses physical selection until material-dose calibration is
@@ -44,8 +48,8 @@ The directional result now also feeds a bounded ideal on-axis camera. A placed
 finite pupil selects actual hogel/view directions, independent wavelengths use
 their own circular-pupil Airy kernels, and a strict measured spectral LUT maps
 optical intensity into linear sensor RGB with explicit edge-loss and work
-accounting. Distortion, defocus, noise, and absolute camera calibration remain
-open rather than hidden behind display colour.
+accounting. Distortion, defocus, noise, and absolute photoelectron calibration
+remain explicit later extensions rather than being hidden behind display colour.
 
 The first shared-Bench product slice is now operational. The contextual
 `CHIMERA Automation` bar binds a canonical perspective dataset and deterministic
@@ -74,10 +78,11 @@ The named GPU display gate is
 `chimera/editable_23_component_bench_renderer`: the canonical 23-component
 Bench renders at 1920x1080 after 60 warm-up frames, with 120 synchronized
 measurements and a 33.333 ms p95 ceiling. AMD Radeon Pro 5300M measured
-2.503 ms p95. This is a CHIMERA layout/beam renderer budget, not a claim that
-the unrelated 1024x1024 GPU wave-compute benchmark passed on that older GPU.
-The latter remains a capability/performance validation for the user's NVIDIA
-environment without any vendor/model branch.
+2.503 ms p95. This is a CHIMERA layout/beam renderer budget, separate from the
+1024x1024 wave-compute gates. A fresh optimized build on the same GPU measured
+ASM at 30.335 ms p95 against 50 ms and 4-f at 270.187 ms p95 against 300 ms;
+Debug-build timings are not performance evidence. NVIDIA parity remains an
+additive user-hardware validation without any vendor/model branch.
 
 Real view input now has a strict manifest boundary: two to 256 entries declare
 stable view ID, horizontal/vertical radians, relative or absolute P3/P6 path,
@@ -176,7 +181,12 @@ solver graph that cannot be represented by the shared bench document.
 - [x] Parameter sweeps are deterministic and retain every constraint/metric
   used to select a candidate.
 - [x] Batch cancellation/resume and corrupt-artifact rejection are tested.
-- [ ] Named CPU/GPU performance and memory budgets, renderer smoke, and
+- [x] Named CPU/GPU performance and memory budgets, renderer smoke, and
   Windows/Linux CI pass.
+
+Final cross-platform evidence: GitHub Actions run
+[33471184614](https://github.com/liufangyuan247/HoloBench/actions/runs/33471184614)
+passes Ubuntu and Windows Core plus Application Compile jobs for commit
+`77c7a60`.
 
 Completion tag: `m9-chimera-automation`.

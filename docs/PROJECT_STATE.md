@@ -10,7 +10,11 @@ Completed product milestone: **[M7 - Free-form 3D Optical Bench Sandbox](milesto
 
 Completed product milestone: **[M8 - Transmission, reflection, and RGB holography sandbox](milestones/M8_HOLOGRAPHY_SANDBOX.md)** — empty-Bench Record/Reconstruct acceptance passed
 
-Active product milestone: **[M9 - automated CHIMERA construction and reconstruction](milestones/M9_CHIMERA_AUTOMATION.md)** — integrate the retained virtual-printer data path into the accepted shared Bench
+Completed product milestone: **[M9 - automated CHIMERA construction and reconstruction](milestones/M9_CHIMERA_AUTOMATION.md)** — editable-Bench virtual printing, resumable RGB exposure, and bounded reconstruction acceptance passed
+
+**Software baseline complete through M9 in the documented scalar/paraxial domains.**
+NVIDIA measurements and later real-hardware calibration are additive external
+validation, not unfinished virtual-sandbox implementation.
 
 Steam, store, packaging, and distribution work has been removed from project scope.
 
@@ -543,9 +547,11 @@ completion because it is primarily driven through fixed parameter panels:
   generated ordinary Bench at 1920x1080 with 60 warm-up and 120 measured,
   GPU-synchronized frames. AMD Radeon Pro 5300M measured 2.503 ms p95 against
   a 33.333 ms ceiling with all 23 components and 128 displayed ray segments.
-  This renderer result does not disguise the same GPU's failure of the separate
-  1024x1024 wave-compute target; NVIDIA compute parity remains an explicit later
-  validation on the user's hardware.
+  This renderer gate is separate from the 1024x1024 wave-compute targets. A
+  fresh optimized `app-ci` validation on the same GPU recorded ASM p95
+  30.335 ms against 50 ms and 4-f p95 270.187 ms against 300 ms. Debug-build
+  timings are not performance evidence. NVIDIA compute parity remains an
+  additive later validation on the user's hardware.
 - **Shared-Bench automation workflow**: The generated 23-component ordinary
   Bench now exposes contextual Generate Dataset/Plan, Expose Selected RGB Hogel,
   and Reconstruct View to Probe actions. Product workflow state binds recipe,
@@ -660,32 +666,20 @@ completion because it is primarily driven through fixed parameter panels:
   remain visible and cannot be selected. Canonical format-v2 JSON exposes all
   selection evidence. See
   [ADR 0020](adr/0020-chimera-deterministic-parameter-sweep.md).
-- **Current M9 validation**: Windows Clang warnings-as-errors core/application
+- **Final M9 validation**: Windows Clang warnings-as-errors core/application
   builds pass; `core-ci` passes 561 headless cases and `dev` passes 563 total
-  cases including font/GPU gates. The updated
-  development build, targeted gizmo/alignment tests, and OpenGL smoke pass. The
-  development gate includes GPU and font executables. Hidden OpenGL smoke
-  drives the compact Bench actions with real ImGui mouse events for
-  transmission, reflection/Denisyuk, and RGB presets, requires current placed
-  observation textures, verifies edit-driven stale suppression, renders and
-  semantically round-trips the generated 23-component
-  CHIMERA bench, finds its six plate branches, and exits with no GL errors on
-  AMD Radeon Pro 5300M. GitHub Actions run
-  [33453934235](https://github.com/liufangyuan247/HoloBench/actions/runs/33453934235)
-  passes Windows/MSVC and Ubuntu/GCC core and application-compile jobs through
-  the hashed dataset, exposure-plan, sparse placed-SLM, and M8 execution slice.
-  Run
-  [33454882017](https://github.com/liufangyuan247/HoloBench/actions/runs/33454882017)
-  passes the same four jobs through directional reconstruction. Run
-  [33455832150](https://github.com/liufangyuan247/HoloBench/actions/runs/33455832150)
-  passes all four jobs through deterministic parameter sweeps. Run
-  [33456409971](https://github.com/liufangyuan247/HoloBench/actions/runs/33456409971)
-  passes all four jobs through the real perspective-raster adapter. Run
-  [33457995330](https://github.com/liufangyuan247/HoloBench/actions/runs/33457995330)
-  passes all four jobs through calibrated SLM/material-dose execution. Run
-  [33459807508](https://github.com/liufangyuan247/HoloBench/actions/runs/33459807508)
-  passes all four jobs through calibrated exposure-aware parameter sweeps.
-  Remote cross-compiler evidence for the finite-pupil camera slice is pending.
+  cases including font/GPU gates. Hidden OpenGL smoke drives the compact Bench
+  actions with real ImGui mouse events for all three hologram modes and the
+  CHIMERA prepare/expose/reconstruct path, requires current textures on the
+  physical Screen/Probe, verifies edit-driven stale suppression, validates the
+  generated 23-component Bench and its six plate branches, and exits without GL
+  errors on AMD Radeon Pro 5300M. GitHub Actions runs
+  [33469016367](https://github.com/liufangyuan247/HoloBench/actions/runs/33469016367),
+  [33470678082](https://github.com/liufangyuan247/HoloBench/actions/runs/33470678082),
+  and [33471184614](https://github.com/liufangyuan247/HoloBench/actions/runs/33471184614)
+  successively validate the shared-Bench workflow, resumable batch/real-view
+  path, CPU/memory gate, and final renderer-gate code. The last run passes all
+  four Windows/MSVC and Ubuntu/GCC Core/Application Compile jobs.
 
 ## Known limitations (M1/M2)
 
@@ -695,14 +689,16 @@ completion because it is primarily driven through fixed parameter panels:
 - **Planar interface conventions**: `nIncident` and `nTransmitted` are supplied by the caller according to the propagation side.
 - **Platform scope**: Windows and Ubuntu automated build/test coverage; macOS remains unsupported (requires OpenGL 4.6 Core).
 
-## Next five tasks
+## Post-milestone follow-up (not M9 blockers)
 
-1. Integrate the retained CHIMERA recipe, image/dataset, exposure,
-   reconstruction-camera, and sweep contracts into that same bench workflow.
-2. Add multi-selection and equal-spacing tools for larger optical layouts.
-3. Resume calibrated-sweep performance reuse and resumable/corruption-safe
-   CHIMERA batches through the accepted sandbox interaction path.
-4. Run capability-driven NVIDIA parity and named performance validation without
-   introducing any vendor/model/driver identity branch.
-5. Close camera distortion/defocus/noise and final cross-platform CHIMERA
-   acceptance in the explicitly supported scalar domains.
+1. Run the unchanged optimized GPU tests and named benchmarks on the user's
+   NVIDIA hardware; append renderer/driver, numerical parity, selected runtime
+   capability path, and timing evidence without identity-based branches.
+2. Collect user exploratory feedback on free placement and alignment, then add
+   multi-selection/equal-spacing ergonomics only where the real workflow needs it.
+3. Attach measured SLM, material, camera, and stage evidence when physical
+   hardware and calibration data become available.
+4. Add distortion, defocus, sensor noise, polarization, or high-NA vector
+   solvers only under a separately validated hardware/digital-twin milestone.
+5. Keep Steam, store, packaging, and distribution closed unless the user
+   explicitly reopens that scope.
