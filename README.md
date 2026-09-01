@@ -51,6 +51,12 @@ reference arms, one volume plate, one reconstruction Probe, and three ordinary
 M8 recording recipes. The Lab can build the canonical layout or load a recipe
 JSON, displays explicit FOV/NA/sampling/material constraints, and leaves every
 generated component editable through the same Bench UI and save format.
+The same automation path now generates hashed hogel/angular data and RGB
+exposure events, reconstructs bounded directional hogel views with M8 replay
+efficiency and Airy cross-talk evidence, and evaluates bounded deterministic
+parameter sweeps. Sweep output keeps every candidate recipe, constraint,
+metric, and rejection reason; it does not claim an exposure optimum until a
+measured material-dose response is available.
 
 ## M1 Features
 

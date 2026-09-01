@@ -465,15 +465,29 @@ completion because it is primarily driven through fixed parameter panels:
   two hogels/two views without constructing a hidden 3D wave volume. It remains
   an ideal scalar directional preview rather than a calibrated camera image.
   See [ADR 0019](adr/0019-chimera-directional-reconstruction-preview.md).
+- **Deterministic parameter sweep**: Explicit axes cover hogel pitch, FOV,
+  SLM/field sampling, relay focal length and stop, reference geometry,
+  exposure, plate thickness, and shrinkage. A bounded Cartesian product retains
+  every full recipe, compiler constraint, SLM diagnostic, M8 RGB diffraction
+  efficiency/crossing angle, Airy resolution/cross-talk metric, ideal timeline,
+  artifact byte count, evaluation issue, and hard-constraint violation.
+  Candidates passing user constraints are ranked by the documented stable
+  lexicographic policy rather than an opaque optimizer. More than one exposure
+  value suppresses physical best selection because dose does not yet drive the
+  material response. Canonical JSON exposes all selection evidence. See
+  [ADR 0020](adr/0020-chimera-deterministic-parameter-sweep.md).
 - **Current M9 validation**: Windows Clang warnings-as-errors core/application
-  builds pass; `core-ci` passes 522/522 and `dev` passes 524/524 including GPU
+  builds pass; `core-ci` passes 526/526 and `dev` passes 528/528 including GPU
   and font executables. Hidden OpenGL smoke renders and semantically
   round-trips the generated 23-component bench, finds its six plate branches,
   and exits with no GL errors on AMD Radeon Pro 5300M. GitHub Actions run
   [33453934235](https://github.com/liufangyuan247/HoloBench/actions/runs/33453934235)
   passes Windows/MSVC and Ubuntu/GCC core and application-compile jobs through
   the hashed dataset, exposure-plan, sparse placed-SLM, and M8 execution slice.
-  Remote evidence for the new directional reconstruction slice remains pending.
+  Run
+  [33454882017](https://github.com/liufangyuan247/HoloBench/actions/runs/33454882017)
+  passes the same four jobs through directional reconstruction. Remote evidence
+  for the parameter-sweep slice remains pending.
 
 ## Known limitations (M1/M2)
 
@@ -485,9 +499,9 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Add deterministic parameter sweeps and best-candidate constraint evidence.
-2. Add real perspective-image adapters and calibrated material-dose hooks.
-3. Add spectral/pupil camera reconstruction and bounded image composition.
-4. Expose dataset, exposure-plan, preview, and batch controls in the Lab UI.
-5. Add resumable batch execution, corrupt-artifact rejection, named budgets,
+1. Add real perspective-image adapters and calibrated material-dose hooks.
+2. Add spectral/pupil camera reconstruction and bounded image composition.
+3. Expose dataset, exposure-plan, preview, sweep, and batch controls in the Lab UI.
+4. Add resumable batch execution, corrupt-artifact rejection, named budgets,
    and cross-platform M9 acceptance gates.
+5. Complete the M9 virtual-printer acceptance audit and documentation.

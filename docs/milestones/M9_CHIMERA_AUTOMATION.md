@@ -15,15 +15,18 @@ recipes, and Lab build controls are implemented. The canonical output is a
 23-component ordinary editable bench. Format-v1 hashed hogel/angular datasets,
 deterministic synthetic perspective-view oracles, Fourier-lens position
 mapping, and sparse RGB SLM commands are implemented. Real perspective-image
-adapters, bounded multi-hogel reconstruction, sweeps, and resumable batches
-remain open. Format-v1 virtual exposure plans and a
-single-hogel RGB executor now stage the editable bench, transfer sparse commands
-through the placed local-wave path, and invoke the M8 volume recorder; measured
-device timing and exposure-to-material-dose calibration remain open. Ideal
+adapters and resumable batches remain open. Format-v1 virtual exposure plans
+and a single-hogel RGB executor now stage the editable bench, transfer sparse
+commands through the placed local-wave path, and invoke the M8 volume recorder;
+measured device timing and exposure-to-material-dose calibration remain open. Ideal
 single- and bounded two-hogel directional reconstruction now combines the
 Fourier-lens sign oracle, independent M8 RGB efficiencies, and circular-stop
 Airy separation/cross-talk evidence; calibrated camera-image synthesis remains
-open.
+open. C9.5 deterministic parameter sweeps retain every recipe, constraint,
+SLM diagnostic, M8 RGB efficiency/crossing angle, Airy metric, timeline, and
+artifact-size value used for transparent best-candidate selection. A varied
+exposure axis suppresses physical selection until material-dose calibration
+exists.
 
 ## User-visible outcome
 
@@ -104,7 +107,7 @@ solver graph that cannot be represented by the shared bench document.
 
 - [x] A canonical recipe deterministically builds a complete editable RGB
   CHIMERA-like bench with no hidden components.
-- [ ] Ideal SLM-position-to-angle mapping agrees with the analytic Fourier-lens
+- [x] Ideal SLM-position-to-angle mapping agrees with the analytic Fourier-lens
   oracle, and sampling/NA violations are reported.
 - [x] A single-hogel RGB exposure plan reuses the M8 recording path and is
   byte-stable across supported compilers.
@@ -112,7 +115,7 @@ solver graph that cannot be represented by the shared bench document.
   within stated scalar/paraxial tolerances.
 - [x] A bounded multi-hogel example reconstructs at least two distinguishable
   viewpoints and reports cross-talk/resolution evidence.
-- [ ] Parameter sweeps are deterministic and retain every constraint/metric
+- [x] Parameter sweeps are deterministic and retain every constraint/metric
   used to select a candidate.
 - [ ] Batch cancellation/resume and corrupt-artifact rejection are tested.
 - [ ] Named CPU/GPU performance and memory budgets, renderer smoke, and
