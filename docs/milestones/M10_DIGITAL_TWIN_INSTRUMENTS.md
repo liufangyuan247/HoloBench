@@ -88,6 +88,16 @@ resolves and validates the asset. See [ADR 0027](../adr/0027-instrument-identity
   filtering, transmission/reflection/RGB holography, and CHIMERA construction
   using the same ordinary instrument definitions.
 
+Implementation in progress: an ordinary placed Screen / Detector or virtual
+Field Probe now exposes revision-bound complex cursor samples, local physical
+coordinates, amplitude, W/m^2 intensity, peak-relative dB, phase validity,
+wavelength/coherence identity, integrated power, and horizontal/vertical
+intensity sections. The same cached field switches between intensity, dB, and
+wrapped-phase textures without re-propagation. The current producer is still
+the explicit single-channel `Laser -> Aperture -> observation` adapter; general
+coherent merging and independent spectral-channel selection remain open. See
+[ADR 0028](../adr/0028-revision-bound-placed-field-measurements.md).
+
 ## Platform extensibility acceptance
 
 M10 is not a claim that one scalar/paraxial solver already covers every optical

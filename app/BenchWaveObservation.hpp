@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstddef>
+#include <complex>
 #include <string>
+#include <vector>
 
 #include "compute/propagation/AngularSpectrumPropagator.hpp"
 #include "compute/propagation/TiltedPlanePropagator.hpp"
@@ -25,6 +27,9 @@ struct BenchWaveObservationResult final {
     double observationOffsetYMetres = 0.0;
     bool usedShiftedPaddedPropagation = false;
     bool usedTiltedPlanePropagation = false;
+    std::string coherenceId;
+    double peakIntensityWattsPerSquareMetre = 0.0;
+    double integratedPowerWatts = 0.0;
     field::ComplexField2D fieldAtObservation;
     compute::propagation::AngularSpectrumDiagnostics propagation;
     compute::propagation::TiltedPlaneDiagnostics tiltedPropagation;
@@ -32,6 +37,47 @@ struct BenchWaveObservationResult final {
     [[nodiscard]] bool isStaleFor(
         const optics::scene::BenchScene& bench) const noexcept;
 };
+
+struct BenchFieldSampleMeasurement final {
+    std::size_t xIndex = 0U;
+    std::size_t yIndex = 0U;
+    double xMetres = 0.0;
+    double yMetres = 0.0;
+    std::complex<double> complexAmplitude {};
+    double amplitudeMagnitude = 0.0;
+    double intensityWattsPerSquareMetre = 0.0;
+    double decibelsRelativeToPeak = 0.0;
+    bool phaseValid = false;
+    double wrappedPhaseRadians = 0.0;
+    double wavelengthMetres = 0.0;
+};
+
+enum class BenchFieldCrossSectionAxis {
+    HorizontalX,
+    VerticalY,
+};
+
+struct BenchFieldCrossSection final {
+    BenchFieldCrossSectionAxis axis = BenchFieldCrossSectionAxis::HorizontalX;
+    std::size_t fixedIndex = 0U;
+    std::vector<double> coordinatesMetres;
+    std::vector<double> intensitiesWattsPerSquareMetre;
+};
+
+// Measures a single current complex-field sample. dB is relative to the
+// observation's cached peak and phase validity is explicit at low intensity.
+[[nodiscard]] BenchFieldSampleMeasurement measureBenchWaveSample(
+    const BenchWaveObservationResult& observation,
+    std::size_t xIndex,
+    std::size_t yIndex,
+    double phaseMinimumIntensityWattsPerSquareMetre = 0.0,
+    double decibelFloor = -120.0);
+
+// Extracts a physical X or Y intensity section through one selected sample.
+[[nodiscard]] BenchFieldCrossSection measureBenchWaveCrossSection(
+    const BenchWaveObservationResult& observation,
+    BenchFieldCrossSectionAxis axis,
+    std::size_t fixedIndex);
 
 // Observes a current Laser -> Aperture route on an ordinary freely placed
 // Screen / Detector or non-destructive Field Probe. Rays establish the global

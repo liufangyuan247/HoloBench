@@ -49,8 +49,8 @@ animated or silently approximated.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: `dev` passes 584/584 tests and `core-ci` passes
-  582/582. Clang and MSVC core/application builds pass with warnings as errors;
+- **Acceptance evidence**: `dev` passes 585/585 tests and `core-ci` passes
+  583/583. Clang and MSVC core/application builds pass with warnings as errors;
   the packaged CJK font validates. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
   smoke passes real shelf placement, constrained whole-instrument edits,
   post/XYZ and yaw/pitch mechanical drags, optical-frame updates, all M7/M8
@@ -81,9 +81,23 @@ animated or silently approximated.
   state. Stored references remain evidence only until an applicable model
   explicitly resolves and validates their content. See
   [ADR 0027](adr/0027-instrument-identity-and-calibration-references.md).
-- **Next slice**: connect supported asset kinds to their existing model
-  adapters with explicit applied-calibration diagnostics, then M10.4 closes
-  general placed-probe measurement interaction.
+- **Calibration next slice**: connect supported asset kinds to their existing
+  model adapters with explicit applied-calibration diagnostics.
+- **M10.4 placed measurement foundation implemented**: The current ordinary
+  Screen / Detector or nonblocking Field Probe retains its exact revision-bound
+  complex field, wavelength and coherence identity, peak intensity, integrated
+  power, and propagation diagnostics. The Bench view switches the same field
+  between intensity, peak-relative dB, and validity-masked wrapped phase without
+  propagation. Inspector cursor measurement exposes local X/Y, complex
+  amplitude, magnitude, W/m^2 intensity, dB, phase validity, and physical X/Y
+  intensity sections. Scene edits invalidate the complete result. The hardware
+  smoke exercises cursor/section measurement plus all three views on a placed
+  virtual probe. See
+  [ADR 0028](adr/0028-revision-bound-placed-field-measurements.md).
+- **M10.4 next slice**: replace the current single unambiguous
+  `Laser -> Aperture` producer with reusable same-wavelength coherent field
+  merging and independent spectral channels through arbitrary supported routed
+  components.
 
 ## Product rebaseline (2026-09-01)
 

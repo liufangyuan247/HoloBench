@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 #include <stdexcept>
 
 #include "app/BenchWaveObservation.hpp"
@@ -159,6 +160,97 @@ TEST_CASE("virtual field probe observes the wave without requiring a screen") {
     probe.transform.translationMetres.x += 0.25e-3;
     project.scene.replace(probe.id, probe);
     CHECK(result.isStaleFor(project.scene));
+}
+
+TEST_CASE("placed probe exposes complex cursor and physical cross-section measurements") {
+    fft::CpuFftBackend backend;
+    const auto project = app::makeDoubleSlitExperimentPreset();
+    const auto graph = ray::traceDynamicBench(project.scene);
+    const auto result = app::observeBenchWavePattern(
+        project.scene, graph, "wave-screen", 256U, false, backend);
+
+    CHECK(result.coherenceId == "wave-green");
+    CHECK(result.peakIntensityWattsPerSquareMetre
+        == doctest::Approx(peakIntensity(result.fieldAtObservation)));
+    CHECK(result.integratedPowerWatts > 0.0);
+    CHECK(result.integratedPowerWatts <= 1.0);
+
+    const auto maximum = std::max_element(
+        result.fieldAtObservation.samples().begin(),
+        result.fieldAtObservation.samples().end(),
+        [](const auto& lhs, const auto& rhs) {
+            return std::norm(lhs) < std::norm(rhs);
+        });
+    REQUIRE(maximum != result.fieldAtObservation.samples().end());
+    const auto flatIndex = static_cast<std::size_t>(
+        std::distance(result.fieldAtObservation.samples().begin(), maximum));
+    const std::size_t peakX = flatIndex % result.fieldAtObservation.width();
+    const std::size_t peakY = flatIndex / result.fieldAtObservation.width();
+    const auto sample = app::measureBenchWaveSample(
+        result, peakX, peakY, 0.0, -80.0);
+    CHECK(sample.xIndex == peakX);
+    CHECK(sample.yIndex == peakY);
+    CHECK(sample.complexAmplitude == *maximum);
+    CHECK(sample.amplitudeMagnitude
+        == doctest::Approx(std::abs(*maximum)));
+    CHECK(sample.intensityWattsPerSquareMetre
+        == doctest::Approx(result.peakIntensityWattsPerSquareMetre));
+    CHECK(sample.decibelsRelativeToPeak == doctest::Approx(0.0));
+    CHECK(sample.phaseValid);
+    CHECK(sample.wrappedPhaseRadians >= -std::numbers::pi_v<double>);
+    CHECK(sample.wrappedPhaseRadians < std::numbers::pi_v<double>);
+    CHECK(sample.wavelengthMetres == doctest::Approx(532e-9));
+
+    const auto masked = app::measureBenchWaveSample(
+        result,
+        peakX,
+        peakY,
+        result.peakIntensityWattsPerSquareMetre * 2.0,
+        -80.0);
+    CHECK_FALSE(masked.phaseValid);
+    CHECK(masked.wrappedPhaseRadians == doctest::Approx(0.0));
+
+    const auto horizontal = app::measureBenchWaveCrossSection(
+        result, app::BenchFieldCrossSectionAxis::HorizontalX, peakY);
+    CHECK(horizontal.coordinatesMetres.size()
+        == result.fieldAtObservation.width());
+    CHECK(horizontal.intensitiesWattsPerSquareMetre.size()
+        == result.fieldAtObservation.width());
+    CHECK(horizontal.intensitiesWattsPerSquareMetre[peakX]
+        == doctest::Approx(result.peakIntensityWattsPerSquareMetre));
+    CHECK(horizontal.coordinatesMetres[peakX]
+        == doctest::Approx(result.fieldAtObservation.xCoordinateMetres(peakX)));
+
+    const auto vertical = app::measureBenchWaveCrossSection(
+        result, app::BenchFieldCrossSectionAxis::VerticalY, peakX);
+    CHECK(vertical.coordinatesMetres.size()
+        == result.fieldAtObservation.height());
+    CHECK(vertical.intensitiesWattsPerSquareMetre[peakY]
+        == doctest::Approx(result.peakIntensityWattsPerSquareMetre));
+    CHECK_THROWS_AS(
+        static_cast<void>(app::measureBenchWaveSample(
+            result, result.fieldAtObservation.width(), 0U)),
+        std::out_of_range);
+    CHECK_THROWS_AS(
+        static_cast<void>(app::measureBenchWaveSample(
+            result, 0U, 0U, -1.0)),
+        std::invalid_argument);
+    CHECK_THROWS_AS(
+        static_cast<void>(app::measureBenchWaveSample(
+            result, 0U, 0U, 0.0, 1.0)),
+        std::invalid_argument);
+    CHECK_THROWS_AS(
+        static_cast<void>(app::measureBenchWaveCrossSection(
+            result,
+            app::BenchFieldCrossSectionAxis::HorizontalX,
+            result.fieldAtObservation.height())),
+        std::out_of_range);
+    CHECK_THROWS_AS(
+        static_cast<void>(app::measureBenchWaveCrossSection(
+            result,
+            static_cast<app::BenchFieldCrossSectionAxis>(-1),
+            0U)),
+        std::invalid_argument);
 }
 
 TEST_CASE("live wave screen rejects stale ambiguous and upstream observations") {

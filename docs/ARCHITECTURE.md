@@ -109,3 +109,6 @@ The following wave and Fourier-optics architecture decisions are locked:
 - Generic instrument specifications, optional instance identity, hashed
   external calibration references, visible nominal/calibrated/stale state, and
   Bench format-v5 migration (ADR 0027).
+- Revision-bound complex-field measurements on placed Screen/Probe instruments,
+  validity-masked phase, peak-relative dB, cursor and physical cross-section
+  semantics (ADR 0028).

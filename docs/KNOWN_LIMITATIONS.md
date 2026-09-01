@@ -115,9 +115,13 @@
   tracer still emits only one centre ray per laser/object-source spectral
   channel for global layout. Probes observe it non-destructively, and plates
   collect it as recording input. Real-lens components stop explicitly until their persisted
-  prescription IDs can be resolved into sequential assemblies. Complete
-  coherent field merging and detector intensity/phase views remain open. A
-  plate can now sample source envelopes into local complex fields and record a
+  prescription IDs can be resolved into sequential assemblies. A placed
+  Screen/Probe now exposes intensity, peak-relative dB, validity-masked phase,
+  complex cursor values, and physical cross-sections, but its live-wave
+  producer still requires one unambiguous single-wavelength
+  `Laser -> Aperture` route. Complete same-wavelength coherent merging and
+  independent multi-wavelength measurement channels remain open. A plate can
+  now sample source envelopes into local complex fields and record a
   same-side thin transmission exposure over an explicit ROI. A 2x-padded
   beam-following envelope applies ASM per routed segment, finite mirror/splitter
   clear areas, ideal-lens phase/aperture, circular/rectangular masks, explicit
@@ -130,7 +134,8 @@
   uniform, wrapped linear-ramp, or checkerboard recipes with bit-depth
   quantization and manual/automation provenance. M9 transient hogel rasters can
   attach the existing measured complex-response LUT without altering the saved
-  bench; general persisted per-component calibration remains open.
+  bench. Format v5 persists per-component calibration references, but general
+  asset resolution into placed-instrument solver behavior remains open.
 - Plate candidates currently infer object branches from an Object/Wavefront
   Source and reference branches from a Laser Source. They classify same-side
   transmission versus opposite-side reflection geometry and reject

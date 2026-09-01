@@ -2567,6 +2567,7 @@ void Application::updateSandboxWaveObservation() {
             && observation->kind != bench::BenchComponentKind::FieldProbe)) {
         sandboxWaveObservation_.reset();
         sandboxWaveObservationDiagnostic_.clear();
+        sandboxWaveTextureDirty_ = true;
         if (sandboxWaveTexture_) {
             sandboxWaveTexture_->destroy();
         }
@@ -2580,11 +2581,44 @@ void Application::updateSandboxWaveObservation() {
     const bool needsFullResolution = current
         && sandboxWaveObservation_->interactivePreview
         && !sandboxGizmoDragging_;
-    if (current && !needsFullResolution) {
-        return;
-    }
 
     try {
+        const auto renderObservation = [this](
+                                           const BenchWaveObservationResult& result) {
+            field::FieldVisualizationOptions options;
+            field::FieldViewMode viewMode = field::FieldViewMode::Intensity;
+            if (sandboxWaveViewModeIndex_ == 1) {
+                viewMode = field::FieldViewMode::DecibelIntensity;
+                options.colormap = field::ColormapKind::Inferno;
+                options.floorDecibels = sandboxWaveDecibelFloor_;
+                options.maxDecibels = 0.0;
+                options.decibelReferenceIntensity
+                    = result.peakIntensityWattsPerSquareMetre;
+            } else if (sandboxWaveViewModeIndex_ == 2) {
+                viewMode = field::FieldViewMode::WrappedPhase;
+                options.colormap = field::ColormapKind::CyclicPhase;
+                options.phaseMinimumIntensity
+                    = result.peakIntensityWattsPerSquareMetre
+                    * static_cast<double>(
+                        sandboxWavePhaseMinimumPeakFraction_);
+            } else {
+                options.colormap = field::ColormapKind::Grayscale;
+            }
+            const auto image = field::renderFieldView(
+                result.fieldAtObservation, viewMode, options);
+            if (!sandboxWaveTexture_
+                || !sandboxWaveTexture_->uploadImage(image)) {
+                throw std::runtime_error(
+                    "OpenGL rejected the live wave-screen texture");
+            }
+        };
+        if (current && !needsFullResolution) {
+            if (sandboxWaveTextureDirty_) {
+                renderObservation(*sandboxWaveObservation_);
+                sandboxWaveTextureDirty_ = false;
+            }
+            return;
+        }
         if (!detectorFftBackend_) {
             throw std::runtime_error("CPU FFT backend is unavailable");
         }
@@ -2596,21 +2630,15 @@ void Application::updateSandboxWaveObservation() {
             preview ? 256U : 512U,
             preview,
             *detectorFftBackend_);
-        field::FieldVisualizationOptions options;
-        options.colormap = field::ColormapKind::Grayscale;
-        const auto image = field::renderLinearIntensity(
-            result.fieldAtObservation, options);
-        if (!sandboxWaveTexture_
-            || !sandboxWaveTexture_->uploadImage(image)) {
-            throw std::runtime_error(
-                "OpenGL rejected the live wave-screen texture");
-        }
+        renderObservation(result);
         sandboxWaveObservation_ = std::make_unique<
             BenchWaveObservationResult>(std::move(result));
+        sandboxWaveTextureDirty_ = false;
         sandboxWaveObservationDiagnostic_.clear();
     } catch (const std::exception& error) {
         sandboxWaveObservation_.reset();
         sandboxWaveObservationDiagnostic_ = error.what();
+        sandboxWaveTextureDirty_ = true;
         if (sandboxWaveTexture_) {
             sandboxWaveTexture_->destroy();
         }
@@ -6355,7 +6383,7 @@ void Application::drawSandboxWaveBar() {
             == observation->id;
     ImGui::BeginChild(
         "##sandbox_wave_bar",
-        ImVec2(0.0F, 58.0F),
+        ImVec2(0.0F, 82.0F),
         ImGuiChildFlags_Borders,
         ImGuiWindowFlags_NoScrollbar);
     ImGui::AlignTextToFramePadding();
@@ -6368,6 +6396,40 @@ void Application::drawSandboxWaveBar() {
     ImGui::SameLine();
     ImGui::Checkbox("Observe light field", &sandboxLiveWavePlane_);
     ImGui::SameLine();
+    constexpr std::array<const char*, 3> waveViewNames {
+        "Intensity", "dB", "Phase"};
+    ImGui::SetNextItemWidth(92.0F);
+    if (ImGui::Combo(
+            "##bench-wave-view",
+            &sandboxWaveViewModeIndex_,
+            waveViewNames.data(),
+            static_cast<int>(waveViewNames.size()))) {
+        sandboxWaveTextureDirty_ = true;
+    }
+    ImGui::SameLine();
+    if (sandboxWaveViewModeIndex_ == 1) {
+        ImGui::SetNextItemWidth(95.0F);
+        if (ImGui::DragFloat(
+                "##bench-wave-db-floor",
+                &sandboxWaveDecibelFloor_,
+                1.0F,
+                -160.0F,
+                -1.0F,
+                "%.0f dB")) {
+            sandboxWaveTextureDirty_ = true;
+        }
+    } else if (sandboxWaveViewModeIndex_ == 2) {
+        ImGui::SetNextItemWidth(105.0F);
+        if (ImGui::DragFloat(
+                "##bench-wave-phase-floor",
+                &sandboxWavePhaseMinimumPeakFraction_,
+                1.0e-6F,
+                0.0F,
+                1.0F,
+                "%.3g peak")) {
+            sandboxWaveTextureDirty_ = true;
+        }
+    }
     if (current) {
         const auto& result = *sandboxWaveObservation_;
         ImGui::TextColored(
@@ -8188,6 +8250,167 @@ void Application::drawSandboxInspector() {
                 }
                 if (changed) {
                     commitParameters(std::move(edited));
+                }
+            }
+
+            selected = benchProject_.scene.find(selectedBenchComponentId_);
+            if (selected != nullptr
+                && (selected->kind == bench::BenchComponentKind::ScreenDetector
+                    || selected->kind
+                        == bench::BenchComponentKind::FieldProbe)) {
+                ImGui::SeparatorText("Complex Field Measurement");
+                const bool measurementCurrent = sandboxWaveObservation_
+                    && !sandboxWaveObservation_->isStaleFor(
+                        benchProject_.scene)
+                    && sandboxWaveObservation_->observationComponentId
+                        == selected->id;
+                if (!measurementCurrent) {
+                    ImGui::TextDisabled(
+                        "Enable Observe light field for this selected plane and provide one unambiguous Laser -> Aperture route.");
+                } else {
+                    const auto& observationResult
+                        = *sandboxWaveObservation_;
+                    const auto& measuredField
+                        = observationResult.fieldAtObservation;
+                    if (sandboxWaveMeasurementComponentId_ != selected->id) {
+                        sandboxWaveMeasurementComponentId_ = selected->id;
+                        sandboxWaveCursorX_ = static_cast<int>(
+                            measuredField.width() / 2U);
+                        sandboxWaveCursorY_ = static_cast<int>(
+                            measuredField.height() / 2U);
+                    }
+                    sandboxWaveCursorX_ = std::clamp(
+                        sandboxWaveCursorX_,
+                        0,
+                        static_cast<int>(measuredField.width() - 1U));
+                    sandboxWaveCursorY_ = std::clamp(
+                        sandboxWaveCursorY_,
+                        0,
+                        static_cast<int>(measuredField.height() - 1U));
+
+                    ImGui::Text(
+                        "Channel: %.3f nm | coherence %s | revision %llu",
+                        measuredField.vacuumWavelengthMetres() * 1e9,
+                        observationResult.coherenceId.c_str(),
+                        static_cast<unsigned long long>(
+                            observationResult.sourceRevision));
+                    ImGui::Text(
+                        "Peak %.7g W/m^2 | integrated %.7g W",
+                        observationResult
+                            .peakIntensityWattsPerSquareMetre,
+                        observationResult.integratedPowerWatts);
+                    ImGui::SliderInt(
+                        "Sample X",
+                        &sandboxWaveCursorX_,
+                        0,
+                        static_cast<int>(measuredField.width() - 1U));
+                    ImGui::SliderInt(
+                        "Sample Y",
+                        &sandboxWaveCursorY_,
+                        0,
+                        static_cast<int>(measuredField.height() - 1U));
+                    if (ImGui::DragFloat(
+                            "dB display floor",
+                            &sandboxWaveDecibelFloor_,
+                            1.0F,
+                            -160.0F,
+                            -1.0F,
+                            "%.0f dB")) {
+                        sandboxWaveTextureDirty_ = true;
+                    }
+                    if (ImGui::DragFloat(
+                            "Phase validity / peak",
+                            &sandboxWavePhaseMinimumPeakFraction_,
+                            1.0e-6F,
+                            0.0F,
+                            1.0F,
+                            "%.6g")) {
+                        sandboxWaveTextureDirty_ = true;
+                    }
+
+                    try {
+                        const auto sample = measureBenchWaveSample(
+                            observationResult,
+                            static_cast<std::size_t>(sandboxWaveCursorX_),
+                            static_cast<std::size_t>(sandboxWaveCursorY_),
+                            observationResult
+                                    .peakIntensityWattsPerSquareMetre
+                                * static_cast<double>(
+                                    sandboxWavePhaseMinimumPeakFraction_),
+                            sandboxWaveDecibelFloor_);
+                        ImGui::Text(
+                            "Position: x %.6f mm | y %.6f mm",
+                            sample.xMetres * 1e3,
+                            sample.yMetres * 1e3);
+                        ImGui::Text(
+                            "U = %.7g %+.7gi | |U| %.7g",
+                            sample.complexAmplitude.real(),
+                            sample.complexAmplitude.imag(),
+                            sample.amplitudeMagnitude);
+                        ImGui::Text(
+                            "I %.7g W/m^2 | %.3f dB re peak",
+                            sample.intensityWattsPerSquareMetre,
+                            sample.decibelsRelativeToPeak);
+                        if (sample.phaseValid) {
+                            ImGui::Text(
+                                "Wrapped phase %.7g rad",
+                                sample.wrappedPhaseRadians);
+                        } else {
+                            ImGui::TextColored(
+                                ImVec4(1.0F, 0.72F, 0.25F, 1.0F),
+                                "Phase undefined below the selected intensity threshold");
+                        }
+
+                        ImGui::RadioButton(
+                            "Horizontal X section",
+                            &sandboxWaveCrossSectionAxisIndex_,
+                            0);
+                        ImGui::SameLine();
+                        ImGui::RadioButton(
+                            "Vertical Y section",
+                            &sandboxWaveCrossSectionAxisIndex_,
+                            1);
+                        const auto sectionAxis
+                            = sandboxWaveCrossSectionAxisIndex_ == 0
+                            ? BenchFieldCrossSectionAxis::HorizontalX
+                            : BenchFieldCrossSectionAxis::VerticalY;
+                        const auto section = measureBenchWaveCrossSection(
+                            observationResult,
+                            sectionAxis,
+                            static_cast<std::size_t>(
+                                sandboxWaveCrossSectionAxisIndex_ == 0
+                                    ? sandboxWaveCursorY_
+                                    : sandboxWaveCursorX_));
+                        std::vector<float> normalizedSection;
+                        normalizedSection.reserve(
+                            section.intensitiesWattsPerSquareMetre.size());
+                        for (const double intensity
+                             : section.intensitiesWattsPerSquareMetre) {
+                            normalizedSection.push_back(static_cast<float>(
+                                intensity
+                                / observationResult
+                                    .peakIntensityWattsPerSquareMetre));
+                        }
+                        ImGui::PlotLines(
+                            "##bench-field-cross-section",
+                            normalizedSection.data(),
+                            static_cast<int>(normalizedSection.size()),
+                            0,
+                            "Normalized intensity",
+                            0.0F,
+                            1.0F,
+                            ImVec2(0.0F, 90.0F));
+                        ImGui::TextDisabled(
+                            "%+.4f to %+.4f mm | %zu physical samples",
+                            section.coordinatesMetres.front() * 1e3,
+                            section.coordinatesMetres.back() * 1e3,
+                            section.coordinatesMetres.size());
+                    } catch (const std::exception& error) {
+                        ImGui::TextColored(
+                            ImVec4(1.0F, 0.45F, 0.35F, 1.0F),
+                            "Measurement rejected: %s",
+                            error.what());
+                    }
                 }
             }
 
@@ -11911,6 +12134,42 @@ void Application::runSandboxInteractionSmoke() {
             + sandboxWaveObservationDiagnostic_ + ", overlay="
             + sandboxReconstructionOverlayDiagnostic_ + ")");
     }
+    const auto probeSample = measureBenchWaveSample(
+        *sandboxWaveObservation_,
+        sandboxWaveObservation_->fieldAtObservation.width() / 2U,
+        sandboxWaveObservation_->fieldAtObservation.height() / 2U,
+        sandboxWaveObservation_->peakIntensityWattsPerSquareMetre * 1e-6,
+        -60.0);
+    const auto probeSection = measureBenchWaveCrossSection(
+        *sandboxWaveObservation_,
+        BenchFieldCrossSectionAxis::HorizontalX,
+        sandboxWaveObservation_->fieldAtObservation.height() / 2U);
+    if (sandboxWaveObservation_->peakIntensityWattsPerSquareMetre <= 0.0
+        || sandboxWaveObservation_->integratedPowerWatts <= 0.0
+        || !std::isfinite(probeSample.intensityWattsPerSquareMetre)
+        || probeSection.intensitiesWattsPerSquareMetre.size()
+            != sandboxWaveObservation_->fieldAtObservation.width()) {
+        throw std::runtime_error(
+            "virtual Field Probe did not expose finite cursor and cross-section measurements");
+    }
+    sandboxWaveViewModeIndex_ = 1;
+    sandboxWaveTextureDirty_ = true;
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    if (sandboxWaveTextureDirty_ || !sandboxWaveTexture_
+        || !sandboxWaveTexture_->isValid()) {
+        throw std::runtime_error(
+            "virtual Field Probe did not render the dB observable");
+    }
+    sandboxWaveViewModeIndex_ = 2;
+    sandboxWaveTextureDirty_ = true;
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    if (sandboxWaveTextureDirty_ || !sandboxWaveTexture_
+        || !sandboxWaveTexture_->isValid()) {
+        throw std::runtime_error(
+            "virtual Field Probe did not render the wrapped-phase observable");
+    }
+    sandboxWaveViewModeIndex_ = 0;
+    sandboxWaveTextureDirty_ = true;
 
     click(
         sandboxUiEvidence_.rgbDenisyukPreset,

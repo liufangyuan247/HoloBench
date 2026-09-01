@@ -658,6 +658,14 @@ private:
     std::string sandboxWaveObservationComponentId_;
     bool sandboxLiveWavePlane_ = true;
     std::string sandboxWaveObservationDiagnostic_;
+    std::string sandboxWaveMeasurementComponentId_;
+    int sandboxWaveViewModeIndex_ = 0;
+    bool sandboxWaveTextureDirty_ = true;
+    float sandboxWaveDecibelFloor_ = -60.0F;
+    float sandboxWavePhaseMinimumPeakFraction_ = 1.0e-6F;
+    int sandboxWaveCursorX_ = 0;
+    int sandboxWaveCursorY_ = 0;
+    int sandboxWaveCrossSectionAxisIndex_ = 0;
     bool sandboxReconstructionOverlaySubmitted_ = false;
     std::string sandboxReconstructionOverlayDiagnostic_;
     SandboxUiEvidence sandboxUiEvidence_;

@@ -3,12 +3,14 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <limits>
 #include <numbers>
 #include <stdexcept>
 #include <string_view>
 #include <vector>
 
 #include "compute/fft/IFftBackend.hpp"
+#include "core/field/FieldObservables.hpp"
 #include "optics/wave/FieldElements.hpp"
 
 namespace holobench::app {
@@ -17,6 +19,29 @@ namespace {
 namespace scene = optics::scene;
 
 constexpr double kParallelTolerance = 2e-12;
+
+[[nodiscard]] double finiteIntensity(
+    const std::complex<double>& sample) {
+    if (!std::isfinite(sample.real()) || !std::isfinite(sample.imag())) {
+        throw std::invalid_argument(
+            "Bench field measurement sample must be finite");
+    }
+    const long double real = sample.real();
+    const long double imaginary = sample.imag();
+    const long double intensity = real * real + imaginary * imaginary;
+    if (intensity
+        > static_cast<long double>(std::numeric_limits<double>::max())) {
+        throw std::overflow_error(
+            "Bench field measurement intensity exceeds double precision");
+    }
+    if (intensity > 0.0L
+        && intensity < static_cast<long double>(
+            std::numeric_limits<double>::denorm_min())) {
+        throw std::underflow_error(
+            "Bench field measurement intensity is below double precision");
+    }
+    return static_cast<double>(intensity);
+}
 
 struct ObservationSampling final {
     double widthMetres = 0.0;
@@ -203,6 +228,113 @@ bool BenchWaveObservationResult::isStaleFor(
         || !isWaveObservationPlane(observation->kind);
 }
 
+BenchFieldSampleMeasurement measureBenchWaveSample(
+    const BenchWaveObservationResult& observation,
+    std::size_t xIndex,
+    std::size_t yIndex,
+    double phaseMinimumIntensityWattsPerSquareMetre,
+    double decibelFloor) {
+    if (!std::isfinite(phaseMinimumIntensityWattsPerSquareMetre)
+        || phaseMinimumIntensityWattsPerSquareMetre < 0.0) {
+        throw std::invalid_argument(
+            "Bench field phase threshold must be finite and non-negative");
+    }
+    if (!std::isfinite(decibelFloor) || decibelFloor > 0.0) {
+        throw std::invalid_argument(
+            "Bench field dB floor must be finite and non-positive");
+    }
+    if (xIndex >= observation.fieldAtObservation.width()
+        || yIndex >= observation.fieldAtObservation.height()) {
+        throw std::out_of_range(
+            "Bench field measurement cursor is outside the sampled plane");
+    }
+    if (!std::isfinite(observation.peakIntensityWattsPerSquareMetre)
+        || observation.peakIntensityWattsPerSquareMetre <= 0.0) {
+        throw std::invalid_argument(
+            "Bench field measurement requires a positive finite peak intensity");
+    }
+    const auto sample = observation.fieldAtObservation.at(xIndex, yIndex);
+    const double magnitude = std::abs(sample);
+    const double intensity = finiteIntensity(sample);
+    double decibels = decibelFloor;
+    if (magnitude > 0.0) {
+        decibels = std::max(
+            decibelFloor,
+            20.0 * std::log10(magnitude)
+                - 10.0 * std::log10(
+                    observation.peakIntensityWattsPerSquareMetre));
+    }
+    const bool phaseValid = magnitude > 0.0
+        && magnitude >= std::sqrt(
+            phaseMinimumIntensityWattsPerSquareMetre);
+    double phase = phaseValid ? std::arg(sample) : 0.0;
+    if (phase == std::numbers::pi_v<double>) {
+        phase = -std::numbers::pi_v<double>;
+    }
+    return {
+        .xIndex = xIndex,
+        .yIndex = yIndex,
+        .xMetres = observation.fieldAtObservation.xCoordinateMetres(xIndex),
+        .yMetres = observation.fieldAtObservation.yCoordinateMetres(yIndex),
+        .complexAmplitude = sample,
+        .amplitudeMagnitude = magnitude,
+        .intensityWattsPerSquareMetre = intensity,
+        .decibelsRelativeToPeak = decibels,
+        .phaseValid = phaseValid,
+        .wrappedPhaseRadians = phase,
+        .wavelengthMetres
+            = observation.fieldAtObservation.vacuumWavelengthMetres(),
+    };
+}
+
+BenchFieldCrossSection measureBenchWaveCrossSection(
+    const BenchWaveObservationResult& observation,
+    BenchFieldCrossSectionAxis axis,
+    std::size_t fixedIndex) {
+    if (axis != BenchFieldCrossSectionAxis::HorizontalX
+        && axis != BenchFieldCrossSectionAxis::VerticalY) {
+        throw std::invalid_argument(
+            "Bench field cross-section axis is unsupported");
+    }
+    const std::size_t sampleCount
+        = axis == BenchFieldCrossSectionAxis::HorizontalX
+        ? observation.fieldAtObservation.width()
+        : observation.fieldAtObservation.height();
+    const std::size_t fixedLimit
+        = axis == BenchFieldCrossSectionAxis::HorizontalX
+        ? observation.fieldAtObservation.height()
+        : observation.fieldAtObservation.width();
+    if (fixedIndex >= fixedLimit) {
+        throw std::out_of_range(
+            "Bench field cross-section index is outside the sampled plane");
+    }
+    BenchFieldCrossSection result {
+        .axis = axis,
+        .fixedIndex = fixedIndex,
+        .coordinatesMetres = {},
+        .intensitiesWattsPerSquareMetre = {},
+    };
+    result.coordinatesMetres.reserve(sampleCount);
+    result.intensitiesWattsPerSquareMetre.reserve(sampleCount);
+    for (std::size_t index = 0; index < sampleCount; ++index) {
+        const std::size_t x = axis
+                == BenchFieldCrossSectionAxis::HorizontalX
+            ? index
+            : fixedIndex;
+        const std::size_t y = axis
+                == BenchFieldCrossSectionAxis::HorizontalX
+            ? fixedIndex
+            : index;
+        result.coordinatesMetres.push_back(
+            axis == BenchFieldCrossSectionAxis::HorizontalX
+            ? observation.fieldAtObservation.xCoordinateMetres(index)
+            : observation.fieldAtObservation.yCoordinateMetres(index));
+        result.intensitiesWattsPerSquareMetre.push_back(
+            finiteIntensity(observation.fieldAtObservation.at(x, y)));
+    }
+    return result;
+}
+
 BenchWaveObservationResult observeBenchWavePattern(
     const scene::BenchScene& bench,
     const scene::BenchTraceGraph& traceGraph,
@@ -295,6 +427,16 @@ BenchWaveObservationResult observeBenchWavePattern(
             route.outgoing.front().beam.direction);
     }
 
+    const auto intensity = field::computeIntensity(field);
+    const double peakIntensity = *std::max_element(
+        intensity.samples().begin(), intensity.samples().end());
+    if (!std::isfinite(peakIntensity) || peakIntensity <= 0.0) {
+        throw std::runtime_error(
+            "live wave observation has no finite measurable intensity");
+    }
+    const double integratedPower = field::computeIntegratedIntensity(
+        intensity);
+
     return {
         .sourceComponentId = source->id,
         .apertureComponentId = aperture->id,
@@ -306,6 +448,9 @@ BenchWaveObservationResult observeBenchWavePattern(
         .observationOffsetYMetres = observerCentre.y,
         .usedShiftedPaddedPropagation = parallelAxisAligned,
         .usedTiltedPlanePropagation = !parallelAxisAligned,
+        .coherenceId = route.incidentBeam.coherenceId,
+        .peakIntensityWattsPerSquareMetre = peakIntensity,
+        .integratedPowerWatts = integratedPower,
         .fieldAtObservation = std::move(field),
         .propagation = propagation,
         .tiltedPropagation = tiltedPropagation,

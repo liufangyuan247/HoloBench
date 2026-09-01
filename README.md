@@ -88,6 +88,14 @@ transform. The overlay is keyed to the replay observation ID and exact scene
 revision, so editing the bench removes stale imagery instead of leaving an old
 result on the table.
 
+An ordinary Screen / Detector or non-blocking Field Probe can also measure the
+current placed complex field. The Bench switches the same revision-bound result
+between intensity, peak-relative dB, and validity-masked phase. Inspector cursor
+and cross-section tools report local physical coordinates, complex amplitude,
+W/m^2 intensity, integrated power, wavelength, coherence identity, and
+horizontal/vertical profiles; they never sample the rendered 8-bit texture as
+measurement truth.
+
 For supported ray-routed paths, placed ideal lenses, mirror/splitter clear
 areas, apertures, pinholes, and SLM finite pixels/dead space now act on a
 beam-following local complex field before plate recording. Ideal mirror and
