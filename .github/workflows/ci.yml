@@ -36,12 +36,14 @@ jobs:
           from pathlib import Path
 
           lines = Path("ubuntu-core-build.log").read_text(
-              encoding="utf-8", errors="replace").splitlines()[-80:]
-          diagnostic = "\n".join(lines)
-          diagnostic = diagnostic.replace("%", "%25")
-          diagnostic = diagnostic.replace("\r", "%0D")
-          diagnostic = diagnostic.replace("\n", "%0A")
-          print(f"::error title=Ubuntu core build diagnostics::{diagnostic}")
+              encoding="utf-8", errors="replace").splitlines()[-10:]
+          for index, line in enumerate(lines, start=1):
+              diagnostic = line.replace("%", "%25")
+              diagnostic = diagnostic.replace("\r", "%0D")
+              diagnostic = diagnostic.replace("\n", "%0A")
+              print(
+                  f"::error title=Ubuntu core build tail {index}/{len(lines)}::"
+                  f"{diagnostic}")
           PY
           fi
           exit "$build_status"
