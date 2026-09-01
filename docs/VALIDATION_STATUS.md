@@ -31,7 +31,9 @@
   volume-recipe persistence case; the expanded hardware OpenGL smoke moves the
   real screen, requires its recomputed 512-sample texture, records/reconstructs
   RGB Denisyuk on the plate, and exits with no GL errors on AMD Radeon Pro
-  5300M. Cross-compiler CI evidence is recorded after `main` is pushed.
+  5300M. Implementation commit `c0ab45d` passes all four Windows/Linux
+  Core/Application jobs in GitHub Actions run `33498048377`, including the
+  M6-M9 performance gates.
 
 ## M1 Validation Breakdown
 

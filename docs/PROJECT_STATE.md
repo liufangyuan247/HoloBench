@@ -92,7 +92,9 @@ The required interaction is now explicit:
   requires a current committed 512-sample texture on the moved quad, then
   clicks RGB Denisyuk Record/Reconstruct and requires current RGB evidence on
   the plate. The Clang development gate passes 572/572 cases and the expanded
-  smoke exits without GL errors on AMD Radeon Pro 5300M. See
+  smoke exits without GL errors on AMD Radeon Pro 5300M. Implementation commit
+  `c0ab45d` passes all four Windows/Linux Core/Application jobs in GitHub
+  Actions run `33498048377`, including the M6-M9 performance gates. See
   [ADR 0025](adr/0025-live-wave-screen-and-rgb-denisyuk.md).
 
 ## M7 implementation progress
