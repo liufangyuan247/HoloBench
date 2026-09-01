@@ -20,8 +20,17 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
       - name: Configure
         run: cmake --preset core-ci
-      - name: Build
-        run: cmake --build --preset core-ci
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: cmake --build --preset core-ci --parallel 2
+      # The core target compiles the complete monolithic test executable. Two
+      # consecutive hosted Ubuntu runs failed during the parallel GCC build
+      # while the same revision built in an ext4 GCC clone. Serialize to remove
+      # concurrent frontend memory pressure; application/runtime behavior is
+      # unchanged.
+      - name: Build (Linux, bounded memory)
+        if: runner.os == 'Linux'
+        run: cmake --build --preset core-ci --parallel 1
       - name: Test
         run: ctest --preset core-ci
       - name: Run M6 CPU performance gate (Windows)
