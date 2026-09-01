@@ -230,6 +230,76 @@ math::RigidTransform3d transformFromJson(const Json& value) {
     return result;
 }
 
+Json mechanicalAssemblyToJson(
+    const scene::MechanicalAssemblyState& state) {
+    scene::validateMechanicalAssemblyState(state);
+    return {
+        {"bench_frame", transformToJson(state.benchFrame)},
+        {"maximum_mount_pitch_rad", state.maximumMountPitchRadians},
+        {"maximum_mount_yaw_rad", state.maximumMountYawRadians},
+        {"maximum_post_height_m", state.maximumPostHeightMetres},
+        {"maximum_stage_translation_m", vec3ToJson(state.maximumStageTranslationMetres)},
+        {"minimum_mount_pitch_rad", state.minimumMountPitchRadians},
+        {"minimum_mount_yaw_rad", state.minimumMountYawRadians},
+        {"minimum_post_height_m", state.minimumPostHeightMetres},
+        {"minimum_stage_translation_m", vec3ToJson(state.minimumStageTranslationMetres)},
+        {"mount_pitch_rad", state.mountPitchRadians},
+        {"mount_yaw_rad", state.mountYawRadians},
+        {"post_height_m", state.postHeightMetres},
+        {"stage_translation_m", vec3ToJson(state.stageTranslationMetres)},
+    };
+}
+
+scene::MechanicalAssemblyState mechanicalAssemblyFromJson(
+    const Json& value) {
+    requireKeys(value,
+        {"bench_frame", "maximum_mount_pitch_rad",
+            "maximum_mount_yaw_rad", "maximum_post_height_m",
+            "maximum_stage_translation_m", "minimum_mount_pitch_rad",
+            "minimum_mount_yaw_rad", "minimum_post_height_m",
+            "minimum_stage_translation_m", "mount_pitch_rad",
+            "mount_yaw_rad", "post_height_m", "stage_translation_m"},
+        "mechanical assembly");
+    scene::MechanicalAssemblyState result {
+        .benchFrame = transformFromJson(value.at("bench_frame")),
+        .postHeightMetres = finiteNumber(
+            value.at("post_height_m"), "mechanical post_height_m"),
+        .minimumPostHeightMetres = finiteNumber(
+            value.at("minimum_post_height_m"),
+            "mechanical minimum_post_height_m"),
+        .maximumPostHeightMetres = finiteNumber(
+            value.at("maximum_post_height_m"),
+            "mechanical maximum_post_height_m"),
+        .stageTranslationMetres = vec3FromJson(
+            value.at("stage_translation_m"),
+            "mechanical stage_translation_m"),
+        .minimumStageTranslationMetres = vec3FromJson(
+            value.at("minimum_stage_translation_m"),
+            "mechanical minimum_stage_translation_m"),
+        .maximumStageTranslationMetres = vec3FromJson(
+            value.at("maximum_stage_translation_m"),
+            "mechanical maximum_stage_translation_m"),
+        .mountYawRadians = finiteNumber(
+            value.at("mount_yaw_rad"), "mechanical mount_yaw_rad"),
+        .minimumMountYawRadians = finiteNumber(
+            value.at("minimum_mount_yaw_rad"),
+            "mechanical minimum_mount_yaw_rad"),
+        .maximumMountYawRadians = finiteNumber(
+            value.at("maximum_mount_yaw_rad"),
+            "mechanical maximum_mount_yaw_rad"),
+        .mountPitchRadians = finiteNumber(
+            value.at("mount_pitch_rad"), "mechanical mount_pitch_rad"),
+        .minimumMountPitchRadians = finiteNumber(
+            value.at("minimum_mount_pitch_rad"),
+            "mechanical minimum_mount_pitch_rad"),
+        .maximumMountPitchRadians = finiteNumber(
+            value.at("maximum_mount_pitch_rad"),
+            "mechanical maximum_mount_pitch_rad"),
+    };
+    scene::validateMechanicalAssemblyState(result);
+    return result;
+}
+
 Json spectralChannelToJson(const scene::SpectralChannel& channel) {
     return {
         {"coherence_id", channel.coherenceId},
@@ -519,7 +589,7 @@ scene::BenchComponentParameters parametersFromJson(
             .clearApertureDiameterMetres = finiteNumber(value.at("clear_aperture_diameter_m"), "spatial-filter clear aperture_m"),
         };
     case scene::BenchComponentKind::SpatialLightModulator: {
-        if (formatVersion < kBenchProjectFormatVersion) {
+        if (formatVersion < kSlmCommandBenchProjectFormatVersion) {
             requireKeys(value,
                 {"fill_factor", "height_m", "pixel_height", "pixel_width",
                     "width_m"},
@@ -617,6 +687,10 @@ Json componentToJson(const scene::BenchComponent& component) {
     return {
         {"id", component.id},
         {"kind", scene::benchComponentKindName(component.kind)},
+        {"mechanical_assembly",
+            component.mechanicalAssembly.has_value()
+                ? mechanicalAssemblyToJson(*component.mechanicalAssembly)
+                : Json(nullptr)},
         {"parameters", parametersToJson(component)},
         {"transform", transformToJson(component.transform)},
     };
@@ -625,7 +699,15 @@ Json componentToJson(const scene::BenchComponent& component) {
 scene::BenchComponent componentFromJson(
     const Json& value,
     int formatVersion) {
-    requireKeys(value, {"id", "kind", "parameters", "transform"}, "bench component");
+    if (formatVersion >= kBenchProjectFormatVersion) {
+        requireKeys(value,
+            {"id", "kind", "mechanical_assembly", "parameters", "transform"},
+            "bench component");
+    } else {
+        requireKeys(value,
+            {"id", "kind", "parameters", "transform"},
+            "legacy bench component");
+    }
     const auto kind = scene::benchComponentKindFromName(requiredString(value.at("kind"), "component kind"));
     scene::BenchComponent result {
         .id = requiredString(value.at("id"), "component id"),
@@ -633,7 +715,13 @@ scene::BenchComponent componentFromJson(
         .transform = transformFromJson(value.at("transform")),
         .parameters = parametersFromJson(
             kind, value.at("parameters"), formatVersion),
+        .mechanicalAssembly = std::nullopt,
     };
+    if (formatVersion >= kBenchProjectFormatVersion
+        && !value.at("mechanical_assembly").is_null()) {
+        result.mechanicalAssembly = mechanicalAssemblyFromJson(
+            value.at("mechanical_assembly"));
+    }
     scene::validateBenchComponent(result);
     return result;
 }
@@ -1110,6 +1198,7 @@ BenchProject parseBenchProject(std::string_view jsonText) {
         }
         const int formatVersion = root.at("format_version").get<int>();
         if (formatVersion != kBenchProjectFormatVersion
+            && formatVersion != kSlmCommandBenchProjectFormatVersion
             && formatVersion != kRecipeBenchProjectFormatVersion
             && formatVersion != kLegacyBenchProjectFormatVersion) {
             throw std::runtime_error("unsupported bench project format version: " + std::to_string(formatVersion));

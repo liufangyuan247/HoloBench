@@ -72,6 +72,75 @@ TEST_CASE("dynamic bench rejects invalid IDs transforms parameter mismatches and
     CHECK_THROWS_AS(scene::validateBenchComponent(slm), std::invalid_argument);
 }
 
+TEST_CASE("mechanical assembly resolves constrained stage and mount state into optical truth") {
+    auto mirror = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::PlanarMirror, "mounted-mirror");
+    mirror.transform = {
+        .translationMetres = {0.2, 0.12, -0.1},
+        .localXAxisInWorld = {0.0, 0.0, -1.0},
+        .localYAxisInWorld = {0.0, 1.0, 0.0},
+        .localZAxisInWorld = {1.0, 0.0, 0.0},
+    };
+    auto assembly = scene::makeDefaultMechanicalAssembly(mirror);
+    const auto nominal = scene::resolveMechanicalOpticalTransform(assembly);
+    CHECK(nominal == mirror.transform);
+
+    assembly.postHeightMetres = 0.10;
+    assembly.stageTranslationMetres = {0.005, -0.002, 0.003};
+    assembly.mountYawRadians = 0.2;
+    assembly.mountPitchRadians = -0.1;
+    scene::applyMechanicalAssembly(mirror, assembly);
+    REQUIRE(mirror.mechanicalAssembly.has_value());
+    CHECK_NOTHROW(scene::validateBenchComponent(mirror));
+    CHECK(mirror.transform.translationMetres.x
+        == doctest::Approx(0.203));
+    CHECK(mirror.transform.translationMetres.y
+        == doctest::Approx(0.138));
+    CHECK(mirror.transform.translationMetres.z
+        == doctest::Approx(-0.105));
+    CHECK(mirror.transform.localZAxisInWorld
+        != nominal.localZAxisInWorld);
+
+    const holobench::math::RigidTransform3d rebasedOptical {
+        .translationMetres = {-0.4, 0.3, 0.2},
+        .localXAxisInWorld = {1.0, 0.0, 0.0},
+        .localYAxisInWorld = {0.0, 1.0, 0.0},
+        .localZAxisInWorld = {0.0, 0.0, 1.0},
+    };
+    scene::rebaseMechanicalAssembly(mirror, rebasedOptical);
+    CHECK(mirror.transform.translationMetres.x
+        == doctest::Approx(rebasedOptical.translationMetres.x));
+    CHECK(mirror.transform.translationMetres.y
+        == doctest::Approx(rebasedOptical.translationMetres.y));
+    CHECK(mirror.transform.translationMetres.z
+        == doctest::Approx(rebasedOptical.translationMetres.z));
+    CHECK(mirror.transform.localZAxisInWorld.x
+        == doctest::Approx(rebasedOptical.localZAxisInWorld.x).epsilon(1e-12));
+    CHECK(mirror.transform.localZAxisInWorld.y
+        == doctest::Approx(rebasedOptical.localZAxisInWorld.y).epsilon(1e-12));
+    CHECK(mirror.transform.localZAxisInWorld.z
+        == doctest::Approx(rebasedOptical.localZAxisInWorld.z).epsilon(1e-12));
+
+    auto invalid = assembly;
+    invalid.stageTranslationMetres.x
+        = invalid.maximumStageTranslationMetres.x + 1e-3;
+    CHECK_THROWS_AS(
+        scene::applyMechanicalAssembly(mirror, invalid),
+        std::invalid_argument);
+
+    auto inconsistent = mirror;
+    inconsistent.transform.translationMetres.x += 1e-3;
+    CHECK_THROWS_AS(
+        scene::validateBenchComponent(inconsistent),
+        std::invalid_argument);
+
+    const auto resolvedBeforeRemoval = mirror.transform;
+    scene::removeMechanicalAssembly(mirror);
+    CHECK_FALSE(mirror.mechanicalAssembly.has_value());
+    CHECK(mirror.transform == resolvedBeforeRemoval);
+    CHECK_NOTHROW(scene::validateBenchComponent(mirror));
+}
+
 TEST_CASE("placed SLM procedural commands are deterministic quantized and bounded") {
     scene::SpatialLightModulatorParameters parameters;
     parameters.pixelWidth = 4U;

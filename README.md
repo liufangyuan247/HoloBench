@@ -262,9 +262,10 @@ independent optical wavelengths into linear camera RGB response.
   events, and simulates bounded reconstruction. See [the M9 brief](docs/milestones/M9_CHIMERA_AUTOMATION.md).
 - **M10 — Procedural Digital-Twin Instruments (active)**: Every current Bench
   component now has a bounded parameter-driven solid body rendered independently
-  from diagnostic rays and proxy outlines. The remaining slices add persisted
-  mechanical assemblies, direct instrument adjustments, calibration identity,
-  and general measurement closure. See [the M10 brief](docs/milestones/M10_DIGITAL_TWIN_INSTRUMENTS.md).
+  from diagnostic rays and proxy outlines. Persisted base/post/XYZ/tip-tilt
+  assemblies now drive both direct viewport controls and the explicit solver
+  optical frame. The remaining slices add calibration identity and general
+  measurement closure. See [the M10 brief](docs/milestones/M10_DIGITAL_TWIN_INSTRUMENTS.md).
 
 The existing ten guided panel workflows, templates, localization/font,
 progress, history, and teaching benchmarks remain tested reference assets.

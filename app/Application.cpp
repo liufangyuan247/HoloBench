@@ -788,7 +788,12 @@ bool Application::placeSandboxComponent(
             + "-" + std::to_string(sandboxNextComponentOrdinal_++);
     } while (candidate.find(newId) != nullptr);
     auto component = bench::makeDefaultBenchComponent(kind, newId);
-    component.transform.translationMetres = positionMetres;
+    auto mechanical = bench::MechanicalAssemblyState {};
+    component.transform.translationMetres = positionMetres
+        + component.transform.localYAxisInWorld
+            * mechanical.postHeightMetres;
+    mechanical = bench::makeDefaultMechanicalAssembly(component);
+    bench::applyMechanicalAssembly(component, mechanical);
     candidate.add(component);
     const std::string previousSelection = selectedBenchComponentId_;
     selectedBenchComponentId_ = newId;
@@ -2506,6 +2511,9 @@ void Application::shutdown() noexcept {
     isPanning_ = false;
     sandboxGizmoDragging_ = false;
     sandboxGizmoChanged_ = false;
+    sandboxMechanicalDragging_ = false;
+    sandboxMechanicalChanged_ = false;
+    sandboxMechanicalControl_ = SandboxMechanicalControl::None;
     benchEditHistoryReady_ = false;
     isGizmoDragging_ = false;
     draggedTarget_ = GizmoTarget::None;
@@ -5897,25 +5905,26 @@ void Application::applySandboxTargetAlignment(
         }
 
         auto edited = *current;
+        math::RigidTransform3d desiredTransform = current->transform;
         std::string message;
         switch (action) {
         case SandboxAlignmentAction::AimAtTarget:
-            edited.transform = alignment::aimAt(
+            desiredTransform = alignment::aimAt(
                 current->transform, target->transform.translationMetres);
             message = "Aimed component at alignment target";
             break;
         case SandboxAlignmentAction::MakeCoaxial:
-            edited.transform = alignment::makeCoaxialWith(
+            desiredTransform = alignment::makeCoaxialWith(
                 current->transform, target->transform);
             message = "Aligned component to target optical axis";
             break;
         case SandboxAlignmentAction::MatchHeight:
-            edited.transform = alignment::matchHeight(
+            desiredTransform = alignment::matchHeight(
                 current->transform, target->transform);
             message = "Matched component height to target";
             break;
         case SandboxAlignmentAction::PlaceAlongTargetAxis:
-            edited.transform = alignment::placeAlongTargetAxis(
+            desiredTransform = alignment::placeAlongTargetAxis(
                 current->transform,
                 target->transform,
                 static_cast<double>(sandboxAlignmentSpacingMillimetres_)
@@ -5923,6 +5932,7 @@ void Application::applySandboxTargetAlignment(
             message = "Placed component at target-axis spacing";
             break;
         }
+        optics::scene::rebaseMechanicalAssembly(edited, desiredTransform);
 
         auto candidate = benchProject_.scene;
         candidate.replace(edited.id, edited);
@@ -5949,7 +5959,7 @@ void Application::snapSandboxSelectedToNearestBeam() {
             static_cast<double>(sandboxBeamSnapDistanceMillimetres_) * 1e-3);
         auto candidate = benchProject_.scene;
         auto edited = *current;
-        edited.transform = snapped.transform;
+        optics::scene::rebaseMechanicalAssembly(edited, snapped.transform);
         candidate.replace(edited.id, edited);
         static_cast<void>(applyBenchScene(
             std::move(candidate),
@@ -7238,11 +7248,14 @@ void Application::drawSandboxInspector() {
                     "Position (mm)", translationMm, 0.25F, -5000.0F, 5000.0F, "%.2f")) {
                 auto candidate = benchProject_.scene;
                 auto edited = *candidate.find(selectedBenchComponentId_);
-                edited.transform.translationMetres = {
+                auto desiredTransform = edited.transform;
+                desiredTransform.translationMetres = {
                     static_cast<double>(translationMm[0]) * 1e-3,
                     static_cast<double>(translationMm[1]) * 1e-3,
                     static_cast<double>(translationMm[2]) * 1e-3,
                 };
+                optics::scene::rebaseMechanicalAssembly(
+                    edited, desiredTransform);
                 candidate.replace(edited.id, edited);
                 static_cast<void>(applyBenchScene(std::move(candidate), "Moved component"));
             }
@@ -7254,10 +7267,12 @@ void Application::drawSandboxInspector() {
                 auto edited = *candidate.find(selectedBenchComponentId_);
                 const double radians = sign * static_cast<double>(sandboxRotationStepDegrees_)
                     * std::numbers::pi_v<double> / 180.0;
-                edited.transform = gizmo::rotateRigidTransformLocally(
+                const auto desiredTransform = gizmo::rotateRigidTransformLocally(
                     edited.transform,
                     static_cast<gizmo::LocalRotationAxis>(axis),
                     radians);
+                optics::scene::rebaseMechanicalAssembly(
+                    edited, desiredTransform);
                 candidate.replace(edited.id, edited);
                 static_cast<void>(applyBenchScene(std::move(candidate), "Rotated component"));
             };
@@ -7280,6 +7295,154 @@ void Application::drawSandboxInspector() {
                     selected->transform.localZAxisInWorld.x,
                     selected->transform.localZAxisInWorld.y,
                     selected->transform.localZAxisInWorld.z);
+
+                ImGui::SeparatorText("Mechanical Assembly");
+                if (!selected->mechanicalAssembly.has_value()) {
+                    ImGui::TextDisabled(
+                        "Free optical frame; no persisted mount constraints");
+                    if (ImGui::Button("Add post / XYZ stage / tip-tilt mount")) {
+                        try {
+                            auto candidate = benchProject_.scene;
+                            auto mounted = *candidate.find(
+                                selectedBenchComponentId_);
+                            bench::applyMechanicalAssembly(
+                                mounted,
+                                bench::makeDefaultMechanicalAssembly(mounted));
+                            candidate.replace(mounted.id, mounted);
+                            static_cast<void>(applyBenchScene(
+                                std::move(candidate),
+                                "Attached constrained mechanical assembly"));
+                        } catch (const std::exception& error) {
+                            errorMessage_ = "Mechanical assembly failed: "
+                                + std::string(error.what());
+                            statusMessage_.clear();
+                        }
+                    }
+                } else {
+                    auto mechanical = *selected->mechanicalAssembly;
+                    float postHeightMm = static_cast<float>(
+                        mechanical.postHeightMetres * 1000.0);
+                    float stageMm[3] {
+                        static_cast<float>(
+                            mechanical.stageTranslationMetres.x * 1000.0),
+                        static_cast<float>(
+                            mechanical.stageTranslationMetres.y * 1000.0),
+                        static_cast<float>(
+                            mechanical.stageTranslationMetres.z * 1000.0),
+                    };
+                    float yawDegrees = static_cast<float>(
+                        mechanical.mountYawRadians * 180.0
+                        / std::numbers::pi_v<double>);
+                    float pitchDegrees = static_cast<float>(
+                        mechanical.mountPitchRadians * 180.0
+                        / std::numbers::pi_v<double>);
+                    bool mechanicalChanged = ImGui::DragFloat(
+                        "Post height (mm)",
+                        &postHeightMm,
+                        0.05F,
+                        static_cast<float>(
+                            mechanical.minimumPostHeightMetres * 1000.0),
+                        static_cast<float>(
+                            mechanical.maximumPostHeightMetres * 1000.0),
+                        "%.3f");
+                    mechanicalChanged |= ImGui::DragFloat(
+                        "Stage X (mm)",
+                        &stageMm[0],
+                        0.01F,
+                        static_cast<float>(
+                            mechanical.minimumStageTranslationMetres.x * 1000.0),
+                        static_cast<float>(
+                            mechanical.maximumStageTranslationMetres.x * 1000.0),
+                        "%.3f");
+                    mechanicalChanged |= ImGui::DragFloat(
+                        "Stage Y (mm)",
+                        &stageMm[1],
+                        0.01F,
+                        static_cast<float>(
+                            mechanical.minimumStageTranslationMetres.y * 1000.0),
+                        static_cast<float>(
+                            mechanical.maximumStageTranslationMetres.y * 1000.0),
+                        "%.3f");
+                    mechanicalChanged |= ImGui::DragFloat(
+                        "Stage Z (mm)",
+                        &stageMm[2],
+                        0.01F,
+                        static_cast<float>(
+                            mechanical.minimumStageTranslationMetres.z * 1000.0),
+                        static_cast<float>(
+                            mechanical.maximumStageTranslationMetres.z * 1000.0),
+                        "%.3f");
+                    mechanicalChanged |= ImGui::DragFloat(
+                        "Mount yaw (deg)",
+                        &yawDegrees,
+                        0.02F,
+                        static_cast<float>(
+                            mechanical.minimumMountYawRadians * 180.0
+                            / std::numbers::pi_v<double>),
+                        static_cast<float>(
+                            mechanical.maximumMountYawRadians * 180.0
+                            / std::numbers::pi_v<double>),
+                        "%.3f");
+                    mechanicalChanged |= ImGui::DragFloat(
+                        "Mount pitch (deg)",
+                        &pitchDegrees,
+                        0.02F,
+                        static_cast<float>(
+                            mechanical.minimumMountPitchRadians * 180.0
+                            / std::numbers::pi_v<double>),
+                        static_cast<float>(
+                            mechanical.maximumMountPitchRadians * 180.0
+                            / std::numbers::pi_v<double>),
+                        "%.3f");
+                    if (mechanicalChanged) {
+                        try {
+                            mechanical.postHeightMetres
+                                = static_cast<double>(postHeightMm) * 1e-3;
+                            mechanical.stageTranslationMetres = {
+                                static_cast<double>(stageMm[0]) * 1e-3,
+                                static_cast<double>(stageMm[1]) * 1e-3,
+                                static_cast<double>(stageMm[2]) * 1e-3,
+                            };
+                            mechanical.mountYawRadians
+                                = static_cast<double>(yawDegrees)
+                                * std::numbers::pi_v<double> / 180.0;
+                            mechanical.mountPitchRadians
+                                = static_cast<double>(pitchDegrees)
+                                * std::numbers::pi_v<double> / 180.0;
+                            auto candidate = benchProject_.scene;
+                            auto mounted = *candidate.find(
+                                selectedBenchComponentId_);
+                            bench::applyMechanicalAssembly(
+                                mounted, mechanical);
+                            candidate.replace(mounted.id, mounted);
+                            static_cast<void>(applyBenchScene(
+                                std::move(candidate),
+                                "Adjusted mechanical assembly"));
+                        } catch (const std::exception& error) {
+                            errorMessage_ = "Mechanical adjustment failed: "
+                                + std::string(error.what());
+                            statusMessage_.clear();
+                        }
+                    } else if (ImGui::Button("Detach mechanical assembly")) {
+                        auto candidate = benchProject_.scene;
+                        auto freeComponent = *candidate.find(
+                            selectedBenchComponentId_);
+                        bench::removeMechanicalAssembly(freeComponent);
+                        candidate.replace(freeComponent.id, freeComponent);
+                        static_cast<void>(applyBenchScene(
+                            std::move(candidate),
+                            "Detached mechanical assembly"));
+                    }
+                    ImGui::TextDisabled(
+                        "Stage and mount values update the solver optical frame; PCG follows the same state.");
+                }
+
+                selected = benchProject_.scene.find(
+                    selectedBenchComponentId_);
+                if (selected == nullptr) {
+                    throw std::runtime_error(
+                        "selected component disappeared during mechanical editing");
+                }
 
                 ImGui::SeparatorText("Optical Alignment");
                 const auto* alignmentTarget = benchProject_.scene.find(
@@ -9251,9 +9414,13 @@ void Application::drawWorkspace() {
             };
             std::array<gizmo::ProjectedPoint, 3> gizmoAxisEndpoints {};
             std::array<gizmo::AxisProjection, 3> gizmoAxisProjections {};
+            std::array<gizmo::ProjectedPoint, 6> mechanicalHandleProjections {};
+            std::array<gizmo::AxisProjection, 4> mechanicalAxisProjections {};
             gizmo::ProjectedPoint selectedComponentProjection {};
             SandboxGizmoConstraint hoveredGizmoConstraint
                 = SandboxGizmoConstraint::None;
+            SandboxMechanicalControl hoveredMechanicalControl
+                = SandboxMechanicalControl::None;
             if (const auto* selectedComponent
                 = benchProject_.scene.find(selectedBenchComponentId_)) {
                 const auto& transform = selectedComponent->transform;
@@ -9314,18 +9481,255 @@ void Application::drawWorkspace() {
                                 + static_cast<int>(axis));
                     }
                 }
+
+                if (selectedComponent->mechanicalAssembly.has_value()) {
+                    const auto& mechanical
+                        = *selectedComponent->mechanicalAssembly;
+                    const auto toGlm = [](const math::Vec3d& value) {
+                        return glm::vec3 {
+                            static_cast<float>(value.x),
+                            static_cast<float>(value.y),
+                            static_cast<float>(value.z),
+                        };
+                    };
+                    const glm::vec3 base = toGlm(
+                        mechanical.benchFrame.translationMetres);
+                    const glm::vec3 baseX = toGlm(
+                        mechanical.benchFrame.localXAxisInWorld);
+                    const glm::vec3 baseY = toGlm(
+                        mechanical.benchFrame.localYAxisInWorld);
+                    const glm::vec3 baseZ = toGlm(
+                        mechanical.benchFrame.localZAxisInWorld);
+                    const float postHeight = static_cast<float>(
+                        mechanical.postHeightMetres);
+                    const float controlReach = std::clamp(
+                        0.045F * camera_.distance(), 0.018F, 0.065F);
+                    const glm::vec3 stageCentre = centre;
+                    const std::array<glm::vec3, 6> handlePositions {{
+                        base + baseX * 0.014F
+                            + baseY * (0.55F * postHeight),
+                        stageCentre + baseX * controlReach,
+                        stageCentre + baseY * controlReach,
+                        stageCentre + baseZ * controlReach,
+                        stageCentre - baseX * (0.45F * controlReach)
+                            + baseY * (0.28F * controlReach),
+                        stageCentre - baseX * (0.45F * controlReach)
+                            - baseY * (0.28F * controlReach),
+                    }};
+                    for (std::size_t index = 0;
+                         index < handlePositions.size(); ++index) {
+                        mechanicalHandleProjections[index]
+                            = gizmo::projectWorldToViewport(
+                                handlePositions[index],
+                                viewProj,
+                                rectMin,
+                                rectSize);
+                    }
+                    if (selectedComponentProjection.visible) {
+                        mechanicalHandleProjections[4]
+                            = selectedComponentProjection;
+                        mechanicalHandleProjections[4].screenPos = {
+                            std::clamp(
+                                selectedComponentProjection.screenPos.x
+                                    - 34.0F,
+                                rectMin.x + 12.0F,
+                                rectMin.x + rectSize.x - 12.0F),
+                            std::clamp(
+                                selectedComponentProjection.screenPos.y
+                                    - 24.0F,
+                                rectMin.y + 12.0F,
+                                rectMin.y + rectSize.y - 12.0F),
+                        };
+                        mechanicalHandleProjections[5]
+                            = selectedComponentProjection;
+                        mechanicalHandleProjections[5].screenPos = {
+                            std::clamp(
+                                selectedComponentProjection.screenPos.x
+                                    - 34.0F,
+                                rectMin.x + 12.0F,
+                                rectMin.x + rectSize.x - 12.0F),
+                            std::clamp(
+                                selectedComponentProjection.screenPos.y
+                                    + 24.0F,
+                                rectMin.y + 12.0F,
+                                rectMin.y + rectSize.y - 12.0F),
+                        };
+                    }
+                    const std::array<glm::vec3, 4> mechanicalAxes {{
+                        baseY, baseX, baseY, baseZ,
+                    }};
+                    for (std::size_t index = 0;
+                         index < mechanicalAxes.size(); ++index) {
+                        mechanicalAxisProjections[index]
+                            = gizmo::computeAxisProjection(
+                                handlePositions[index],
+                                mechanicalAxes[index],
+                                controlReach,
+                                viewProj,
+                                rectMin,
+                                rectSize);
+                    }
+                    float nearestMechanicalDistance
+                        = std::numeric_limits<float>::max();
+                    for (std::size_t index = 0;
+                         index < mechanicalHandleProjections.size(); ++index) {
+                        const auto& projected
+                            = mechanicalHandleProjections[index];
+                        if (!gizmo::hitTestHandle(
+                                mousePosition, projected, 10.0F)) {
+                            continue;
+                        }
+                        if (index < mechanicalAxisProjections.size()
+                            && mechanicalAxisProjections[index].isDegenerate) {
+                            continue;
+                        }
+                        const float distance = std::hypot(
+                            mousePosition.x - projected.screenPos.x,
+                            mousePosition.y - projected.screenPos.y);
+                        if (distance < nearestMechanicalDistance) {
+                            nearestMechanicalDistance = distance;
+                            hoveredMechanicalControl = static_cast<
+                                SandboxMechanicalControl>(
+                                    static_cast<int>(
+                                        SandboxMechanicalControl::PostHeight)
+                                    + static_cast<int>(index));
+                        }
+                    }
+                }
             }
             sandboxUiEvidence_.selectedComponent
                 = selectedComponentProjection;
             sandboxUiEvidence_.gizmoEndpoints = gizmoAxisEndpoints;
             sandboxUiEvidence_.gizmoProjections = gizmoAxisProjections;
+            sandboxUiEvidence_.mechanicalHandles
+                = mechanicalHandleProjections;
+            sandboxUiEvidence_.mechanicalProjections
+                = mechanicalAxisProjections;
+
+            if (sandboxMechanicalDragging_) {
+                if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                    auto candidate = benchProject_.scene;
+                    if (const auto* component = candidate.find(
+                            selectedBenchComponentId_)) {
+                        auto restored = *component;
+                        optics::scene::applyMechanicalAssembly(
+                            restored, sandboxMechanicalDragInitial_);
+                        candidate.replace(restored.id, restored);
+                        static_cast<void>(applyBenchScene(
+                            std::move(candidate),
+                            "Cancelled mechanical adjustment",
+                            false));
+                    }
+                    sandboxMechanicalDragging_ = false;
+                    sandboxMechanicalChanged_ = false;
+                    sandboxMechanicalControl_
+                        = SandboxMechanicalControl::None;
+                } else if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                    if (sandboxMechanicalChanged_) {
+                        recordBenchEdit();
+                    }
+                    sandboxMechanicalDragging_ = false;
+                    sandboxMechanicalChanged_ = false;
+                    sandboxMechanicalControl_
+                        = SandboxMechanicalControl::None;
+                } else if (const auto* component = benchProject_.scene.find(
+                               selectedBenchComponentId_);
+                           component != nullptr
+                           && component->mechanicalAssembly.has_value()) {
+                    auto adjusted = sandboxMechanicalDragInitial_;
+                    const int controlIndex = static_cast<int>(
+                        sandboxMechanicalControl_)
+                        - static_cast<int>(
+                            SandboxMechanicalControl::PostHeight);
+                    if (controlIndex >= 0 && controlIndex < 4) {
+                        sandboxMechanicalDragAccumulated_
+                            += gizmo::computeGizmoDeltaZ(
+                                {io.MouseDelta.x, io.MouseDelta.y},
+                                mechanicalAxisProjections[
+                                    static_cast<std::size_t>(controlIndex)]);
+                        const double delta = gizmo::quantizeGizmoDelta(
+                            sandboxMechanicalDragAccumulated_, 1e-5);
+                        switch (sandboxMechanicalControl_) {
+                        case SandboxMechanicalControl::PostHeight:
+                            adjusted.postHeightMetres = std::clamp(
+                                sandboxMechanicalDragInitial_.postHeightMetres
+                                    + delta,
+                                adjusted.minimumPostHeightMetres,
+                                adjusted.maximumPostHeightMetres);
+                            break;
+                        case SandboxMechanicalControl::StageX:
+                            adjusted.stageTranslationMetres.x = std::clamp(
+                                sandboxMechanicalDragInitial_
+                                        .stageTranslationMetres.x
+                                    + delta,
+                                adjusted.minimumStageTranslationMetres.x,
+                                adjusted.maximumStageTranslationMetres.x);
+                            break;
+                        case SandboxMechanicalControl::StageY:
+                            adjusted.stageTranslationMetres.y = std::clamp(
+                                sandboxMechanicalDragInitial_
+                                        .stageTranslationMetres.y
+                                    + delta,
+                                adjusted.minimumStageTranslationMetres.y,
+                                adjusted.maximumStageTranslationMetres.y);
+                            break;
+                        case SandboxMechanicalControl::StageZ:
+                            adjusted.stageTranslationMetres.z = std::clamp(
+                                sandboxMechanicalDragInitial_
+                                        .stageTranslationMetres.z
+                                    + delta,
+                                adjusted.minimumStageTranslationMetres.z,
+                                adjusted.maximumStageTranslationMetres.z);
+                            break;
+                        case SandboxMechanicalControl::None:
+                        case SandboxMechanicalControl::MountYaw:
+                        case SandboxMechanicalControl::MountPitch:
+                            break;
+                        }
+                    } else {
+                        sandboxMechanicalDragAccumulated_
+                            += static_cast<double>(
+                                io.MouseDelta.x - io.MouseDelta.y) * 0.002;
+                        const double angleDelta = gizmo::quantizeGizmoDelta(
+                            sandboxMechanicalDragAccumulated_,
+                            std::numbers::pi_v<double> / 1800.0);
+                        if (sandboxMechanicalControl_
+                            == SandboxMechanicalControl::MountYaw) {
+                            adjusted.mountYawRadians = std::clamp(
+                                sandboxMechanicalDragInitial_.mountYawRadians
+                                    + angleDelta,
+                                adjusted.minimumMountYawRadians,
+                                adjusted.maximumMountYawRadians);
+                        } else if (sandboxMechanicalControl_
+                            == SandboxMechanicalControl::MountPitch) {
+                            adjusted.mountPitchRadians = std::clamp(
+                                sandboxMechanicalDragInitial_.mountPitchRadians
+                                    + angleDelta,
+                                adjusted.minimumMountPitchRadians,
+                                adjusted.maximumMountPitchRadians);
+                        }
+                    }
+                    auto candidate = benchProject_.scene;
+                    auto mounted = *candidate.find(
+                        selectedBenchComponentId_);
+                    optics::scene::applyMechanicalAssembly(
+                        mounted, adjusted);
+                    candidate.replace(mounted.id, mounted);
+                    sandboxMechanicalChanged_ = applyBenchScene(
+                        std::move(candidate),
+                        "Adjusted mechanical control in viewport",
+                        false)
+                        || sandboxMechanicalChanged_;
+                }
+            }
 
             if (sandboxGizmoDragging_) {
                 if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
                     auto candidate = benchProject_.scene;
                     if (const auto* component = candidate.find(selectedBenchComponentId_)) {
                         auto restored = *component;
-                        restored.transform = sandboxDragInitialTransform_;
+                        optics::scene::rebaseMechanicalAssembly(
+                            restored, sandboxDragInitialTransform_);
                         candidate.replace(restored.id, restored);
                         static_cast<void>(applyBenchScene(
                             std::move(candidate), "Cancelled sandbox gizmo edit", false));
@@ -9341,6 +9745,7 @@ void Application::drawWorkspace() {
                 } else if (const auto* component = benchProject_.scene.find(selectedBenchComponentId_)) {
                     auto candidate = benchProject_.scene;
                     auto edited = *component;
+                    auto desiredTransform = edited.transform;
                     if (sandboxGizmoMode_ == SandboxGizmoMode::Translate) {
                         const int axisIndex = sandboxConstraintAxisIndex(
                             sandboxGizmoConstraint_);
@@ -9389,9 +9794,9 @@ void Application::drawWorkspace() {
                                 sandboxDragAccumulatedTranslationMetres_.z,
                                 snapMetres),
                         };
-                        edited.transform = sandboxDragInitialTransform_;
-                        edited.transform.translationMetres
-                            = edited.transform.translationMetres + snapped;
+                        desiredTransform = sandboxDragInitialTransform_;
+                        desiredTransform.translationMetres
+                            = desiredTransform.translationMetres + snapped;
                     } else {
                         const int axisIndex = sandboxConstraintAxisIndex(
                             sandboxGizmoConstraint_);
@@ -9406,21 +9811,23 @@ void Application::drawWorkspace() {
                                 = gizmo::quantizeGizmoDelta(
                                     sandboxDragAccumulatedAngleRadians_,
                                     stepRadians);
-                            edited.transform = gizmo::rotateRigidTransformLocally(
+                            desiredTransform = gizmo::rotateRigidTransformLocally(
                                 sandboxDragInitialTransform_,
                                 localRotationAxisForIndex(axisIndex),
                                 snappedAngle);
                         } else {
-                            edited.transform = gizmo::rotateRigidTransformLocally(
-                                edited.transform,
+                            desiredTransform = gizmo::rotateRigidTransformLocally(
+                                desiredTransform,
                                 gizmo::LocalRotationAxis::Y,
                                 static_cast<double>(io.MouseDelta.x) * 0.01);
-                            edited.transform = gizmo::rotateRigidTransformLocally(
-                                edited.transform,
+                            desiredTransform = gizmo::rotateRigidTransformLocally(
+                                desiredTransform,
                                 gizmo::LocalRotationAxis::X,
                                 static_cast<double>(-io.MouseDelta.y) * 0.01);
                         }
                     }
+                    optics::scene::rebaseMechanicalAssembly(
+                        edited, desiredTransform);
                     candidate.replace(edited.id, edited);
                     sandboxGizmoChanged_ = applyBenchScene(
                         std::move(candidate),
@@ -9432,7 +9839,8 @@ void Application::drawWorkspace() {
                 }
             }
 
-            if (isHovered && noActiveWidget && !sandboxGizmoDragging_) {
+            if (isHovered && noActiveWidget && !sandboxGizmoDragging_
+                && !sandboxMechanicalDragging_) {
                 if (std::abs(io.MouseWheel) > 0.0F) {
                     camera_.zoom(io.MouseWheel);
                 }
@@ -9473,7 +9881,21 @@ void Application::drawWorkspace() {
                     isPanning_ = true;
                 }
                 if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                    if (hoveredGizmoConstraint
+                    if (hoveredMechanicalControl
+                        != SandboxMechanicalControl::None) {
+                        const auto* mounted = benchProject_.scene.find(
+                            selectedBenchComponentId_);
+                        if (mounted != nullptr
+                            && mounted->mechanicalAssembly.has_value()) {
+                            sandboxMechanicalControl_
+                                = hoveredMechanicalControl;
+                            sandboxMechanicalDragInitial_
+                                = *mounted->mechanicalAssembly;
+                            sandboxMechanicalDragAccumulated_ = 0.0;
+                            sandboxMechanicalDragging_ = true;
+                            sandboxMechanicalChanged_ = false;
+                        }
+                    } else if (hoveredGizmoConstraint
                         != SandboxGizmoConstraint::None) {
                         sandboxGizmoConstraint_ = hoveredGizmoConstraint;
                         sandboxDragInitialTransform_ = benchProject_.scene
@@ -9683,13 +10105,47 @@ void Application::drawWorkspace() {
                             kAxisLabels[axis]);
                     }
                 }
+                constexpr std::array<const char*, 6> kMechanicalLabels {
+                    "POST", "STAGE X", "STAGE Y", "STAGE Z", "YAW", "PITCH"};
+                for (std::size_t index = 0;
+                     index < mechanicalHandleProjections.size(); ++index) {
+                    const auto& projected
+                        = mechanicalHandleProjections[index];
+                    if (!projected.visible) {
+                        continue;
+                    }
+                    const auto control = static_cast<
+                        SandboxMechanicalControl>(
+                            static_cast<int>(
+                                SandboxMechanicalControl::PostHeight)
+                            + static_cast<int>(index));
+                    const bool active = sandboxMechanicalDragging_
+                        && sandboxMechanicalControl_ == control;
+                    const bool hovered
+                        = hoveredMechanicalControl == control;
+                    const ImU32 color = active || hovered
+                        ? IM_COL32(255, 238, 132, 255)
+                        : IM_COL32(225, 167, 65, 235);
+                    const ImVec2 centre(
+                        projected.screenPos.x, projected.screenPos.y);
+                    drawList->AddCircleFilled(
+                        centre, active || hovered ? 7.0F : 5.0F,
+                        color, 20);
+                    drawList->AddCircle(
+                        centre, active || hovered ? 10.0F : 8.0F,
+                        IM_COL32(73, 48, 18, 230), 20, 1.5F);
+                    drawList->AddText(
+                        ImVec2(centre.x + 9.0F, centre.y - 7.0F),
+                        color,
+                        kMechanicalLabels[index]);
+                }
                 const char* modeName = sandboxGizmoMode_ == SandboxGizmoMode::Translate
                     ? "Move (world axes)" : "Rotate (local axes)";
                 const std::string hud = std::string("SANDBOX | ") + modeName
-                    + " [W/E] | F focus | Shift+WASD roam | RMB orbit | MMB pan | wheel zoom";
+                    + " [W/E] | brass points: mount controls | F focus | Shift+WASD roam | RMB orbit | MMB pan | wheel zoom";
                 drawList->AddRectFilled(
                     ImVec2(imagePosMin.x + 10.0F, imagePosMin.y + 10.0F),
-                    ImVec2(imagePosMin.x + 820.0F, imagePosMin.y + 34.0F),
+                    ImVec2(imagePosMin.x + 1040.0F, imagePosMin.y + 34.0F),
                     IM_COL32(8, 15, 25, 205), 4.0F);
                 drawList->AddText(
                     ImVec2(imagePosMin.x + 17.0F, imagePosMin.y + 15.0F),
@@ -9918,6 +10374,9 @@ void Application::drawWorkspace() {
         isPanning_ = false;
         sandboxGizmoDragging_ = false;
         sandboxGizmoChanged_ = false;
+        sandboxMechanicalDragging_ = false;
+        sandboxMechanicalChanged_ = false;
+        sandboxMechanicalControl_ = SandboxMechanicalControl::None;
         isGizmoDragging_ = false;
         draggedTarget_ = GizmoTarget::None;
         if (shouldCommitGizmoDrag) {
@@ -10638,6 +11097,107 @@ void Application::runSandboxInteractionSmoke() {
             + ", selected=" + selectedBenchComponentId_ + ", status="
             + statusMessage_ + ", error=" + errorMessage_ + ")");
     }
+    if (!selectedAfterGizmo->mechanicalAssembly.has_value()) {
+        throw std::runtime_error(
+            "newly placed plate has no direct mechanical assembly");
+    }
+
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    std::size_t mechanicalControlIndex
+        = sandboxUiEvidence_.mechanicalProjections.size();
+    for (std::size_t index = 0;
+         index < sandboxUiEvidence_.mechanicalProjections.size(); ++index) {
+        if (sandboxUiEvidence_.mechanicalHandles[index].visible
+            && !sandboxUiEvidence_.mechanicalProjections[index].isDegenerate) {
+            mechanicalControlIndex = index;
+            break;
+        }
+    }
+    if (mechanicalControlIndex
+        == sandboxUiEvidence_.mechanicalProjections.size()) {
+        throw std::runtime_error(
+            "mounted plate exposes no usable direct mechanical handle");
+    }
+    const auto mechanicalValue = [](const bench::MechanicalAssemblyState& state,
+                                     std::size_t index) {
+        switch (index) {
+        case 0U: return state.postHeightMetres;
+        case 1U: return state.stageTranslationMetres.x;
+        case 2U: return state.stageTranslationMetres.y;
+        case 3U: return state.stageTranslationMetres.z;
+        default: return std::numeric_limits<double>::quiet_NaN();
+        }
+    };
+    const auto mechanicalBefore
+        = *selectedAfterGizmo->mechanicalAssembly;
+    const auto opticalBeforeMechanical = selectedAfterGizmo->transform;
+    const glm::vec2 mechanicalHandle
+        = sandboxUiEvidence_
+              .mechanicalHandles[mechanicalControlIndex]
+              .screenPos;
+    dragPoints(
+        mechanicalHandle,
+        mechanicalHandle
+            + sandboxUiEvidence_
+                  .mechanicalProjections[mechanicalControlIndex]
+                  .screenDir
+                * 32.0F,
+        "selected plate mechanical control");
+    const auto* selectedAfterMechanical
+        = benchProject_.scene.find(gizmoComponentId);
+    if (selectedAfterMechanical == nullptr
+        || !selectedAfterMechanical->mechanicalAssembly.has_value()
+        || mechanicalValue(
+               *selectedAfterMechanical->mechanicalAssembly,
+               mechanicalControlIndex)
+            == mechanicalValue(mechanicalBefore, mechanicalControlIndex)
+        || selectedAfterMechanical->transform == opticalBeforeMechanical) {
+        throw std::runtime_error(
+            "direct mechanical-handle drag did not update mechanical and optical truth");
+    }
+
+    focusSandboxSelection();
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    std::size_t angularControlIndex
+        = sandboxUiEvidence_.mechanicalHandles.size();
+    for (std::size_t index = 4U;
+         index < sandboxUiEvidence_.mechanicalHandles.size(); ++index) {
+        if (sandboxUiEvidence_.mechanicalHandles[index].visible) {
+            angularControlIndex = index;
+            break;
+        }
+    }
+    if (angularControlIndex
+        == sandboxUiEvidence_.mechanicalHandles.size()) {
+        throw std::runtime_error(
+            "mounted plate exposes no usable tip-tilt control");
+    }
+    const auto angularBefore
+        = *selectedAfterMechanical->mechanicalAssembly;
+    const auto opticalBeforeAngular = selectedAfterMechanical->transform;
+    const glm::vec2 angularHandle
+        = sandboxUiEvidence_.mechanicalHandles[angularControlIndex].screenPos;
+    dragPoints(
+        angularHandle,
+        angularHandle + glm::vec2(30.0F, -15.0F),
+        "selected plate tip-tilt control");
+    selectedAfterMechanical = benchProject_.scene.find(gizmoComponentId);
+    const auto angularValue = [](const bench::MechanicalAssemblyState& state,
+                                 std::size_t index) {
+        return index == 4U
+            ? state.mountYawRadians : state.mountPitchRadians;
+    };
+    if (selectedAfterMechanical == nullptr
+        || !selectedAfterMechanical->mechanicalAssembly.has_value()
+        || angularValue(
+               *selectedAfterMechanical->mechanicalAssembly,
+               angularControlIndex)
+            == angularValue(angularBefore, angularControlIndex)
+        || selectedAfterMechanical->transform.localZAxisInWorld
+            == opticalBeforeAngular.localZAxisInWorld) {
+        throw std::runtime_error(
+            "direct tip-tilt drag did not update mount angle and optical axis");
+    }
 
     const auto* alignmentTarget = benchProject_.scene.find(
         sandboxAlignmentTargetComponentId_);
@@ -10647,15 +11207,16 @@ void Application::runSandboxInteractionSmoke() {
             "Bench alignment bar did not expose a distinct target");
     }
     const math::Vec3d alignedPosition
-        = selectedAfterGizmo->transform.translationMetres;
+        = selectedAfterMechanical->transform.translationMetres;
     const math::Vec3d expectedAim = math::normalized(
         alignmentTarget->transform.translationMetres - alignedPosition);
     click(sandboxUiEvidence_.aimAtTarget, "Aim +Z action");
     const auto* selectedAfterAlignment
         = benchProject_.scene.find(gizmoComponentId);
     if (selectedAfterAlignment == nullptr
-        || selectedAfterAlignment->transform.translationMetres
-            != alignedPosition
+        || math::length(
+               selectedAfterAlignment->transform.translationMetres
+               - alignedPosition) > 1e-10
         || math::dot(
             selectedAfterAlignment->transform.localZAxisInWorld,
             expectedAim) < 1.0 - 1e-12) {
@@ -10695,8 +11256,9 @@ void Application::runSandboxInteractionSmoke() {
     const auto* selectedAfterRotation
         = benchProject_.scene.find(gizmoComponentId);
     if (selectedAfterRotation == nullptr
-        || selectedAfterRotation->transform.translationMetres
-            != transformBeforeRotation.translationMetres
+        || math::length(
+               selectedAfterRotation->transform.translationMetres
+               - transformBeforeRotation.translationMetres) > 1e-10
         || (selectedAfterRotation->transform.localXAxisInWorld
                 == transformBeforeRotation.localXAxisInWorld
             && selectedAfterRotation->transform.localYAxisInWorld

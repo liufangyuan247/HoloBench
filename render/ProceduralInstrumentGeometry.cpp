@@ -309,6 +309,66 @@ void addPostAndBase(
     const bench::BenchComponent& component,
     const VisualExtent& extent,
     const glm::vec4& color) {
+    if (component.mechanicalAssembly.has_value()) {
+        const auto& assembly = *component.mechanicalAssembly;
+        bench::BenchComponent baseComponent = component;
+        baseComponent.transform = assembly.benchFrame;
+        baseComponent.mechanicalAssembly.reset();
+
+        const float postHeight = static_cast<float>(assembly.postHeightMetres);
+        const float postHalfWidth = std::clamp(
+            0.08F * extent.width, 0.0015F, 0.004F);
+        const float baseWidth = std::max(0.024F, 0.75F * extent.width);
+        const float baseDepth = std::max(0.020F, 0.55F * baseWidth);
+        const float stageWidth = std::max(0.018F, 0.62F * extent.width);
+        const float stageDepth = std::max(0.016F, 0.55F * extent.width);
+        const glm::vec3 stageTranslation {
+            static_cast<float>(assembly.stageTranslationMetres.x),
+            static_cast<float>(assembly.stageTranslationMetres.y),
+            static_cast<float>(assembly.stageTranslationMetres.z),
+        };
+        addBox(mesh, baseComponent,
+            {0.0F, -0.0025F, 0.0F},
+            {0.5F * baseWidth, 0.0025F, 0.5F * baseDepth}, color);
+        if (postHeight > kMinimumVisualThickness) {
+            addBox(mesh, baseComponent,
+                {0.0F, 0.5F * postHeight, 0.0F},
+                {postHalfWidth, 0.5F * postHeight, postHalfWidth}, color);
+        }
+        addBox(mesh, baseComponent,
+            stageTranslation + glm::vec3 {0.0F, postHeight, 0.0F},
+            {0.5F * stageWidth, 0.0025F, 0.5F * stageDepth}, color);
+        const float knobHalf = std::clamp(
+            0.10F * extent.width, 0.0018F, 0.0035F);
+        addBox(mesh, baseComponent,
+            {0.014F, 0.55F * postHeight, 0.0F},
+            {knobHalf, knobHalf, knobHalf}, color);
+        addBox(mesh, baseComponent,
+            stageTranslation + glm::vec3 {
+                0.5F * stageWidth + 1.5F * knobHalf,
+                postHeight,
+                0.0F},
+            {1.5F * knobHalf, knobHalf, knobHalf}, color);
+        addBox(mesh, baseComponent,
+            stageTranslation + glm::vec3 {
+                0.0F,
+                postHeight + 1.5F * knobHalf,
+                0.5F * stageDepth},
+            {knobHalf, 1.5F * knobHalf, knobHalf}, color);
+        addBox(mesh, baseComponent,
+            stageTranslation + glm::vec3 {
+                0.0F,
+                postHeight,
+                0.5F * stageDepth + 1.5F * knobHalf},
+            {knobHalf, knobHalf, 1.5F * knobHalf}, color);
+        addBox(mesh, component,
+            {-0.55F * extent.width, 0.0F, -0.006F},
+            {1.5F * knobHalf, knobHalf, knobHalf}, color);
+        addBox(mesh, component,
+            {0.0F, -0.55F * extent.height, -0.006F},
+            {knobHalf, 1.5F * knobHalf, knobHalf}, color);
+        return;
+    }
     const float postHeight = std::max(0.018F, 0.45F * extent.height);
     const float postWidth = std::clamp(0.08F * extent.width, 0.0015F, 0.004F);
     const float baseWidth = std::max(0.018F, 0.65F * extent.width);

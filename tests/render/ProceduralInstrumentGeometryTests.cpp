@@ -121,4 +121,28 @@ TEST_CASE("PCG tessellation is deterministic and bounded by the public options")
     CHECK(clampedLow.triangles.size() == explicitLow.triangles.size());
 }
 
+TEST_CASE("PCG mount geometry follows persisted post and stage mechanics") {
+    namespace scene = optics::scene;
+    auto mirror = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::PlanarMirror, "mechanical-pcg-mirror");
+    mirror.transform.translationMetres = {0.0, 0.10, 0.0};
+    auto assembly = scene::makeDefaultMechanicalAssembly(mirror);
+    scene::applyMechanicalAssembly(mirror, assembly);
+    const auto nominal = generateProceduralInstrumentMesh(mirror);
+
+    assembly.postHeightMetres = 0.14;
+    assembly.stageTranslationMetres.x = 0.01;
+    scene::applyMechanicalAssembly(mirror, assembly);
+    const auto adjusted = generateProceduralInstrumentMesh(mirror);
+
+    CHECK(adjusted.opticalProxy.centre.x
+        == doctest::Approx(nominal.opticalProxy.centre.x + 0.01F));
+    CHECK(adjusted.opticalProxy.centre.y
+        == doctest::Approx(nominal.opticalProxy.centre.y + 0.06F));
+    CHECK(adjusted.boundsMaximum.y
+        > nominal.boundsMaximum.y + 0.05F);
+    CHECK(adjusted.boundsMinimum.y
+        == doctest::Approx(nominal.boundsMinimum.y));
+}
+
 } // namespace holobench::render

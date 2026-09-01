@@ -81,9 +81,11 @@
 ## Architecture & data
 
 - The current GPU propagation backend covers fused ASM-style spectral transfer; arbitrary non-power-of-two FFTs, automatic padding, and CUDA-specific acceleration are not implemented.
-- The unified optical-bench document is format v3 with source provenance,
-  recording recipes, and placed SLM command recipes. Strict v1/v2 migrations
-  preserve v2 recordings and add explicit manual zero-phase SLM defaults.
+- The unified optical-bench document is format v4 with source provenance,
+  recording recipes, placed SLM command recipes, and optional persisted
+  mechanical assemblies. Strict v1-v3 migrations preserve supported legacy
+  data, add explicit manual zero-phase SLM defaults where required, and migrate
+  components without an assembly to `null`.
   Real-lens prescriptions use separate versioned JSON/CSV exchange and are not
   embedded in that scene document; the separate holography document is format
   v3 with narrowly scoped v1/v2 migrations.

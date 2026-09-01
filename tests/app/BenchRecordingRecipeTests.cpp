@@ -193,6 +193,9 @@ TEST_CASE("legacy bench migrates empty recipes and corrupt recipes reject strict
     auto json = nlohmann::json::parse(app::serializeBenchProject(project));
     json.erase("recording_recipes");
     json["format_version"] = app::kLegacyBenchProjectFormatVersion;
+    for (auto& component : json["components"]) {
+        component.erase("mechanical_assembly");
+    }
     const auto migrated = app::parseBenchProject(json.dump());
     CHECK(migrated.formatVersion == app::kBenchProjectFormatVersion);
     CHECK(migrated.recordingRecipes.empty());

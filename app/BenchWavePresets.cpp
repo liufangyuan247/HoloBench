@@ -8,6 +8,15 @@ namespace {
 
 namespace scene = optics::scene;
 
+void mountOnOpticalTable(scene::BenchComponent& component) {
+    const scene::MechanicalAssemblyState nominal;
+    component.transform.translationMetres
+        = component.transform.translationMetres
+        + component.transform.localYAxisInWorld * nominal.postHeightMetres;
+    scene::applyMechanicalAssembly(
+        component, scene::makeDefaultMechanicalAssembly(component));
+}
+
 BenchProject makeBaseWaveBench(std::string id, std::string name) {
     BenchProject result;
     result.projectId = std::move(id);
@@ -26,6 +35,7 @@ BenchProject makeBaseWaveBench(std::string id, std::string name) {
         .coherenceId = "wave-green",
     }};
     laser.parameters = laserParameters;
+    mountOnOpticalTable(laser);
     result.scene.add(std::move(laser));
 
     auto screen = scene::makeDefaultBenchComponent(
@@ -38,6 +48,7 @@ BenchProject makeBaseWaveBench(std::string id, std::string name) {
     screenParameters.sampleWidth = 512U;
     screenParameters.sampleHeight = 512U;
     screen.parameters = screenParameters;
+    mountOnOpticalTable(screen);
     result.scene.add(std::move(screen));
     return result;
 }
@@ -46,6 +57,7 @@ scene::BenchComponent makeAperture() {
     auto aperture = scene::makeDefaultBenchComponent(
         scene::BenchComponentKind::Aperture, "wave-aperture");
     aperture.transform.translationMetres = {0.0, 0.0, 0.0};
+    mountOnOpticalTable(aperture);
     return aperture;
 }
 

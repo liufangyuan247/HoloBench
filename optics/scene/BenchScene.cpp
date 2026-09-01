@@ -13,6 +13,7 @@ namespace holobench::optics::scene {
 namespace {
 
 constexpr double kPowerTolerance = 1e-12;
+constexpr double kMechanicalTransformTolerance = 1e-10;
 
 void requireFinitePositive(double value, const char* field) {
     if (!std::isfinite(value) || value <= 0.0) {
@@ -190,6 +191,37 @@ void validateParameters(const HolographicPlateParameters& value) {
     requireFinitePositive(value.thicknessMetres, "plate thickness_m");
 }
 
+[[nodiscard]] math::Vec3d rotateAroundAxis(
+    math::Vec3d value,
+    math::Vec3d unitAxis,
+    double radians) {
+    const double cosine = std::cos(radians);
+    const double sine = std::sin(radians);
+    return value * cosine
+        + math::cross(unitAxis, value) * sine
+        + unitAxis * (math::dot(unitAxis, value) * (1.0 - cosine));
+}
+
+[[nodiscard]] bool nearVector(math::Vec3d lhs, math::Vec3d rhs) noexcept {
+    return std::abs(lhs.x - rhs.x) <= kMechanicalTransformTolerance
+        && std::abs(lhs.y - rhs.y) <= kMechanicalTransformTolerance
+        && std::abs(lhs.z - rhs.z) <= kMechanicalTransformTolerance;
+}
+
+void requireOrderedMechanicalRange(
+    double minimum,
+    double value,
+    double maximum,
+    const char* field) {
+    if (!std::isfinite(minimum) || !std::isfinite(value)
+        || !std::isfinite(maximum) || minimum > maximum
+        || value < minimum || value > maximum) {
+        throw std::invalid_argument(
+            std::string("mechanical ") + field
+            + " must be finite and inside an ordered range");
+    }
+}
+
 } // namespace
 
 std::string_view benchComponentKindName(BenchComponentKind kind) noexcept {
@@ -275,11 +307,169 @@ bool isStableBenchId(std::string_view id) noexcept {
     return true;
 }
 
+void validateMechanicalAssemblyState(const MechanicalAssemblyState& state) {
+    math::validateRigidTransform(state.benchFrame);
+    requireOrderedMechanicalRange(
+        state.minimumPostHeightMetres,
+        state.postHeightMetres,
+        state.maximumPostHeightMetres,
+        "post height");
+    if (state.minimumPostHeightMetres < 0.0) {
+        throw std::invalid_argument(
+            "mechanical minimum post height must be non-negative");
+    }
+    requireOrderedMechanicalRange(
+        state.minimumStageTranslationMetres.x,
+        state.stageTranslationMetres.x,
+        state.maximumStageTranslationMetres.x,
+        "stage X travel");
+    requireOrderedMechanicalRange(
+        state.minimumStageTranslationMetres.y,
+        state.stageTranslationMetres.y,
+        state.maximumStageTranslationMetres.y,
+        "stage Y travel");
+    requireOrderedMechanicalRange(
+        state.minimumStageTranslationMetres.z,
+        state.stageTranslationMetres.z,
+        state.maximumStageTranslationMetres.z,
+        "stage Z travel");
+    requireOrderedMechanicalRange(
+        state.minimumMountYawRadians,
+        state.mountYawRadians,
+        state.maximumMountYawRadians,
+        "mount yaw");
+    requireOrderedMechanicalRange(
+        state.minimumMountPitchRadians,
+        state.mountPitchRadians,
+        state.maximumMountPitchRadians,
+        "mount pitch");
+}
+
+math::RigidTransform3d resolveMechanicalOpticalTransform(
+    const MechanicalAssemblyState& state) {
+    validateMechanicalAssemblyState(state);
+    const auto& base = state.benchFrame;
+    const math::Vec3d yawedX = rotateAroundAxis(
+        base.localXAxisInWorld,
+        base.localYAxisInWorld,
+        state.mountYawRadians);
+    const math::Vec3d yawedZ = rotateAroundAxis(
+        base.localZAxisInWorld,
+        base.localYAxisInWorld,
+        state.mountYawRadians);
+    const math::Vec3d pitchedY = rotateAroundAxis(
+        base.localYAxisInWorld,
+        yawedX,
+        state.mountPitchRadians);
+    const math::Vec3d pitchedZ = rotateAroundAxis(
+        yawedZ,
+        yawedX,
+        state.mountPitchRadians);
+    math::RigidTransform3d result {
+        .translationMetres = base.translationMetres
+            + base.localYAxisInWorld
+                * (state.postHeightMetres + state.stageTranslationMetres.y)
+            + base.localXAxisInWorld * state.stageTranslationMetres.x
+            + base.localZAxisInWorld * state.stageTranslationMetres.z,
+        .localXAxisInWorld = yawedX,
+        .localYAxisInWorld = pitchedY,
+        .localZAxisInWorld = pitchedZ,
+    };
+    math::validateRigidTransform(result);
+    return result;
+}
+
+MechanicalAssemblyState makeDefaultMechanicalAssembly(
+    const BenchComponent& component) {
+    math::validateRigidTransform(component.transform);
+    MechanicalAssemblyState state;
+    state.benchFrame = component.transform;
+    state.benchFrame.translationMetres
+        = component.transform.translationMetres
+        - component.transform.localYAxisInWorld * state.postHeightMetres;
+    validateMechanicalAssemblyState(state);
+    return state;
+}
+
+void applyMechanicalAssembly(
+    BenchComponent& component,
+    const MechanicalAssemblyState& state) {
+    const math::RigidTransform3d resolved
+        = resolveMechanicalOpticalTransform(state);
+    component.mechanicalAssembly = state;
+    component.transform = resolved;
+    validateBenchComponent(component);
+}
+
+void rebaseMechanicalAssembly(
+    BenchComponent& component,
+    const math::RigidTransform3d& desiredOpticalTransform) {
+    math::validateRigidTransform(desiredOpticalTransform);
+    if (!component.mechanicalAssembly.has_value()) {
+        component.transform = desiredOpticalTransform;
+        validateBenchComponent(component);
+        return;
+    }
+
+    MechanicalAssemblyState rebased = *component.mechanicalAssembly;
+    const math::Vec3d baseY = rotateAroundAxis(
+        desiredOpticalTransform.localYAxisInWorld,
+        desiredOpticalTransform.localXAxisInWorld,
+        -rebased.mountPitchRadians);
+    const math::Vec3d yawedZ = rotateAroundAxis(
+        desiredOpticalTransform.localZAxisInWorld,
+        desiredOpticalTransform.localXAxisInWorld,
+        -rebased.mountPitchRadians);
+    const math::Vec3d baseX = rotateAroundAxis(
+        desiredOpticalTransform.localXAxisInWorld,
+        baseY,
+        -rebased.mountYawRadians);
+    const math::Vec3d baseZ = rotateAroundAxis(
+        yawedZ,
+        baseY,
+        -rebased.mountYawRadians);
+    rebased.benchFrame = {
+        .translationMetres = desiredOpticalTransform.translationMetres
+            - baseY
+                * (rebased.postHeightMetres
+                    + rebased.stageTranslationMetres.y)
+            - baseX * rebased.stageTranslationMetres.x
+            - baseZ * rebased.stageTranslationMetres.z,
+        .localXAxisInWorld = math::normalized(baseX),
+        .localYAxisInWorld = math::normalized(baseY),
+        .localZAxisInWorld = math::normalized(baseZ),
+    };
+    applyMechanicalAssembly(component, rebased);
+}
+
+void removeMechanicalAssembly(BenchComponent& component) noexcept {
+    component.mechanicalAssembly.reset();
+}
+
 void validateBenchComponent(const BenchComponent& component) {
     if (!isStableBenchId(component.id)) {
         throw std::invalid_argument("bench component ID is invalid");
     }
     math::validateRigidTransform(component.transform);
+    if (component.mechanicalAssembly.has_value()) {
+        const auto resolved = resolveMechanicalOpticalTransform(
+            *component.mechanicalAssembly);
+        if (!nearVector(
+                component.transform.translationMetres,
+                resolved.translationMetres)
+            || !nearVector(
+                component.transform.localXAxisInWorld,
+                resolved.localXAxisInWorld)
+            || !nearVector(
+                component.transform.localYAxisInWorld,
+                resolved.localYAxisInWorld)
+            || !nearVector(
+                component.transform.localZAxisInWorld,
+                resolved.localZAxisInWorld)) {
+            throw std::invalid_argument(
+                "component optical transform is inconsistent with its mechanical assembly");
+        }
+    }
     switch (component.kind) {
     case BenchComponentKind::LaserSource:
         requireParameterType<LaserSourceParameters>(component);
@@ -322,7 +512,13 @@ void validateBenchComponent(const BenchComponent& component) {
 }
 
 BenchComponent makeDefaultBenchComponent(BenchComponentKind kind, std::string id) {
-    BenchComponent result {.id = std::move(id), .kind = kind};
+    BenchComponent result {
+        .id = std::move(id),
+        .kind = kind,
+        .transform = {},
+        .parameters = LaserSourceParameters {},
+        .mechanicalAssembly = std::nullopt,
+    };
     switch (kind) {
     case BenchComponentKind::LaserSource: result.parameters = LaserSourceParameters {}; break;
     case BenchComponentKind::ObjectWavefrontSource: result.parameters = ObjectWavefrontSourceParameters {}; break;

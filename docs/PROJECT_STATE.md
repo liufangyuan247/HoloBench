@@ -43,12 +43,30 @@ as the only solver truth.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: `dev` passes 578/578 tests; `core-ci` passes 576/576;
-  `app-ci` builds successfully; and the hardware OpenGL smoke now fails unless
-  ordinary and CHIMERA scenes both produce non-empty solid PCG geometry.
-- **Next slice**: M10.2 persists base/post/mount/stage assemblies and constrained
-  travel, yaw, and pitch. Direct adjustment of those mechanical parts must update
-  the explicit optical frame; regenerated triangles remain presentation output.
+- **Acceptance evidence**: `dev` passes 581/581 tests and `core-ci` passes
+  579/579. Clang and MSVC core/application builds pass with warnings as errors;
+  the packaged CJK font validates. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
+  smoke passes real shelf placement, constrained whole-instrument edits,
+  post/XYZ and yaw/pitch mechanical drags, optical-frame updates, all M7/M8
+  recording/reconstruction flows, live wave planes, and CHIMERA PCG output.
+- **M10.2 mechanical assemblies implemented**: Bench components can persist a
+  validated base frame, post height, XYZ stage travel, mount yaw/pitch, and the
+  ordered limit for each degree of freedom. The resolved component transform is
+  still the only optical frame consumed by solvers; validation rejects drift
+  between that frame and its mechanical source.
+- **Direct mechanical interaction implemented**: Instruments dropped on the
+  optical table receive a nominal post/XYZ/tip-tilt assembly. Selected mounted
+  instruments expose brass viewport controls for post, stage, yaw, and pitch;
+  dragging clamps and quantizes mechanical readings, regenerates the optical
+  frame, updates PCG base/post/stage/knob geometry, and commits one undo/autosave
+  edit. The Inspector retains exact SI entry and attach/detach controls.
+- **Bench format v4**: Every component canonically stores
+  `mechanical_assembly` as a complete object or `null`. Strict v1-v3 migration
+  retains free components, and inconsistent resolved transforms are rejected.
+  See [ADR 0026](adr/0026-mechanical-assembly-and-optical-frame.md).
+- **Next slice**: M10.3 adds versioned generic instrument identity and
+  calibration evidence without allowing manufacturer/model data to select GPU
+  behavior. M10.4 then closes general placed-probe measurement interaction.
 
 ## Product rebaseline (2026-09-01)
 

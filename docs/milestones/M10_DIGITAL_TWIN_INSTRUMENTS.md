@@ -57,6 +57,12 @@ physically detailed.
 - Optical proxy frames update from mechanical state without using render meshes
   as solver input.
 
+Implementation delivered: the generic base/post/XYZ/tip-tilt assembly is
+persisted in Bench format v4, validates against its resolved optical frame, and
+drives both PCG parts and brass viewport controls. Ordinary whole-instrument
+move/rotate/alignment operations rebase the assembly without changing its
+readings. See [ADR 0026](../adr/0026-mechanical-assembly-and-optical-frame.md).
+
 ### M10.3 — Digital-twin identity and calibration
 
 - Versioned generic instrument specifications and optional manufacturer/model

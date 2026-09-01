@@ -402,6 +402,16 @@ enum class SandboxGizmoConstraint {
     AxisZ,
 };
 
+enum class SandboxMechanicalControl {
+    None,
+    PostHeight,
+    StageX,
+    StageY,
+    StageZ,
+    MountYaw,
+    MountPitch,
+};
+
 enum class SandboxExperimentMode {
     Auto,
     ThinTransmission,
@@ -471,6 +481,8 @@ struct SandboxUiEvidence final {
     gizmo::ProjectedPoint selectedComponent;
     std::array<gizmo::ProjectedPoint, 3> gizmoEndpoints {};
     std::array<gizmo::AxisProjection, 3> gizmoProjections {};
+    std::array<gizmo::ProjectedPoint, 6> mechanicalHandles {};
+    std::array<gizmo::AxisProjection, 4> mechanicalProjections {};
 };
 
 class Application final {
@@ -603,6 +615,12 @@ private:
     math::RigidTransform3d sandboxDragInitialTransform_ {};
     math::Vec3d sandboxDragAccumulatedTranslationMetres_ {};
     double sandboxDragAccumulatedAngleRadians_ = 0.0;
+    SandboxMechanicalControl sandboxMechanicalControl_
+        = SandboxMechanicalControl::None;
+    bool sandboxMechanicalDragging_ = false;
+    bool sandboxMechanicalChanged_ = false;
+    optics::scene::MechanicalAssemblyState sandboxMechanicalDragInitial_ {};
+    double sandboxMechanicalDragAccumulated_ = 0.0;
     std::string selectedBenchComponentId_;
     std::string sandboxAlignmentTargetComponentId_;
     std::size_t sandboxNextComponentOrdinal_ = 1;

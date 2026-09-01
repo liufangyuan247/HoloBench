@@ -211,16 +211,51 @@ using BenchComponentParameters = std::variant<
     FieldProbeParameters,
     HolographicPlateParameters>;
 
+// A generic post-mounted translation/tilt assembly. The component transform
+// remains the resolved optical frame consumed by every solver; benchFrame and
+// the constrained degrees of freedom are the persisted mechanical truth that
+// regenerates it. Render meshes never participate in this relationship.
+struct MechanicalAssemblyState final {
+    math::RigidTransform3d benchFrame {};
+    double postHeightMetres = 0.08;
+    double minimumPostHeightMetres = 0.02;
+    double maximumPostHeightMetres = 0.25;
+    math::Vec3d stageTranslationMetres {};
+    math::Vec3d minimumStageTranslationMetres {-0.025, -0.010, -0.025};
+    math::Vec3d maximumStageTranslationMetres {0.025, 0.010, 0.025};
+    double mountYawRadians = 0.0;
+    double minimumMountYawRadians = -3.14159265358979323846;
+    double maximumMountYawRadians = 3.14159265358979323846;
+    double mountPitchRadians = 0.0;
+    double minimumMountPitchRadians = -0.26179938779914943654;
+    double maximumMountPitchRadians = 0.26179938779914943654;
+
+    bool operator==(const MechanicalAssemblyState&) const = default;
+};
+
 struct BenchComponent final {
     std::string id;
     BenchComponentKind kind = BenchComponentKind::LaserSource;
     math::RigidTransform3d transform {};
     BenchComponentParameters parameters = LaserSourceParameters {};
+    std::optional<MechanicalAssemblyState> mechanicalAssembly;
 
     bool operator==(const BenchComponent&) const = default;
 };
 
 [[nodiscard]] bool isStableBenchId(std::string_view id) noexcept;
+void validateMechanicalAssemblyState(const MechanicalAssemblyState& state);
+[[nodiscard]] math::RigidTransform3d resolveMechanicalOpticalTransform(
+    const MechanicalAssemblyState& state);
+[[nodiscard]] MechanicalAssemblyState makeDefaultMechanicalAssembly(
+    const BenchComponent& component);
+void applyMechanicalAssembly(
+    BenchComponent& component,
+    const MechanicalAssemblyState& state);
+void rebaseMechanicalAssembly(
+    BenchComponent& component,
+    const math::RigidTransform3d& desiredOpticalTransform);
+void removeMechanicalAssembly(BenchComponent& component) noexcept;
 void validateBenchComponent(const BenchComponent& component);
 [[nodiscard]] BenchComponent makeDefaultBenchComponent(
     BenchComponentKind kind,

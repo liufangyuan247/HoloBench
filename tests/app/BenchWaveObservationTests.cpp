@@ -59,7 +59,9 @@ TEST_CASE("placed double slit produces the expected movable-screen fringe scale"
 
     auto movedScene = project.scene;
     auto movedScreen = *movedScene.find("wave-screen");
-    movedScreen.transform.translationMetres.z = 0.80;
+    auto desiredTransform = movedScreen.transform;
+    desiredTransform.translationMetres.z = 0.80;
+    scene::rebaseMechanicalAssembly(movedScreen, desiredTransform);
     movedScene.replace(movedScreen.id, movedScreen);
     CHECK(nearResult.isStaleFor(movedScene));
     graph = ray::traceDynamicBench(movedScene);
@@ -92,8 +94,10 @@ TEST_CASE("live wave screen follows decentered and rotated free placement") {
     auto project = app::makeDoubleSlitExperimentPreset();
 
     auto screen = *project.scene.find("wave-screen");
-    screen.transform.translationMetres.x = 0.50e-3;
-    screen.transform.translationMetres.y = -0.25e-3;
+    auto desiredTransform = screen.transform;
+    desiredTransform.translationMetres.x = 0.50e-3;
+    desiredTransform.translationMetres.y -= 0.25e-3;
+    scene::rebaseMechanicalAssembly(screen, desiredTransform);
     project.scene.replace(screen.id, screen);
     auto graph = ray::traceDynamicBench(project.scene);
     const auto shifted = app::observeBenchWavePattern(
@@ -108,11 +112,13 @@ TEST_CASE("live wave screen follows decentered and rotated free placement") {
 
     screen = *project.scene.find("wave-screen");
     constexpr double angle = 0.005;
-    screen.transform.localXAxisInWorld = {
+    desiredTransform = screen.transform;
+    desiredTransform.localXAxisInWorld = {
         std::cos(angle), 0.0, -std::sin(angle)};
-    screen.transform.localYAxisInWorld = {0.0, 1.0, 0.0};
-    screen.transform.localZAxisInWorld = {
+    desiredTransform.localYAxisInWorld = {0.0, 1.0, 0.0};
+    desiredTransform.localZAxisInWorld = {
         std::sin(angle), 0.0, std::cos(angle)};
+    scene::rebaseMechanicalAssembly(screen, desiredTransform);
     project.scene.replace(screen.id, screen);
     graph = ray::traceDynamicBench(project.scene);
     const auto tilted = app::observeBenchWavePattern(
@@ -162,7 +168,9 @@ TEST_CASE("live wave screen rejects stale ambiguous and upstream observations") 
 
     auto staleScene = project.scene;
     auto screen = *staleScene.find("wave-screen");
-    screen.transform.translationMetres.x = 0.001;
+    auto desiredTransform = screen.transform;
+    desiredTransform.translationMetres.x = 0.001;
+    scene::rebaseMechanicalAssembly(screen, desiredTransform);
     staleScene.replace(screen.id, screen);
     CHECK_THROWS_AS(
         static_cast<void>(app::observeBenchWavePattern(
@@ -182,7 +190,9 @@ TEST_CASE("live wave screen rejects stale ambiguous and upstream observations") 
 
     auto upstreamScene = project.scene;
     screen = *upstreamScene.find("wave-screen");
-    screen.transform.translationMetres.z = -0.20;
+    desiredTransform = screen.transform;
+    desiredTransform.translationMetres.z = -0.20;
+    scene::rebaseMechanicalAssembly(screen, desiredTransform);
     upstreamScene.replace(screen.id, screen);
     graph = ray::traceDynamicBench(upstreamScene);
     CHECK_THROWS_WITH_AS(
