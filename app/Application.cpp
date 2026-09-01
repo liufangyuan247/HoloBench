@@ -5487,6 +5487,7 @@ void Application::drawSandboxAlignmentBar() {
     if (ImGui::Button("Snap to beam")) {
         snapSandboxSelectedToNearestBeam();
     }
+    captureLastItemBounds(sandboxUiEvidence_.snapToBeam);
     ImGui::EndChild();
 }
 
@@ -8991,13 +8992,18 @@ void Application::runSandboxInteractionSmoke() {
 
     const auto drawInputFrame = [this](
                                     const glm::vec2& mousePosition,
-                                    int leftButtonState) {
+                                    int leftButtonState,
+                                    ImGuiKey key = ImGuiKey_None,
+                                    int keyState = -1) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGuiIO& io = ImGui::GetIO();
         io.AddMousePosEvent(mousePosition.x, mousePosition.y);
         if (leftButtonState >= 0) {
             io.AddMouseButtonEvent(0, leftButtonState != 0);
+        }
+        if (key != ImGuiKey_None && keyState >= 0) {
+            io.AddKeyEvent(key, keyState != 0);
         }
         ImGui::NewFrame();
         ImGui::SetWindowFocus(
@@ -9190,6 +9196,70 @@ void Application::runSandboxInteractionSmoke() {
             expectedAim) < 1.0 - 1e-12) {
         throw std::runtime_error(
             "Aim +Z UI click did not align the ordinary component transform");
+    }
+
+    const glm::vec2 viewportKeyPoint
+        = sandboxUiEvidence_.viewport.centre();
+    drawInputFrame(viewportKeyPoint, 0, ImGuiKey_E, 1);
+    drawInputFrame(viewportKeyPoint, 0, ImGuiKey_E, 0);
+    if (sandboxGizmoMode_ != SandboxGizmoMode::Rotate) {
+        throw std::runtime_error(
+            "E key input did not activate local-axis rotation handles");
+    }
+    std::size_t rotationAxis = sandboxUiEvidence_.gizmoEndpoints.size();
+    for (std::size_t axis = 0;
+         axis < sandboxUiEvidence_.gizmoEndpoints.size(); ++axis) {
+        if (sandboxUiEvidence_.gizmoEndpoints[axis].visible
+            && !sandboxUiEvidence_.gizmoProjections[axis].isDegenerate) {
+            rotationAxis = axis;
+            break;
+        }
+    }
+    if (rotationAxis == sandboxUiEvidence_.gizmoEndpoints.size()) {
+        throw std::runtime_error(
+            "selected plate exposes no usable local rotation handle");
+    }
+    const auto transformBeforeRotation
+        = selectedAfterAlignment->transform;
+    const glm::vec2 rotationHandle
+        = sandboxUiEvidence_.gizmoEndpoints[rotationAxis].screenPos;
+    dragPoints(
+        rotationHandle,
+        rotationHandle + glm::vec2(32.0F, -16.0F),
+        "selected plate local rotation handle");
+    const auto* selectedAfterRotation
+        = benchProject_.scene.find(gizmoComponentId);
+    if (selectedAfterRotation == nullptr
+        || selectedAfterRotation->transform.translationMetres
+            != transformBeforeRotation.translationMetres
+        || (selectedAfterRotation->transform.localXAxisInWorld
+                == transformBeforeRotation.localXAxisInWorld
+            && selectedAfterRotation->transform.localYAxisInWorld
+                == transformBeforeRotation.localYAxisInWorld
+            && selectedAfterRotation->transform.localZAxisInWorld
+                == transformBeforeRotation.localZAxisInWorld)) {
+        throw std::runtime_error(
+            "local rotation-handle drag did not rotate in place");
+    }
+    math::validateRigidTransform(selectedAfterRotation->transform);
+
+    sandboxBeamSnapDistanceMillimetres_ = 5000.0F;
+    const std::uint64_t revisionBeforeBeamSnap
+        = benchProject_.scene.revision();
+    click(sandboxUiEvidence_.snapToBeam, "Snap to beam action");
+    if (benchProject_.scene.revision() <= revisionBeforeBeamSnap
+        || !errorMessage_.empty()
+        || statusMessage_.find("Snapped component to beam branch #") != 0U) {
+        throw std::runtime_error(
+            "Snap to beam UI click did not apply a traced branch transform");
+    }
+    const glm::vec2 currentViewportKeyPoint
+        = sandboxUiEvidence_.viewport.centre();
+    drawInputFrame(currentViewportKeyPoint, 0, ImGuiKey_W, 1);
+    drawInputFrame(currentViewportKeyPoint, 0, ImGuiKey_W, 0);
+    if (sandboxGizmoMode_ != SandboxGizmoMode::Translate) {
+        throw std::runtime_error(
+            "W key input did not restore world-axis translation handles");
     }
 
     click(sandboxUiEvidence_.transmissionPreset, "Transmission action");

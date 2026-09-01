@@ -446,6 +446,7 @@ struct SandboxUiEvidence final {
     UiItemBounds record;
     UiItemBounds reconstruct;
     UiItemBounds aimAtTarget;
+    UiItemBounds snapToBeam;
     UiItemBounds viewport;
     gizmo::ProjectedPoint selectedComponent;
     std::array<gizmo::ProjectedPoint, 3> gizmoEndpoints {};

@@ -189,9 +189,10 @@ commit and must never block viewport rendering indefinitely.
   and a plate result to produce drawable evidence without GL errors. It also
   uses real ImGui mouse events to clear the Bench, drag a laser and plate onto
   camera-derived table points, drag a constrained world-axis handle, click the
-  contextual Aim +Z action and verify its frame, run all three holography
-  Record/Reconstruct examples, and prove that a later shelf edit stales the
-  visible replay.
+  contextual Aim +Z action and verify its frame, switch to and drag a local
+  rotation handle, snap to a traced beam, switch back to movement, run all three
+  holography Record/Reconstruct examples, and prove that a later shelf edit
+  stales the visible replay.
 
 ## Performance budget
 
