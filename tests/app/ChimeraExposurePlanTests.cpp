@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <set>
 #include <string>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -11,6 +12,7 @@
 
 namespace chimera = holobench::app::chimera;
 namespace holography = holobench::optics::holography;
+namespace slm = holobench::optics::slm;
 
 namespace {
 
@@ -23,6 +25,32 @@ struct CanonicalAutomation final {
     chimera::ExposurePlan plan
         = chimera::generateExposurePlan(recipe, dataset, bench);
 };
+
+slm::CalibratedSlmResponse makeMeasuredSlmResponse() {
+    return slm::CalibratedSlmResponse(std::vector<slm::SlmWavelengthResponse> {{
+        .vacuumWavelengthMetres = 400e-9,
+        .commandResponse = {{0.0, 0.0, 0.0}, {1.0, 0.5, 0.0}},
+    }, {
+        .vacuumWavelengthMetres = 700e-9,
+        .commandResponse = {{0.0, 0.0, 0.0}, {1.0, 0.5, 0.0}},
+    }});
+}
+
+holography::CalibratedMaterialDoseResponse makeMeasuredMaterialResponse() {
+    return {"measured-photopolymer-lot-9", {{
+        .vacuumWavelengthMetres = 400e-9,
+        .doseResponse = {
+            {0.0, 0.001, 0.001},
+            {1e12, 0.02, 0.01},
+        },
+    }, {
+        .vacuumWavelengthMetres = 700e-9,
+        .doseResponse = {
+            {0.0, 0.001, 0.001},
+            {1e12, 0.02, 0.01},
+        },
+    }}};
+}
 
 } // namespace
 
@@ -117,6 +145,56 @@ TEST_CASE("single hogel exposure invokes three independent M8 volume recordings"
     CHECK(wavelengths == std::set<double> {450e-9, 532e-9, 638e-9});
 }
 
+TEST_CASE("calibrated SLM and material LUTs drive physical hogel exposure evidence") {
+    const CanonicalAutomation automation;
+    const auto slmResponse = makeMeasuredSlmResponse();
+    const auto materialResponse = makeMeasuredMaterialResponse();
+    holobench::compute::fft::CpuFftBackend fft;
+    const chimera::HogelExposureExecutionOptions options {
+        .maximumPreviewSampleWidth = 256U,
+        .maximumPreviewSampleHeight = 256U,
+        .slmCalibrationId = "measured-slm-unit-4",
+        .calibratedSlmResponse = &slmResponse,
+        .calibratedMaterialDoseResponse = &materialResponse,
+    };
+    const auto executed = chimera::executeHogelExposure(
+        automation.recipe,
+        automation.dataset,
+        automation.plan,
+        automation.bench,
+        fft,
+        2U,
+        3U,
+        options);
+
+    REQUIRE(executed.channels.size() == 3U);
+    for (const auto& channel : executed.channels) {
+        CHECK(channel.calibratedSlmResponseApplied);
+        CHECK(channel.slmCalibrationId == "measured-slm-unit-4");
+        CHECK(channel.calibratedMaterialDoseResponseApplied);
+        CHECK(channel.materialCalibrationId
+            == "measured-photopolymer-lot-9");
+        CHECK(channel.objectMeanIrradianceWattsPerSquareMetre > 0.0);
+        CHECK(channel.referenceMeanIrradianceWattsPerSquareMetre > 0.0);
+        CHECK(channel.fringeVisibility > 0.0);
+        CHECK(channel.fringeVisibility <= 1.0);
+        CHECK(channel.totalDoseJoulesPerSquareMetre
+            > channel.fringeModulationDoseJoulesPerSquareMetre);
+        CHECK(channel.fringeModulationDoseJoulesPerSquareMetre > 0.0);
+        CHECK(channel.referenceFieldDiagnostics.integratedPowerWatts > 0.0);
+        CHECK(channel.objectFieldDiagnostics.appliedSlmCalibrationIds
+            == std::vector<std::string> {"measured-slm-unit-4"});
+        const auto expected = materialResponse.evaluate(
+            channel.recording.pair.wavelengthMetres,
+            channel.fringeModulationDoseJoulesPerSquareMetre);
+        CHECK(channel.recording.material.refractiveIndexModulation
+            == doctest::Approx(expected.refractiveIndexModulation));
+        CHECK(channel.recording.material.isotropicLinearShrinkageFraction
+            == doctest::Approx(
+                expected.isotropicLinearShrinkageFraction));
+    }
+}
+
 TEST_CASE("exposure planning rejects mismatched and unsupported inputs") {
     CanonicalAutomation automation;
     holobench::compute::fft::CpuFftBackend fft;
@@ -151,6 +229,23 @@ TEST_CASE("exposure planning rejects mismatched and unsupported inputs") {
                 fft,
                 automation.recipe.hogels.countX,
                 0U)),
+            std::invalid_argument);
+    }
+    SUBCASE("SLM calibration identity and response must be paired") {
+        CHECK_THROWS_AS(
+            static_cast<void>(chimera::executeHogelExposure(
+                automation.recipe,
+                automation.dataset,
+                automation.plan,
+                automation.bench,
+                fft,
+                0U,
+                0U,
+                {.maximumPreviewSampleWidth = 64U,
+                    .maximumPreviewSampleHeight = 64U,
+                    .slmCalibrationId = "missing-response",
+                    .calibratedSlmResponse = nullptr,
+                    .calibratedMaterialDoseResponse = nullptr})),
             std::invalid_argument);
     }
 }

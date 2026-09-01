@@ -61,6 +61,10 @@ Real perspective content can enter the same hashed data chain through a
 decoder-neutral RGB raster adapter with explicit linear/sRGB transfer and
 area-weighted hogel resampling. A strict P3/P6 PPM loader supplies the built-in
 dependency-free file path; richer image decoders can target the same boundary.
+Single-hogel execution can also attach the existing measured complex SLM LUT
+and a strict measured material dose-response LUT. It derives total and
+fringe-modulation dose from the actual sampled object/reference fields and uses
+the calibrated index modulation and shrinkage in the ordinary M8 recorder.
 
 ## M1 Features
 

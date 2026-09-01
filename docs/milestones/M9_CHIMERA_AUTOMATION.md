@@ -27,8 +27,11 @@ Airy separation/cross-talk evidence; calibrated camera-image synthesis remains
 open. C9.5 deterministic parameter sweeps retain every recipe, constraint,
 SLM diagnostic, M8 RGB efficiency/crossing angle, Airy metric, timeline, and
 artifact-size value used for transparent best-candidate selection. A varied
-exposure axis suppresses physical selection until material-dose calibration
-exists.
+exposure axis suppresses physical selection until material-dose calibration is
+explicitly attached to the sweep. A strict measured material LUT and the
+existing M5 measured complex SLM LUT now attach to single-hogel execution;
+actual sampled object/reference irradiances produce total and fringe-modulation
+dose, and calibrated index modulation/shrinkage drive the M8 recording.
 
 ## User-visible outcome
 

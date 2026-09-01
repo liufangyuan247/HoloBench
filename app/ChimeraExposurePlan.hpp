@@ -7,7 +7,9 @@
 
 #include "app/ChimeraHogelDataset.hpp"
 #include "optics/holography/BenchVolumeHologram.hpp"
+#include "optics/holography/MaterialDoseResponse.hpp"
 #include "optics/holography/PlateFieldSampling.hpp"
+#include "optics/slm/SlmResponse.hpp"
 
 namespace holobench::app::chimera {
 
@@ -74,7 +76,17 @@ struct ExecutedHogelChannelExposure final {
     std::size_t sampleWidth = 0;
     std::size_t sampleHeight = 0;
     bool usedBoundedPreviewSampling = false;
+    bool calibratedSlmResponseApplied = false;
+    std::string slmCalibrationId;
+    bool calibratedMaterialDoseResponseApplied = false;
+    std::string materialCalibrationId;
+    double objectMeanIrradianceWattsPerSquareMetre = 0.0;
+    double referenceMeanIrradianceWattsPerSquareMetre = 0.0;
+    double fringeVisibility = 0.0;
+    double totalDoseJoulesPerSquareMetre = 0.0;
+    double fringeModulationDoseJoulesPerSquareMetre = 0.0;
     optics::holography::PlateFieldSamplingDiagnostics objectFieldDiagnostics;
+    optics::holography::PlateFieldSamplingDiagnostics referenceFieldDiagnostics;
     optics::holography::VolumePlateRecordingResult recording;
 
 };
@@ -82,6 +94,10 @@ struct ExecutedHogelChannelExposure final {
 struct HogelExposureExecutionOptions final {
     std::size_t maximumPreviewSampleWidth = 256;
     std::size_t maximumPreviewSampleHeight = 256;
+    std::string slmCalibrationId;
+    const optics::slm::CalibratedSlmResponse* calibratedSlmResponse = nullptr;
+    const optics::holography::CalibratedMaterialDoseResponse*
+        calibratedMaterialDoseResponse = nullptr;
 };
 
 struct ExecutedHogelExposure final {

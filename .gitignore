@@ -13,3 +13,4 @@ CMakeUserPresets.json
 __pycache__/
 compile_commands.json
 imgui.ini
+/*.autosave

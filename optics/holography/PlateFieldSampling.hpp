@@ -13,6 +13,10 @@ namespace holobench::compute::fft {
 class IFftBackend;
 }
 
+namespace holobench::optics::slm {
+class CalibratedSlmResponse;
+}
+
 namespace holobench::optics::holography {
 
 struct PlacedSlmSparsePixel final {
@@ -33,6 +37,8 @@ struct PlacedSlmSparseCommand final {
     std::size_t pixelWidth = 0;
     std::size_t pixelHeight = 0;
     double defaultNormalizedCommand = 0.0;
+    std::string calibrationId;
+    const optics::slm::CalibratedSlmResponse* calibratedResponse = nullptr;
     std::vector<PlacedSlmSparsePixel> pixels;
 
     bool operator==(const PlacedSlmSparseCommand&) const = default;
@@ -75,6 +81,7 @@ struct PlateFieldSamplingDiagnostics final {
     std::vector<std::string> appliedWaveComponentIds;
     std::vector<std::string> foldedWaveComponentIds;
     std::vector<std::string> appliedSlmCommandIds;
+    std::vector<std::string> appliedSlmCalibrationIds;
     std::vector<std::string> warnings;
 };
 

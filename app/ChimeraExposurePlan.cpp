@@ -180,13 +180,17 @@ optics::holography::PlacedSlmSparseCommand makePlacedSparseCommand(
     const SlmHogelCommand& command,
     std::string componentId,
     std::size_t pixelWidth,
-    std::size_t pixelHeight) {
+    std::size_t pixelHeight,
+    std::string calibrationId,
+    const optics::slm::CalibratedSlmResponse* calibratedResponse) {
     optics::holography::PlacedSlmSparseCommand result {
         .componentId = std::move(componentId),
         .commandId = command.commandId,
         .pixelWidth = pixelWidth,
         .pixelHeight = pixelHeight,
         .defaultNormalizedCommand = 0.0,
+        .calibrationId = std::move(calibrationId),
+        .calibratedResponse = calibratedResponse,
         .pixels = {},
     };
     result.pixels.reserve(command.pixels.size());
@@ -590,6 +594,13 @@ ExecutedHogelExposure executeHogelExposure(
         throw std::invalid_argument(
             "hogel exposure preview sampling must be in [32, 2048]");
     }
+    if ((options.calibratedSlmResponse == nullptr)
+            != options.slmCalibrationId.empty()
+        || (!options.slmCalibrationId.empty()
+            && !optics::scene::isStableBenchId(options.slmCalibrationId))) {
+        throw std::invalid_argument(
+            "hogel exposure SLM calibration identity is invalid");
+    }
     if (computeHogelDatasetContentHash(dataset) != dataset.contentHash
         || computeExposurePlanContentHash(plan) != plan.contentHash
         || plan.sourceRecipeId != recipe.recipeId
@@ -687,7 +698,9 @@ ExecutedHogelExposure executeHogelExposure(
             command,
             event.slmComponentId,
             dataset.slmPixelWidth,
-            dataset.slmPixelHeight);
+            dataset.slmPixelHeight,
+            options.slmCalibrationId,
+            options.calibratedSlmResponse);
         const std::array sparseCommands {sparseCommand};
         auto sampling = recordingRecipe.sampling;
         sampling.sampleWidth = std::min(
@@ -713,12 +726,76 @@ ExecutedHogelExposure executeHogelExposure(
             throw std::invalid_argument(
                 "placed sparse SLM command produced no sampled object field");
         }
+        optics::holography::PlateFieldSamplingDiagnostics referenceDiagnostics;
+        double objectIrradiance = 0.0;
+        double referenceIrradiance = 0.0;
+        double fringeVisibility = 0.0;
+        double totalDose = 0.0;
+        double modulationDose = 0.0;
+        auto material = recordingRecipe.volumeMaterial;
+        std::string materialCalibrationId;
+        if (options.calibratedMaterialDoseResponse != nullptr) {
+            const auto sampledReference
+                = optics::holography::samplePlateIncidentField(
+                    channelProject.scene,
+                    fields,
+                    pair.referenceBranchId,
+                    sampling,
+                    fftBackend);
+            referenceDiagnostics = sampledReference.diagnostics;
+            const double sampledArea
+                = sampledObject.diagnostics.sampledExtentWidthMetres
+                * sampledObject.diagnostics.sampledExtentHeightMetres;
+            if (!std::isfinite(sampledArea) || sampledArea <= 0.0
+                || sampledReference.diagnostics.sampledExtentWidthMetres
+                        != sampledObject.diagnostics.sampledExtentWidthMetres
+                || sampledReference.diagnostics.sampledExtentHeightMetres
+                        != sampledObject.diagnostics.sampledExtentHeightMetres) {
+                throw std::logic_error(
+                    "calibrated exposure fields do not share a physical area");
+            }
+            objectIrradiance
+                = sampledObject.diagnostics.integratedPowerWatts / sampledArea;
+            referenceIrradiance
+                = sampledReference.diagnostics.integratedPowerWatts / sampledArea;
+            if (!std::isfinite(objectIrradiance)
+                || !std::isfinite(referenceIrradiance)
+                || objectIrradiance <= 0.0 || referenceIrradiance <= 0.0) {
+                throw std::invalid_argument(
+                    "calibrated exposure requires non-zero finite object and reference irradiance");
+            }
+            const double sumIrradiance
+                = objectIrradiance + referenceIrradiance;
+            const double modulationIrradiance = 2.0
+                * std::sqrt(objectIrradiance)
+                * std::sqrt(referenceIrradiance);
+            fringeVisibility = modulationIrradiance / sumIrradiance;
+            totalDose = sumIrradiance * event.durationSeconds;
+            modulationDose = modulationIrradiance * event.durationSeconds;
+            if (!std::isfinite(sumIrradiance)
+                || !std::isfinite(modulationIrradiance)
+                || !std::isfinite(fringeVisibility)
+                || !std::isfinite(totalDose)
+                || !std::isfinite(modulationDose)
+                || fringeVisibility <= 0.0 || fringeVisibility > 1.0) {
+                throw std::overflow_error(
+                    "calibrated exposure dose is not representable");
+            }
+            const auto evaluated
+                = options.calibratedMaterialDoseResponse->evaluate(
+                    event.wavelengthMetres, modulationDose);
+            material.refractiveIndexModulation
+                = evaluated.refractiveIndexModulation;
+            material.isotropicLinearShrinkageFraction
+                = evaluated.isotropicLinearShrinkageFraction;
+            materialCalibrationId = evaluated.calibrationId;
+        }
         auto recording = optics::holography::recordVolumePlate(
             channelProject.scene,
             fields,
             pair.objectBranchId,
             pair.referenceBranchId,
-            recordingRecipe.volumeMaterial);
+            material);
         result.channels.push_back({
             .hogelX = hogelX,
             .hogelY = hogelY,
@@ -736,7 +813,20 @@ ExecutedHogelExposure executeHogelExposure(
                 = sampling.sampleWidth != recordingRecipe.sampling.sampleWidth
                 || sampling.sampleHeight
                     != recordingRecipe.sampling.sampleHeight,
+            .calibratedSlmResponseApplied
+                = options.calibratedSlmResponse != nullptr,
+            .slmCalibrationId = options.slmCalibrationId,
+            .calibratedMaterialDoseResponseApplied
+                = options.calibratedMaterialDoseResponse != nullptr,
+            .materialCalibrationId = std::move(materialCalibrationId),
+            .objectMeanIrradianceWattsPerSquareMetre = objectIrradiance,
+            .referenceMeanIrradianceWattsPerSquareMetre
+                = referenceIrradiance,
+            .fringeVisibility = fringeVisibility,
+            .totalDoseJoulesPerSquareMetre = totalDose,
+            .fringeModulationDoseJoulesPerSquareMetre = modulationDose,
             .objectFieldDiagnostics = sampledObject.diagnostics,
+            .referenceFieldDiagnostics = std::move(referenceDiagnostics),
             .recording = std::move(recording),
         });
     }

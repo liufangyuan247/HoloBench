@@ -54,9 +54,9 @@ stores stable automation provenance while the hashed dataset owns the command
 payload. This avoids bloating every scene snapshot while keeping the actual
 wave-path transfer explicit.
 
-The current M8 material model uses configured refractive-index modulation and
-does not derive modulation from exposure dose, reciprocity failure, RGB
-sensitivity, or measured material curves. Exposure seconds therefore govern
-the event timeline but do not yet change diffraction efficiency. This limit
-must remain visible until a calibration-ready dose adapter is added; parameter
-sweeps may not claim exposure optimization before that adapter exists.
+Without an attached material calibration, M8 continues to use the configured
+refractive-index modulation and exposure seconds govern only the timeline.
+[ADR 0022](0022-chimera-calibrated-slm-and-material-dose.md) adds an explicit
+measured SLM and material-dose path that can change per-channel M8 material and
+efficiency. Parameter sweeps still may not claim exposure optimization until
+they explicitly consume that calibrated path.

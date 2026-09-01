@@ -461,9 +461,19 @@ completion because it is primarily driven through fixed parameter panels:
   object-field evidence, and invokes three independent M8 volume recordings.
   Interactive execution defaults to a bounded 256x256 preview; the canonical
   1024x1024 request remains an offline batch target. The ideal timeline excludes
-  real device settle/load latency, and exposure duration does not yet drive the
-  configured material index modulation. See
+  real device settle/load latency. Without calibration, exposure duration does
+  not drive the configured material index modulation. See
   [ADR 0018](adr/0018-chimera-exposure-plan-and-sparse-slm-transfer.md).
+- **Calibrated SLM and material-dose execution**: A transient sparse placed-SLM
+  command can apply the existing M5 measured complex-response LUT at the actual
+  channel wavelength. A strict versioned material LUT maps measured
+  fringe-modulation dose and wavelength to index modulation and shrinkage,
+  rejecting extrapolation. Execution samples both real object and reference
+  fields on the same hogel area, reports their mean irradiances, ideal fringe
+  visibility, total and modulation dose, both calibration IDs, and invokes M8
+  with the calibrated material. Uncalibrated execution remains unchanged; the
+  scalar area-average and chemistry/history limitations are explicit. See
+  [ADR 0022](adr/0022-chimera-calibrated-slm-and-material-dose.md).
 - **Single- and bounded multi-hogel directional reconstruction**: A versioned
   reconstruction request selects stable view IDs and hogel coordinates. The
   result closes the shared `theta=atan(-x_slm/f)` Fourier sign oracle, weights
@@ -482,11 +492,12 @@ completion because it is primarily driven through fixed parameter panels:
   artifact byte count, evaluation issue, and hard-constraint violation.
   Candidates passing user constraints are ranked by the documented stable
   lexicographic policy rather than an opaque optimizer. More than one exposure
-  value suppresses physical best selection because dose does not yet drive the
-  material response. Canonical JSON exposes all selection evidence. See
+  value suppresses physical best selection until the measured material response
+  is explicitly attached to sweep evaluation. Canonical JSON exposes all
+  selection evidence. See
   [ADR 0020](adr/0020-chimera-deterministic-parameter-sweep.md).
 - **Current M9 validation**: Windows Clang warnings-as-errors core/application
-  builds pass; `core-ci` passes 530/530 and `dev` passes 532/532 including GPU
+  builds pass; `core-ci` passes 534/534 and `dev` passes 536/536 including GPU
   and font executables. Hidden OpenGL smoke renders and semantically
   round-trips the generated 23-component bench, finds its six plate branches,
   and exits with no GL errors on AMD Radeon Pro 5300M. GitHub Actions run
@@ -497,8 +508,10 @@ completion because it is primarily driven through fixed parameter panels:
   [33454882017](https://github.com/liufangyuan247/HoloBench/actions/runs/33454882017)
   passes the same four jobs through directional reconstruction. Run
   [33455832150](https://github.com/liufangyuan247/HoloBench/actions/runs/33455832150)
-  passes all four jobs through deterministic parameter sweeps. Remote evidence
-  for the real perspective-raster adapter remains pending.
+  passes all four jobs through deterministic parameter sweeps. Run
+  [33456409971](https://github.com/liufangyuan247/HoloBench/actions/runs/33456409971)
+  passes all four jobs through the real perspective-raster adapter. Remote
+  evidence for calibrated SLM/material-dose execution remains pending.
 
 ## Known limitations (M1/M2)
 
@@ -510,8 +523,8 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Add calibrated material-dose and measured SLM/camera LUT hooks.
-2. Add spectral/pupil camera reconstruction and bounded image composition.
+1. Add measured camera LUT plus spectral/pupil reconstruction and bounded image composition.
+2. Let calibrated material response participate in exposure parameter sweeps.
 3. Expose real image import, dataset, exposure, preview, sweep, and batch controls in the Lab UI.
 4. Add resumable batch execution, corrupt-artifact rejection, named budgets,
    and cross-platform M9 acceptance gates.

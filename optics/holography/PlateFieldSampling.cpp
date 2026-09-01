@@ -12,6 +12,7 @@
 
 #include "compute/fft/IFftBackend.hpp"
 #include "compute/propagation/AngularSpectrumPropagator.hpp"
+#include "optics/slm/SlmResponse.hpp"
 
 namespace holobench::optics::holography {
 namespace {
@@ -363,6 +364,13 @@ void validateSparseSlmCommands(
             throw std::invalid_argument(
                 "placed sparse SLM command does not match its component");
         }
+        if ((command.calibratedResponse == nullptr)
+                != command.calibrationId.empty()
+            || (!command.calibrationId.empty()
+                && !scene::isStableBenchId(command.calibrationId))) {
+            throw std::invalid_argument(
+                "placed sparse SLM calibration identity is invalid");
+        }
         std::pair<std::size_t, std::size_t> previous {};
         bool first = true;
         for (const auto& pixel : command.pixels) {
@@ -492,7 +500,15 @@ void applyProjectedElement(
                             p, location.column, location.row)
                         : evaluateSparseCommand(
                             *sparse, location.column, location.row);
-                    if (p.modulationMode
+                    if (sparse != nullptr
+                        && sparse->calibratedResponse != nullptr) {
+                        const auto response
+                            = sparse->calibratedResponse->evaluate(
+                                value.vacuumWavelengthMetres(), command);
+                        amplitudeTransmission
+                            = response.amplitudeTransmission;
+                        phase = response.unwrappedPhaseDelayRadians;
+                    } else if (p.modulationMode
                         == scene::SlmModulationMode::Amplitude) {
                         amplitudeTransmission = command;
                     } else {
@@ -543,6 +559,10 @@ void applyProjectedElement(
         diagnostics.appliedSlmCommandIds.push_back(
             std::get<scene::SpatialLightModulatorParameters>(
                 component.parameters).commandId);
+        if (sparse != nullptr && sparse->calibratedResponse != nullptr) {
+            diagnostics.appliedSlmCalibrationIds.push_back(
+                sparse->calibrationId);
+        }
     }
     diagnostics.appliedWaveComponentIds.push_back(component.id);
 }

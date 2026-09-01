@@ -124,8 +124,9 @@
   thickness, vector/polarization, and high-NA longitudinal effects remain
   explicit. Placed SLMs apply persisted ideal amplitude/phase commands using
   uniform, wrapped linear-ramp, or checkerboard recipes with bit-depth
-  quantization and manual/automation provenance. Arbitrary image/hogel raster
-  artifacts and calibrated complex-response attachment remain M9 work.
+  quantization and manual/automation provenance. M9 transient hogel rasters can
+  attach the existing measured complex-response LUT without altering the saved
+  bench; general persisted per-component calibration remains open.
 - Plate candidates currently infer object branches from an Object/Wavefront
   Source and reference branches from a Laser Source. They classify same-side
   transmission versus opposite-side reflection geometry and reject
@@ -151,8 +152,10 @@
 - Transmission, reflection/Denisyuk, and RGB full-colour buttons load ordinary
   editable `BenchProject` layouts. All three have placed-bench recording and
   reconstruction paths in their stated thin/volume/scalar domains. General
-  off-axis resampling and calibrated material/colour response remain
-  incomplete.
+  off-axis resampling and calibrated colour response remain incomplete. M9 can
+  attach a measured scalar material dose LUT to a single-hogel execution, but
+  cumulative multi-hogel chemistry and unmeasured-dose extrapolation are not
+  modeled.
 - The dynamic bench has its own bounded scene-wide undo/redo timeline. The
   separate legacy history still covers lesson-relevant fixed optical-bench,
   Wave Detector, Sampling Debugger, and SLM inputs, but not Real Lens or the
