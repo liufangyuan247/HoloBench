@@ -508,6 +508,37 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## M9 CHIMERA automation state
 
+- **Real multi-view manifest input and bounded region replay**: A strict
+  versioned manifest supplies two to 256 real P3/P6 perspective views with
+  explicit radian angles, relative or absolute paths, and per-view linear/sRGB
+  transfer declarations. Relative paths resolve beside the manifest and every
+  raster is bounded and area-resampled into the recipe's hogel grid before the
+  dataset hash is created. The contextual Bench bar can prepare either these
+  real views or the labelled canonical oracle. Completed batch evidence can
+  reconstruct a user-bounded first 1-64 hogel region for the selected view and
+  place its finite-pupil camera image on the actual Probe.
+- **Resumable bounded print batches and visible sweeps**: A strict hashed
+  format-v1 batch artifact executes in canonical row-major order and observes
+  cancellation only between complete three-channel hogels. Every atomic
+  checkpoint binds recipe/dataset/plan hashes, project identity, exact scene
+  revision, stage position, RGB wavelength identity, and M8 diffraction
+  efficiency. Loading rejects corruption or a stale Bench and restores only
+  the compact evidence required for directional reconstruction; transient
+  sampled fields are deliberately rerun rather than masquerading as restored.
+  The shared Bench exposes New Batch, bounded Run + Checkpoint, Pause, progress,
+  load, and save. Its Inspector also runs an editable three-candidate relay
+  sweep, shows retained efficiency/cross-talk/artifact metrics, and can compile
+  the transparently selected recipe back into an ordinary editable Bench. See
+  [ADR 0024](adr/0024-chimera-resumable-batch-checkpoints.md).
+- **Named M9 resource gate**: The
+  `chimera/selected_hogel_rgb_record_reconstruct_camera_cpu` benchmark covers
+  a 256x256 three-channel M8 exposure, directional reconstruction, and finite-
+  pupil camera capture. On the local Windows/Clang reference run it completed
+  in 1161.105 ms against a 30000 ms ceiling in the optimized `core-ci` build
+  on an Intel Core i7-9750H / Windows 10 19045 host. Canonical artifacts occupied
+  1,273,819 bytes and the deliberately conservative twelve-complex-field peak
+  estimate was 13,856,731 bytes against a 64 MiB budget. The gate is now wired
+  into Windows and Linux core CI.
 - **Shared-Bench automation workflow**: The generated 23-component ordinary
   Bench now exposes contextual Generate Dataset/Plan, Expose Selected RGB Hogel,
   and Reconstruct View to Probe actions. Product workflow state binds recipe,
@@ -623,7 +654,8 @@ completion because it is primarily driven through fixed parameter panels:
   selection evidence. See
   [ADR 0020](adr/0020-chimera-deterministic-parameter-sweep.md).
 - **Current M9 validation**: Windows Clang warnings-as-errors core/application
-  builds pass; `core-ci` passes 553/553 and `dev` passes 555/555. The updated
+  builds pass; `core-ci` passes 561 headless cases and `dev` passes 563 total
+  cases including font/GPU gates. The updated
   development build, targeted gizmo/alignment tests, and OpenGL smoke pass. The
   development gate includes GPU and font executables. Hidden OpenGL smoke
   drives the compact Bench actions with real ImGui mouse events for

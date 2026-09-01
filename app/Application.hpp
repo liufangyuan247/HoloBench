@@ -18,6 +18,8 @@
 #include "app/BenchEditHistory.hpp"
 #include "app/BenchProject.hpp"
 #include "app/ChimeraBenchWorkflow.hpp"
+#include "app/ChimeraBatch.hpp"
+#include "app/ChimeraParameterSweep.hpp"
 #include "app/ChimeraRecipe.hpp"
 #include "app/LessonEditHistory.hpp"
 #include "app/HolographyLabPipeline.hpp"
@@ -554,8 +556,15 @@ private:
         const chimera::ChimeraRecipe& recipe,
         std::string sourceLabel);
     void prepareChimeraAutomation();
+    void prepareChimeraAutomationFromManifest();
     void executeSelectedChimeraHogel();
     void reconstructSelectedChimeraHogel();
+    void createChimeraBatch();
+    void runChimeraBatchSlice();
+    void pauseChimeraBatch();
+    void reconstructChimeraBatchRegion();
+    void runChimeraRelaySweep();
+    void applyBestChimeraSweepCandidate();
     void recomputeRecordingRecipe(
         const optics::holography::PlateIncidentFieldSet& fields,
         const HologramRecordingRecipe& recipe);
@@ -621,6 +630,12 @@ private:
     int chimeraHogelY_ = 2;
     int chimeraViewIndex_ = 7;
     float chimeraCameraDisplayGamma_ = 2.2F;
+    std::unique_ptr<chimera::ChimeraBatchArtifact> chimeraBatch_;
+    std::unique_ptr<chimera::ChimeraSweepResult> chimeraSweepResult_;
+    int chimeraBatchSliceHogels_ = 1;
+    int chimeraReconstructionRegionHogels_ = 16;
+    float chimeraSweepRelayFocalLengthsMillimetres_[3] {40.0F, 50.0F, 60.0F};
+    float chimeraSweepMaximumCrosstalk_ = 0.10F;
 
     GizmoTarget selectedTarget_ = GizmoTarget::None;
     GizmoTarget draggedTarget_ = GizmoTarget::None;
@@ -743,6 +758,8 @@ private:
     char projectPathBuffer_[512] = "holobench_scene.json";
     char benchProjectPathBuffer_[512] = "holobench_bench.json";
     char chimeraRecipePathBuffer_[512] = "chimera_recipe.json";
+    char chimeraViewManifestPathBuffer_[512] = "chimera_views.json";
+    char chimeraBatchPathBuffer_[512] = "chimera_batch.json";
     char reflectionProjectPathBuffer_[512] = "reflection_workbench.json";
     char realLensPathBuffer_[512] = "holobench_lens.json";
     char slmCalibrationPathBuffer_[512] = "slm_response.json";

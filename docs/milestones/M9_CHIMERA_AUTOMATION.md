@@ -58,6 +58,25 @@ drives the three actions with real ImGui mouse events and verifies the submitted
 Probe texture. The bundled camera response is explicitly a nominal relative
 preview, not measured calibration.
 
+Batch execution is now resumable through a strict hashed format-v1 artifact.
+It checkpoints only complete RGB hogels in deterministic row-major order,
+observes cancellation at hogel boundaries, uses atomic replacement, rejects
+corruption and stale Bench revisions, and restores compact directional-
+reconstruction evidence without claiming to restore discarded complex fields.
+The Bench exposes batch progress/load/save controls and a visible three-
+candidate relay sweep whose retained metrics and selected recipe can be built
+back into the ordinary editable Bench. A named 256x256 selected-hogel CPU gate
+covers RGB M8 exposure through finite-pupil camera output with a 30 s latency
+ceiling and a conservative 64 MiB working-memory budget; Windows/Linux CI now
+runs the gate.
+
+Real view input now has a strict manifest boundary: two to 256 entries declare
+stable view ID, horizontal/vertical radians, relative or absolute P3/P6 path,
+and explicit linear or IEC sRGB transfer. The files are bounded and
+deterministically area-resampled into the hogel grid before hashing. A completed
+batch can reconstruct a bounded first 1-64 hogel region for the selected view
+and send its finite-pupil camera image to the placed Probe.
+
 ## User-visible outcome
 
 A user provides a printing specification—scene/views, hogel pitch and count,
@@ -147,7 +166,7 @@ solver graph that cannot be represented by the shared bench document.
   viewpoints and reports cross-talk/resolution evidence.
 - [x] Parameter sweeps are deterministic and retain every constraint/metric
   used to select a candidate.
-- [ ] Batch cancellation/resume and corrupt-artifact rejection are tested.
+- [x] Batch cancellation/resume and corrupt-artifact rejection are tested.
 - [ ] Named CPU/GPU performance and memory budgets, renderer smoke, and
   Windows/Linux CI pass.
 

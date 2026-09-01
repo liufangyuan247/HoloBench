@@ -37,6 +37,11 @@ struct ChimeraBenchWorkflow final {
     const ChimeraRecipe &recipe, const BenchProject &bench,
     std::size_t horizontalViewCount = 5, std::size_t verticalViewCount = 3);
 
+[[nodiscard]] ChimeraBenchWorkflow
+prepareChimeraBenchWorkflow(const ChimeraRecipe &recipe,
+                            const BenchProject &bench,
+                            std::vector<PerspectiveViewImage> perspectiveViews);
+
 [[nodiscard]] bool
 isChimeraBenchWorkflowCurrent(const ChimeraBenchWorkflow &workflow,
                               const BenchProject &bench) noexcept;

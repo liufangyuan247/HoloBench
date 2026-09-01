@@ -42,6 +42,12 @@ jobs:
       - name: Run M8 holography-sandbox performance gate (Linux)
         if: runner.os == 'Linux'
         run: ./out/build/core-ci/holobench_m8_benchmark
+      - name: Run M9 CHIMERA automation performance gate (Windows)
+        if: runner.os == 'Windows'
+        run: .\out\build\core-ci\holobench_m9_benchmark.exe
+      - name: Run M9 CHIMERA automation performance gate (Linux)
+        if: runner.os == 'Linux'
+        run: ./out/build/core-ci/holobench_m9_benchmark
 
   app-compile:
     name: Application Compile (${{ matrix.os }})

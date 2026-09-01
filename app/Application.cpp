@@ -37,6 +37,7 @@
 #include "app/BenchRecordingRecipe.hpp"
 #include "app/BenchSourceSpectrum.hpp"
 #include "app/ChimeraBenchWorkflow.hpp"
+#include "app/ChimeraPerspectiveManifest.hpp"
 #include "app/SlmInterferenceProject.hpp"
 #include "app/UiFont.hpp"
 #include "app/lessons/LessonProgress.hpp"
@@ -895,6 +896,8 @@ void Application::buildChimeraBench(
         if (applyDynamicBenchProject(std::move(compiled.project), status)) {
             chimeraRecipe_ = recipe;
             chimeraWorkflow_.reset();
+            chimeraBatch_.reset();
+            chimeraSweepResult_.reset();
             sandboxRecordedExperiment_ = SandboxRecordedExperiment::None;
             sandboxPlateRecording_.reset();
             sandboxPlateReplay_.reset();
@@ -929,6 +932,8 @@ void Application::prepareChimeraAutomation() {
     const std::string datasetHash = workflow.dataset.contentHash;
     chimeraWorkflow_ = std::make_unique<chimera::ChimeraBenchWorkflow>(
         std::move(workflow));
+    chimeraBatch_.reset();
+    chimeraSweepResult_.reset();
     if (chimeraCameraTexture_) {
         chimeraCameraTexture_->destroy();
     }
@@ -936,6 +941,36 @@ void Application::prepareChimeraAutomation() {
     statusMessage_ = "Prepared CHIMERA dataset " + datasetHash
         + " and " + std::to_string(eventCount)
         + " deterministic exposure events from the current Bench";
+}
+
+void Application::prepareChimeraAutomationFromManifest() {
+    auto views = chimera::loadPerspectiveViewManifest(
+        chimeraViewManifestPathBuffer_, chimeraRecipe_);
+    auto workflow = chimera::prepareChimeraBenchWorkflow(
+        chimeraRecipe_, benchProject_, std::move(views));
+    chimeraHogelX_ = std::clamp(
+        chimeraHogelX_, 0,
+        static_cast<int>(chimeraRecipe_.hogels.countX - 1U));
+    chimeraHogelY_ = std::clamp(
+        chimeraHogelY_, 0,
+        static_cast<int>(chimeraRecipe_.hogels.countY - 1U));
+    chimeraViewIndex_ = std::clamp(
+        chimeraViewIndex_, 0,
+        static_cast<int>(workflow.dataset.sourceViews.size() - 1U));
+    const std::size_t viewCount = workflow.dataset.sourceViews.size();
+    const std::size_t eventCount = workflow.plan.events.size();
+    const std::string datasetHash = workflow.dataset.contentHash;
+    chimeraWorkflow_ = std::make_unique<chimera::ChimeraBenchWorkflow>(
+        std::move(workflow));
+    chimeraBatch_.reset();
+    chimeraSweepResult_.reset();
+    if (chimeraCameraTexture_) {
+        chimeraCameraTexture_->destroy();
+    }
+    errorMessage_.clear();
+    statusMessage_ = "Prepared " + std::to_string(viewCount)
+        + " real manifest views as dataset " + datasetHash + " and "
+        + std::to_string(eventCount) + " exposure events";
 }
 
 void Application::executeSelectedChimeraHogel() {
@@ -1019,6 +1054,198 @@ void Application::reconstructSelectedChimeraHogel() {
     statusMessage_ = "Reconstructed " + view.viewId + " from hogel ("
         + std::to_string(x) + ", " + std::to_string(y)
         + ") on placed observation " + sandboxObservationComponentId_;
+}
+
+void Application::createChimeraBatch() {
+    if (!chimeraWorkflow_
+        || !chimera::isChimeraBenchWorkflowCurrent(
+            *chimeraWorkflow_, benchProject_)) {
+        throw std::runtime_error(
+            "prepare current CHIMERA data before creating a batch");
+    }
+    chimeraBatch_ = std::make_unique<chimera::ChimeraBatchArtifact>(
+        chimera::createChimeraBatchArtifact(
+            "chimera-print-batch",
+            chimeraWorkflow_->recipe,
+            chimeraWorkflow_->dataset,
+            chimeraWorkflow_->plan,
+            benchProject_));
+    chimera::saveChimeraBatchArtifact(
+        *chimeraBatch_, chimeraBatchPathBuffer_);
+    errorMessage_.clear();
+    statusMessage_ = "Created atomic CHIMERA batch checkpoint: "
+        + std::string(chimeraBatchPathBuffer_);
+}
+
+void Application::runChimeraBatchSlice() {
+    if (!chimeraWorkflow_ || !chimeraBatch_ || !detectorFftBackend_) {
+        throw std::runtime_error(
+            "create a current CHIMERA batch before running it");
+    }
+    const std::size_t slice = static_cast<std::size_t>(
+        std::clamp(chimeraBatchSliceHogels_, 1, 4));
+    const auto executed = chimera::runChimeraBatchSlice(
+        *chimeraBatch_,
+        chimeraWorkflow_->recipe,
+        chimeraWorkflow_->dataset,
+        chimeraWorkflow_->plan,
+        benchProject_,
+        *detectorFftBackend_,
+        slice);
+    for (auto exposure : executed.executedHogels) {
+        const auto existing = std::find_if(
+            chimeraWorkflow_->exposures.begin(),
+            chimeraWorkflow_->exposures.end(),
+            [&](const auto& value) {
+                return value.hogelX == exposure.hogelX
+                    && value.hogelY == exposure.hogelY;
+            });
+        if (existing == chimeraWorkflow_->exposures.end()) {
+            chimeraWorkflow_->exposures.push_back(std::move(exposure));
+        } else {
+            *existing = std::move(exposure);
+        }
+    }
+    chimera::saveChimeraBatchArtifact(
+        *chimeraBatch_, chimeraBatchPathBuffer_);
+    errorMessage_.clear();
+    statusMessage_ = "Checkpointed CHIMERA batch at "
+        + std::to_string(executed.completedHogelCount) + "/"
+        + std::to_string(executed.totalHogelCount) + " complete hogels";
+}
+
+void Application::pauseChimeraBatch() {
+    if (!chimeraWorkflow_ || !chimeraBatch_ || !detectorFftBackend_) {
+        throw std::runtime_error("no current CHIMERA batch can be paused");
+    }
+    std::atomic_bool cancelled {true};
+    static_cast<void>(chimera::runChimeraBatchSlice(
+        *chimeraBatch_,
+        chimeraWorkflow_->recipe,
+        chimeraWorkflow_->dataset,
+        chimeraWorkflow_->plan,
+        benchProject_,
+        *detectorFftBackend_,
+        1U,
+        {},
+        &cancelled));
+    chimera::saveChimeraBatchArtifact(
+        *chimeraBatch_, chimeraBatchPathBuffer_);
+    errorMessage_.clear();
+    statusMessage_ = "Paused CHIMERA batch at a complete RGB hogel boundary";
+}
+
+void Application::reconstructChimeraBatchRegion() {
+    if (!chimeraWorkflow_ || !chimeraBatch_
+        || chimeraBatch_->completedHogels.empty()) {
+        throw std::runtime_error(
+            "the current CHIMERA batch has no completed hogel region");
+    }
+    chimera::validateChimeraBatchForWorkflow(
+        *chimeraBatch_,
+        chimeraWorkflow_->recipe,
+        chimeraWorkflow_->dataset,
+        chimeraWorkflow_->plan,
+        benchProject_);
+    const std::size_t count = std::min(
+        chimeraBatch_->completedHogels.size(),
+        static_cast<std::size_t>(std::clamp(
+            chimeraReconstructionRegionHogels_, 1, 64)));
+    std::vector<chimera::HogelSelection> hogels;
+    hogels.reserve(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        hogels.push_back({
+            .x = chimeraBatch_->completedHogels[index].hogelX,
+            .y = chimeraBatch_->completedHogels[index].hogelY,
+        });
+    }
+    chimeraViewIndex_ = std::clamp(
+        chimeraViewIndex_, 0,
+        static_cast<int>(
+            chimeraWorkflow_->dataset.sourceViews.size() - 1U));
+    const auto& view = chimeraWorkflow_->dataset.sourceViews[
+        static_cast<std::size_t>(chimeraViewIndex_)];
+    const std::array views {view.viewId};
+    chimera::reconstructChimeraViews(
+        *chimeraWorkflow_,
+        benchProject_,
+        hogels,
+        views,
+        "chimera-batch-region-preview");
+
+    chimera::CameraImageRequest request;
+    request.jobId = "chimera-batch-region-camera-preview";
+    request.pupilPlaneDistanceMetres = 0.03;
+    request.pupilCentreXMetres = request.pupilPlaneDistanceMetres
+        * std::tan(view.horizontalAngleRadians);
+    request.pupilCentreYMetres = request.pupilPlaneDistanceMetres
+        * std::tan(view.verticalAngleRadians);
+    request.pupilDiameterMetres = 2e-3;
+    request.focalLengthMetres = 2.5e-3;
+    request.pixelWidth = 129U;
+    request.pixelHeight = 129U;
+    request.pixelPitchXMetres = 10e-6;
+    request.pixelPitchYMetres = 10e-6;
+    chimera::captureChimeraCameraImage(
+        *chimeraWorkflow_,
+        benchProject_,
+        request,
+        makeNominalChimeraCameraResponse(),
+        sandboxObservationComponentId_);
+    const auto display = chimera::renderChimeraCameraImage(
+        *chimeraWorkflow_->cameraImage,
+        {1.0, 1.0, 1.0},
+        static_cast<double>(chimeraCameraDisplayGamma_));
+    if (!chimeraCameraTexture_
+        || !chimeraCameraTexture_->uploadImage(display)) {
+        throw std::runtime_error(
+            "OpenGL rejected the CHIMERA batch-region camera texture");
+    }
+    errorMessage_.clear();
+    statusMessage_ = "Reconstructed bounded " + std::to_string(count)
+        + "-hogel batch region for " + view.viewId + " on "
+        + sandboxObservationComponentId_;
+}
+
+void Application::runChimeraRelaySweep() {
+    chimera::ChimeraSweepDefinition definition;
+    definition.sweepId = "bench-relay-sweep";
+    definition.baseRecipe = chimeraRecipe_;
+    definition.axes.relayFocalLengthMetres.reserve(3U);
+    for (const float value : chimeraSweepRelayFocalLengthsMillimetres_) {
+        if (!std::isfinite(value) || value <= 0.0F) {
+            throw std::invalid_argument(
+                "CHIMERA relay sweep focal lengths must be positive");
+        }
+        definition.axes.relayFocalLengthMetres.push_back(
+            static_cast<double>(value) * 1e-3);
+    }
+    if (!std::isfinite(chimeraSweepMaximumCrosstalk_)
+        || chimeraSweepMaximumCrosstalk_ < 0.0F
+        || chimeraSweepMaximumCrosstalk_ > 1.0F) {
+        throw std::invalid_argument(
+            "CHIMERA sweep cross-talk constraint must be in [0, 1]");
+    }
+    definition.constraints.maximumNearestViewCrosstalkFraction
+        = static_cast<double>(chimeraSweepMaximumCrosstalk_);
+    definition.maximumCandidateCount = 3U;
+    chimeraSweepResult_ = std::make_unique<chimera::ChimeraSweepResult>(
+        chimera::runChimeraParameterSweep(definition));
+    errorMessage_.clear();
+    statusMessage_ = "Evaluated three transparent CHIMERA relay candidates"
+        + std::string(chimeraSweepResult_->bestCandidate() != nullptr
+                ? " and selected a feasible best recipe"
+                : " with no candidate satisfying every hard constraint");
+}
+
+void Application::applyBestChimeraSweepCandidate() {
+    if (!chimeraSweepResult_ || chimeraSweepResult_->bestCandidate() == nullptr) {
+        throw std::runtime_error(
+            "CHIMERA sweep has no feasible best candidate to apply");
+    }
+    buildChimeraBench(
+        chimeraSweepResult_->bestCandidate()->recipe,
+        "best transparent relay-sweep candidate");
 }
 
 void Application::recomputeRecordingRecipe(
@@ -2014,6 +2241,8 @@ void Application::shutdown() noexcept {
     sandboxRgbRecording_.reset();
     sandboxRgbReplay_.reset();
     chimeraWorkflow_.reset();
+    chimeraBatch_.reset();
+    chimeraSweepResult_.reset();
     if (imguiGlInitialized_) {
         ImGui_ImplOpenGL3_Shutdown();
         imguiGlInitialized_ = false;
@@ -5997,7 +6226,7 @@ void Application::drawChimeraAutomationBar() {
             *chimeraWorkflow_, benchProject_);
     ImGui::BeginChild(
         "##chimera_automation_bar",
-        ImVec2(0.0F, 116.0F),
+        ImVec2(0.0F, 184.0F),
         ImGuiChildFlags_Borders);
     ImGui::TextUnformatted("CHIMERA Automation on this editable Bench");
     ImGui::SameLine();
@@ -6029,6 +6258,16 @@ void Application::drawChimeraAutomationBar() {
         }
     }
     captureLastItemBounds(sandboxUiEvidence_.chimeraPrepare);
+    ImGui::SameLine();
+    if (ImGui::Button("Load Real View Manifest")) {
+        try {
+            prepareChimeraAutomationFromManifest();
+        } catch (const std::exception& error) {
+            errorMessage_ = "CHIMERA view manifest rejected: "
+                + std::string(error.what());
+            statusMessage_.clear();
+        }
+    }
     ImGui::SameLine();
     ImGui::SetNextItemWidth(72.0F);
     ImGui::InputInt("Hogel X", &chimeraHogelX_);
@@ -6132,6 +6371,71 @@ void Application::drawChimeraAutomationBar() {
             metrics.maximumNearestViewCrosstalkFraction,
             metrics.allRequestedViewsResolvable ? "resolvable" : "unresolved");
     }
+    ImGui::BeginDisabled(!current);
+    if (ImGui::Button("New Print Batch")) {
+        try {
+            createChimeraBatch();
+        } catch (const std::exception& error) {
+            errorMessage_ = "CHIMERA batch creation failed: "
+                + std::string(error.what());
+            statusMessage_.clear();
+        }
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(62.0F);
+    ImGui::InputInt("Slice", &chimeraBatchSliceHogels_);
+    ImGui::SameLine();
+    ImGui::BeginDisabled(
+        !current || !chimeraBatch_ || chimeraBatch_->complete());
+    if (ImGui::Button("Run + Checkpoint")) {
+        try {
+            runChimeraBatchSlice();
+        } catch (const std::exception& error) {
+            errorMessage_ = "CHIMERA batch slice failed: "
+                + std::string(error.what());
+            statusMessage_.clear();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Pause at Hogel Boundary")) {
+        try {
+            pauseChimeraBatch();
+        } catch (const std::exception& error) {
+            errorMessage_ = "CHIMERA batch pause failed: "
+                + std::string(error.what());
+            statusMessage_.clear();
+        }
+    }
+    ImGui::EndDisabled();
+    if (chimeraBatch_) {
+        ImGui::SameLine();
+        const float progress = static_cast<float>(
+            chimeraBatch_->progressFraction());
+        const std::string label
+            = std::to_string(chimeraBatch_->nextLinearHogelIndex) + "/"
+            + std::to_string(chimeraBatch_->totalHogelCount())
+            + " complete RGB hogels";
+        ImGui::ProgressBar(progress, ImVec2(250.0F, 0.0F), label.c_str());
+    }
+    ImGui::SetNextItemWidth(72.0F);
+    ImGui::InputInt(
+        "Region hogels", &chimeraReconstructionRegionHogels_);
+    ImGui::SameLine();
+    ImGui::BeginDisabled(
+        !current || !chimeraBatch_
+        || chimeraBatch_->completedHogels.empty()
+        || sandboxObservationComponentId_.empty());
+    if (ImGui::Button("Reconstruct Bounded Batch Region")) {
+        try {
+            reconstructChimeraBatchRegion();
+        } catch (const std::exception& error) {
+            errorMessage_ = "CHIMERA batch reconstruction failed: "
+                + std::string(error.what());
+            statusMessage_.clear();
+        }
+    }
+    ImGui::EndDisabled();
     ImGui::EndChild();
 }
 
@@ -6248,6 +6552,12 @@ void Application::drawSandboxInspector() {
         "CHIMERA Recipe JSON",
         chimeraRecipePathBuffer_,
         sizeof(chimeraRecipePathBuffer_));
+    ImGui::InputText(
+        "Perspective View Manifest JSON",
+        chimeraViewManifestPathBuffer_,
+        sizeof(chimeraViewManifestPathBuffer_));
+    ImGui::TextDisabled(
+        "Strict manifest: radian view angles, relative P3/P6 paths, and explicit linear/sRGB transfer.");
     if (ImGui::Button("Build CHIMERA Recipe")) {
         try {
             buildChimeraBench(
@@ -6287,6 +6597,102 @@ void Application::drawSandboxInspector() {
                 severity,
                 entry.code.c_str(),
                 entry.message.c_str());
+        }
+    }
+    if (benchProject_.projectId == "chimera-" + chimeraRecipe_.recipeId) {
+        ImGui::SeparatorText("CHIMERA Batch Artifact");
+        ImGui::InputText(
+            "Batch JSON",
+            chimeraBatchPathBuffer_,
+            sizeof(chimeraBatchPathBuffer_));
+        ImGui::BeginDisabled(!chimeraWorkflow_);
+        if (ImGui::Button("Load + Validate Batch")) {
+            try {
+                auto loaded = chimera::loadChimeraBatchArtifact(
+                    chimeraBatchPathBuffer_);
+                chimera::validateChimeraBatchForWorkflow(
+                    loaded,
+                    chimeraWorkflow_->recipe,
+                    chimeraWorkflow_->dataset,
+                    chimeraWorkflow_->plan,
+                    benchProject_);
+                chimeraWorkflow_->exposures
+                    = chimera::restoreChimeraBatchReconstructionEvidence(
+                        loaded);
+                chimeraBatch_ = std::make_unique<
+                    chimera::ChimeraBatchArtifact>(std::move(loaded));
+                errorMessage_.clear();
+                statusMessage_ = "Loaded valid CHIMERA batch checkpoint at "
+                    + std::to_string(
+                        chimeraBatch_->nextLinearHogelIndex)
+                    + "/"
+                    + std::to_string(chimeraBatch_->totalHogelCount());
+            } catch (const std::exception& error) {
+                errorMessage_ = "CHIMERA batch load rejected: "
+                    + std::string(error.what());
+                statusMessage_.clear();
+            }
+        }
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!chimeraBatch_);
+        if (ImGui::Button("Save Batch Checkpoint")) {
+            try {
+                chimera::saveChimeraBatchArtifact(
+                    *chimeraBatch_, chimeraBatchPathBuffer_);
+                errorMessage_.clear();
+                statusMessage_ = "Saved atomic CHIMERA batch checkpoint";
+            } catch (const std::exception& error) {
+                errorMessage_ = "CHIMERA batch save failed: "
+                    + std::string(error.what());
+                statusMessage_.clear();
+            }
+        }
+        ImGui::EndDisabled();
+        ImGui::EndDisabled();
+
+        ImGui::SeparatorText("Transparent CHIMERA Parameter Sweep");
+        ImGui::InputFloat3(
+            "Relay focal candidates (mm)",
+            chimeraSweepRelayFocalLengthsMillimetres_,
+            "%.2f");
+        ImGui::InputFloat(
+            "Maximum nearest-view cross-talk",
+            &chimeraSweepMaximumCrosstalk_,
+            0.01F,
+            0.05F,
+            "%.4f");
+        if (ImGui::Button("Run 3-candidate Relay Sweep")) {
+            try {
+                runChimeraRelaySweep();
+            } catch (const std::exception& error) {
+                errorMessage_ = "CHIMERA sweep failed: "
+                    + std::string(error.what());
+                statusMessage_.clear();
+            }
+        }
+        if (chimeraSweepResult_) {
+            const auto* best = chimeraSweepResult_->bestCandidate();
+            ImGui::SameLine();
+            ImGui::TextDisabled(
+                "%zu candidates | best: %s",
+                chimeraSweepResult_->candidates.size(),
+                best == nullptr ? "none" : best->candidateId.c_str());
+            if (best != nullptr) {
+                ImGui::TextDisabled(
+                    "min RGB efficiency %.6f | cross-talk %.6f | artifact %zu bytes",
+                    best->metrics.minimumRgbDiffractionEfficiency,
+                    best->metrics.maximumNearestViewCrosstalkFraction,
+                    best->metrics.canonicalArtifactBytes);
+                if (ImGui::Button("Build Best Candidate as Editable Bench")) {
+                    try {
+                        applyBestChimeraSweepCandidate();
+                    } catch (const std::exception& error) {
+                        errorMessage_ = "CHIMERA best-candidate build failed: "
+                            + std::string(error.what());
+                        statusMessage_.clear();
+                    }
+                }
+            }
         }
     }
 

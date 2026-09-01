@@ -129,11 +129,13 @@ add_library(holobench_app_logic STATIC
     app/BenchProject.cpp
     app/BenchRecordingRecipe.cpp
     app/ChimeraBenchWorkflow.cpp
+    app/ChimeraBatch.cpp
     app/ChimeraExposurePlan.cpp
     app/ChimeraCameraImage.cpp
     app/ChimeraHogelDataset.cpp
     app/ChimeraParameterSweep.cpp
     app/ChimeraPerspectiveImageAdapter.cpp
+    app/ChimeraPerspectiveManifest.cpp
     app/ChimeraReconstruction.cpp
     app/ChimeraRecipe.cpp
     app/LessonEditHistory.cpp
@@ -231,6 +233,17 @@ target_link_libraries(holobench_m8_benchmark PRIVATE
     HoloBench::Optics
 )
 holobench_set_warnings(holobench_m8_benchmark)
+
+add_executable(holobench_m9_benchmark
+    benchmarks/ChimeraAutomationBenchmark.cpp
+)
+target_include_directories(holobench_m9_benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(holobench_m9_benchmark PRIVATE
+    HoloBench::AppLogic
+    HoloBench::Compute
+    HoloBench::Optics
+)
+holobench_set_warnings(holobench_m9_benchmark)
 
 set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
@@ -463,11 +476,13 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/app/BenchProjectTests.cpp
         tests/app/BenchRecordingRecipeTests.cpp
         tests/app/ChimeraBenchWorkflowTests.cpp
+        tests/app/ChimeraBatchTests.cpp
         tests/app/ChimeraExposurePlanTests.cpp
         tests/app/ChimeraCameraImageTests.cpp
         tests/app/ChimeraHogelDatasetTests.cpp
         tests/app/ChimeraParameterSweepTests.cpp
         tests/app/ChimeraPerspectiveImageAdapterTests.cpp
+        tests/app/ChimeraPerspectiveManifestTests.cpp
         tests/app/ChimeraReconstructionTests.cpp
         tests/app/ChimeraRecipeTests.cpp
         tests/app/SlmInterferenceUiStateTests.cpp

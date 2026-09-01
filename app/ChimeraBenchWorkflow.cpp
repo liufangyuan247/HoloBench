@@ -32,15 +32,22 @@ std::uint8_t displayByte(double normalized, double inverseGamma) {
 ChimeraBenchWorkflow prepareChimeraBenchWorkflow(
     const ChimeraRecipe &recipe, const BenchProject &bench,
     std::size_t horizontalViewCount, std::size_t verticalViewCount) {
+  return prepareChimeraBenchWorkflow(
+      recipe, bench,
+      makeCanonicalPerspectiveViews(recipe, horizontalViewCount,
+                                    verticalViewCount));
+}
+
+ChimeraBenchWorkflow prepareChimeraBenchWorkflow(
+    const ChimeraRecipe &recipe, const BenchProject &bench,
+    std::vector<PerspectiveViewImage> perspectiveViews) {
   validateBenchProject(bench);
   validateChimeraRecipe(recipe);
   if (bench.projectId != "chimera-" + recipe.recipeId) {
     throw std::invalid_argument(
         "current Bench project identity does not match the CHIMERA recipe");
   }
-  auto dataset = generateHogelDataset(
-      recipe, makeCanonicalPerspectiveViews(recipe, horizontalViewCount,
-                                            verticalViewCount));
+  auto dataset = generateHogelDataset(recipe, std::move(perspectiveViews));
   auto plan = generateExposurePlan(recipe, dataset, bench);
   return {
       .recipe = recipe,
