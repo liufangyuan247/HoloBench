@@ -21,7 +21,8 @@ RgbThinPlateRecordingResult recordRgbThinTransmissionPlateImpl(
     const PlateIncidentFieldSet& fields,
     const std::array<PlateBranchPairSelection, 3>& selections,
     const ThinPlateRecordingOptions& options,
-    compute::fft::IFftBackend* fftBackend);
+    compute::fft::IFftBackend* fftBackend,
+    const ray::ILensPrescriptionResolver* lensPrescriptions);
 
 } // namespace
 
@@ -142,7 +143,7 @@ RgbThinPlateRecordingResult recordRgbThinTransmissionPlate(
     const std::array<PlateBranchPairSelection, 3>& selections,
     const ThinPlateRecordingOptions& options) {
     return recordRgbThinTransmissionPlateImpl(
-        bench, fields, selections, options, nullptr);
+        bench, fields, selections, options, nullptr, nullptr);
 }
 
 RgbThinPlateRecordingResult recordRgbThinTransmissionPlate(
@@ -150,9 +151,15 @@ RgbThinPlateRecordingResult recordRgbThinTransmissionPlate(
     const PlateIncidentFieldSet& fields,
     const std::array<PlateBranchPairSelection, 3>& selections,
     const ThinPlateRecordingOptions& options,
-    compute::fft::IFftBackend& fftBackend) {
+    compute::fft::IFftBackend& fftBackend,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
     return recordRgbThinTransmissionPlateImpl(
-        bench, fields, selections, options, &fftBackend);
+        bench,
+        fields,
+        selections,
+        options,
+        &fftBackend,
+        lensPrescriptions);
 }
 
 namespace {
@@ -162,7 +169,8 @@ RgbThinPlateRecordingResult recordRgbThinTransmissionPlateImpl(
     const PlateIncidentFieldSet& fields,
     const std::array<PlateBranchPairSelection, 3>& selections,
     const ThinPlateRecordingOptions& options,
-    compute::fft::IFftBackend* fftBackend) {
+    compute::fft::IFftBackend* fftBackend,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
     if (fields.isStaleFor(bench)) {
         throw std::invalid_argument(
             "RGB thin recording requires current plate incident evidence");
@@ -206,7 +214,8 @@ RgbThinPlateRecordingResult recordRgbThinTransmissionPlateImpl(
                 selections[index].objectBranchId,
                 selections[index].referenceBranchId,
                 options,
-                *fftBackend);
+                *fftBackend,
+                lensPrescriptions);
     };
     return {
         .plateComponentId = fields.plateComponentId,

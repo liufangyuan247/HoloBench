@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <vector>
 
 #include "compute/fft/CpuFftBackend.hpp"
 #include "optics/holography/BenchHologramRecording.hpp"
@@ -143,6 +144,48 @@ TEST_CASE("placed same-side branches record a resolved thin transmission hologra
     CHECK(result.hologram.diagnostics.maximumRecordedRelativeIntensity
         > result.hologram.diagnostics.minimumRecordedRelativeIntensity);
     CHECK_FALSE(result.isStaleFor(bench));
+
+    auto lensBench = recordingBench(false);
+    auto lens = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::RealLensAssembly,
+        "recording-lens");
+    lens.transform.translationMetres = {0.0, 0.0, -0.05};
+    auto lensParameters
+        = std::get<scene::RealLensAssemblyParameters>(lens.parameters);
+    lensParameters.clearApertureDiameterMetres = 0.001;
+    lens.parameters = lensParameters;
+    lensBench.add(std::move(lens));
+    const ray::LensPrescriptionCatalog catalog({
+        ray::makeDefaultNBk7BiconvexPrescription()});
+    const auto lensFields = holography::collectPlateIncidentFields(
+        lensBench,
+        ray::traceDynamicBench(lensBench, {}, &catalog),
+        "plate");
+    const auto lensIds = pairIds(lensFields);
+    holobench::compute::fft::CpuFftBackend backend;
+    CHECK_THROWS_WITH_AS(
+        static_cast<void>(holography::recordThinTransmissionPlate(
+            lensBench,
+            lensFields,
+            lensIds.object,
+            lensIds.reference,
+            resolvedOptions(),
+            backend)),
+        doctest::Contains("prescription resolver"),
+        std::invalid_argument);
+    const auto lensRecording = holography::recordThinTransmissionPlate(
+        lensBench,
+        lensFields,
+        lensIds.object,
+        lensIds.reference,
+        resolvedOptions(),
+        backend,
+        &catalog);
+    CHECK(lensRecording.objectIncident.diagnostics
+        .appliedRealLensPrescriptionIds
+        == std::vector<std::string> {"default_n_bk7_biconvex"});
+    CHECK(lensRecording.referenceIncident.diagnostics
+        .appliedRealLensPrescriptionIds.empty());
 }
 
 TEST_CASE("thin transmission recording rejects unresolved fringes and reflection geometry") {

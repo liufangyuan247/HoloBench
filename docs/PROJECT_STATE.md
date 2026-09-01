@@ -137,11 +137,14 @@ animated or silently approximated.
   evidence names the applied prescription and labels the scalar low-NA
   approximation. Missing assets, high slope, tilt, decenter, off-axis centre
   rays, non-air exterior media, and other unsupported regimes fail explicitly
-  instead of becoming a thin lens. See
+  instead of becoming a thin lens. The same resolver now reaches product-level
+  single-channel and RGB thin-transmission recording, so a supported placed
+  prescription is applied to the physical plate field and retained in its
+  diagnostics; a missing resolver rejects the recording. See
   [ADR 0031](adr/0031-placed-real-lens-prescription-adapter.md).
 - **M10.4 next slice**: bind imported prescriptions through hashed calibration
-  asset references and pass the resolver/provenance through plate-recording
-  paths without permitting centreline-envelope fallback.
+  asset references and restore them with verified provenance; general
+  reflection-volume and camera paths remain separate validated extensions.
 
 ## Product rebaseline (2026-09-01)
 
@@ -388,8 +391,9 @@ The required interaction is now explicit:
   decentered observation, non-grazing rotated observation planes, and placed
   SLM command/provenance behavior. Named M8 performance scenes and remote
   Windows/Linux cross-compiler validation pass. The later bounded real-lens
-  Screen/Probe adapter covers only its declared coaxial low-NA domain;
-  plate-path binding and vector/high-NA physics remain explicit scope limits
+  Screen/Probe and thin-transmission plate adapter covers only its declared
+  coaxial low-NA domain; general reflection-volume prescription wavefronts and
+  vector/high-NA physics remain explicit scope limits
   rather than hidden claims. Real input-driven empty-Bench assembly, placed reconstruction,
   and stale invalidation now add direct-manipulation product evidence.
 

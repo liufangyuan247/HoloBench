@@ -112,9 +112,11 @@ surface and retains wavelength-dependent glass OPL; a bounded forward-coaxial,
 centred, low-NA scalar split-step adapter applies physical surface sag,
 apertures, intermediate refractive indices, and thickness to Screen/Probe
 fields. Unsupported prescription geometry rejects rather than becoming an
-ideal thin lens. Imported prescription binding remains an ordinary component
-edit, and general hashed project-asset restoration plus plate-path resolution
-are subsequent slices.
+ideal thin lens. The same resolver now drives FFT-refined single/RGB
+thin-transmission plate recording and retains applied prescription IDs.
+Imported prescription binding remains an ordinary component edit; general
+hashed project-asset restoration and reflection-volume wavefront extensions are
+subsequent slices.
 See
 [ADR 0028](../adr/0028-revision-bound-placed-field-measurements.md) and
 [ADR 0029](../adr/0029-coherent-merge-and-independent-measurement-channels.md),

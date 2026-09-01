@@ -85,7 +85,8 @@ selectRgbReflectionPairs(const PlateIncidentFieldSet& fields);
     const PlateIncidentFieldSet& fields,
     const std::array<PlateBranchPairSelection, 3>& selections,
     const ThinPlateRecordingOptions& options,
-    compute::fft::IFftBackend& fftBackend);
+    compute::fft::IFftBackend& fftBackend,
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
 
 // Replays and propagates all three channels independently onto one placed
 // observation component. Colour composition is a separate display operation.

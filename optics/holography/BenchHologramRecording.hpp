@@ -64,6 +64,7 @@ struct ThinPlateRecordingResult final {
     std::uint64_t objectBranchId,
     std::uint64_t referenceBranchId,
     const ThinPlateRecordingOptions& options,
-    compute::fft::IFftBackend& fftBackend);
+    compute::fft::IFftBackend& fftBackend,
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
 
 } // namespace holobench::optics::holography

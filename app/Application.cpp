@@ -1442,7 +1442,8 @@ void Application::recomputeRecordingRecipe(
                 channel.objectBranchId,
                 channel.referenceBranchId,
                 options,
-                *detectorFftBackend_);
+                *detectorFftBackend_,
+                &realLensPrescriptionCatalog_);
             field::FieldVisualizationOptions viewOptions;
             viewOptions.colormap = field::ColormapKind::Inferno;
             const auto image = field::renderLinearIntensity(
@@ -1478,7 +1479,8 @@ void Application::recomputeRecordingRecipe(
                     fields,
                     selections,
                     options,
-                    *detectorFftBackend_);
+                    *detectorFftBackend_,
+                    &realLensPrescriptionCatalog_);
             sandboxRgbRecording_ = std::make_unique<
                 optics::holography::RgbThinPlateRecordingResult>(
                     std::move(recording));
@@ -8966,7 +8968,8 @@ void Application::drawSandboxInspector() {
                                                 pair.objectBranchId,
                                                 pair.referenceBranchId,
                                                 recordingOptions,
-                                                *detectorFftBackend_);
+                                                *detectorFftBackend_,
+                                                &realLensPrescriptionCatalog_);
                                         field::FieldVisualizationOptions viewOptions;
                                         viewOptions.colormap = field::ColormapKind::Inferno;
                                         const auto image = field::renderLinearIntensity(
@@ -9192,7 +9195,8 @@ void Application::drawSandboxInspector() {
                                                 fields,
                                                 rgbSelections,
                                                 options,
-                                                *detectorFftBackend_);
+                                                *detectorFftBackend_,
+                                                &realLensPrescriptionCatalog_);
                                     upsertRecordingRecipe(
                                         benchProject_,
                                         makeThinRecordingRecipe(

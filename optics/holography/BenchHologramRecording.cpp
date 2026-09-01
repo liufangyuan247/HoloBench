@@ -33,7 +33,8 @@ ThinPlateRecordingResult recordThinTransmissionPlateImpl(
     std::uint64_t objectBranchId,
     std::uint64_t referenceBranchId,
     const ThinPlateRecordingOptions& options,
-    compute::fft::IFftBackend* fftBackend) {
+    compute::fft::IFftBackend* fftBackend,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
     if (fields.isStaleFor(bench)) {
         throw std::invalid_argument(
             "thin-plate recording requires current incident branch evidence");
@@ -48,7 +49,13 @@ ThinPlateRecordingResult recordThinTransmissionPlateImpl(
         return fftBackend == nullptr
             ? samplePlateIncidentField(bench, fields, branchId, options.sampling)
             : samplePlateIncidentField(
-                bench, fields, branchId, options.sampling, *fftBackend);
+                bench,
+                fields,
+                branchId,
+                options.sampling,
+                *fftBackend,
+                {},
+                lensPrescriptions);
     };
     auto object = sample(objectBranchId);
     auto reference = sample(referenceBranchId);
@@ -126,6 +133,7 @@ ThinPlateRecordingResult recordThinTransmissionPlate(
         objectBranchId,
         referenceBranchId,
         options,
+        nullptr,
         nullptr);
 }
 
@@ -135,14 +143,16 @@ ThinPlateRecordingResult recordThinTransmissionPlate(
     std::uint64_t objectBranchId,
     std::uint64_t referenceBranchId,
     const ThinPlateRecordingOptions& options,
-    compute::fft::IFftBackend& fftBackend) {
+    compute::fft::IFftBackend& fftBackend,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
     return recordThinTransmissionPlateImpl(
         bench,
         fields,
         objectBranchId,
         referenceBranchId,
         options,
-        &fftBackend);
+        &fftBackend,
+        lensPrescriptions);
 }
 
 } // namespace holobench::optics::holography

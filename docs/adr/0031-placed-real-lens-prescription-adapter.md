@@ -86,17 +86,19 @@ measurement.
 
 ## Consequences
 
-- A Real Lens Assembly can now participate in ordinary editable Bench routing
-  and in placed Screen/Field Probe observations within the declared scalar
-  domain. The same resolver is reusable by later plate-recording, camera, and
-  calibration-asset adapters.
+- A Real Lens Assembly can now participate in ordinary editable Bench routing,
+  placed Screen/Field Probe observations, and FFT-refined single/RGB
+  thin-transmission plate recording within the declared scalar domain. The same
+  resolver remains reusable by later camera and calibration-asset adapters.
 - JSON/CSV prescription bytes remain external assets and are not embedded in
   Bench format v5. General hashed asset binding and catalog restoration on
   project load remain a follow-up; the built-in prescription is immediately
   reproducible.
-- Plate-recording call paths do not yet receive the runtime resolver. A real
-  lens on a recording branch therefore remains outside the product recording
-  acceptance until that provenance-bearing adapter is added.
+- Product thin-transmission recording passes the runtime resolver into both
+  object and reference branch sampling and retains the applied prescription ID.
+  Missing resolution rejects the full recording. Reflection-volume recording
+  remains a separate centre-direction/coupled-wave model and does not claim a
+  general prescription-shaped exposure wavefront.
 - Deterministic tests cover rigid placement, exact thick-lens centre-ray
   routing and optical path, a resolved scalar focal field, missing-resolver
   rejection, and the high-slope validity gate.

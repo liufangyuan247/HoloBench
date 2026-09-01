@@ -144,9 +144,12 @@
   transverse parity; tilted zero-thickness masks use their ray-projected local
   footprint; and an oblique plate restores the resolved centre carrier.
   Tilted powered lenses, non-ideal direction changes, and general prescription
-  paths remain explicit. The bounded Screen/Probe real-lens adapter is not yet
-  passed through plate recording; a recording branch cannot claim that model.
-  Vector/polarization and high-NA longitudinal effects remain explicit. Placed
+  paths remain explicit. The bounded real-lens adapter is passed through
+  FFT-refined single-channel and RGB thin-transmission plate recording. The
+  reflection-volume recorder still represents each branch by its local centre
+  direction and coupled-wave material response; it does not claim a general
+  prescribed-lens wavefront exposure. Vector/polarization and high-NA
+  longitudinal effects remain explicit. Placed
   SLMs apply persisted ideal amplitude/phase commands using
   uniform, wrapped linear-ramp, or checkerboard recipes with bit-depth
   quantization and manual/automation provenance. M9 transient hogel rasters can
