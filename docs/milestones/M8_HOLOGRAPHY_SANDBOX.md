@@ -146,7 +146,9 @@ response preflight: if the configured upper response bound would clip, the
 relative `I=1` reference is scaled with headroom and persisted before the final
 recording. This does not change physical source powers, response bounds, or
 independent wavelength computation. Hidden OpenGL smoke performs all three
-preset Record/Reconstruct paths through these application actions.
+preset Record/Reconstruct paths through real ImGui clicks on these application
+actions. Each directly visible preset also sets its matching experiment mode;
+switching from RGB to transmission cannot retain an incompatible mode.
 
 Current reconstruction imagery is also mapped onto the physical four corners
 of the chosen Screen/Probe in the 3D Bench. Its projected outline follows the placed

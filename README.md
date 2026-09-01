@@ -22,6 +22,10 @@ removed from scope. For the current repository state and roadmap, see
 [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
 
 The free-form viewport now has an always-visible searchable component shelf.
+The same Bench header exposes Empty, Transmission, Reflection/Denisyuk, RGB,
+and CHIMERA entry points; each example is an ordinary editable scene, and each
+holography entry also selects its matching recording mode instead of inheriting
+stale mode state from the previous experiment.
 Clicking places a component at the current table view centre; dragging a
 component into the viewport intersects the camera ray with the horizontal
 optical table and places it at that physical location. The Inspector remains
@@ -45,6 +49,12 @@ records only an unambiguous single pair or exactly three independent RGB
 pairs. New thin/RGB recipes preflight the bounded plate response and persist a
 measured relative-exposure rescale when the default reference would clip; they
 never suppress clipping or mix wavelengths.
+
+The hardware OpenGL smoke drives these controls with real ImGui mouse events:
+it clears the Bench, drags a laser and plate from the shelf onto camera-derived
+table positions, clicks Record and Reconstruct for all three holography
+examples, then performs another shelf edit and requires the reconstruction to
+become stale and disappear.
 
 A current reconstruction is drawn back onto the actual placed Screen/Probe as
 a corner-projected texture quad using that component's physical extent and rigid

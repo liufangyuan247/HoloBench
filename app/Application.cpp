@@ -68,6 +68,16 @@ bool containsAsciiCaseInsensitive(
         != text.end();
 }
 
+void captureLastItemBounds(UiItemBounds& bounds) noexcept {
+    const ImVec2 minimum = ImGui::GetItemRectMin();
+    const ImVec2 maximum = ImGui::GetItemRectMax();
+    bounds = {
+        .minimum = {minimum.x, minimum.y},
+        .maximum = {maximum.x, maximum.y},
+        .current = maximum.x > minimum.x && maximum.y > minimum.y,
+    };
+}
+
 int sandboxConstraintAxisIndex(SandboxGizmoConstraint constraint) noexcept {
     switch (constraint) {
     case SandboxGizmoConstraint::AxisX: return 0;
@@ -845,6 +855,9 @@ void Application::saveBenchProjectToPath() {
 }
 
 void Application::autosaveBenchProjectAfterEdit() {
+    if (glSmokeMode_) {
+        return;
+    }
     try {
         saveBenchProjectAutosave(benchProject_, benchProjectPathBuffer_);
     } catch (const std::exception& error) {
@@ -1734,6 +1747,11 @@ bool Application::initialize(const RunOptions& options) {
     ImGui::CreateContext();
     imguiContextCreated_ = true;
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    if (glSmokeMode_) {
+        // Automated UI input needs the deterministic first-run layout and must
+        // neither consume nor rewrite a developer's local docking preferences.
+        ImGui::GetIO().IniFilename = nullptr;
+    }
     ImGui::StyleColorsDark();
 
     try {
@@ -5192,7 +5210,7 @@ void Application::drawSandboxComponentShelf() {
     namespace bench = optics::scene;
     ImGui::BeginChild(
         "##sandbox_component_shelf",
-        ImVec2(0.0F, 126.0F),
+        ImVec2(0.0F, 164.0F),
         ImGuiChildFlags_Borders,
         ImGuiWindowFlags_NoScrollbar);
     ImGui::AlignTextToFramePadding();
@@ -5206,6 +5224,49 @@ void Application::drawSandboxComponentShelf() {
         sizeof(sandboxComponentSearch_));
     ImGui::SameLine();
     ImGui::TextDisabled("Click: place at view centre | Drag: place on table");
+
+    if (ImGui::Button("Empty Bench")) {
+        BenchProject empty;
+        empty.projectId = "untitled-bench";
+        empty.name = "Untitled Optical Bench";
+        selectedBenchComponentId_.clear();
+        static_cast<void>(applyDynamicBenchProject(
+            std::move(empty), "Created an empty optical bench"));
+    }
+    captureLastItemBounds(sandboxUiEvidence_.emptyBench);
+    ImGui::SameLine();
+    if (ImGui::Button("Transmission")) {
+        sandboxExperimentMode_ = SandboxExperimentMode::ThinTransmission;
+        selectedBenchComponentId_ = "plate-h1";
+        static_cast<void>(applyDynamicBenchProject(
+            makeTransmissionHolographyPreset(),
+            "Loaded editable transmission holography bench"));
+    }
+    captureLastItemBounds(sandboxUiEvidence_.transmissionPreset);
+    ImGui::SameLine();
+    if (ImGui::Button("Reflection / Denisyuk")) {
+        sandboxExperimentMode_ = SandboxExperimentMode::ReflectionDenisyuk;
+        selectedBenchComponentId_ = "plate-h1";
+        static_cast<void>(applyDynamicBenchProject(
+            makeReflectionHolographyPreset(),
+            "Loaded editable reflection / Denisyuk bench"));
+    }
+    captureLastItemBounds(sandboxUiEvidence_.reflectionPreset);
+    ImGui::SameLine();
+    if (ImGui::Button("RGB Full-colour")) {
+        sandboxExperimentMode_ = SandboxExperimentMode::RgbFullColour;
+        selectedBenchComponentId_ = "plate-h1";
+        static_cast<void>(applyDynamicBenchProject(
+            makeRgbHolographyPreset(),
+            "Loaded editable RGB full-colour holography bench"));
+    }
+    captureLastItemBounds(sandboxUiEvidence_.rgbPreset);
+    ImGui::SameLine();
+    if (ImGui::Button("CHIMERA")) {
+        buildChimeraBench(
+            chimera::makeCanonicalChimeraRecipe(), "canonical recipe");
+    }
+    captureLastItemBounds(sandboxUiEvidence_.chimeraPreset);
 
     const auto& kinds = bench::requiredBenchComponentKinds();
     constexpr int kShelfColumns = 4;
@@ -5232,6 +5293,11 @@ void Application::drawSandboxComponentShelf() {
                     {static_cast<double>(target.x), 0.0,
                         static_cast<double>(target.z)},
                     "Placed " + std::string(label) + " from component shelf"));
+            }
+            if (kind == bench::BenchComponentKind::LaserSource) {
+                captureLastItemBounds(sandboxUiEvidence_.laserShelf);
+            } else if (kind == bench::BenchComponentKind::HolographicPlate) {
+                captureLastItemBounds(sandboxUiEvidence_.plateShelf);
             }
             const int payloadIndex = static_cast<int>(index);
             if (ImGui::BeginDragDropSource(
@@ -5453,6 +5519,7 @@ void Application::drawSandboxExperimentBar() {
             statusMessage_.clear();
         }
     }
+    captureLastItemBounds(sandboxUiEvidence_.record);
     ImGui::SameLine();
     const char* observationPreview = sandboxObservationComponentId_.empty()
         ? "No Screen / Probe"
@@ -5502,6 +5569,7 @@ void Application::drawSandboxExperimentBar() {
             statusMessage_.clear();
         }
     }
+    captureLastItemBounds(sandboxUiEvidence_.reconstruct);
     ImGui::EndDisabled();
 
     const char* reconstructedOn = nullptr;
@@ -5616,6 +5684,7 @@ void Application::drawSandboxInspector() {
             std::move(preset), "Loaded ray branch demo"));
     }
     if (ImGui::Button("Transmission Hologram")) {
+        sandboxExperimentMode_ = SandboxExperimentMode::ThinTransmission;
         selectedBenchComponentId_ = "plate-h1";
         static_cast<void>(applyDynamicBenchProject(
             makeTransmissionHolographyPreset(),
@@ -5623,12 +5692,14 @@ void Application::drawSandboxInspector() {
     }
     ImGui::SameLine();
     if (ImGui::Button("Reflection / Denisyuk")) {
+        sandboxExperimentMode_ = SandboxExperimentMode::ReflectionDenisyuk;
         selectedBenchComponentId_ = "plate-h1";
         static_cast<void>(applyDynamicBenchProject(
             makeReflectionHolographyPreset(),
             "Loaded editable reflection / Denisyuk bench"));
     }
     if (ImGui::Button("RGB Full-colour Hologram")) {
+        sandboxExperimentMode_ = SandboxExperimentMode::RgbFullColour;
         selectedBenchComponentId_ = "plate-h1";
         static_cast<void>(applyDynamicBenchProject(
             makeRgbHolographyPreset(),
@@ -7565,6 +7636,7 @@ void Application::drawSandboxInspector() {
 }
 
 void Application::drawWorkspace() {
+    sandboxUiEvidence_ = {};
     sandboxReconstructionOverlaySubmitted_ = false;
     sandboxReconstructionOverlayDiagnostic_ = "overlay viewport was not drawn";
     updateWaveDetector();
@@ -7696,6 +7768,13 @@ void Application::drawWorkspace() {
 
         const ImVec2 imagePosMin = ImGui::GetItemRectMin();
         const ImVec2 imageSize = ImGui::GetItemRectSize();
+        sandboxUiEvidence_.viewport = {
+            .minimum = {imagePosMin.x, imagePosMin.y},
+            .maximum = {
+                imagePosMin.x + imageSize.x,
+                imagePosMin.y + imageSize.y},
+            .current = imageSize.x > 0.0F && imageSize.y > 0.0F,
+        };
         const bool isHovered = ImGui::IsItemHovered();
         const bool noActiveWidget = !ImGui::IsAnyItemActive();
         const glm::vec2 rectMin(imagePosMin.x, imagePosMin.y);
@@ -8794,6 +8873,192 @@ void Application::drawWorkspace() {
     drawLearnPanel();
 }
 
+void Application::runSandboxInteractionSmoke() {
+    namespace bench = optics::scene;
+
+    viewportMode_ = ViewportMode::Sandbox;
+    sandboxComponentSearch_[0] = '\0';
+    camera_.setPresetView(render::CameraPresetView::Perspective);
+    camera_.setTarget({0.0F, 0.0F, 0.0F});
+    camera_.setDistance(0.8F);
+
+    const auto drawInputFrame = [this](
+                                    const glm::vec2& mousePosition,
+                                    int leftButtonState) {
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplSDL3_NewFrame();
+        ImGuiIO& io = ImGui::GetIO();
+        io.AddMousePosEvent(mousePosition.x, mousePosition.y);
+        if (leftButtonState >= 0) {
+            io.AddMouseButtonEvent(0, leftButtonState != 0);
+        }
+        ImGui::NewFrame();
+        ImGui::SetWindowFocus(
+            docking::DockLayoutConfig::kOpticalBenchWindowName);
+        drawWorkspace();
+        ImGui::Render();
+
+        int width = 0;
+        int height = 0;
+        SDL_GetWindowSizeInPixels(window_, &width, &height);
+        if (width <= 0 || height <= 0) {
+            throw std::runtime_error(
+                "interaction smoke window has no drawable extent");
+        }
+        glViewport(0, 0, width, height);
+        glClearColor(0.035F, 0.045F, 0.060F, 1.0F);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    };
+
+    const auto requireBounds = [](const UiItemBounds& bounds,
+                                   std::string_view name) {
+        if (!bounds.current) {
+            throw std::runtime_error(
+                std::string(name) + " is not visible in the Bench UI");
+        }
+    };
+    const auto click = [&](UiItemBounds bounds, std::string_view name) {
+        requireBounds(bounds, name);
+        const glm::vec2 point = bounds.centre();
+        drawInputFrame(point, 0);
+        drawInputFrame(point, 1);
+        drawInputFrame(point, 0);
+    };
+    const auto drag = [&](UiItemBounds source,
+                          const glm::vec2& destination,
+                          std::string_view name) {
+        requireBounds(source, name);
+        const glm::vec2 origin = source.centre();
+        const glm::vec2 delta = destination - origin;
+        const float length = glm::length(delta);
+        if (!std::isfinite(length) || length < 20.0F) {
+            throw std::runtime_error(
+                std::string(name) + " drag path is degenerate");
+        }
+        const glm::vec2 firstMove = origin + delta * (12.0F / length);
+        drawInputFrame(origin, 0);
+        drawInputFrame(origin, 1);
+        drawInputFrame(firstMove, -1);
+        drawInputFrame(destination, -1);
+        drawInputFrame(destination, 0);
+    };
+
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    requireBounds(sandboxUiEvidence_.emptyBench, "Empty Bench action");
+    requireBounds(sandboxUiEvidence_.laserShelf, "Laser shelf item");
+    requireBounds(sandboxUiEvidence_.plateShelf, "Plate shelf item");
+    requireBounds(sandboxUiEvidence_.viewport, "3D Bench viewport");
+
+    click(sandboxUiEvidence_.emptyBench, "Empty Bench action");
+    if (!benchProject_.scene.components().empty()) {
+        throw std::runtime_error(
+            "Empty Bench click did not clear the ordinary scene");
+    }
+
+    const UiItemBounds viewport = sandboxUiEvidence_.viewport;
+    const glm::vec2 viewportExtent = viewport.maximum - viewport.minimum;
+    const glm::mat4 viewProjection
+        = camera_.projectionMatrix(viewportExtent.x / viewportExtent.y)
+        * camera_.viewMatrix();
+    const auto tableDropAt = [&](float horizontalFraction) {
+        for (int row = 4; row <= 18; ++row) {
+            const float verticalFraction = static_cast<float>(row) * 0.05F;
+            const glm::vec2 point = viewport.minimum
+                + glm::vec2(
+                    viewportExtent.x * horizontalFraction,
+                    viewportExtent.y * verticalFraction);
+            if (gizmo::unprojectScreenToHorizontalPlane(
+                    point,
+                    0.0F,
+                    viewProjection,
+                    viewport.minimum,
+                    viewportExtent)
+                    .hit) {
+                return point;
+            }
+        }
+        throw std::runtime_error(
+            "controlled interaction camera exposes no optical-table drop point");
+    };
+    const glm::vec2 laserDrop = tableDropAt(0.42F);
+    const glm::vec2 plateDrop = tableDropAt(0.58F);
+    drag(sandboxUiEvidence_.laserShelf, laserDrop, "Laser shelf item");
+    if (benchProject_.scene.components().size() != 1U
+        || benchProject_.scene.components().front().kind
+            != bench::BenchComponentKind::LaserSource) {
+        throw std::runtime_error(
+            "shelf-to-table laser drag did not create one ordinary laser (count="
+            + std::to_string(benchProject_.scene.components().size())
+            + ", status=" + statusMessage_ + ", error=" + errorMessage_ + ")");
+    }
+    drag(sandboxUiEvidence_.plateShelf, plateDrop, "Plate shelf item");
+    if (benchProject_.scene.components().size() != 2U
+        || std::none_of(
+            benchProject_.scene.components().begin(),
+            benchProject_.scene.components().end(),
+            [](const auto& component) {
+                return component.kind
+                    == bench::BenchComponentKind::HolographicPlate;
+            })) {
+        throw std::runtime_error(
+            "shelf-to-table plate drag did not add an ordinary plate");
+    }
+
+    click(sandboxUiEvidence_.transmissionPreset, "Transmission action");
+    click(sandboxUiEvidence_.record, "Record action");
+    click(sandboxUiEvidence_.reconstruct, "Reconstruct action");
+    if (!sandboxPlateRecording_ || !sandboxPlateReplay_
+        || sandboxPlateReplay_->isStaleFor(benchProject_.scene)) {
+        throw std::runtime_error(
+            "transmission UI clicks did not produce current reconstruction (project="
+            + benchProject_.projectId + ", selected="
+            + selectedBenchComponentId_ + ", recording="
+            + (sandboxPlateRecording_ ? "yes" : "no") + ", replay="
+            + (sandboxPlateReplay_ ? "yes" : "no") + ", status="
+            + statusMessage_ + ", error=" + errorMessage_ + ")");
+    }
+
+    click(sandboxUiEvidence_.reflectionPreset, "Reflection action");
+    click(sandboxUiEvidence_.record, "Record action");
+    click(sandboxUiEvidence_.reconstruct, "Reconstruct action");
+    if (!sandboxVolumeRecording_ || !sandboxVolumeObservationReplay_
+        || sandboxVolumeObservationReplay_->isStaleFor(
+            benchProject_.scene)) {
+        throw std::runtime_error(
+            "reflection UI clicks did not produce current reconstruction");
+    }
+
+    click(sandboxUiEvidence_.rgbPreset, "RGB action");
+    click(sandboxUiEvidence_.record, "Record action");
+    click(sandboxUiEvidence_.reconstruct, "Reconstruct action");
+    if (!sandboxRgbRecording_ || !sandboxRgbReplay_
+        || sandboxRgbReplay_->isStaleFor(benchProject_.scene)) {
+        throw std::runtime_error(
+            "RGB UI clicks did not produce current reconstruction");
+    }
+
+    const std::uint64_t reconstructionRevision
+        = benchProject_.scene.revision();
+    drag(
+        sandboxUiEvidence_.laserShelf,
+        tableDropAt(0.5F),
+        "Laser shelf item");
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    if (benchProject_.scene.revision() <= reconstructionRevision
+        || !sandboxRgbReplay_->isStaleFor(benchProject_.scene)
+        || sandboxReconstructionOverlaySubmitted_) {
+        throw std::runtime_error(
+            "post-reconstruction shelf edit did not stale and hide RGB evidence");
+    }
+
+    glFinish();
+    if (glGetError() != GL_NO_ERROR) {
+        throw std::runtime_error(
+            "Bench interaction smoke produced an OpenGL error");
+    }
+}
+
 int Application::run(const RunOptions& options) {
     if (!initialize(options)) {
         return 1;
@@ -9319,6 +9584,16 @@ int Application::run(const RunOptions& options) {
         } catch (const std::exception& ex) {
             SDL_Log(
                 "OpenGL smoke check failed: lesson progress round trip: %s",
+                ex.what());
+            rawGlError = true;
+        }
+    }
+    if (glSmokeMode_) {
+        try {
+            runSandboxInteractionSmoke();
+        } catch (const std::exception& ex) {
+            SDL_Log(
+                "OpenGL smoke check failed: Bench user interactions: %s",
                 ex.what());
             rawGlError = true;
         }

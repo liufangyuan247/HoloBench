@@ -417,6 +417,29 @@ struct RunOptions {
     bool glSmoke = false;
 };
 
+struct UiItemBounds final {
+    glm::vec2 minimum {0.0F, 0.0F};
+    glm::vec2 maximum {0.0F, 0.0F};
+    bool current = false;
+
+    [[nodiscard]] glm::vec2 centre() const noexcept {
+        return (minimum + maximum) * 0.5F;
+    }
+};
+
+struct SandboxUiEvidence final {
+    UiItemBounds emptyBench;
+    UiItemBounds transmissionPreset;
+    UiItemBounds reflectionPreset;
+    UiItemBounds rgbPreset;
+    UiItemBounds chimeraPreset;
+    UiItemBounds laserShelf;
+    UiItemBounds plateShelf;
+    UiItemBounds record;
+    UiItemBounds reconstruct;
+    UiItemBounds viewport;
+};
+
 class Application final {
 public:
     Application();
@@ -494,6 +517,7 @@ private:
     void drawSandboxComponentShelf();
     void drawSandboxExperimentBar();
     void drawSandboxInspector();
+    void runSandboxInteractionSmoke();
     void loadBenchProjectFromPath();
     void saveBenchProjectToPath();
     void autosaveBenchProjectAfterEdit();
@@ -548,6 +572,7 @@ private:
     std::string sandboxObservationComponentId_;
     bool sandboxReconstructionOverlaySubmitted_ = false;
     std::string sandboxReconstructionOverlayDiagnostic_;
+    SandboxUiEvidence sandboxUiEvidence_;
     int sandboxPlateReplayViewIndex_ = 0;
     int sandboxRgbReplayViewIndex_ = 0;
     float sandboxRgbDisplayGains_[3] {1.0F, 1.0F, 1.0F};

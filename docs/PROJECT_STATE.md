@@ -71,8 +71,10 @@ The required interaction is now explicit:
   signed target-axis spacing, and nearest-visible-beam snapping all write
   ordinary transforms through the same history, trace, and autosave path.
   Degenerate, off-radius, or equally-near ambiguous beam snapping rejects
-  explicitly and creates no hidden connection. An automated input-gesture
-  smoke remains open.
+  explicitly and creates no hidden connection. Hardware OpenGL smoke now uses
+  real ImGui mouse events to click Empty Bench and drag a laser plus plate from
+  the shelf onto camera-derived table points. Transform-handle and alignment
+  mouse sequences remain open.
 - **Default interactive sandbox**: the application now opens on the unified
   dynamic bench instead of the fixed-axis reference scene. The starter project
   contains an RGB laser, splitter, two routed arms, an ideal lens, two screens,
@@ -414,9 +416,12 @@ completion because it is primarily driven through fixed parameter panels:
   clip, derive and persist a headroom-preserving relative-intensity reference
   from the measured sampled peak before recording again. Physical beam power,
   plate response bounds, per-wavelength fields, and clipping diagnostics are
-  unchanged. Hidden OpenGL smoke executes transmission, reflection/Denisyuk,
-  and RGB Record-to-placed-Reconstruct through these application actions and
-  requires current textures and revision evidence for all three.
+  unchanged. Empty, transmission, reflection/Denisyuk, RGB, and CHIMERA entry
+  points are directly visible above the 3D viewport; each holography example
+  selects its matching experiment mode. Hidden OpenGL smoke uses real ImGui
+  mouse press/release events to select every example and execute all three
+  Record-to-placed-Reconstruct paths, then performs a shelf drag edit and
+  requires the RGB replay to become stale and disappear.
 - **Placed reconstruction surface**: A current thin, reflection/Denisyuk, or
   RGB replay texture is projected onto the actual observation component's
   physical four corners in the 3D viewport. Arbitrary Screen/Probe transforms
@@ -461,8 +466,9 @@ completion because it is primarily driven through fixed parameter panels:
   deterministic CPU, application, font, and OpenGL GPU cases after the placed
   volume/RGB/local-wave-path/recipe/SLM/recovery increments; `core-ci` passes
   551/551, `app-ci` compiles
-  warnings-as-errors, and the hidden OpenGL smoke exits successfully on AMD
-  Radeon Pro 5300M. The accepted remote cross-compiler evidence is recorded
+  warnings-as-errors, and the hidden OpenGL smoke, including real shelf
+  drag/drop and experiment-button input, exits successfully on AMD Radeon Pro
+  5300M. The accepted remote cross-compiler evidence is recorded
   below.
 
 - **M8 acceptance**: GitHub Actions runs
@@ -580,9 +586,10 @@ completion because it is primarily driven through fixed parameter panels:
   builds pass; `core-ci` passes 551/551 and `dev` passes 553/553. The updated
   development build, targeted gizmo/alignment tests, and OpenGL smoke pass. The
   development gate includes GPU and font executables. Hidden OpenGL smoke
-  executes the compact Bench Record/Reconstruct actions for transmission,
-  reflection/Denisyuk, and RGB presets, requires current placed observation
-  textures, renders and semantically round-trips the generated 23-component
+  drives the compact Bench actions with real ImGui mouse events for
+  transmission, reflection/Denisyuk, and RGB presets, requires current placed
+  observation textures, verifies edit-driven stale suppression, renders and
+  semantically round-trips the generated 23-component
   CHIMERA bench, finds its six plate branches, and exits with no GL errors on
   AMD Radeon Pro 5300M. GitHub Actions run
   [33453934235](https://github.com/liufangyuan247/HoloBench/actions/runs/33453934235)
@@ -611,12 +618,10 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Close user-facing end-to-end acceptance for ordinary transmission,
-   reflection/Denisyuk, and RGB full-colour benches assembled through the same
-   direct-manipulation workflow; add automated interaction smoke coverage.
-2. Add automated input gestures for shelf drag/drop, transform handles,
-   target alignment, Record, and Reconstruct, then use them to close the three
-   empty-bench user workflows.
+1. Extend the passing shelf/Record/Reconstruct input smoke to constrained
+   transform handles and target/beam alignment gestures.
+2. Use those gestures to close user-facing empty-bench assembly acceptance for
+   transmission, reflection/Denisyuk, and RGB full-colour experiments.
 3. Integrate the retained CHIMERA recipe, image/dataset, exposure,
    reconstruction-camera, and sweep contracts into that same bench workflow.
 4. Add multi-selection and equal-spacing tools for larger optical layouts.
