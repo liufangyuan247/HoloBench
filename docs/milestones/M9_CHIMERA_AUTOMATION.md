@@ -14,8 +14,10 @@ provenance, constraint report, three independent M8 reflection recording
 recipes, and Lab build controls are implemented. The canonical output is a
 23-component ordinary editable bench. Format-v1 hashed hogel/angular datasets,
 deterministic synthetic perspective-view oracles, Fourier-lens position
-mapping, and sparse RGB SLM commands are implemented. Real perspective-image
-adapters and resumable batches remain open. Format-v1 virtual exposure plans
+mapping, and sparse RGB SLM commands are implemented. Decoder-neutral real
+perspective rasters, strict P3/P6 inputs, explicit linear/sRGB transfer, and
+area resampling into the hogel grid are implemented. Calibrated camera/renderer
+plugins and resumable batches remain open. Format-v1 virtual exposure plans
 and a single-hogel RGB executor now stage the editable bench, transfer sparse
 commands through the placed local-wave path, and invoke the M8 volume recorder;
 measured device timing and exposure-to-material-dose calibration remain open. Ideal

@@ -57,6 +57,10 @@ efficiency and Airy cross-talk evidence, and evaluates bounded deterministic
 parameter sweeps. Sweep output keeps every candidate recipe, constraint,
 metric, and rejection reason; it does not claim an exposure optimum until a
 measured material-dose response is available.
+Real perspective content can enter the same hashed data chain through a
+decoder-neutral RGB raster adapter with explicit linear/sRGB transfer and
+area-weighted hogel resampling. A strict P3/P6 PPM loader supplies the built-in
+dependency-free file path; richer image decoders can target the same boundary.
 
 ## M1 Features
 

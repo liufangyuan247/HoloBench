@@ -127,6 +127,7 @@ add_library(holobench_app_logic STATIC
     app/ChimeraExposurePlan.cpp
     app/ChimeraHogelDataset.cpp
     app/ChimeraParameterSweep.cpp
+    app/ChimeraPerspectiveImageAdapter.cpp
     app/ChimeraReconstruction.cpp
     app/ChimeraRecipe.cpp
     app/LessonEditHistory.cpp
@@ -453,6 +454,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/app/ChimeraExposurePlanTests.cpp
         tests/app/ChimeraHogelDatasetTests.cpp
         tests/app/ChimeraParameterSweepTests.cpp
+        tests/app/ChimeraPerspectiveImageAdapterTests.cpp
         tests/app/ChimeraReconstructionTests.cpp
         tests/app/ChimeraRecipeTests.cpp
         tests/app/SlmInterferenceUiStateTests.cpp

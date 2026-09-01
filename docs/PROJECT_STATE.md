@@ -443,6 +443,15 @@ completion because it is primarily driven through fixed parameter panels:
   payload/hash disagreement. The packaged 5x3 synthetic view grid is only a
   deterministic data-chain oracle, not a real scene renderer. See
   [ADR 0017](adr/0017-chimera-hogel-angular-dataset.md).
+- **Real perspective-raster input**: A decoder-neutral normalized RGB boundary
+  accepts externally rendered or captured views, validates their stable angular
+  identity and bounded raster storage, converts declared IEC sRGB values to
+  linear intensity, and performs exact pixel-area resampling into the recipe's
+  hogel grid. Strict P3/P6 PPM loading, including 16-bit big-endian P6, provides
+  a dependency-free real file path. Row orientation is explicit and no hidden
+  scene renderer is introduced. PNG/JPEG/EXR, ICC/HDR, camera distortion, and
+  radiometric calibration remain plugin/calibration work. See
+  [ADR 0021](adr/0021-chimera-perspective-raster-adapter.md).
 - **Deterministic virtual exposure sequence**: Format-v1 `ExposurePlan`
   generates row-major hogel stage moves and ordered RGB SLM-load, beam-gate,
   exposure, and gate-off events with source dataset/bench provenance and a
@@ -477,7 +486,7 @@ completion because it is primarily driven through fixed parameter panels:
   material response. Canonical JSON exposes all selection evidence. See
   [ADR 0020](adr/0020-chimera-deterministic-parameter-sweep.md).
 - **Current M9 validation**: Windows Clang warnings-as-errors core/application
-  builds pass; `core-ci` passes 526/526 and `dev` passes 528/528 including GPU
+  builds pass; `core-ci` passes 530/530 and `dev` passes 532/532 including GPU
   and font executables. Hidden OpenGL smoke renders and semantically
   round-trips the generated 23-component bench, finds its six plate branches,
   and exits with no GL errors on AMD Radeon Pro 5300M. GitHub Actions run
@@ -486,8 +495,10 @@ completion because it is primarily driven through fixed parameter panels:
   the hashed dataset, exposure-plan, sparse placed-SLM, and M8 execution slice.
   Run
   [33454882017](https://github.com/liufangyuan247/HoloBench/actions/runs/33454882017)
-  passes the same four jobs through directional reconstruction. Remote evidence
-  for the parameter-sweep slice remains pending.
+  passes the same four jobs through directional reconstruction. Run
+  [33455832150](https://github.com/liufangyuan247/HoloBench/actions/runs/33455832150)
+  passes all four jobs through deterministic parameter sweeps. Remote evidence
+  for the real perspective-raster adapter remains pending.
 
 ## Known limitations (M1/M2)
 
@@ -499,9 +510,9 @@ completion because it is primarily driven through fixed parameter panels:
 
 ## Next five tasks
 
-1. Add real perspective-image adapters and calibrated material-dose hooks.
+1. Add calibrated material-dose and measured SLM/camera LUT hooks.
 2. Add spectral/pupil camera reconstruction and bounded image composition.
-3. Expose dataset, exposure-plan, preview, sweep, and batch controls in the Lab UI.
+3. Expose real image import, dataset, exposure, preview, sweep, and batch controls in the Lab UI.
 4. Add resumable batch execution, corrupt-artifact rejection, named budgets,
    and cross-platform M9 acceptance gates.
 5. Complete the M9 virtual-printer acceptance audit and documentation.
