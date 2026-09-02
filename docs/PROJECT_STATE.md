@@ -64,18 +64,19 @@ animated or silently approximated.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: the current local increment passes 632/632 Clang
-  development tests, including the font and GPU executables, and 630/630
-  Release Core tests under both Clang and MSVC. Clang and MSVC complete
-  Application builds pass with warnings as errors. The default solid-object M8
+- **Acceptance evidence**: the current increment passes 632/632 Clang
+  development tests, including the font and GPU executables. Clang, MSVC, and
+  Ubuntu/GCC Release Core pass 630/630; Windows and Ubuntu complete Application
+  builds pass with warnings as errors. The default solid-object M8
   benchmark meets its 750/750/2000 ms p95 budgets at
   602.393/590.569/1817.430 ms. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
   smoke passes real shelf placement, constrained whole-instrument edits,
   post/XYZ and yaw/pitch mechanical drags, optical-frame updates, all M7/M8
   recording/reconstruction flows including RGB Denisyuk on a placed Probe,
   live wave planes, and CHIMERA PCG output under both Clang and MSVC; their
-  120-frame smokes also exit 0. The new source remains platform-neutral;
-  Ubuntu/GCC confirmation is delegated to the unchanged four-job CI gate.
+  120-frame smokes also exit 0. The platform-neutral four-job gate passes in
+  GitHub Actions run
+  [33661724502](https://github.com/liufangyuan247/HoloBench/actions/runs/33661724502).
 - **M10.2 mechanical assemblies implemented**: Bench components can persist a
   validated base frame, post height, XYZ stage travel, mount yaw/pitch, and the
   ordered limit for each degree of freedom. The resolved component transform is

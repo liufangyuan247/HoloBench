@@ -223,7 +223,9 @@ used as the solid-sample gate.
 The CPU reference contains no GPU dispatch, vendor/model branch, speculative
 compatibility workaround, precision reduction, or hardware-specific cap.
 Windows MSVC and Ubuntu GCC execute the same platform-neutral gates in CI;
-GitHub Actions run 33471184614 passes both Core jobs.
+GitHub Actions run
+[33661724502](https://github.com/liufangyuan247/HoloBench/actions/runs/33661724502)
+passes both Core jobs with the solid-object workload.
 
 ## M9 CHIMERA Automation Benchmarks
 
