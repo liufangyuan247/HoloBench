@@ -29,7 +29,7 @@ holography::ThinPlateRecordingOptions rgbRecordingOptions() {
         .extentWidthMetres = 1e-3,
         .extentHeightMetres = 1e-3,
     };
-    options.relativeIntensityReferenceWattsPerSquareMetre = 100e3;
+    options.relativeIntensityReferenceWattsPerSquareMetre = 250e3;
     return options;
 }
 
@@ -57,8 +57,13 @@ TEST_CASE("RGB bench records and replays three independent spectral channels") {
         project.scene, trace, "plate-h1");
     const auto selections
         = holography::selectRgbThinTransmissionPairs(fields);
+    holobench::compute::fft::CpuFftBackend fft;
     const auto recording = holography::recordRgbThinTransmissionPlate(
-        project.scene, fields, selections, rgbRecordingOptions());
+        project.scene,
+        fields,
+        selections,
+        rgbRecordingOptions(),
+        fft);
 
     CHECK(recording.channels[0].pair.wavelengthMetres
         == doctest::Approx(638e-9));
@@ -72,7 +77,6 @@ TEST_CASE("RGB bench records and replays three independent spectral channels") {
         != recording.channels[2].pair.objectBranchId);
     CHECK_FALSE(recording.isStaleFor(project.scene));
 
-    holobench::compute::fft::CpuFftBackend fft;
     const auto replay = holography::replayRgbThinTransmissionToObservation(
         project.scene,
         recording,

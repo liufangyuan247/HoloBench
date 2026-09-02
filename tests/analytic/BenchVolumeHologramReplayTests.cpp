@@ -28,9 +28,26 @@ struct ReflectionInput final {
     std::uint64_t referenceBranchId = 0;
 };
 
+void useLegacyUniformObject(holobench::app::BenchProject& project) {
+    const auto* existingObject = project.scene.find("object-green");
+    if (existingObject == nullptr) return;
+    auto object = *existingObject;
+    auto parameters = std::get<scene::ObjectWavefrontSourceParameters>(
+        object.parameters);
+    parameters.geometry = scene::ObjectSourceGeometry::UniformPlane;
+    parameters.primitiveYawRadians = 0.0;
+    parameters.primitivePitchRadians = 0.0;
+    object.parameters = parameters;
+    project.scene.replace("object-green", std::move(object));
+}
+
 ReflectionInput reflectionInput(
     holobench::app::BenchProject project
         = holobench::app::makeReflectionHolographyPreset()) {
+    // These replay-oracle cases predate solid samples and assert an analytic
+    // uniform object plane. Solid primitive recording is covered separately
+    // by DiffuseObjectWavefrontTests and PlateFieldSamplingTests.
+    useLegacyUniformObject(project);
     const auto trace = ray::traceDynamicBench(project.scene);
     auto fields = holography::collectPlateIncidentFields(
         project.scene, trace, "plate-h1");
@@ -258,6 +275,7 @@ TEST_CASE("reflection recording retains a resolved real-lens wavefront for repla
 
 TEST_CASE("placed real prescription shapes the routed volume reconstruction path") {
     auto project = holobench::app::makeReflectionHolographyPreset();
+    useLegacyUniformObject(project);
     auto reference = *project.scene.find("reference-green");
     scene::rebaseMechanicalAssembly(
         reference,

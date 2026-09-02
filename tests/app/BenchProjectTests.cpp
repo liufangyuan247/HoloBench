@@ -5,6 +5,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -120,6 +121,73 @@ TEST_CASE("unified bench project round trips every kind arbitrary transforms and
     CHECK(slmParameters.commandId == "rgb-hogel-42");
     CHECK(slmParameters.commandOrigin == scene::SlmCommandOrigin::Automation);
     CHECK(slmParameters.horizontalCycles == doctest::Approx(7.0));
+
+    const auto* object = loaded.scene.find("component-19");
+    REQUIRE(object != nullptr);
+    const auto& objectParameters
+        = std::get<scene::ObjectWavefrontSourceParameters>(
+            object->parameters);
+    CHECK(objectParameters.geometry == scene::ObjectSourceGeometry::Cube);
+    CHECK(objectParameters.depthMetres == doctest::Approx(0.02));
+    CHECK(objectParameters.roughnessSeed == 1U);
+}
+
+TEST_CASE("format six persists diffuse primitives and migrates format five planes") {
+    app::BenchProject project;
+    auto object = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::ObjectWavefrontSource,
+        "diffuse-sample");
+    auto parameters = std::get<scene::ObjectWavefrontSourceParameters>(
+        object.parameters);
+    parameters.geometry = scene::ObjectSourceGeometry::Sphere;
+    parameters.widthMetres = 0.031;
+    parameters.heightMetres = 0.027;
+    parameters.depthMetres = 0.019;
+    parameters.primitiveYawRadians = -0.4;
+    parameters.primitivePitchRadians = 0.2;
+    parameters.roughnessSeed = std::numeric_limits<std::uint64_t>::max();
+    object.parameters = parameters;
+    object.instrument.serialNumber = "HB-DIFFUSE-1";
+    project.scene.add(object);
+
+    const auto bytes = app::serializeBenchProject(project);
+    const auto json = nlohmann::json::parse(bytes);
+    CHECK(json.at("format_version")
+        == app::kPrimitiveObjectBenchProjectFormatVersion);
+    CHECK(json["components"][0]["parameters"]["geometry"] == "sphere");
+    const auto restored = app::parseBenchProject(bytes);
+    CHECK(app::serializeBenchProject(restored) == bytes);
+    const auto& restoredParameters
+        = std::get<scene::ObjectWavefrontSourceParameters>(
+            restored.scene.find("diffuse-sample")->parameters);
+    CHECK(restoredParameters == parameters);
+
+    auto formatFive = json;
+    formatFive["format_version"]
+        = app::kInstrumentCalibrationBenchProjectFormatVersion;
+    auto& legacyParameters = formatFive["components"][0]["parameters"];
+    legacyParameters = {
+        {"channel", legacyParameters.at("channel")},
+        {"height_m", legacyParameters.at("height_m")},
+        {"width_m", legacyParameters.at("width_m")},
+    };
+    const auto migrated = app::parseBenchProject(formatFive.dump());
+    const auto* migratedObject = migrated.scene.find("diffuse-sample");
+    REQUIRE(migratedObject != nullptr);
+    const auto& migratedParameters
+        = std::get<scene::ObjectWavefrontSourceParameters>(
+            migratedObject->parameters);
+    CHECK(migratedParameters.geometry
+        == scene::ObjectSourceGeometry::UniformPlane);
+    CHECK(migratedParameters.depthMetres == doctest::Approx(0.027));
+    CHECK(migratedObject->instrument.serialNumber == "HB-DIFFUSE-1");
+
+    auto unknownGeometry = json;
+    unknownGeometry["components"][0]["parameters"]["geometry"]
+        = "mesh_from_render_triangles";
+    CHECK_THROWS_AS(
+        static_cast<void>(app::parseBenchProject(unknownGeometry.dump())),
+        std::runtime_error);
 }
 
 TEST_CASE("format two bench SLM migrates to explicit manual zero-phase command") {
@@ -149,7 +217,7 @@ TEST_CASE("format two bench SLM migrates to explicit manual zero-phase command")
     CHECK(restored.primaryCommand == doctest::Approx(0.0));
 }
 
-TEST_CASE("format five persists instrument calibration and migrates format four") {
+TEST_CASE("format six persists instrument calibration and migrates formats five and four") {
     app::BenchProject project;
     auto lens = scene::makeDefaultBenchComponent(
         scene::BenchComponentKind::IdealThinLens, "mounted-lens");
@@ -194,6 +262,13 @@ TEST_CASE("format five persists instrument calibration and migrates format four"
     CHECK(restoredLens->instrument == lens.instrument);
     CHECK(scene::instrumentCalibrationState(restoredLens->instrument)
         == scene::InstrumentCalibrationState::Calibrated);
+
+    auto formatFive = json;
+    formatFive["format_version"]
+        = app::kInstrumentCalibrationBenchProjectFormatVersion;
+    const auto migratedFromFive = app::parseBenchProject(formatFive.dump());
+    CHECK(migratedFromFive.scene.find("mounted-lens")->instrument
+        == lens.instrument);
 
     auto inconsistent = json;
     inconsistent["components"][0]["mechanical_assembly"]

@@ -116,6 +116,7 @@ add_library(holobench_optics STATIC
     optics/wave/SequentialPupilPsf.cpp
     optics/wave/CoherentInterference.cpp
     optics/wave/BeamFollowingField.cpp
+    optics/wave/DiffuseObjectWavefront.cpp
 )
 add_library(HoloBench::Optics ALIAS holobench_optics)
 target_include_directories(holobench_optics PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -453,6 +454,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/CoatingResponseTests.cpp
         tests/analytic/BenchSceneTests.cpp
         tests/analytic/DynamicBenchTracerTests.cpp
+        tests/analytic/DiffuseObjectWavefrontTests.cpp
         tests/analytic/ChromaticAnalysisTests.cpp
         tests/analytic/PlateFieldSamplingTests.cpp
         tests/analytic/PlateIncidentFieldsTests.cpp

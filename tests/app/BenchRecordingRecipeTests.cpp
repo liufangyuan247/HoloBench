@@ -196,6 +196,14 @@ TEST_CASE("legacy bench migrates empty recipes and corrupt recipes reject strict
     for (auto& component : json["components"]) {
         component.erase("instrument");
         component.erase("mechanical_assembly");
+        if (component.at("kind") == "object_wavefront_source") {
+            const auto& current = component.at("parameters");
+            component["parameters"] = {
+                {"channel", current.at("channel")},
+                {"height_m", current.at("height_m")},
+                {"width_m", current.at("width_m")},
+            };
+        }
     }
     const auto migrated = app::parseBenchProject(json.dump());
     CHECK(migrated.formatVersion == app::kBenchProjectFormatVersion);

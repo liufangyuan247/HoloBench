@@ -1,6 +1,7 @@
 #include "render/ProceduralInstrumentGeometry.hpp"
 
 #include <cmath>
+#include <array>
 #include <limits>
 #include <string>
 
@@ -74,6 +75,43 @@ TEST_CASE("PCG instrument dimensions follow editable optical parameters") {
         > (small.boundsMaximum.x - small.boundsMinimum.x) * 2.0F);
     CHECK((large.boundsMaximum.y - large.boundsMinimum.y)
         > (small.boundsMaximum.y - small.boundsMinimum.y) * 2.0F);
+}
+
+TEST_CASE("PCG diffuse samples follow the three analytic primitive parameters") {
+    namespace scene = optics::scene;
+    auto object = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::ObjectWavefrontSource,
+        "pcg-diffuse-object");
+    auto parameters = std::get<scene::ObjectWavefrontSourceParameters>(
+        object.parameters);
+    parameters.widthMetres = 0.04;
+    parameters.heightMetres = 0.03;
+    parameters.depthMetres = 0.02;
+    parameters.primitiveYawRadians = 0.4;
+    parameters.primitivePitchRadians = -0.2;
+    constexpr std::array geometries {
+        scene::ObjectSourceGeometry::Cube,
+        scene::ObjectSourceGeometry::Sphere,
+        scene::ObjectSourceGeometry::Tetrahedron,
+    };
+    std::array<std::size_t, geometries.size()> triangleCounts {};
+    for (std::size_t index = 0U; index < geometries.size(); ++index) {
+        parameters.geometry = geometries[index];
+        object.parameters = parameters;
+        const auto mesh = generateProceduralInstrumentMesh(
+            object, {.radialSegments = 24U});
+        CAPTURE(static_cast<int>(geometries[index]));
+        triangleCounts[index] = mesh.triangleCount();
+        CHECK(mesh.opticalProxy.widthMetres == doctest::Approx(0.04F));
+        CHECK(mesh.opticalProxy.heightMetres == doctest::Approx(0.03F));
+        CHECK(mesh.boundsMinimum.z < -0.01F);
+        // The disposable mounting base straddles the optical proxy slightly;
+        // the analytic primitive pose itself is validated in optics tests.
+        CHECK(mesh.boundsMaximum.z < 0.006F);
+    }
+    CHECK(triangleCounts[0] != triangleCounts[1]);
+    CHECK(triangleCounts[0] != triangleCounts[2]);
+    CHECK(triangleCounts[1] != triangleCounts[2]);
 }
 
 TEST_CASE("PCG solids and diagnostic proxy follow the exact rigid instrument pose") {

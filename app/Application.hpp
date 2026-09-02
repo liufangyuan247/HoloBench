@@ -662,7 +662,9 @@ private:
     float sandboxCalibrationMaximumTemperatureKelvin_ = 350.0F;
     int sandboxPlateSampleSize_ = 256;
     float sandboxPlateWindowMillimetres_ = 1.0F;
-    float sandboxPlateRelativeReferenceKilowattsPerSquareMetre_ = 100.0F;
+    // Coherent diffuse objects create physical speckle peaks; this exposure
+    // reference keeps the default thin-plate response inside its linear range.
+    float sandboxPlateRelativeReferenceKilowattsPerSquareMetre_ = 250.0F;
     int sandboxPlateReplayKindIndex_ = 1;
     SandboxExperimentMode sandboxExperimentMode_ = SandboxExperimentMode::Auto;
     SandboxRecordedExperiment sandboxRecordedExperiment_

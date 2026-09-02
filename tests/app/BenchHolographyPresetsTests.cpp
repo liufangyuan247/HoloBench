@@ -72,6 +72,13 @@ TEST_CASE("transmission preset is an ordinary editable bench with record and rep
     CHECK(project.scene.find("reference-green") != nullptr);
     CHECK(project.scene.find("plate-h1") != nullptr);
     CHECK(project.scene.find("reconstruction-screen") != nullptr);
+    const auto& objectParameters
+        = std::get<scene::ObjectWavefrontSourceParameters>(
+            project.scene.find("object-green")->parameters);
+    CHECK(objectParameters.geometry == scene::ObjectSourceGeometry::Cube);
+    CHECK(objectParameters.widthMetres == doctest::Approx(0.01));
+    CHECK(objectParameters.heightMetres == doctest::Approx(0.01));
+    CHECK(objectParameters.depthMetres == doctest::Approx(0.01));
     const auto fields = plateFields(project);
     REQUIRE(fields.branches.size() == 2U);
     const auto [object, reference] = singlePair(fields);

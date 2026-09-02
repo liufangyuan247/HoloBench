@@ -64,6 +64,17 @@ existing total power equally and assigns matching per-colour coherence IDs.
 Object sources remain explicitly single-channel, so a full-colour object is
 built from three ordinary placed sources rather than hidden wavelength mixing.
 
+Newly placed diffuse objects are real sampled optical sources, not decorative
+meshes. The Inspector selects a cube, sphere, or triangular pyramid
+(tetrahedron), edits its three dimensions and sample-relative yaw/pitch, and
+persists a coherent-roughness seed. `optics/` analytically samples the nearest
+opaque surface, applies scalar Lambertian amplitude plus deterministic rough
+phase, and propagates six bounded depth layers into the ordinary
+Screen/Probe/Plate field chain. PCG draws the matching solid but never defines
+the optical surface. `Power` is the already-scattered object-wave power;
+independent laser illumination, cast shadows, specular/transparent materials,
+polarization, and multiple scattering are not claimed in this first slice.
+
 Selecting a holographic plate now opens a compact experiment bar in the
 Optical Bench itself. It reports the object/reference incidence and available
 transmission, reflection, and strict RGB pairings, then provides Record,

@@ -83,7 +83,7 @@ bench::BenchComponent applySourceSpectrumPreset(
         edited.parameters = std::move(parameters);
     } else {
         throw std::invalid_argument(
-            "spectral presets require a Laser Source or Object / Wavefront Source");
+            "spectral presets require a Laser Source or Diffuse Object");
     }
     bench::validateBenchComponent(edited);
     return edited;

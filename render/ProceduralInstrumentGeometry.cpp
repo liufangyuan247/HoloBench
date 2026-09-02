@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "core/math/RigidTransform.hpp"
+#include "optics/wave/DiffuseObjectWavefront.hpp"
 
 namespace holobench::render {
 
@@ -380,6 +381,103 @@ void addPostAndBase(
         {0.5F * baseWidth, 0.0025F, std::max(0.009F, 0.35F * baseWidth)}, color);
 }
 
+void addDiffuseObjectPrimitive(
+    ProceduralInstrumentMesh& mesh,
+    const bench::BenchComponent& component,
+    const bench::ObjectWavefrontSourceParameters& parameters,
+    std::size_t radialSegments,
+    const glm::vec4& color) {
+    const auto frame = optics::wave::diffuseObjectPrimitiveFrame(parameters);
+    const auto at = [&](math::Vec3d primitivePoint) {
+        return toGlm(optics::wave::diffuseObjectPrimitiveToSourcePoint(
+            frame, primitivePoint));
+    };
+    const float hx = 0.5F * static_cast<float>(parameters.widthMetres);
+    const float hy = 0.5F * static_cast<float>(parameters.heightMetres);
+    const float hz = 0.5F * static_cast<float>(parameters.depthMetres);
+    if (parameters.geometry == bench::ObjectSourceGeometry::Cube) {
+        const std::array corners {
+            at({-hx, -hy, -hz}), at({hx, -hy, -hz}),
+            at({hx, hy, -hz}), at({-hx, hy, -hz}),
+            at({-hx, -hy, hz}), at({hx, -hy, hz}),
+            at({hx, hy, hz}), at({-hx, hy, hz}),
+        };
+        addQuad(mesh, component,
+            corners[4], corners[5], corners[6], corners[7], color);
+        addQuad(mesh, component,
+            corners[1], corners[0], corners[3], corners[2], color);
+        addQuad(mesh, component,
+            corners[5], corners[1], corners[2], corners[6], color);
+        addQuad(mesh, component,
+            corners[0], corners[4], corners[7], corners[3], color);
+        addQuad(mesh, component,
+            corners[7], corners[6], corners[2], corners[3], color);
+        addQuad(mesh, component,
+            corners[0], corners[1], corners[5], corners[4], color);
+        return;
+    }
+    if (parameters.geometry == bench::ObjectSourceGeometry::Tetrahedron) {
+        const std::array vertices {
+            at({-hx, -hy, -hz}),
+            at({hx, -hy, -hz}),
+            at({0.0, hy, -hz}),
+            at({0.0, 0.0, hz}),
+        };
+        addTriangle(mesh, component,
+            vertices[0], vertices[2], vertices[1], color);
+        addTriangle(mesh, component,
+            vertices[0], vertices[1], vertices[3], color);
+        addTriangle(mesh, component,
+            vertices[1], vertices[2], vertices[3], color);
+        addTriangle(mesh, component,
+            vertices[2], vertices[0], vertices[3], color);
+        return;
+    }
+    if (parameters.geometry != bench::ObjectSourceGeometry::Sphere) return;
+
+    const std::size_t latitudeSegments = std::max(
+        std::size_t {4U}, radialSegments / 2U);
+    const auto point = [&](std::size_t latitude, std::size_t longitude) {
+        const double latitudeAngle = -0.5 * std::numbers::pi_v<double>
+            + std::numbers::pi_v<double>
+                * static_cast<double>(latitude)
+                / static_cast<double>(latitudeSegments);
+        const double longitudeAngle = 2.0 * std::numbers::pi_v<double>
+            * static_cast<double>(longitude)
+            / static_cast<double>(radialSegments);
+        const double latitudeCosine = std::cos(latitudeAngle);
+        return at({
+            static_cast<double>(hx) * latitudeCosine
+                * std::cos(longitudeAngle),
+            static_cast<double>(hy) * std::sin(latitudeAngle),
+            static_cast<double>(hz) * latitudeCosine
+                * std::sin(longitudeAngle),
+        });
+    };
+    const glm::vec3 bottom = at({0.0, -hy, 0.0});
+    const glm::vec3 top = at({0.0, hy, 0.0});
+    for (std::size_t longitude = 0U;
+         longitude < radialSegments; ++longitude) {
+        const std::size_t next = (longitude + 1U) % radialSegments;
+        addTriangle(mesh, component,
+            bottom, point(1U, next), point(1U, longitude), color);
+        for (std::size_t latitude = 1U;
+             latitude + 1U < latitudeSegments; ++latitude) {
+            addQuad(mesh, component,
+                point(latitude, longitude),
+                point(latitude + 1U, longitude),
+                point(latitude + 1U, next),
+                point(latitude, next),
+                color);
+        }
+        addTriangle(mesh, component,
+            point(latitudeSegments - 1U, longitude),
+            point(latitudeSegments - 1U, next),
+            top,
+            color);
+    }
+}
+
 void updateBounds(ProceduralInstrumentMesh& mesh) {
     if (mesh.triangles.empty()) {
         throw std::invalid_argument("procedural instrument generated no triangles");
@@ -431,14 +529,28 @@ ProceduralInstrumentMesh generateProceduralInstrumentMesh(
             {0.75F, 0.10F, 0.06F, 1.0F});
         break;
     }
-    case bench::BenchComponentKind::ObjectWavefrontSource:
-        addBox(mesh, component, {0.0F, 0.0F, -0.004F},
-            {halfWidth + 0.003F, halfHeight + 0.003F, 0.005F}, dark);
-        addBox(mesh, component, {0.0F, 0.0F, 0.0015F},
-            {halfWidth, halfHeight, 0.0005F},
-            selectedTint({0.58F, 0.18F, 0.78F, 1.0F}, options.selected));
+    case bench::BenchComponentKind::ObjectWavefrontSource: {
+        const auto& value = std::get<bench::ObjectWavefrontSourceParameters>(
+            component.parameters);
+        if (value.geometry == bench::ObjectSourceGeometry::UniformPlane) {
+            addBox(mesh, component, {0.0F, 0.0F, -0.004F},
+                {halfWidth + 0.003F, halfHeight + 0.003F, 0.005F}, dark);
+            addBox(mesh, component, {0.0F, 0.0F, 0.0015F},
+                {halfWidth, halfHeight, 0.0005F},
+                selectedTint(
+                    {0.58F, 0.18F, 0.78F, 1.0F}, options.selected));
+        } else {
+            addDiffuseObjectPrimitive(
+                mesh,
+                component,
+                value,
+                radialSegments,
+                selectedTint(
+                    {0.52F, 0.43F, 0.31F, 1.0F}, options.selected));
+        }
         addPostAndBase(mesh, component, extent, metal);
         break;
+    }
     case bench::BenchComponentKind::PlanarMirror:
         addBox(mesh, component, {0.0F, 0.0F, -0.0025F},
             {halfWidth + 0.0025F, halfHeight + 0.0025F, 0.003F}, dark);

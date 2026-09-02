@@ -131,6 +131,18 @@ bool requiresWaveRefinement(scene::BenchComponentKind kind) noexcept {
     return wave::requiresBeamFollowingWaveTransform(kind);
 }
 
+bool requiresWaveRefinement(
+    const scene::BenchComponent& component) noexcept {
+    if (requiresWaveRefinement(component.kind)) return true;
+    if (component.kind
+        != scene::BenchComponentKind::ObjectWavefrontSource) {
+        return false;
+    }
+    return std::get<scene::ObjectWavefrontSourceParameters>(
+               component.parameters).geometry
+        != scene::ObjectSourceGeometry::UniformPlane;
+}
+
 bool hasWaveRefinementComponent(
     const scene::BenchScene& bench,
     const PlateIncidentBranch& branch) {
@@ -140,7 +152,7 @@ bool hasWaveRefinementComponent(
         [&bench](const auto& componentId) {
             const auto* component = bench.find(componentId);
             return component != nullptr
-                && requiresWaveRefinement(component->kind);
+                && requiresWaveRefinement(*component);
         });
 }
 
@@ -150,7 +162,15 @@ void appendRefinementWarnings(
     PlateFieldSamplingDiagnostics& diagnostics) {
     for (const auto& componentId : branch.beam.provenance.componentPath) {
         const auto* component = bench.find(componentId);
-        if (component != nullptr && requiresWaveRefinement(component->kind)) {
+        if (component == nullptr || !requiresWaveRefinement(*component)) {
+            continue;
+        }
+        if (component->kind
+            == scene::BenchComponentKind::ObjectWavefrontSource) {
+            diagnostics.warnings.push_back(
+                componentId
+                + ": diffuse primitive requires FFT-backed layered object-wave refinement");
+        } else {
             diagnostics.warnings.push_back(
                 componentId
                 + ": centreline routing is present but its sampled wave transform is not yet applied");
@@ -289,7 +309,10 @@ SampledPlateIncidentField sampleLocalWavePath(
                     != std::string::npos
                     || warning.find(
                         "propagated waist curvature awaits local-plane refinement")
-                    != std::string::npos
+                        != std::string::npos
+                    || warning.find(
+                        "diffuse primitive requires FFT-backed layered object-wave refinement")
+                        != std::string::npos
                     || warning.find(
                         "incident source support reaches the sampled plate boundary")
                     != std::string::npos;
@@ -396,6 +419,12 @@ SampledPlateIncidentField samplePlateIncidentField(
         = source.kind == scene::BenchComponentKind::LaserSource
         && std::get<scene::LaserSourceParameters>(source.parameters).profile
             == scene::LaserBeamProfile::Gaussian;
+    if (source.kind == scene::BenchComponentKind::ObjectWavefrontSource
+        && std::get<scene::ObjectWavefrontSourceParameters>(
+               source.parameters).geometry
+            != scene::ObjectSourceGeometry::UniformPlane) {
+        diagnostics.usesApproximateSourceEnvelope = true;
+    }
 
     double discreteFluxWeight = 0.0;
     const double pixelArea = pitchX * pitchY;

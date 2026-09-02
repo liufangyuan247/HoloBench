@@ -1,10 +1,12 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <complex>
 #include <numbers>
 #include <stdexcept>
+#include <string>
 
 #include "compute/fft/CpuFftBackend.hpp"
 #include "optics/holography/PlateFieldSampling.hpp"
@@ -75,6 +77,41 @@ scene::BenchScene coaxialElementBench(
 
     element.transform.translationMetres.z = -0.05;
     bench.add(std::move(element));
+
+    auto plate = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::HolographicPlate, "plate");
+    auto plateParameters = std::get<scene::HolographicPlateParameters>(
+        plate.parameters);
+    plateParameters.widthMetres = 0.012;
+    plateParameters.heightMetres = 0.012;
+    plate.parameters = plateParameters;
+    bench.add(std::move(plate));
+    return bench;
+}
+
+scene::BenchScene diffuseObjectBench(
+    scene::ObjectSourceGeometry geometry) {
+    scene::BenchScene bench;
+    auto object = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::ObjectWavefrontSource,
+        "diffuse-object");
+    object.transform.translationMetres.z = -0.03;
+    auto parameters = std::get<scene::ObjectWavefrontSourceParameters>(
+        object.parameters);
+    parameters.geometry = geometry;
+    parameters.widthMetres = 0.006;
+    parameters.heightMetres = 0.006;
+    parameters.depthMetres = 0.004;
+    parameters.primitiveYawRadians = 0.35;
+    parameters.primitivePitchRadians = -0.2;
+    parameters.roughnessSeed = 77U;
+    parameters.channel = {
+        .wavelengthMetres = 532e-9,
+        .powerWatts = 0.1,
+        .coherenceId = "diffuse-recording",
+    };
+    object.parameters = parameters;
+    bench.add(std::move(object));
 
     auto plate = scene::makeDefaultBenchComponent(
         scene::BenchComponentKind::HolographicPlate, "plate");
@@ -219,6 +256,40 @@ TEST_CASE("plate-local collimated field preserves branch identity phase and powe
         2.0 * std::numbers::pi);
     CHECK(std::abs(center / std::abs(center) - std::polar(1.0, expectedPhase))
         < 2e-10);
+}
+
+TEST_CASE("all diffuse solid primitives enter the routed plate field chain") {
+    constexpr std::array geometries {
+        scene::ObjectSourceGeometry::Cube,
+        scene::ObjectSourceGeometry::Sphere,
+        scene::ObjectSourceGeometry::Tetrahedron,
+    };
+    for (const auto geometry : geometries) {
+        const auto bench = diffuseObjectBench(geometry);
+        const auto fields = incidentFields(bench);
+        REQUIRE(fields.branches.size() == 1U);
+        REQUIRE(fields.branches.front().role
+            == holography::RecordingBranchRole::Object);
+        holobench::compute::fft::CpuFftBackend backend;
+        const auto sampled = holography::samplePlateIncidentField(
+            bench,
+            fields,
+            fields.branches.front().beam.provenance.branchId,
+            coaxialSampling(32U),
+            backend);
+        CAPTURE(static_cast<int>(geometry));
+        CHECK(sampled.diagnostics.appliedLocalWavePath);
+        CHECK(sampled.diagnostics.integratedPowerWatts > 0.0);
+        CHECK(sampled.diagnostics.integratedPowerWatts <= 0.1 + 1e-10);
+        CHECK(sampled.diagnostics.illuminatedSampleCount > 0U);
+        CHECK(std::any_of(
+            sampled.diagnostics.warnings.begin(),
+            sampled.diagnostics.warnings.end(),
+            [](const std::string& warning) {
+                return warning.find("opaque scalar Lambertian")
+                    != std::string::npos;
+            }));
+    }
 }
 
 TEST_CASE("oblique plate-local field has the analytic transverse phase slope") {

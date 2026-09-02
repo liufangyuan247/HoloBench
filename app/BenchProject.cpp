@@ -184,6 +184,19 @@ std::size_t rasterSize(const Json& value, std::string_view field) {
     return static_cast<std::size_t>(signedValue);
 }
 
+std::uint64_t unsignedInteger(const Json& value, std::string_view field) {
+    if (value.is_number_unsigned()) return value.get<std::uint64_t>();
+    if (!value.is_number_integer()) {
+        throw std::runtime_error(std::string(field) + " must be an integer");
+    }
+    const auto signedValue = value.get<std::int64_t>();
+    if (signedValue < 0) {
+        throw std::runtime_error(
+            std::string(field) + " must be non-negative");
+    }
+    return static_cast<std::uint64_t>(signedValue);
+}
+
 std::string requiredString(const Json& value, std::string_view field) {
     if (!value.is_string()) {
         throw std::runtime_error(std::string(field) + " must be a string");
@@ -484,6 +497,30 @@ scene::LaserBeamProfile laserProfileFromName(std::string_view name) {
     throw std::runtime_error("unsupported laser profile: " + std::string(name));
 }
 
+std::string_view objectGeometryName(
+    scene::ObjectSourceGeometry geometry) noexcept {
+    switch (geometry) {
+    case scene::ObjectSourceGeometry::UniformPlane: return "uniform_plane";
+    case scene::ObjectSourceGeometry::Cube: return "cube";
+    case scene::ObjectSourceGeometry::Sphere: return "sphere";
+    case scene::ObjectSourceGeometry::Tetrahedron: return "tetrahedron";
+    }
+    return "unknown";
+}
+
+scene::ObjectSourceGeometry objectGeometryFromName(std::string_view name) {
+    if (name == "uniform_plane") {
+        return scene::ObjectSourceGeometry::UniformPlane;
+    }
+    if (name == "cube") return scene::ObjectSourceGeometry::Cube;
+    if (name == "sphere") return scene::ObjectSourceGeometry::Sphere;
+    if (name == "tetrahedron") {
+        return scene::ObjectSourceGeometry::Tetrahedron;
+    }
+    throw std::runtime_error(
+        "unsupported object geometry: " + std::string(name));
+}
+
 std::string_view apertureShapeName(scene::ApertureShape shape) noexcept {
     switch (shape) {
     case scene::ApertureShape::Circular: return "circular";
@@ -575,8 +612,16 @@ Json parametersToJson(const scene::BenchComponent& component) {
     }
     case scene::BenchComponentKind::ObjectWavefrontSource: {
         const auto& value = std::get<scene::ObjectWavefrontSourceParameters>(component.parameters);
-        return {{"channel", spectralChannelToJson(value.channel)}, {"height_m", value.heightMetres},
-            {"width_m", value.widthMetres}};
+        return {
+            {"channel", spectralChannelToJson(value.channel)},
+            {"depth_m", value.depthMetres},
+            {"geometry", objectGeometryName(value.geometry)},
+            {"height_m", value.heightMetres},
+            {"primitive_pitch_rad", value.primitivePitchRadians},
+            {"primitive_yaw_rad", value.primitiveYawRadians},
+            {"roughness_seed", value.roughnessSeed},
+            {"width_m", value.widthMetres},
+        };
     }
     case scene::BenchComponentKind::PlanarMirror: {
         const auto& value = std::get<scene::PlanarMirrorParameters>(component.parameters);
@@ -676,13 +721,51 @@ scene::BenchComponentParameters parametersFromJson(
         for (const auto& channel : value.at("channels")) result.channels.push_back(spectralChannelFromJson(channel));
         return result;
     }
-    case scene::BenchComponentKind::ObjectWavefrontSource:
-        requireKeys(value, {"channel", "height_m", "width_m"}, "object source parameters");
+    case scene::BenchComponentKind::ObjectWavefrontSource: {
+        if (formatVersion < kPrimitiveObjectBenchProjectFormatVersion) {
+            requireKeys(value,
+                {"channel", "height_m", "width_m"},
+                "legacy object source parameters");
+            scene::ObjectWavefrontSourceParameters migrated;
+            migrated.channel = spectralChannelFromJson(value.at("channel"));
+            migrated.geometry = scene::ObjectSourceGeometry::UniformPlane;
+            migrated.widthMetres = finiteNumber(
+                value.at("width_m"), "object source width_m");
+            migrated.heightMetres = finiteNumber(
+                value.at("height_m"), "object source height_m");
+            migrated.depthMetres = std::min(
+                migrated.widthMetres, migrated.heightMetres);
+            migrated.primitiveYawRadians = 0.0;
+            migrated.primitivePitchRadians = 0.0;
+            migrated.roughnessSeed = 1U;
+            return migrated;
+        }
+        requireKeys(value,
+            {"channel", "depth_m", "geometry", "height_m",
+                "primitive_pitch_rad", "primitive_yaw_rad",
+                "roughness_seed", "width_m"},
+            "object source parameters");
+        const std::uint64_t roughnessSeed = unsignedInteger(
+            value.at("roughness_seed"), "object source roughness_seed");
         return scene::ObjectWavefrontSourceParameters {
             .channel = spectralChannelFromJson(value.at("channel")),
-            .widthMetres = finiteNumber(value.at("width_m"), "object source width_m"),
-            .heightMetres = finiteNumber(value.at("height_m"), "object source height_m"),
+            .geometry = objectGeometryFromName(requiredString(
+                value.at("geometry"), "object source geometry")),
+            .widthMetres = finiteNumber(
+                value.at("width_m"), "object source width_m"),
+            .heightMetres = finiteNumber(
+                value.at("height_m"), "object source height_m"),
+            .depthMetres = finiteNumber(
+                value.at("depth_m"), "object source depth_m"),
+            .primitiveYawRadians = finiteNumber(
+                value.at("primitive_yaw_rad"),
+                "object source primitive_yaw_rad"),
+            .primitivePitchRadians = finiteNumber(
+                value.at("primitive_pitch_rad"),
+                "object source primitive_pitch_rad"),
+            .roughnessSeed = roughnessSeed,
         };
+    }
     case scene::BenchComponentKind::PlanarMirror:
         requireKeys(value, {"height_m", "power_reflectivity", "width_m"}, "mirror parameters");
         return scene::PlanarMirrorParameters {
@@ -853,7 +936,8 @@ Json componentToJson(const scene::BenchComponent& component) {
 scene::BenchComponent componentFromJson(
     const Json& value,
     int formatVersion) {
-    if (formatVersion >= kBenchProjectFormatVersion) {
+    if (formatVersion
+        >= kInstrumentCalibrationBenchProjectFormatVersion) {
         requireKeys(value,
             {"id", "instrument", "kind", "mechanical_assembly", "parameters",
                 "transform"},
@@ -883,7 +967,8 @@ scene::BenchComponent componentFromJson(
         result.mechanicalAssembly = mechanicalAssemblyFromJson(
             value.at("mechanical_assembly"));
     }
-    if (formatVersion >= kBenchProjectFormatVersion) {
+    if (formatVersion
+        >= kInstrumentCalibrationBenchProjectFormatVersion) {
         result.instrument = instrumentIdentityFromJson(value.at("instrument"));
     }
     scene::validateBenchComponent(result);
@@ -1362,6 +1447,8 @@ BenchProject parseBenchProject(std::string_view jsonText) {
         }
         const int formatVersion = root.at("format_version").get<int>();
         if (formatVersion != kBenchProjectFormatVersion
+            && formatVersion
+                != kInstrumentCalibrationBenchProjectFormatVersion
             && formatVersion != kMechanicalAssemblyBenchProjectFormatVersion
             && formatVersion != kSlmCommandBenchProjectFormatVersion
             && formatVersion != kRecipeBenchProjectFormatVersion

@@ -8585,16 +8585,81 @@ void Application::drawSandboxInspector() {
                 }
                 case bench::BenchComponentKind::ObjectWavefrontSource: {
                     auto value = std::get<bench::ObjectWavefrontSourceParameters>(edited.parameters);
-                    float sizeMm[2] {static_cast<float>(value.widthMetres * 1000.0), static_cast<float>(value.heightMetres * 1000.0)};
+                    const auto geometryLabel = [](bench::ObjectSourceGeometry geometry) {
+                        switch (geometry) {
+                        case bench::ObjectSourceGeometry::UniformPlane:
+                            return "Legacy uniform plane";
+                        case bench::ObjectSourceGeometry::Cube:
+                            return "Cube";
+                        case bench::ObjectSourceGeometry::Sphere:
+                            return "Sphere";
+                        case bench::ObjectSourceGeometry::Tetrahedron:
+                            return "Triangular pyramid (tetrahedron)";
+                        }
+                        return "Unknown";
+                    };
+                    if (ImGui::BeginCombo(
+                            "Sample geometry", geometryLabel(value.geometry))) {
+                        constexpr std::array geometries {
+                            bench::ObjectSourceGeometry::Cube,
+                            bench::ObjectSourceGeometry::Sphere,
+                            bench::ObjectSourceGeometry::Tetrahedron,
+                        };
+                        for (const auto geometry : geometries) {
+                            const bool geometrySelected
+                                = value.geometry == geometry;
+                            if (ImGui::Selectable(
+                                    geometryLabel(geometry),
+                                    geometrySelected)) {
+                                value.geometry = geometry;
+                                changed = true;
+                            }
+                            if (geometrySelected) {
+                                ImGui::SetItemDefaultFocus();
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+                    float sizeMm[3] {
+                        static_cast<float>(value.widthMetres * 1000.0),
+                        static_cast<float>(value.heightMetres * 1000.0),
+                        static_cast<float>(value.depthMetres * 1000.0),
+                    };
                     float wavelengthNm = static_cast<float>(value.channel.wavelengthMetres * 1e9);
                     float powerWatts = static_cast<float>(value.channel.powerWatts);
-                    changed |= ImGui::DragFloat2("Source size (mm)", sizeMm, 0.1F, 0.001F, 5000.0F);
+                    float orientationDegrees[2] {
+                        static_cast<float>(value.primitiveYawRadians
+                            * 180.0 / std::numbers::pi),
+                        static_cast<float>(value.primitivePitchRadians
+                            * 180.0 / std::numbers::pi),
+                    };
+                    changed |= ImGui::DragFloat3(
+                        "Sample dimensions (mm)", sizeMm,
+                        0.1F, 0.001F, 5000.0F);
+                    changed |= ImGui::DragFloat2(
+                        "Sample yaw / pitch (deg)", orientationDegrees,
+                        0.25F, -180.0F, 180.0F);
                     changed |= ImGui::DragFloat("Object wavelength (nm)", &wavelengthNm, 1.0F, 200.0F, 2000.0F);
-                    changed |= ImGui::DragFloat("Object power (W)", &powerWatts, 0.01F, 0.0F, 1000.0F);
+                    changed |= ImGui::DragFloat("Scattered object-wave power (W)", &powerWatts, 0.01F, 0.0F, 1000.0F);
+                    changed |= ImGui::InputScalar(
+                        "Coherent roughness seed",
+                        ImGuiDataType_U64,
+                        &value.roughnessSeed);
                     value.widthMetres = static_cast<double>(sizeMm[0]) * 1e-3;
                     value.heightMetres = static_cast<double>(sizeMm[1]) * 1e-3;
+                    value.depthMetres = static_cast<double>(sizeMm[2]) * 1e-3;
+                    value.primitiveYawRadians
+                        = static_cast<double>(orientationDegrees[0])
+                        * std::numbers::pi / 180.0;
+                    value.primitivePitchRadians
+                        = static_cast<double>(orientationDegrees[1])
+                        * std::numbers::pi / 180.0;
                     value.channel.wavelengthMetres = static_cast<double>(wavelengthNm) * 1e-9;
                     value.channel.powerWatts = static_cast<double>(powerWatts);
+                    ImGui::TextDisabled(
+                        "Material: opaque diffuse (scalar Lambertian)");
+                    ImGui::TextWrapped(
+                        "Power is total scattered object-wave power. The deterministic rough phase produces coherent speckle; independent illumination, object shadowing, polarization, transparency, and specular reflection are not yet modeled.");
                     edited.parameters = value;
                     break;
                 }

@@ -66,6 +66,21 @@ void validateParameters(const ObjectWavefrontSourceParameters& value) {
     validateSpectralChannel(value.channel);
     requireFinitePositive(value.widthMetres, "object source width_m");
     requireFinitePositive(value.heightMetres, "object source height_m");
+    requireFinitePositive(value.depthMetres, "object source depth_m");
+    if (!std::isfinite(value.primitiveYawRadians)
+        || !std::isfinite(value.primitivePitchRadians)) {
+        throw std::invalid_argument(
+            "object primitive orientation must be finite");
+    }
+    switch (value.geometry) {
+    case ObjectSourceGeometry::UniformPlane:
+    case ObjectSourceGeometry::Cube:
+    case ObjectSourceGeometry::Sphere:
+    case ObjectSourceGeometry::Tetrahedron:
+        break;
+    default:
+        throw std::invalid_argument("object source geometry is invalid");
+    }
 }
 
 void validateParameters(const PlanarMirrorParameters& value) {
@@ -245,7 +260,7 @@ std::string_view benchComponentKindName(BenchComponentKind kind) noexcept {
 std::string_view benchComponentDisplayName(BenchComponentKind kind) noexcept {
     switch (kind) {
     case BenchComponentKind::LaserSource: return "Laser Source";
-    case BenchComponentKind::ObjectWavefrontSource: return "Object / Wavefront Source";
+    case BenchComponentKind::ObjectWavefrontSource: return "Diffuse Object";
     case BenchComponentKind::PlanarMirror: return "Planar Mirror";
     case BenchComponentKind::BeamSplitterCombiner: return "Beam Splitter / Combiner";
     case BenchComponentKind::IdealThinLens: return "Ideal Thin Lens";

@@ -56,7 +56,7 @@ struct PairIds final {
 [[nodiscard]] holography::ThinPlateRecordingOptions recordingOptions() {
     holography::ThinPlateRecordingOptions options;
     options.sampling = samplingOptions();
-    options.relativeIntensityReferenceWattsPerSquareMetre = 100e3;
+    options.relativeIntensityReferenceWattsPerSquareMetre = 250e3;
     return options;
 }
 
@@ -153,7 +153,9 @@ struct PairIds final {
             .averageRefractiveIndex = 1.52,
             .refractiveIndexModulation = 0.008,
             .isotropicLinearShrinkageFraction = 0.0,
-        });
+        },
+        samplingOptions(),
+        backend);
     const auto replay = holography::replayVolumeReflectionToObservation(
         project.scene,
         fields,
@@ -279,7 +281,7 @@ int main() {
              750.0,
              [&backend] { return runTransmissionScene(backend); }},
             {"holography/placed_reflection_256_record_replay_cpu",
-             500.0,
+             750.0,
              [&backend] { return runReflectionScene(backend); }},
             {"holography/placed_rgb_256_record_replay_cpu",
              2'000.0,

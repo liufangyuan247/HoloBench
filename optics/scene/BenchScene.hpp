@@ -56,10 +56,25 @@ struct LaserSourceParameters final {
     bool operator==(const LaserSourceParameters&) const = default;
 };
 
+// UniformPlane is retained solely so projects created before format v6 keep
+// their original prescribed wavefront. New bench objects use one of the three
+// opaque diffuse primitives below.
+enum class ObjectSourceGeometry {
+    UniformPlane,
+    Cube,
+    Sphere,
+    Tetrahedron,
+};
+
 struct ObjectWavefrontSourceParameters final {
     SpectralChannel channel {};
+    ObjectSourceGeometry geometry = ObjectSourceGeometry::Cube;
     double widthMetres = 0.02;
     double heightMetres = 0.02;
+    double depthMetres = 0.02;
+    double primitiveYawRadians = 0.45;
+    double primitivePitchRadians = -0.28;
+    std::uint64_t roughnessSeed = 1U;
 
     bool operator==(const ObjectWavefrontSourceParameters&) const = default;
 };

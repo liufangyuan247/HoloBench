@@ -223,6 +223,20 @@ plus [ADR 0030](../adr/0030-shared-beam-following-field-paths.md) and
 [ADR 0041](../adr/0041-hashed-scalar-coating-response.md), plus
 [ADR 0042](../adr/0042-coating-power-on-derived-fields.md).
 
+### M10.6 - Analytic diffuse experiment samples
+
+Implementation delivered: newly placed Object sources are opaque diffuse
+cube/cuboid, sphere/ellipsoid, or tetrahedron samples with editable dimensions,
+sample-relative yaw/pitch, and stable coherent roughness seed. Analytic
+surface intersection in `optics/` supplies visible depth and Lambertian
+amplitude; up to six ASM-propagated depth layers form the actual object field
+used by Screen/Probe observation and thin/volume/RGB plate recording. Matching
+PCG solids consume the parameters but never become optical truth. Bench format
+v6 persists the model and strictly migrates v1-v5 rectangular sources to a
+legacy uniform plane. Independent `Laser -> Object` illumination and materials
+beyond opaque diffuse remain explicit future reusable models. See
+[ADR 0043](../adr/0043-analytic-diffuse-primitive-object-waves.md).
+
 ## Platform extensibility acceptance
 
 M10 is not a claim that one scalar/paraxial solver already covers every optical

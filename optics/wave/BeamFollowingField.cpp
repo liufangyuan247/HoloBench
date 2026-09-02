@@ -14,6 +14,7 @@
 #include "compute/propagation/AngularSpectrumPropagator.hpp"
 #include "optics/ray/LensPrescriptionCatalog.hpp"
 #include "optics/slm/SlmResponse.hpp"
+#include "optics/wave/DiffuseObjectWavefront.hpp"
 
 namespace holobench::optics::wave {
 namespace {
@@ -1112,22 +1113,45 @@ BeamFollowingFieldResult sampleBeamFollowingField(
         options.extentHeightMetres / static_cast<double>(options.sampleHeight),
         terminalBeam.wavelengthMetres,
         options.refractiveIndex);
-    const double amplitudeScale = std::sqrt(
-        terminalBeam.powerWatts
-        / sourceNormalizationAreaSquareMetres(source));
     const auto sourcePhase = finitePhasor(terminalBeam.phaseRadians);
-    for (std::size_t y = 0; y < propagated.height(); ++y) {
-        for (std::size_t x = 0; x < propagated.width(); ++x) {
-            const auto envelope = sourceEnvelope(
-                source,
-                propagated.xCoordinateMetres(x),
-                propagated.yCoordinateMetres(y));
-            propagated.at(x, y) = envelope.amplitude
-                * amplitudeScale * sourcePhase;
+    double boundaryReferenceIntensity = 0.0;
+    const bool isPrimitiveObject
+        = source.kind == scene::BenchComponentKind::ObjectWavefrontSource
+        && std::get<scene::ObjectWavefrontSourceParameters>(
+               source.parameters).geometry
+            != scene::ObjectSourceGeometry::UniformPlane;
+    if (isPrimitiveObject) {
+        const auto& parameters
+            = std::get<scene::ObjectWavefrontSourceParameters>(
+                source.parameters);
+        static_cast<void>(synthesizeDiffuseObjectWavefrontAtReferencePlane(
+            propagated,
+            parameters,
+            terminalBeam.powerWatts,
+            sourcePhase,
+            fftBackend));
+        for (const auto& sample : propagated.samples()) {
+            boundaryReferenceIntensity = std::max(
+                boundaryReferenceIntensity, std::norm(sample));
+        }
+    } else {
+        const double amplitudeScale = std::sqrt(
+            terminalBeam.powerWatts
+            / sourceNormalizationAreaSquareMetres(source));
+        boundaryReferenceIntensity = amplitudeScale * amplitudeScale;
+        for (std::size_t y = 0; y < propagated.height(); ++y) {
+            for (std::size_t x = 0; x < propagated.width(); ++x) {
+                const auto envelope = sourceEnvelope(
+                    source,
+                    propagated.xCoordinateMetres(x),
+                    propagated.yCoordinateMetres(y));
+                propagated.at(x, y) = envelope.amplitude
+                    * amplitudeScale * sourcePhase;
+            }
         }
     }
 
-    return propagatePreparedField(
+    auto result = propagatePreparedField(
         bench,
         std::move(propagated),
         source.transform.translationMetres,
@@ -1139,7 +1163,12 @@ BeamFollowingFieldResult sampleBeamFollowingField(
         fftBackend,
         slmCommands,
         lensPrescriptions,
-        amplitudeScale * amplitudeScale);
+        boundaryReferenceIntensity);
+    if (isPrimitiveObject) {
+        result.diagnostics.warnings.emplace_back(
+            "object branch is an opaque scalar Lambertian source with deterministic coherent rough phase; independent illumination, polarization, shadowing, and multiple scattering are not modeled");
+    }
+    return result;
 }
 
 BeamFollowingFieldResult sampleDerivedBeamFollowingField(

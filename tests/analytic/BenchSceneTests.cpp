@@ -61,6 +61,28 @@ TEST_CASE("dynamic bench rejects invalid IDs transforms parameter mismatches and
     splitter.parameters = splitterParameters;
     CHECK_THROWS_AS(scene::validateBenchComponent(splitter), std::invalid_argument);
 
+    auto object = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::ObjectWavefrontSource, "object-1");
+    auto objectParameters
+        = std::get<scene::ObjectWavefrontSourceParameters>(
+            object.parameters);
+    objectParameters.depthMetres = 0.0;
+    object.parameters = objectParameters;
+    CHECK_THROWS_AS(
+        scene::validateBenchComponent(object), std::invalid_argument);
+    objectParameters.depthMetres = 0.01;
+    objectParameters.primitiveYawRadians
+        = std::numeric_limits<double>::infinity();
+    object.parameters = objectParameters;
+    CHECK_THROWS_AS(
+        scene::validateBenchComponent(object), std::invalid_argument);
+    objectParameters.primitiveYawRadians = 0.0;
+    objectParameters.geometry
+        = static_cast<scene::ObjectSourceGeometry>(999);
+    object.parameters = objectParameters;
+    CHECK_THROWS_AS(
+        scene::validateBenchComponent(object), std::invalid_argument);
+
     auto slm = scene::makeDefaultBenchComponent(
         scene::BenchComponentKind::SpatialLightModulator, "slm-1");
     auto slmParameters = std::get<scene::SpatialLightModulatorParameters>(slm.parameters);

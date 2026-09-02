@@ -2,6 +2,24 @@
 
 ## M6 holography scope
 
+### Diffuse solid object-wave scope
+
+- Solid samples are limited to cube/cuboid, sphere/ellipsoid, and triangular
+  pyramid (tetrahedron). Their only material is opaque scalar Lambertian
+  diffuse; there is no texture, specular lobe, transparency, refraction,
+  polarization, subsurface transport, or multiple scattering.
+- A sample is currently an already-illuminated coherent object-wave source.
+  Its power is total scattered power. A separate placed laser does not yet
+  illuminate, shadow, or exchange power with the sample, and no other Bench
+  object casts a shadow onto it.
+- Only the nearest analytic surface along the emitted local +Z view is sampled.
+  A deterministic 25 um rough-phase correlation cell produces coherent speckle,
+  and at most six axial layers approximate visible depth before normal Bench
+  propagation. This is not a full non-sequential surface-scattering or 3-D
+  electromagnetic solver.
+- RGB is three independent matched single-channel object sources. There is no
+  cross-wavelength interference or native multi-channel material response yet.
+
 - Thin H1/H2 recording is scalar, fully coherent, and a zero-thickness real
   amplitude response driven by relative exposure. It is not a calibrated
   radiometric emulsion, a reflection hologram, or a material-processing model.
@@ -81,13 +99,15 @@
 ## Architecture & data
 
 - The current GPU propagation backend covers fused ASM-style spectral transfer; arbitrary non-power-of-two FFTs, automatic padding, and CUDA-specific acceleration are not implemented.
-- The unified optical-bench document is format v5 with source provenance,
+- The unified optical-bench document is format v6 with source provenance,
   recording recipes, placed SLM command recipes, and optional persisted
   mechanical assemblies plus required instrument identity and optional
-  calibration references. Strict v1-v4 migrations preserve supported legacy
+  calibration references plus analytic diffuse-object geometry. Strict v1-v5
+  migrations preserve supported legacy
   data, add explicit manual zero-phase SLM defaults where required, and migrate
   components without an assembly to `null` and without identity to the matching
-  generic nominal specification.
+  generic nominal specification; old rectangular object waves become an
+  internal uniform-plane compatibility source.
   Real-lens prescriptions use separate versioned JSON/CSV exchange and are not
   embedded in that scene document. A placed external prescription is restored
   through a project-relative or absolute source plus exact-byte SHA-256,

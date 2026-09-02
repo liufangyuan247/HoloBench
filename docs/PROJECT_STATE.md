@@ -1,6 +1,6 @@
 # Project state
 
-Last updated: 2026-09-02
+Last updated: 2026-09-03
 
 ## Current milestone
 
@@ -34,6 +34,21 @@ animated or silently approximated.
 
 ## M10 implementation state (in progress)
 
+- **M10.6 analytic diffuse samples implemented**: A newly placed Object is a
+  cube/cuboid, sphere/ellipsoid, or tetrahedron with only an opaque scalar
+  Lambertian material. Independent sample yaw/pitch and a persisted roughness
+  seed drive analytic nearest-surface depth/normal sampling, stable coherent
+  speckle, and at most six ASM-propagated axial layers. The coherently summed,
+  power-normalized field is forced through the same placed Screen/Probe/Plate,
+  thin/volume/RGB/Denisyuk, and CHIMERA-compatible route; it cannot silently
+  fall back to the old rectangular envelope when an FFT backend is supplied.
+  Matching PCG solids never define optical truth. Bench format v6 strictly
+  migrates v1-v5 sources to an internal uniform plane. The Inspector states
+  that power is already-scattered object-wave power and that independent laser
+  illumination, shadows, specular/transmissive materials, polarization, and
+  multiple scattering are not yet modeled. See
+  [ADR 0043](adr/0043-analytic-diffuse-primitive-object-waves.md).
+
 - **M10.1 PCG foundation implemented**: All 12 current Bench component kinds
   generate finite bounded triangle solids from their validated component state.
   The first library includes parameterized housings, cylinders, lens and aperture
@@ -49,14 +64,18 @@ animated or silently approximated.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: `dev` passes 624/624 tests and `core-ci` passes
-  622/622. Clang, MSVC, and WSL/GCC Core plus Clang/MSVC Application builds
-  pass with warnings as errors;
-  the packaged CJK font validates. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
+- **Acceptance evidence**: the current local increment passes 632/632 Clang
+  development tests, including the font and GPU executables, and 630/630
+  Release Core tests under both Clang and MSVC. Clang and MSVC complete
+  Application builds pass with warnings as errors. The default solid-object M8
+  benchmark meets its 750/750/2000 ms p95 budgets at
+  602.393/590.569/1817.430 ms. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
   smoke passes real shelf placement, constrained whole-instrument edits,
   post/XYZ and yaw/pitch mechanical drags, optical-frame updates, all M7/M8
   recording/reconstruction flows including RGB Denisyuk on a placed Probe,
-  live wave planes, and CHIMERA PCG output.
+  live wave planes, and CHIMERA PCG output under both Clang and MSVC; their
+  120-frame smokes also exit 0. The new source remains platform-neutral;
+  Ubuntu/GCC confirmation is delegated to the unchanged four-job CI gate.
 - **M10.2 mechanical assemblies implemented**: Bench components can persist a
   validated base frame, post height, XYZ stage travel, mount yaw/pitch, and the
   ordered limit for each degree of freedom. The resolved component transform is

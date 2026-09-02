@@ -196,7 +196,9 @@ workaround, precision reduction, or hardware-specific performance cap.
 - **Hardware Profile**: Intel Core i7-9750H (6 cores / 12 logical processors),
   Windows 10 10.0.19045, Clang 21.1.8 Release build.
 - **Workload**: Three ordinary editable M8 presets are traced from their placed
-  source geometry to `plate-h1`. Transmission records and replays one sampled
+  source geometry to `plate-h1`. Their default opaque diffuse cube is sampled
+  analytically and propagated from at most six coherent axial layers; PCG
+  triangles do not enter the benchmark field. Transmission records and replays one sampled
   thin hologram to the placed screen; reflection records the counter-propagating
   grating and propagates the Bragg-weighted field to the reflection-side probe;
   RGB independently records and replays 638/532/450 nm channels to the placed
@@ -210,11 +212,14 @@ workaround, precision reduction, or hardware-specific performance cap.
 
 | Named scene | Clang p50 | Clang p95 | p95 budget | Status |
 |---|---:|---:|---:|---|
-| `holography/placed_transmission_256_record_replay_cpu` | **71.628 ms** | **78.915 ms** | **< 750 ms** | Met |
-| `holography/placed_reflection_256_record_replay_cpu` | **46.293 ms** | **84.668 ms** | **< 500 ms** | Met |
-| `holography/placed_rgb_256_record_replay_cpu` | **218.359 ms** | **239.419 ms** | **< 2000 ms** | Met |
+| `holography/placed_transmission_256_record_replay_cpu` | **580.149 ms** | **602.393 ms** | **< 750 ms** | Met |
+| `holography/placed_reflection_256_record_replay_cpu` | **556.697 ms** | **590.569 ms** | **< 750 ms** | Met |
+| `holography/placed_rgb_256_record_replay_cpu` | **1721.837 ms** | **1817.430 ms** | **< 2000 ms** | Met |
 
 These are explicit record/reconstruct actions, not per-frame rendering targets.
+The 2026-09-03 revalidation includes analytic diffuse depth and deterministic
+coherent speckle; the earlier uniform rectangular object-source timings are not
+used as the solid-sample gate.
 The CPU reference contains no GPU dispatch, vendor/model branch, speculative
 compatibility workaround, precision reduction, or hardware-specific cap.
 Windows MSVC and Ubuntu GCC execute the same platform-neutral gates in CI;

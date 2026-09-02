@@ -41,6 +41,7 @@ bench::BenchComponent objectSource(
         result.parameters);
     parameters.widthMetres = 0.01;
     parameters.heightMetres = 0.01;
+    parameters.depthMetres = 0.01;
     parameters.channel = {
         .wavelengthMetres = wavelengthMetres,
         .powerWatts = powerWatts,
