@@ -73,6 +73,34 @@ void main() {
 }
 )";
 
+constexpr std::string_view kObservationVertexShaderSource = R"(#version 460 core
+layout (location = 0) in vec3 aPosition;
+layout (location = 1) in vec2 aUv;
+
+uniform mat4 uViewProjection;
+
+out vec2 vUv;
+
+void main() {
+    vUv = aUv;
+    gl_Position = uViewProjection * vec4(aPosition, 1.0);
+}
+)";
+
+constexpr std::string_view kObservationFragmentShaderSource = R"(#version 460 core
+in vec2 vUv;
+
+uniform sampler2D uObservationTexture;
+uniform float uOpacity;
+
+out vec4 fragColor;
+
+void main() {
+    fragColor = texture(uObservationTexture, vUv);
+    fragColor.a *= uOpacity;
+}
+)";
+
 struct GlRenderStateGuard {
     GLint prevDrawFbo = 0;
     GLint prevReadFbo = 0;
@@ -95,6 +123,7 @@ struct GlRenderStateGuard {
     GLint prevPolygonMode[2] = {GL_FILL, GL_FILL};
     GLint prevActiveTexture = GL_TEXTURE0;
     GLint prevTexture2D = 0;
+    GLint prevTexture2DUnit0 = 0;
     GLint prevVao = 0;
     GLint prevArrayBuffer = 0;
     GLint prevProgram = 0;
@@ -125,6 +154,9 @@ struct GlRenderStateGuard {
 
         glGetIntegerv(GL_ACTIVE_TEXTURE, &prevActiveTexture);
         glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTexture2D);
+        glActiveTexture(GL_TEXTURE0);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTexture2DUnit0);
+        glActiveTexture(static_cast<GLenum>(prevActiveTexture));
         glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prevVao);
         glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prevArrayBuffer);
         glGetIntegerv(GL_CURRENT_PROGRAM, &prevProgram);
@@ -135,6 +167,9 @@ struct GlRenderStateGuard {
         glBindBuffer(GL_ARRAY_BUFFER, static_cast<GLuint>(prevArrayBuffer));
         glUseProgram(static_cast<GLuint>(prevProgram));
 
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(
+            GL_TEXTURE_2D, static_cast<GLuint>(prevTexture2DUnit0));
         glActiveTexture(static_cast<GLenum>(prevActiveTexture));
         glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(prevTexture2D));
 
@@ -254,6 +289,7 @@ OpticalBenchRenderer::~OpticalBenchRenderer() {
 OpticalBenchRenderer::OpticalBenchRenderer(OpticalBenchRenderer&& other) noexcept
     : shader_(std::move(other.shader_))
     , solidShader_(std::move(other.solidShader_))
+    , observationShader_(std::move(other.observationShader_))
     , framebuffer_(std::move(other.framebuffer_))
     , gridVao_(std::exchange(other.gridVao_, 0))
     , gridVbo_(std::exchange(other.gridVbo_, 0))
@@ -266,6 +302,8 @@ OpticalBenchRenderer::OpticalBenchRenderer(OpticalBenchRenderer&& other) noexcep
     , solidVbo_(std::exchange(other.solidVbo_, 0))
     , solidVertexCount_(std::exchange(other.solidVertexCount_, 0))
     , solidVboCapacityBytes_(std::exchange(other.solidVboCapacityBytes_, 0))
+    , observationVao_(std::exchange(other.observationVao_, 0))
+    , observationVbo_(std::exchange(other.observationVbo_, 0))
     , cpuSceneVertices_(std::move(other.cpuSceneVertices_))
     , stagingVertices_(std::move(other.stagingVertices_))
     , cpuSolidVertices_(std::move(other.cpuSolidVertices_))
@@ -278,6 +316,7 @@ OpticalBenchRenderer& OpticalBenchRenderer::operator=(OpticalBenchRenderer&& oth
         destroy();
         shader_ = std::move(other.shader_);
         solidShader_ = std::move(other.solidShader_);
+        observationShader_ = std::move(other.observationShader_);
         framebuffer_ = std::move(other.framebuffer_);
         gridVao_ = std::exchange(other.gridVao_, 0);
         gridVbo_ = std::exchange(other.gridVbo_, 0);
@@ -290,6 +329,8 @@ OpticalBenchRenderer& OpticalBenchRenderer::operator=(OpticalBenchRenderer&& oth
         solidVbo_ = std::exchange(other.solidVbo_, 0);
         solidVertexCount_ = std::exchange(other.solidVertexCount_, 0);
         solidVboCapacityBytes_ = std::exchange(other.solidVboCapacityBytes_, 0);
+        observationVao_ = std::exchange(other.observationVao_, 0);
+        observationVbo_ = std::exchange(other.observationVbo_, 0);
         cpuSceneVertices_ = std::move(other.cpuSceneVertices_);
         stagingVertices_ = std::move(other.stagingVertices_);
         cpuSolidVertices_ = std::move(other.cpuSolidVertices_);
@@ -301,6 +342,14 @@ OpticalBenchRenderer& OpticalBenchRenderer::operator=(OpticalBenchRenderer&& oth
 }
 
 void OpticalBenchRenderer::destroy() noexcept {
+    if (observationVbo_ != 0) {
+        glDeleteBuffers(1, &observationVbo_);
+        observationVbo_ = 0;
+    }
+    if (observationVao_ != 0) {
+        glDeleteVertexArrays(1, &observationVao_);
+        observationVao_ = 0;
+    }
     if (solidVbo_ != 0) {
         glDeleteBuffers(1, &solidVbo_);
         solidVbo_ = 0;
@@ -327,6 +376,7 @@ void OpticalBenchRenderer::destroy() noexcept {
     }
     shader_.destroy();
     solidShader_.destroy();
+    observationShader_.destroy();
     framebuffer_.destroy();
     gridVertexCount_ = 0;
     sceneVertexCount_ = 0;
@@ -365,6 +415,17 @@ bool OpticalBenchRenderer::initialize() {
         destroy();
         return false;
     }
+    if (!observationShader_.compileAndLink(
+            kObservationVertexShaderSource,
+            kObservationFragmentShaderSource,
+            &errorMessage)) {
+        SDL_LogError(
+            SDL_LOG_CATEGORY_RENDER,
+            "OpticalBenchRenderer failed to compile observation shaders: %s",
+            errorMessage.c_str());
+        destroy();
+        return false;
+    }
 
     glGenVertexArrays(1, &gridVao_);
     glGenBuffers(1, &gridVbo_);
@@ -386,6 +447,16 @@ bool OpticalBenchRenderer::initialize() {
     glGenBuffers(1, &solidVbo_);
     if (solidVao_ == 0 || solidVbo_ == 0) {
         SDL_LogError(SDL_LOG_CATEGORY_RENDER, "OpticalBenchRenderer failed to create solid VAO/VBO");
+        destroy();
+        return false;
+    }
+
+    glGenVertexArrays(1, &observationVao_);
+    glGenBuffers(1, &observationVbo_);
+    if (observationVao_ == 0 || observationVbo_ == 0) {
+        SDL_LogError(
+            SDL_LOG_CATEGORY_RENDER,
+            "OpticalBenchRenderer failed to create observation VAO/VBO");
         destroy();
         return false;
     }
@@ -446,6 +517,29 @@ bool OpticalBenchRenderer::initialize() {
             GL_FALSE,
             sizeof(InstrumentVertex),
             reinterpret_cast<const void*>(offsetof(InstrumentVertex, color)));
+    }
+
+    {
+        const GlBufferBindingGuard bindingGuard;
+        glBindVertexArray(observationVao_);
+        glBindBuffer(GL_ARRAY_BUFFER, observationVbo_);
+
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(
+            0,
+            3,
+            GL_FLOAT,
+            GL_FALSE,
+            sizeof(ObservationVertex),
+            reinterpret_cast<const void*>(offsetof(ObservationVertex, position)));
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(
+            1,
+            2,
+            GL_FLOAT,
+            GL_FALSE,
+            sizeof(ObservationVertex),
+            reinterpret_cast<const void*>(offsetof(ObservationVertex, uv)));
     }
 
     if (!generateGridAndAxes()) {
@@ -1524,6 +1618,78 @@ void OpticalBenchRenderer::render(int width, int height, const OrbitCamera& came
 
     glBindVertexArray(0);
     framebuffer_.unbind();
+}
+
+bool OpticalBenchRenderer::renderObservationTexture(
+    GLuint texture,
+    const std::array<math::Vec3d, 4>& worldCorners,
+    const glm::mat4& viewProjection,
+    float opacity) {
+    if (!initialized_ || !framebuffer_.isValid()
+        || !observationShader_.isValid() || observationVao_ == 0
+        || observationVbo_ == 0 || texture == 0 || glIsTexture(texture) != GL_TRUE
+        || !std::isfinite(opacity) || opacity <= 0.0F) {
+        return false;
+    }
+    std::array<glm::vec3, 4> convertedCorners;
+    for (std::size_t corner = 0; corner < worldCorners.size(); ++corner) {
+        if (!toFiniteVec3(worldCorners[corner], convertedCorners[corner])) {
+            return false;
+        }
+    }
+    for (glm::length_t column = 0; column < 4; ++column) {
+        for (glm::length_t row = 0; row < 4; ++row) {
+            if (!std::isfinite(viewProjection[column][row])) {
+                return false;
+            }
+        }
+    }
+    const glm::vec3 firstEdge = convertedCorners[1] - convertedCorners[0];
+    const glm::vec3 secondEdge = convertedCorners[3] - convertedCorners[0];
+    const float twiceArea = glm::length(glm::cross(firstEdge, secondEdge));
+    if (!std::isfinite(twiceArea) || twiceArea <= 1.0e-12F) {
+        return false;
+    }
+
+    const std::array<ObservationVertex, 6> vertices {{
+        {convertedCorners[0], {0.0F, 0.0F}},
+        {convertedCorners[1], {1.0F, 0.0F}},
+        {convertedCorners[2], {1.0F, 1.0F}},
+        {convertedCorners[0], {0.0F, 0.0F}},
+        {convertedCorners[2], {1.0F, 1.0F}},
+        {convertedCorners[3], {0.0F, 1.0F}},
+    }};
+
+    const GlRenderStateGuard stateGuard;
+    framebuffer_.bind();
+    glViewport(0, 0, framebuffer_.width(), framebuffer_.height());
+    glDisable(GL_SCISSOR_TEST);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_DEPTH_TEST);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);
+    glBlendEquation(GL_FUNC_ADD);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glBindVertexArray(observationVao_);
+    glBindBuffer(GL_ARRAY_BUFFER, observationVbo_);
+    glBufferData(
+        GL_ARRAY_BUFFER,
+        static_cast<GLsizeiptr>(vertices.size() * sizeof(ObservationVertex)),
+        vertices.data(),
+        GL_STREAM_DRAW);
+
+    observationShader_.use();
+    observationShader_.setMat4("uViewProjection", viewProjection);
+    observationShader_.setInt("uObservationTexture", 0);
+    observationShader_.setFloat("uOpacity", std::clamp(opacity, 0.0F, 1.0F));
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(vertices.size()));
+    return true;
 }
 
 } // namespace holobench::render

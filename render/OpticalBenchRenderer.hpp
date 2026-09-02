@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <limits>
 #include <span>
@@ -52,6 +53,17 @@ public:
 
     void render(int width, int height, const OrbitCamera& camera);
 
+    /**
+     * Draw an observation image on a physical world-space plane in the
+     * existing bench framebuffer. The world-space vertex shader preserves
+     * clip-space W, so UVs are perspective-correct while the camera moves.
+     */
+    [[nodiscard]] bool renderObservationTexture(
+        GLuint texture,
+        const std::array<math::Vec3d, 4>& worldCorners,
+        const glm::mat4& viewProjection,
+        float opacity = 0.92F);
+
     [[nodiscard]] GLuint colorTextureId() const noexcept {
         return framebuffer_.colorTextureId();
     }
@@ -93,11 +105,17 @@ private:
         glm::vec4 color;
     };
 
+    struct ObservationVertex {
+        glm::vec3 position;
+        glm::vec2 uv;
+    };
+
     [[nodiscard]] bool generateGridAndAxes();
     void uploadSceneBufferIfNeeded();
 
     gl::ShaderProgram shader_;
     gl::ShaderProgram solidShader_;
+    gl::ShaderProgram observationShader_;
     gl::Framebuffer framebuffer_;
 
     GLuint gridVao_ = 0;
@@ -113,6 +131,9 @@ private:
     GLuint solidVbo_ = 0;
     GLsizei solidVertexCount_ = 0;
     std::size_t solidVboCapacityBytes_ = 0;
+
+    GLuint observationVao_ = 0;
+    GLuint observationVbo_ = 0;
 
     std::vector<BenchVertex> cpuSceneVertices_;
     std::vector<BenchVertex> stagingVertices_;

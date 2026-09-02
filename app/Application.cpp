@@ -278,15 +278,13 @@ constexpr T toImTextureID(GLuint textureId) noexcept {
     }
 }
 
-[[nodiscard]] bool drawPlacedObservationTexture(
+void drawPlacedObservationAnnotation(
     ImDrawList& drawList,
-    GLuint texture,
     const optics::scene::BenchComponent& observation,
     const glm::mat4& viewProjection,
     const glm::vec2& viewportMinimum,
     const glm::vec2& viewportSize,
-    std::string_view label,
-    std::string& diagnostic) {
+    std::string_view label) {
     const auto quad
         = observationoverlay::makeObservationPlaneQuad(observation);
     std::array<gizmo::ProjectedPoint, 4> projected;
@@ -304,9 +302,7 @@ constexpr T toImTextureID(GLuint textureId) noexcept {
         allVisible = allVisible && projected[corner].visible;
     }
     if (!allVisible) {
-        diagnostic
-            = "placed Screen/Probe is not fully visible in the current camera";
-        return false;
+        return;
     }
     const std::array<ImVec2, 4> points {{
         {projected[0].screenPos.x, projected[0].screenPos.y},
@@ -314,17 +310,6 @@ constexpr T toImTextureID(GLuint textureId) noexcept {
         {projected[2].screenPos.x, projected[2].screenPos.y},
         {projected[3].screenPos.x, projected[3].screenPos.y},
     }};
-    drawList.AddImageQuad(
-        toImTextureID(texture),
-        points[0],
-        points[1],
-        points[2],
-        points[3],
-        ImVec2(0.0F, 0.0F),
-        ImVec2(1.0F, 0.0F),
-        ImVec2(1.0F, 1.0F),
-        ImVec2(0.0F, 1.0F),
-        IM_COL32(255, 255, 255, 235));
     drawList.AddPolyline(
         points.data(),
         static_cast<int>(points.size()),
@@ -337,8 +322,6 @@ constexpr T toImTextureID(GLuint textureId) noexcept {
         ImVec2(points[3].x + 6.0F, points[3].y - 18.0F),
         IM_COL32(100, 255, 190, 255),
         completeLabel.c_str());
-    diagnostic = "current field quad submitted";
-    return true;
 }
 
 void drawGizmoHandle(
@@ -11798,16 +11781,30 @@ void Application::drawWorkspace() {
                     if (const auto* observation = benchProject_.scene.find(
                             reconstructionObservationId)) {
                         try {
+                            const auto plane
+                                = observationoverlay::makeObservationPlaneQuad(
+                                    *observation);
                             sandboxReconstructionOverlaySubmitted_
-                                = drawPlacedObservationTexture(
-                                    *drawList,
+                                = renderer_
+                                && renderer_->renderObservationTexture(
                                     reconstructionTexture,
+                                    plane.worldCorners,
+                                    viewProj,
+                                    235.0F / 255.0F);
+                            if (sandboxReconstructionOverlaySubmitted_) {
+                                drawPlacedObservationAnnotation(
+                                    *drawList,
                                     *observation,
                                     viewProj,
                                     rectMin,
                                     rectSize,
-                                    reconstructionObservationId,
-                                    sandboxReconstructionOverlayDiagnostic_);
+                                    reconstructionObservationId);
+                                sandboxReconstructionOverlayDiagnostic_
+                                    = "perspective-correct world plane submitted";
+                            } else {
+                                sandboxReconstructionOverlayDiagnostic_
+                                    = "3D observation texture submission failed";
+                            }
                         } catch (const std::exception& error) {
                             errorMessage_
                                 = "Placed reconstruction overlay failed: "
@@ -13906,6 +13903,17 @@ int Application::run(const RunOptions& options) {
             const glm::mat4 smokeViewProjection
                 = camera_.projectionMatrix(smokeSize.x / smokeSize.y)
                 * camera_.viewMatrix();
+            if (!renderer_) {
+                throw std::runtime_error(
+                    "RGB smoke renderer is unavailable");
+            }
+            renderer_->render(
+                static_cast<int>(smokeSize.x),
+                static_cast<int>(smokeSize.y),
+                camera_);
+            const auto smokePlane
+                = observationoverlay::makeObservationPlaneQuad(
+                    *smokeObservation);
             smokeDrawList->PushClipRect(
                 smokeMinimum,
                 ImVec2(
@@ -13913,43 +13921,33 @@ int Application::run(const RunOptions& options) {
                     smokeMinimum.y + smokeSize.y),
                 true);
             sandboxReconstructionOverlaySubmitted_
-                = drawPlacedObservationTexture(
-                    *smokeDrawList,
+                = renderer_->renderObservationTexture(
                     sandboxRgbReplayTexture_->handle(),
+                    smokePlane.worldCorners,
+                    smokeViewProjection,
+                    235.0F / 255.0F);
+            if (sandboxReconstructionOverlaySubmitted_) {
+                drawPlacedObservationAnnotation(
+                    *smokeDrawList,
                     *smokeObservation,
                     smokeViewProjection,
                     smokeRectMinimum,
                     smokeRectSize,
-                    sandboxRgbReplay_->observationComponentId,
-                    sandboxReconstructionOverlayDiagnostic_);
+                    sandboxRgbReplay_->observationComponentId);
+                sandboxReconstructionOverlayDiagnostic_
+                    = "perspective-correct world plane submitted";
+            } else {
+                sandboxReconstructionOverlayDiagnostic_
+                    = "3D observation texture submission failed";
+            }
             smokeDrawList->PopClipRect();
             ImGui::End();
             ImGui::Render();
-            const ImDrawData* drawData = ImGui::GetDrawData();
-            const ImTextureID expectedTexture
-                = toImTextureID(sandboxRgbReplayTexture_->handle());
-            bool replayTextureSubmitted = false;
-            if (drawData != nullptr) {
-                for (int listIndex = 0;
-                     listIndex < drawData->CmdListsCount; ++listIndex) {
-                    const ImDrawList* list = drawData->CmdLists[listIndex];
-                    for (const auto& command : list->CmdBuffer) {
-                        replayTextureSubmitted = replayTextureSubmitted
-                            || (command.ElemCount >= 6U
-                                && command.TexRef._TexData == nullptr
-                                && command.TexRef._TexID
-                                    == expectedTexture);
-                    }
-                }
-            }
-            if (!sandboxReconstructionOverlaySubmitted_
-                || !replayTextureSubmitted) {
+            if (!sandboxReconstructionOverlaySubmitted_) {
                 throw std::runtime_error(
                     std::string(
-                        "current reconstruction was not submitted on its placed Screen/Probe quad (overlay=")
-                    + (sandboxReconstructionOverlaySubmitted_ ? "yes" : "no")
-                    + ", texture="
-                    + (replayTextureSubmitted ? "yes" : "no") + "; "
+                        "current reconstruction was not submitted through the perspective-correct placed Screen/Probe pass (overlay=")
+                    + (sandboxReconstructionOverlaySubmitted_ ? "yes" : "no") + "; "
                     + sandboxReconstructionOverlayDiagnostic_ + ")");
             }
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
