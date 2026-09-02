@@ -19,6 +19,9 @@ inline constexpr std::size_t kMaximumCameraImagePixels = 4U * 1024U * 1024U;
 inline constexpr std::size_t kMaximumCameraPsfSupportRadiusPixels = 128U;
 inline constexpr std::size_t kMaximumCameraKernelEvaluations = 100'000'000U;
 inline constexpr std::size_t kMaximumCameraDirectionalSamples = 100'000U;
+inline constexpr std::size_t kPlacedCameraPupilRingCount = 3U;
+inline constexpr std::size_t kPlacedCameraPupilSamplesPerFirstRing = 8U;
+inline constexpr std::size_t kPlacedCameraPupilRayCount = 49U;
 
 struct CameraImageRequest final {
     int formatVersion = kCameraImageRequestFormatVersion;
@@ -40,7 +43,9 @@ struct CameraImageRequest final {
 // Raster/readout controls for a camera whose optical truth comes from placed
 // Bench components. Unlike CameraImageRequest, this request contains no pupil,
 // focal-length, or pose knobs: those are resolved from the RealLensAssembly,
-// its immutable prescription, and the placed sensor plane.
+// its immutable prescription, and the placed sensor plane. The fixed bounded
+// pupil sampling constants above are numerical fidelity controls, not hidden
+// optical parameters.
 struct CameraSensorRequest final {
     int formatVersion = kCameraImageRequestFormatVersion;
     std::string jobId = "chimera-placed-camera-image";
@@ -64,6 +69,14 @@ struct CameraSpectralRayEvidence final {
     double sensorCentreXMetres = 0.0;
     double sensorCentreYMetres = 0.0;
     bool depositedOnSensor = false;
+    std::size_t pupilRayCount = 0;
+    std::size_t pupilRayCompletedCount = 0;
+    std::size_t pupilRayRejectedCount = 0;
+    std::size_t pupilRaySensorHitCount = 0;
+    double geometricCentroidXMetres = 0.0;
+    double geometricCentroidYMetres = 0.0;
+    double geometricRmsRadiusMetres = 0.0;
+    double geometricRadiusMetres = 0.0;
     LinearRgb idealSensorSignal;
     LinearRgb depositedSensorSignal;
 
@@ -97,6 +110,12 @@ struct CameraImageMetrics final {
     std::size_t prescriptionTraceCompletedCount = 0;
     std::size_t prescriptionTraceRejectedCount = 0;
     std::size_t sensorPlaneMissedChannelCount = 0;
+    std::size_t pupilRayTraceCount = 0;
+    std::size_t pupilRayTraceCompletedCount = 0;
+    std::size_t pupilRayTraceRejectedCount = 0;
+    std::size_t pupilRaySensorHitCount = 0;
+    double maximumGeometricRmsRadiusMetres = 0.0;
+    double maximumGeometricRadiusMetres = 0.0;
     double maximumFirstDarkRadiusMetres = 0.0;
     double maximumPsfSupportRadiusPixels = 0.0;
     std::array<double, 3> rgbFirstDarkRadiusMetres {};
@@ -158,9 +177,11 @@ struct CameraImageResult final {
 
 // Traces every RGB directional sample from the placed holographic plate
 // through the placed sequential lens prescription and onto the placed sensor
-// plane. Physical clipping is retained as per-channel evidence; missing or
-// ambiguous optical truth is rejected instead of falling back to the ideal
-// camera above.
+// plane. A bounded pupil bundle turns the actual prescription and sensor pose
+// into geometric aberration/defocus spots, then the wavelength-specific Airy
+// kernel supplies the unresolved diffraction core. Physical clipping is
+// retained as per-channel evidence; missing or ambiguous optical truth is
+// rejected instead of falling back to the ideal camera above.
 [[nodiscard]] CameraImageResult synthesizePlacedCameraImage(
     const ChimeraRecipe& recipe,
     const ReconstructionResult& reconstruction,

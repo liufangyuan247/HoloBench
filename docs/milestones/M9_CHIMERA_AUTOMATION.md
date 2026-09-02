@@ -49,17 +49,19 @@ The directional result originally fed the bounded ideal on-axis oracle in ADR
 0023. The M10 product path now uses the selected placed Real Lens Assembly and
 Probe: three wavelengths traverse the sequential prescription and exact Bench
 route independently, physical apertures clip them, and actual sensor pose sets
-their hit coordinates. Prescription-derived paraxial EFL still supplies the
-bounded Airy readout. Distortion, aberration wavefronts, defocus, noise, and
-absolute photoelectron calibration remain explicit later extensions.
+their hit coordinates. M10.4 now adds a bounded 49-ray pupil bundle per colour:
+geometric prescription aberration and defocus broaden the Airy-convolved spot.
+Coherent pupil-wavefront diffraction, distortion, noise, and absolute
+photoelectron calibration remain explicit later extensions.
 
 The first shared-Bench product slice is now operational. The contextual
 `CHIMERA Automation` bar binds a canonical perspective dataset and deterministic
 exposure plan to the exact current Bench revision, executes a selected hogel as
 three independent RGB M8 volume recordings, reconstructs a selected directional
-view, routes its RGB camera chief rays through a selected placed real
-prescription, applies the wavelength-specific Airy readout, and draws that image
-on the physical generated reconstruction Probe. Any ordinary
+view, routes its RGB camera chief rays and bounded pupil bundles through a
+selected placed real prescription, applies the wavelength-specific
+Airy-convolved geometric spot/defocus readout, and draws that image on the
+physical generated reconstruction Probe. Any ordinary
 component edit makes the complete automation state stale. Hardware OpenGL smoke
 drives the three actions with real ImGui mouse events and verifies the submitted
 Probe texture. The bundled camera response is explicitly a nominal relative

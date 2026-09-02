@@ -223,13 +223,18 @@
   chromatic chief-ray location, and sensor pose from a placed Real Lens
   Assembly prescription plus placed Screen/Probe. Its wavelength-specific Airy
   kernel uses prescription-derived paraxial effective focal length and the
-  shared circular clear aperture; it does not yet derive a full aberrated or
-  defocused wavefront PSF. An otherwise reachable camera route with additional
+  shared circular clear aperture. A fixed 49-ray pupil bundle now traces the
+  prescription onto the actual sensor, so geometric aberration, vignetting,
+  chromatic spot shift, and sensor defocus broaden the Airy-convolved result.
+  This is not a coherent aberrated-wavefront PSF: pupil optical-path phase and
+  diffraction interference are not yet integrated. An otherwise reachable
+  camera route with additional
   intervening optics rejects until those elements have a declared camera model.
   Distortion, coatings, ghosts, coherent multi-hogel field superposition,
   polarization, noise, saturation, absolute photoelectrons, Bayer sampling,
   and ICC/display colour transforms remain unmodelled. See
-  [ADR 0035](adr/0035-chimera-placed-prescription-camera.md).
+  [ADR 0035](adr/0035-chimera-placed-prescription-camera.md) and
+  [ADR 0036](adr/0036-chimera-prescription-spot-defocus.md).
 - The dynamic bench has its own bounded scene-wide undo/redo timeline. The
   separate legacy history still covers lesson-relevant fixed optical-bench,
   Wave Detector, Sampling Debugger, and SLM inputs, but not Real Lens or the

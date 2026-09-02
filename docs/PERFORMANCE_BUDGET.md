@@ -228,9 +228,12 @@ GitHub Actions run 33471184614 passes both Core jobs.
   `core-ci` build.
 - **Workload**: One 256x256 selected hogel passes through three independent RGB
   M8 volume recordings, directional reconstruction, three wavelength-specific
-  placed sequential-prescription/Bench chief-ray paths, finite-pupil Airy
-  response, and relative linear camera synthesis.
-- **Result**: **2120.586 ms** against a **30000 ms** ceiling; canonical artifact
+  placed sequential-prescription/Bench chief-ray paths, 147 total prescription
+  pupil rays, Airy-convolved geometric aberration/defocus spots, and relative
+  linear camera synthesis.
+- **Result**: **2227.268 ms** against a **30000 ms** ceiling; 108/147 pupil rays
+  reach the active sensor and the worst geometric RMS is **356.729 um**;
+  canonical artifact
   **1,283,337 bytes**; conservative peak estimate **13,866,249 bytes** against
   **64 MiB**.
 

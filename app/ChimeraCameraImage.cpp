@@ -4,17 +4,24 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <numbers>
 #include <stdexcept>
 #include <string_view>
 #include <vector>
 
 #include "compute/fourier/PsfMtf.hpp"
+#include "optics/analysis/SpotDiagram.hpp"
 #include "optics/ray/DynamicBenchTracer.hpp"
 #include "optics/scene/BenchPathEvidence.hpp"
 #include "optics/scene/BenchScene.hpp"
 
 namespace holobench::app::chimera {
 namespace {
+
+static_assert(kPlacedCameraPupilRayCount
+    == 1U + kPlacedCameraPupilSamplesPerFirstRing
+        * kPlacedCameraPupilRingCount
+        * (kPlacedCameraPupilRingCount + 1U) / 2U);
 
 struct PsfChannel final {
     double wavelengthMetres = 0.0;
@@ -150,17 +157,22 @@ std::array<PsfChannel, 3> makePsfChannels(
         const double firstDark = channel.airy.diagnostics().firstDarkRadiusMetres;
         channel.supportRadiusMetres
             = firstDark * request.psfSupportFirstDarkRings;
-        channel.supportRadiusColumns = static_cast<std::size_t>(std::ceil(
-            channel.supportRadiusMetres / request.pixelPitchXMetres + 0.5));
-        channel.supportRadiusRows = static_cast<std::size_t>(std::ceil(
-            channel.supportRadiusMetres / request.pixelPitchYMetres + 0.5));
-        if (channel.supportRadiusColumns
-                > kMaximumCameraPsfSupportRadiusPixels
-            || channel.supportRadiusRows
-                > kMaximumCameraPsfSupportRadiusPixels) {
+        const double supportColumns
+            = channel.supportRadiusMetres / request.pixelPitchXMetres + 0.5;
+        const double supportRows
+            = channel.supportRadiusMetres / request.pixelPitchYMetres + 0.5;
+        if (!std::isfinite(supportColumns) || !std::isfinite(supportRows)
+            || supportColumns
+                > static_cast<double>(kMaximumCameraPsfSupportRadiusPixels)
+            || supportRows
+                > static_cast<double>(kMaximumCameraPsfSupportRadiusPixels)) {
             throw std::invalid_argument(
                 "camera Airy support exceeds the bounded pixel radius");
         }
+        channel.supportRadiusColumns
+            = static_cast<std::size_t>(std::ceil(supportColumns));
+        channel.supportRadiusRows
+            = static_cast<std::size_t>(std::ceil(supportRows));
         metrics.maximumFirstDarkRadiusMetres = std::max(
             metrics.maximumFirstDarkRadiusMetres, firstDark);
         metrics.maximumPsfSupportRadiusPixels = std::max(
@@ -439,6 +451,70 @@ math::RigidTransform3d makeCameraRayFrame(
         .localZAxisInWorld = zAxis,
     };
     math::validateRigidTransform(result);
+    return result;
+}
+
+std::vector<optics::ray::Ray> makePlacedCameraPupilBundle(
+    const optics::ray::Ray& chiefRay,
+    const optics::ray::SequentialLensPrescription& placedPrescription,
+    double clearApertureDiameterMetres) {
+    const auto& frame = placedPrescription.surfaces.front().localToWorld;
+    const auto localOrigin = math::transformPointWorldToLocal(
+        frame, chiefRay.originMetres);
+    const auto localDirection = math::transformDirectionWorldToLocal(
+        frame, chiefRay.direction);
+    if (!std::isfinite(localDirection.x)
+        || !std::isfinite(localDirection.y)
+        || !std::isfinite(localDirection.z)
+        || localDirection.z <= 1e-12) {
+        throw std::invalid_argument(
+            "CHIMERA camera pupil bundle cannot enter the prescription forward");
+    }
+    const double vertexPlaneDistance = -localOrigin.z / localDirection.z;
+    if (!std::isfinite(vertexPlaneDistance)
+        || vertexPlaneDistance <= 1e-12) {
+        throw std::invalid_argument(
+            "CHIMERA camera pupil bundle origin must precede the first prescription surface");
+    }
+    const auto chiefAtVertexPlane
+        = localOrigin + localDirection * vertexPlaneDistance;
+    const double pupilRadius = 0.5 * clearApertureDiameterMetres;
+    const double rayPower = 1.0
+        / static_cast<double>(kPlacedCameraPupilRayCount);
+    std::vector<optics::ray::Ray> result;
+    result.reserve(kPlacedCameraPupilRayCount);
+    const auto appendRay = [&](double offsetX, double offsetY) {
+        const double targetX = chiefAtVertexPlane.x + offsetX;
+        const double targetY = chiefAtVertexPlane.y + offsetY;
+        const math::Vec3d origin {
+            targetX + localDirection.x / localDirection.z * localOrigin.z,
+            targetY + localDirection.y / localDirection.z * localOrigin.z,
+            localOrigin.z,
+        };
+        result.push_back(optics::ray::makeRay(
+            math::transformPointLocalToWorld(frame, origin),
+            chiefRay.direction,
+            chiefRay.wavelengthMetres,
+            rayPower));
+    };
+    appendRay(0.0, 0.0);
+    for (std::size_t ring = 1U;
+         ring <= kPlacedCameraPupilRingCount;
+         ++ring) {
+        const std::size_t ringSamples
+            = kPlacedCameraPupilSamplesPerFirstRing * ring;
+        const double radius = pupilRadius * static_cast<double>(ring)
+            / static_cast<double>(kPlacedCameraPupilRingCount);
+        for (std::size_t index = 0U; index < ringSamples; ++index) {
+            const double angle = 2.0 * std::numbers::pi
+                * static_cast<double>(index)
+                / static_cast<double>(ringSamples);
+            appendRay(radius * std::cos(angle), radius * std::sin(angle));
+        }
+    }
+    if (result.size() != kPlacedCameraPupilRayCount) {
+        throw std::logic_error("placed camera pupil sampling count drifted");
+    }
     return result;
 }
 
@@ -847,8 +923,8 @@ CameraImageResult synthesizePlacedCameraImage(
         .contributions = {},
         .metrics = {},
         .limitations = {
-            "chief rays are traced wavelength-by-wavelength through the placed sequential prescription; finite-aperture clipping and sensor-plane pose are physical Bench inputs",
-            "diffraction blur uses each wavelength's prescription-derived paraxial effective focal length and shared circular clear aperture; prescription aberration wavefronts and defocus blur are not yet integrated",
+            "chief rays and a fixed 49-ray concentric-ring pupil bundle are traced wavelength-by-wavelength through the placed sequential prescription; finite-aperture clipping and sensor-plane pose are physical Bench inputs",
+            "prescription aberration and sensor defocus broaden the geometric pupil spot; each pupil intercept is convolved with the wavelength-specific paraxial Airy core, not a coherent sampled wavefront PSF",
             "each directional sample remains an incoherent ray bundle; full coherent multi-hogel field superposition is not performed",
             "sensor values are linear relative signals from the measured spectral LUT, not display RGB or absolute photoelectrons",
             "sensor row zero maps to positive placed-sensor local Y",
@@ -875,6 +951,12 @@ CameraImageResult synthesizePlacedCameraImage(
         }
         evaluationsPerSample += width * height;
     }
+    if (evaluationsPerSample
+        > kMaximumCameraKernelEvaluations / kPlacedCameraPupilRayCount) {
+        throw std::invalid_argument(
+            "placed camera pupil/PSF work exceeds its safety limit");
+    }
+    evaluationsPerSample *= kPlacedCameraPupilRayCount;
     if (reconstruction.samples.size()
         > kMaximumCameraKernelEvaluations / evaluationsPerSample) {
         throw std::invalid_argument(
@@ -944,6 +1026,14 @@ CameraImageResult synthesizePlacedCameraImage(
                 .sensorCentreXMetres = 0.0,
                 .sensorCentreYMetres = 0.0,
                 .depositedOnSensor = false,
+                .pupilRayCount = 0U,
+                .pupilRayCompletedCount = 0U,
+                .pupilRayRejectedCount = 0U,
+                .pupilRaySensorHitCount = 0U,
+                .geometricCentroidXMetres = 0.0,
+                .geometricCentroidYMetres = 0.0,
+                .geometricRmsRadiusMetres = 0.0,
+                .geometricRadiusMetres = 0.0,
                 .idealSensorSignal = {},
                 .depositedSensorSignal = {},
             };
@@ -992,26 +1082,70 @@ CameraImageResult synthesizePlacedCameraImage(
                 contribution.spectralRays.push_back(std::move(evidence));
                 continue;
             }
+            const auto pupilRays = makePlacedCameraPupilBundle(
+                incident, placedPrescription, clearApertureDiameter);
+            const auto spot = optics::analysis::computeSpotDiagram(
+                pupilRays,
+                placedPrescription,
+                observation->transform,
+                traceOptions,
+                0U);
+            evidence.pupilRayCount = pupilRays.size();
+            evidence.pupilRayCompletedCount = spot.samples.size();
+            evidence.pupilRayRejectedCount = spot.rejectedRays.size();
+            evidence.geometricCentroidXMetres
+                = spot.statistics.centroidXMetres;
+            evidence.geometricCentroidYMetres
+                = spot.statistics.centroidYMetres;
+            evidence.geometricRmsRadiusMetres
+                = spot.statistics.rmsRadiusMetres;
+            evidence.geometricRadiusMetres
+                = spot.statistics.geometricRadiusMetres;
+            result.metrics.pupilRayTraceCount += pupilRays.size();
+            result.metrics.pupilRayTraceCompletedCount += spot.samples.size();
+            result.metrics.pupilRayTraceRejectedCount
+                += spot.rejectedRays.size();
+            result.metrics.maximumGeometricRmsRadiusMetres = std::max(
+                result.metrics.maximumGeometricRmsRadiusMetres,
+                spot.statistics.rmsRadiusMetres);
+            result.metrics.maximumGeometricRadiusMetres = std::max(
+                result.metrics.maximumGeometricRadiusMetres,
+                spot.statistics.geometricRadiusMetres);
             const double opticalIntensity = opticalChannelIntensity(
                 sample.reconstructedLinearIntensity, index);
-            if (opticalIntensity > 0.0) {
-                evidence.idealSensorSignal = scaledResponse(
-                    opticalIntensity, channels[index].cameraResponse);
-                addSignal(contribution.idealSensorSignal,
-                    evidence.idealSensorSignal);
+            for (const auto& spotSample : spot.samples) {
+                if (std::abs(spotSample.imageXMetres)
+                        > observationHalfWidth(*observation)
+                    || std::abs(spotSample.imageYMetres)
+                        > observationHalfHeight(*observation)) {
+                    continue;
+                }
+                ++evidence.pupilRaySensorHitCount;
+                ++result.metrics.pupilRaySensorHitCount;
+                if (opticalIntensity <= 0.0) continue;
+                const auto raySignal = scaledResponse(
+                    opticalIntensity * spotSample.power,
+                    channels[index].cameraResponse);
+                addSignal(evidence.idealSensorSignal, raySignal);
                 if (psfMayReachSensor(
-                        raster, channels[index], sensorX, sensorY)) {
-                    evidence.depositedSensorSignal = depositPsf(
+                        raster,
+                        channels[index],
+                        spotSample.imageXMetres,
+                        spotSample.imageYMetres)) {
+                    const auto deposited = depositPsf(
                         result,
                         raster,
                         channels[index],
-                        sensorX,
-                        sensorY,
-                        evidence.idealSensorSignal);
-                    addSignal(contribution.depositedSensorSignal,
-                        evidence.depositedSensorSignal);
+                        spotSample.imageXMetres,
+                        spotSample.imageYMetres,
+                        raySignal);
+                    addSignal(evidence.depositedSensorSignal, deposited);
                 }
             }
+            addSignal(contribution.idealSensorSignal,
+                evidence.idealSensorSignal);
+            addSignal(contribution.depositedSensorSignal,
+                evidence.depositedSensorSignal);
             evidence.depositedOnSensor
                 = evidence.depositedSensorSignal.red > 0.0
                 || evidence.depositedSensorSignal.green > 0.0

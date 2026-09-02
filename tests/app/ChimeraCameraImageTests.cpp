@@ -239,6 +239,14 @@ TEST_CASE("placed CHIMERA camera traces RGB through the editable prescription") 
         > image.rgbEffectiveFocalLengthMetres[2]);
     CHECK(image.metrics.prescriptionTraceCompletedCount == 3U);
     CHECK(image.metrics.prescriptionTraceRejectedCount == 0U);
+    CHECK(image.metrics.pupilRayTraceCount
+        == 3U * chimera::kPlacedCameraPupilRayCount);
+    CHECK(image.metrics.pupilRayTraceCompletedCount > 3U);
+    CHECK(image.metrics.pupilRayTraceCompletedCount
+            + image.metrics.pupilRayTraceRejectedCount
+        == image.metrics.pupilRayTraceCount);
+    CHECK(image.metrics.pupilRaySensorHitCount > 3U);
+    CHECK(image.metrics.maximumGeometricRmsRadiusMetres > 0.0);
     REQUIRE(image.contributions.size() == 1U);
     REQUIRE(image.contributions.front().spectralRays.size() == 3U);
     for (const auto& spectral : image.contributions.front().spectralRays) {
@@ -247,6 +255,14 @@ TEST_CASE("placed CHIMERA camera traces RGB through the editable prescription") 
         CHECK(spectral.enteredPupil);
         CHECK(spectral.intersectedSensorPlane);
         CHECK(spectral.depositedOnSensor);
+        CHECK(spectral.pupilRayCount
+            == chimera::kPlacedCameraPupilRayCount);
+        CHECK(spectral.pupilRayCompletedCount > 1U);
+        CHECK(spectral.pupilRayCompletedCount
+                + spectral.pupilRayRejectedCount
+            == spectral.pupilRayCount);
+        CHECK(spectral.pupilRaySensorHitCount > 1U);
+        CHECK(spectral.geometricRmsRadiusMetres > 0.0);
     }
     CHECK(image.metrics.sensorDepositedSampleCount == 1U);
     auto edited = bench.scene;
@@ -254,6 +270,61 @@ TEST_CASE("placed CHIMERA camera traces RGB through the editable prescription") 
     sensorPlane.transform.translationMetres.z -= 1e-3;
     edited.replace("chimera-reconstruction-probe", std::move(sensorPlane));
     CHECK(image.isStaleFor(edited));
+}
+
+TEST_CASE("placed camera sensor motion produces prescription defocus") {
+    const auto recipe = chimera::makeCanonicalChimeraRecipe();
+    auto reconstruction = makeDirectionalEvidence(recipe);
+    reconstruction.samples.resize(1U);
+    const auto nominal = chimera::compileChimeraRecipe(recipe).project;
+    const ray::LensPrescriptionCatalog prescriptions({
+        ray::makeDefaultNBk7BiconvexPrescription(),
+    });
+    chimera::CameraSensorRequest request;
+    request.jobId = "placed-camera-defocus";
+    request.pixelWidth = 129U;
+    request.pixelHeight = 129U;
+    const auto focused = chimera::synthesizePlacedCameraImage(
+        recipe,
+        reconstruction,
+        request,
+        makeRgbCameraResponse(),
+        nominal.scene,
+        "chimera-plate",
+        "chimera-camera-lens",
+        "chimera-reconstruction-probe",
+        prescriptions);
+
+    auto defocusedBench = nominal.scene;
+    auto sensor = *defocusedBench.find("chimera-reconstruction-probe");
+    sensor.transform.translationMetres.z -= 0.01;
+    defocusedBench.replace("chimera-reconstruction-probe", std::move(sensor));
+    request.jobId = "placed-camera-defocus-moved";
+    const auto defocused = chimera::synthesizePlacedCameraImage(
+        recipe,
+        reconstruction,
+        request,
+        makeRgbCameraResponse(),
+        defocusedBench,
+        "chimera-plate",
+        "chimera-camera-lens",
+        "chimera-reconstruction-probe",
+        prescriptions);
+
+    REQUIRE(focused.contributions.size() == 1U);
+    REQUIRE(defocused.contributions.size() == 1U);
+    REQUIRE(focused.contributions.front().spectralRays.size() == 3U);
+    REQUIRE(defocused.contributions.front().spectralRays.size() == 3U);
+    const auto& focusedGreen
+        = focused.contributions.front().spectralRays[1U];
+    const auto& defocusedGreen
+        = defocused.contributions.front().spectralRays[1U];
+    CHECK(defocusedGreen.geometricRmsRadiusMetres
+        > focusedGreen.geometricRmsRadiusMetres);
+    CHECK(defocused.metrics.maximumGeometricRmsRadiusMetres
+        > focused.metrics.maximumGeometricRmsRadiusMetres);
+    CHECK(defocused.rgbSensorAxialDistanceMetres[1]
+        == doctest::Approx(focused.rgbSensorAxialDistanceMetres[1] + 0.01));
 }
 
 TEST_CASE("moving the placed camera lens clips the same directional evidence") {

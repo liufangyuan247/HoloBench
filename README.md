@@ -182,6 +182,11 @@ their hit coordinates, prescription-derived paraxial focal lengths drive the
 bounded Airy readout, and a strict measured spectral LUT maps each optical
 wavelength into linear camera RGB response. The former request-driven ideal
 finite-pupil camera remains only a deterministic analytic oracle.
+The placed camera additionally traces a bounded 49-ray pupil bundle per
+wavelength. Prescription aberration, vignetting, and actual sensor defocus form
+a geometric spot that is convolved with the corresponding Airy core; the UI
+reports pupil throughput and worst RMS spot radius. This hybrid is explicitly
+not a coherent aberrated-wavefront PSF.
 
 ## M1 Features
 

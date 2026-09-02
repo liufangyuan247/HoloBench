@@ -70,6 +70,9 @@ int main() {
     if (!workflow.cameraImage || workflow.exposures.size() != 1U ||
         workflow.exposures.front().channels.size() != 3U ||
         workflow.cameraImage->metrics.sensorDepositedSampleCount == 0U ||
+        workflow.cameraImage->metrics.pupilRayTraceCount !=
+            3U * chimera::kPlacedCameraPupilRayCount ||
+        workflow.cameraImage->metrics.pupilRaySensorHitCount <= 3U ||
         !std::isfinite(milliseconds)) {
       throw std::runtime_error(
           "M9 benchmark did not retain complete RGB/camera evidence");
@@ -82,10 +85,14 @@ int main() {
         "backend=cpu-reference grid=256x256 samples=1 elapsed_ms=%.6f "
         "target_ms=%.3f time_target_met=%s artifact_bytes=%zu "
         "estimated_peak_working_bytes=%zu memory_budget_bytes=%zu "
-        "memory_target_met=%s dataset_hash=%s plan_hash=%s\n",
+        "memory_target_met=%s pupil_rays=%zu pupil_sensor_hits=%zu "
+        "max_geometric_rms_um=%.6f dataset_hash=%s plan_hash=%s\n",
         milliseconds, kMaximumSelectedHogelMilliseconds,
         timeMet ? "true" : "false", artifactBytes, estimatedWorkingBytes,
         kMaximumEstimatedWorkingBytes, memoryMet ? "true" : "false",
+        workflow.cameraImage->metrics.pupilRayTraceCount,
+        workflow.cameraImage->metrics.pupilRaySensorHitCount,
+        workflow.cameraImage->metrics.maximumGeometricRmsRadiusMetres * 1e6,
         workflow.dataset.contentHash.c_str(),
         workflow.plan.contentHash.c_str());
     return timeMet && memoryMet ? 0 : 2;

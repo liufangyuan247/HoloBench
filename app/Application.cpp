@@ -7194,6 +7194,11 @@ void Application::drawChimeraAutomationBar() {
             image.rgbEffectiveFocalLengthMetres[2] * 1e3,
             image.metrics.prescriptionTraceCompletedCount,
             image.metrics.prescriptionTraceRejectedCount);
+        ImGui::TextDisabled(
+            "pupil rays %zu/%zu reached the sensor plane | max geometric RMS %.2f um | Airy-convolved spot/defocus",
+            image.metrics.pupilRaySensorHitCount,
+            image.metrics.pupilRayTraceCount,
+            image.metrics.maximumGeometricRmsRadiusMetres * 1e6);
     }
     ImGui::BeginDisabled(!current);
     if (ImGui::Button("New Print Batch")) {
@@ -13034,6 +13039,12 @@ void Application::runSandboxInteractionSmoke() {
         || chimeraWorkflow_->cameraImage->metrics
                 .prescriptionTraceCompletedCount
             != 3U
+        || chimeraWorkflow_->cameraImage->metrics.pupilRayTraceCount
+            != 3U * chimera::kPlacedCameraPupilRayCount
+        || chimeraWorkflow_->cameraImage->metrics.pupilRaySensorHitCount <= 3U
+        || chimeraWorkflow_->cameraImage->metrics
+                .maximumGeometricRmsRadiusMetres
+            <= 0.0
         || chimeraWorkflow_->observationComponentId
             != "chimera-reconstruction-probe"
         || !chimeraCameraTexture_

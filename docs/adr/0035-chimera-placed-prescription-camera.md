@@ -3,6 +3,7 @@
 ## Status
 
 Accepted for the bounded M10 CHIMERA camera assembly.
+Its readout is extended by [ADR 0036](0036-chimera-prescription-spot-defocus.md).
 
 ## Context
 
@@ -65,9 +66,9 @@ sensor changes the physical intersection and advances the revision. The legacy
 `synthesizeCameraImage` ideal on-axis function remains an analytic regression
 oracle, not the shared-Bench product path.
 
-This slice does not yet integrate a full prescription wavefront, aberration
-PSF, depth-dependent defocus, distortion, coatings, ghosts, polarization,
-noise, saturation, CFA sampling, or absolute photoelectron calibration. Its
-Airy blur is explicitly paraxial even though its chief rays and clipping use
-the physical sequential prescription. Additional intervening camera optics
-must first gain a declared and validated camera model.
+ADR 0036 subsequently adds a bounded prescription-traced pupil spot, so sensor
+motion, geometric aberration, marginal clipping, and defocus now affect the
+Airy-convolved readout. It is still not a coherent aberrated-wavefront PSF.
+Distortion, coatings, ghosts, polarization, noise, saturation, CFA sampling,
+and absolute photoelectron calibration remain open. Additional intervening
+camera optics must first gain a declared and validated camera model.

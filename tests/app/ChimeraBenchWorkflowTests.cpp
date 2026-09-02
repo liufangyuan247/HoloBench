@@ -77,6 +77,10 @@ TEST_CASE("CHIMERA Bench workflow closes dataset exposure reconstruction and "
   CHECK(workflow.cameraImage->lensPrescriptionId ==
         "default_n_bk7_biconvex");
   CHECK(workflow.cameraImage->metrics.prescriptionTraceCompletedCount == 3U);
+  CHECK(workflow.cameraImage->metrics.pupilRayTraceCount ==
+        3U * chimera::kPlacedCameraPupilRayCount);
+  CHECK(workflow.cameraImage->metrics.pupilRaySensorHitCount > 3U);
+  CHECK(workflow.cameraImage->metrics.maximumGeometricRmsRadiusMetres > 0.0);
   CHECK(workflow.cameraImage->metrics.sensorDepositedSampleCount == 1U);
   const auto display = chimera::renderChimeraCameraImage(*workflow.cameraImage);
   CHECK(display.width() == 65U);

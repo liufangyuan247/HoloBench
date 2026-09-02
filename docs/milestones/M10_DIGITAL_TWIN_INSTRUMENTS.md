@@ -147,6 +147,12 @@ retain exact revision, IDs, prescription, three focal lengths, per-channel
 surface/coordinate/status evidence, and fail closed on missing assets,
 reversed paths, ambiguous branches, or unsupported intervening optics. The
 former request-driven ideal camera remains only an analytic oracle.
+Each accepted channel also traces a deterministic 49-ray bundle spanning the
+effective pupil. Prescription aberration, marginal clipping, and the actual
+sensor's axial/tilted pose form a geometric spot whose individual intercepts
+receive the wavelength-specific Airy core. Per-channel centroid/RMS/radius and
+completed/rejected/sensor-hit counts are inspectable. This adds physical
+defocus without claiming coherent aberrated-wavefront diffraction.
 See
 [ADR 0028](../adr/0028-revision-bound-placed-field-measurements.md) and
 [ADR 0029](../adr/0029-coherent-merge-and-independent-measurement-channels.md),
@@ -155,7 +161,8 @@ plus [ADR 0030](../adr/0030-shared-beam-following-field-paths.md) and
 [ADR 0032](../adr/0032-hashed-lens-prescription-assets.md), and
 [ADR 0033](../adr/0033-recorded-volume-wavefront-evidence.md), plus
 [ADR 0034](../adr/0034-derived-field-routing-from-placed-planes.md), and
-[ADR 0035](../adr/0035-chimera-placed-prescription-camera.md).
+[ADR 0035](../adr/0035-chimera-placed-prescription-camera.md), and
+[ADR 0036](../adr/0036-chimera-prescription-spot-defocus.md).
 
 ## Platform extensibility acceptance
 
