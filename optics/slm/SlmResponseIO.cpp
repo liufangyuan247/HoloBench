@@ -34,7 +34,8 @@ void requireObjectKeys(
         document,
         {"format_version", "model", "wavelength_curves"},
         "SLM response document");
-    if (document.at("format_version").get<int>() != 1) {
+    if (document.at("format_version").get<int>()
+        != kSlmResponseFormatVersion) {
         throw std::invalid_argument("unsupported SLM response format version");
     }
     if (document.at("model").get<std::string>() != "scalar_complex_response_lut") {
@@ -94,7 +95,7 @@ std::string serializeSlmResponseJson(const CalibratedSlmResponse& response) {
         });
     }
     Json document = {
-        {"format_version", 1},
+        {"format_version", kSlmResponseFormatVersion},
         {"model", "scalar_complex_response_lut"},
         {"wavelength_curves", std::move(curves)},
     };

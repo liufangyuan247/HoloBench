@@ -86,7 +86,9 @@ selectRgbReflectionPairs(const PlateIncidentFieldSet& fields);
     const std::array<PlateBranchPairSelection, 3>& selections,
     const ThinPlateRecordingOptions& options,
     compute::fft::IFftBackend& fftBackend,
-    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr,
+    const slm::ISlmResponseResolver* slmResponses = nullptr,
+    double environmentTemperatureKelvin = 293.15);
 
 // Replays and propagates all three channels independently onto one placed
 // observation component. Colour composition is a separate display operation.
@@ -110,7 +112,9 @@ selectRgbReflectionPairs(const PlateIncidentFieldSet& fields);
     const VolumePlateMaterial& material,
     const PlateFieldSamplingOptions& sampling,
     compute::fft::IFftBackend& fftBackend,
-    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr,
+    const slm::ISlmResponseResolver* slmResponses = nullptr,
+    double environmentTemperatureKelvin = 293.15);
 
 // The observation may be the recorded HolographicPlate itself. In that case
 // the three reconstructed exit fields need no separate Probe.
@@ -122,6 +126,8 @@ replayRgbReflectionVolumeToObservation(
     std::string observationComponentId,
     const PlateFieldSamplingOptions& sampling,
     compute::fft::IFftBackend& fftBackend,
-    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr,
+    const slm::ISlmResponseResolver* slmResponses = nullptr,
+    double environmentTemperatureKelvin = 293.15);
 
 } // namespace holobench::optics::holography

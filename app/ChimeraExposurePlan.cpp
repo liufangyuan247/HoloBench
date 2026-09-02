@@ -594,6 +594,11 @@ ExecutedHogelExposure executeHogelExposure(
         throw std::invalid_argument(
             "hogel exposure preview sampling must be in [32, 2048]");
     }
+    if (!std::isfinite(options.environmentTemperatureKelvin)
+        || options.environmentTemperatureKelvin <= 0.0) {
+        throw std::invalid_argument(
+            "hogel exposure environment temperature must be positive and finite");
+    }
     if ((options.calibratedSlmResponse == nullptr)
             != options.slmCalibrationId.empty()
         || (!options.slmCalibrationId.empty()
@@ -715,7 +720,10 @@ ExecutedHogelExposure executeHogelExposure(
             pair.objectBranchId,
             sampling,
             fftBackend,
-            sparseCommands);
+            sparseCommands,
+            nullptr,
+            options.slmResponses,
+            options.environmentTemperatureKelvin);
         const bool sparseRasterApplied = std::find(
             sampledObject.diagnostics.appliedSlmCommandIds.begin(),
             sampledObject.diagnostics.appliedSlmCommandIds.end(),
@@ -732,7 +740,11 @@ ExecutedHogelExposure executeHogelExposure(
                 fields,
                 pair.referenceBranchId,
                 sampling,
-                fftBackend);
+                fftBackend,
+                {},
+                nullptr,
+                options.slmResponses,
+                options.environmentTemperatureKelvin);
         double objectIrradiance = 0.0;
         double referenceIrradiance = 0.0;
         double fringeVisibility = 0.0;
@@ -790,6 +802,14 @@ ExecutedHogelExposure executeHogelExposure(
         }
         auto objectFieldDiagnostics = sampledObject.diagnostics;
         auto referenceFieldDiagnostics = sampledReference.diagnostics;
+        if (objectFieldDiagnostics.appliedSlmCalibrationIds.size() > 1U) {
+            throw std::invalid_argument(
+                "CHIMERA object path has ambiguous multiple SLM response calibrations");
+        }
+        const std::string appliedSlmCalibrationId
+            = objectFieldDiagnostics.appliedSlmCalibrationIds.empty()
+            ? std::string {}
+            : objectFieldDiagnostics.appliedSlmCalibrationIds.front();
         auto recording
             = optics::holography::recordVolumePlateFromSampledFields(
             channelProject.scene,
@@ -817,8 +837,8 @@ ExecutedHogelExposure executeHogelExposure(
                 || sampling.sampleHeight
                     != recordingRecipe.sampling.sampleHeight,
             .calibratedSlmResponseApplied
-                = options.calibratedSlmResponse != nullptr,
-            .slmCalibrationId = options.slmCalibrationId,
+                = !appliedSlmCalibrationId.empty(),
+            .slmCalibrationId = appliedSlmCalibrationId,
             .calibratedMaterialDoseResponseApplied
                 = options.calibratedMaterialDoseResponse != nullptr,
             .materialCalibrationId = std::move(materialCalibrationId),

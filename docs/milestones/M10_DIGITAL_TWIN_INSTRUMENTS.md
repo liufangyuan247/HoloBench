@@ -96,6 +96,17 @@ Field Probe is never labelled as calibrated hardware and uses the explicit
 nominal preview. See
 [ADR 0037](../adr/0037-hashed-placed-detector-response.md).
 
+Placed SLM response assets now close the same loop for the existing scalar
+complex-response LUT. Format-v1 JSON is read once with a 16 MiB bound, addressed
+by the SHA-256 of those exact bytes, bound only to an ordinary placed SLM, and
+restored transactionally with specification plus wavelength/temperature
+checks. The shared routed-field service applies the response to persisted
+manual/procedural commands and transient sparse rasters, so Screen/Probe
+observation, thin/volume/RGB holography, Denisyuk replay paths, and CHIMERA use
+one instrument truth. A placed binding and transient response are an explicit
+conflict, never an implicit precedence rule. See
+[ADR 0038](../adr/0038-hashed-placed-slm-response.md).
+
 ### M10.4 — Measurement and general experiment closure
 
 - Field Probe amplitude, intensity, phase, dB, spectral-channel, cursor, and

@@ -32,6 +32,7 @@
 #include "app/ReflectionRefractionWorkbench.hpp"
 #include "app/SamplingDebuggerPipeline.hpp"
 #include "app/SlmInterferenceUiState.hpp"
+#include "app/SlmResponseAssets.hpp"
 #include "app/lessons/LearnSession.hpp"
 #include "app/lessons/Localization.hpp"
 #include "optics/ray/BenchTracer.hpp"
@@ -518,6 +519,7 @@ private:
     void loadRealLensPrescription(bool csv);
     void saveRealLensPrescription(bool csv);
     void loadDetectorResponseForBench();
+    void loadSlmResponseForBench();
     void loadSlmCalibration();
     void saveSlmCalibration();
     void loadReflectionRefractionProject();
@@ -770,6 +772,8 @@ private:
     DetectorResponseCatalog detectorResponseCatalog_;
     std::optional<LoadedDetectorResponseAsset>
         activeDetectorResponseAsset_;
+    SlmResponseCatalog slmResponseCatalog_;
+    std::optional<LoadedSlmResponseAsset> activeSlmResponseAsset_;
     slmui::SlmInterferenceUiState slmInterferenceUiState_;
     project::ProjectProvenance slmProjectProvenance_;
     std::string slmProjectName_ = "SLM & Interference Experiment";
@@ -842,6 +846,8 @@ private:
     char realLensPathBuffer_[512] = "holobench_lens.json";
     char detectorResponsePathBuffer_[512]
         = "holobench_detector_response.json";
+    char placedSlmResponsePathBuffer_[512]
+        = "holobench_slm_response.json";
     char slmCalibrationPathBuffer_[512] = "slm_response.json";
     char slmProjectPathBuffer_[512] = "slm_experiment.json";
     char waveProjectPathBuffer_[512] = "wave_workbench.json";

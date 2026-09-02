@@ -34,7 +34,9 @@ ThinPlateRecordingResult recordThinTransmissionPlateImpl(
     std::uint64_t referenceBranchId,
     const ThinPlateRecordingOptions& options,
     compute::fft::IFftBackend* fftBackend,
-    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const ray::ILensPrescriptionResolver* lensPrescriptions,
+    const slm::ISlmResponseResolver* slmResponses,
+    double environmentTemperatureKelvin) {
     if (fields.isStaleFor(bench)) {
         throw std::invalid_argument(
             "thin-plate recording requires current incident branch evidence");
@@ -55,7 +57,9 @@ ThinPlateRecordingResult recordThinTransmissionPlateImpl(
                 options.sampling,
                 *fftBackend,
                 {},
-                lensPrescriptions);
+                lensPrescriptions,
+                slmResponses,
+                environmentTemperatureKelvin);
     };
     auto object = sample(objectBranchId);
     auto reference = sample(referenceBranchId);
@@ -134,7 +138,9 @@ ThinPlateRecordingResult recordThinTransmissionPlate(
         referenceBranchId,
         options,
         nullptr,
-        nullptr);
+        nullptr,
+        nullptr,
+        293.15);
 }
 
 ThinPlateRecordingResult recordThinTransmissionPlate(
@@ -144,7 +150,9 @@ ThinPlateRecordingResult recordThinTransmissionPlate(
     std::uint64_t referenceBranchId,
     const ThinPlateRecordingOptions& options,
     compute::fft::IFftBackend& fftBackend,
-    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const ray::ILensPrescriptionResolver* lensPrescriptions,
+    const slm::ISlmResponseResolver* slmResponses,
+    double environmentTemperatureKelvin) {
     return recordThinTransmissionPlateImpl(
         bench,
         fields,
@@ -152,7 +160,9 @@ ThinPlateRecordingResult recordThinTransmissionPlate(
         referenceBranchId,
         options,
         &fftBackend,
-        lensPrescriptions);
+        lensPrescriptions,
+        slmResponses,
+        environmentTemperatureKelvin);
 }
 
 } // namespace holobench::optics::holography

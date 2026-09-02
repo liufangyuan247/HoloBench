@@ -1,12 +1,17 @@
 #pragma once
 
 #include <filesystem>
+#include <cstddef>
 #include <string>
 #include <string_view>
 
 #include "optics/slm/SlmResponse.hpp"
 
 namespace holobench::optics::slm {
+
+inline constexpr int kSlmResponseFormatVersion = 1;
+inline constexpr std::size_t kMaximumSlmResponseJsonBytes
+    = 16U * 1024U * 1024U;
 
 [[nodiscard]] std::string serializeSlmResponseJson(
     const CalibratedSlmResponse& response);

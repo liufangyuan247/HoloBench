@@ -3,6 +3,7 @@
 #include <complex>
 #include <cstddef>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include "optics/slm/SpatialLightModulator.hpp"
@@ -46,6 +47,17 @@ public:
 
 private:
     std::vector<SlmWavelengthResponse> wavelengths_;
+};
+
+// Solver-facing lookup only. Application asset catalogs own response bytes,
+// provenance, and lifetime; optical solvers resolve immutable calibration
+// truth without depending on application or project-I/O layers.
+class ISlmResponseResolver {
+public:
+    virtual ~ISlmResponseResolver() = default;
+
+    [[nodiscard]] virtual const CalibratedSlmResponse* resolveSlmResponse(
+        std::string_view calibrationId) const noexcept = 0;
 };
 
 enum class LcdColorChannel {

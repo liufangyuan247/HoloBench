@@ -156,14 +156,19 @@
   analytic grating vector and the scalar Kogelnik model supplies diffraction
   efficiency. This is not a three-dimensional index-volume, vector,
   polarization, or high-NA solver. Placed
-  SLMs apply persisted ideal amplitude/phase commands using
+  SLMs apply persisted nominal ideal amplitude/phase commands using
   uniform, wrapped linear-ramp, or checkerboard recipes with bit-depth
-  quantization and manual/automation provenance. M9 transient hogel rasters can
-  attach the existing measured complex-response LUT without altering the saved
-  bench. Format v5 persists per-component calibration references. Verified
-  real-lens prescription assets now resolve into placed-instrument behavior;
-  coating, detector, SLM, pose, stage, and other general calibration asset
-  adapters remain open.
+  quantization and manual/automation provenance. A placed SLM may instead bind
+  one exact-byte SHA-256-addressed scalar complex-response LUT; wavelength and
+  temperature applicability are checked before it changes ordinary
+  Screen/Probe, holographic, or CHIMERA fields. M9 transient hogel rasters retain
+  their compatibility response input, but supplying it together with placed
+  response truth rejects. This LUT does not model pixel cross-talk, temporal
+  settling, angle/polarization dependence, diffraction orders, surface
+  flatness, or hardware electronics. Format v5 persists per-component
+  calibration references. Verified real-lens, detector-response, and SLM
+  response assets now resolve into placed-instrument behavior; coating, pose,
+  stage, and other general calibration asset adapters remain open.
 - Plate candidates currently infer object branches from an Object/Wavefront
   Source and reference branches from a Laser Source. They classify same-side
   transmission versus opposite-side reflection geometry and reject
@@ -247,6 +252,7 @@
   accessibility layer.
 - Direct hardware control remains a long-term roadmap module. Bench format v5
   now persists generic instrument identity and hashed external calibration
-  references with visible nominal/calibrated/stale state, but most asset kinds
-  are not yet resolved into general placed-instrument solver behavior. A stored
+  references with visible nominal/calibrated/stale state. Real-lens, physical
+  detector-response, and placed-SLM response assets resolve into their declared
+  solver paths, but most other asset kinds are not yet connected. A stored
   reference is evidence, not a claim that calibrated physics was applied.

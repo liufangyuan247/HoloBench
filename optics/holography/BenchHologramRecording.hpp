@@ -65,6 +65,8 @@ struct ThinPlateRecordingResult final {
     std::uint64_t referenceBranchId,
     const ThinPlateRecordingOptions& options,
     compute::fft::IFftBackend& fftBackend,
-    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr,
+    const slm::ISlmResponseResolver* slmResponses = nullptr,
+    double environmentTemperatureKelvin = 293.15);
 
 } // namespace holobench::optics::holography

@@ -212,7 +212,9 @@ VolumePlateRecordingResult recordVolumePlate(
     const PlateFieldSamplingOptions& sampling,
     compute::fft::IFftBackend& fftBackend,
     std::span<const PlacedSlmSparseCommand> slmCommands,
-    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const ray::ILensPrescriptionResolver* lensPrescriptions,
+    const slm::ISlmResponseResolver* slmResponses,
+    double environmentTemperatureKelvin) {
     if (sampling.refractiveIndex != 1.0) {
         throw std::invalid_argument(
             "volume recording samples the external plate plane and requires refractive index 1");
@@ -230,7 +232,9 @@ VolumePlateRecordingResult recordVolumePlate(
         sampling,
         fftBackend,
         slmCommands,
-        lensPrescriptions);
+        lensPrescriptions,
+        slmResponses,
+        environmentTemperatureKelvin);
     auto referenceIncident = samplePlateIncidentField(
         bench,
         fields,
@@ -238,7 +242,9 @@ VolumePlateRecordingResult recordVolumePlate(
         sampling,
         fftBackend,
         slmCommands,
-        lensPrescriptions);
+        lensPrescriptions,
+        slmResponses,
+        environmentTemperatureKelvin);
     if (!objectIncident.diagnostics.carrierSampled
         || !referenceIncident.diagnostics.carrierSampled) {
         throw std::invalid_argument(

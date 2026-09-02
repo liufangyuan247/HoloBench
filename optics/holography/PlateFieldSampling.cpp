@@ -227,7 +227,9 @@ SampledPlateIncidentField sampleLocalWavePath(
     compute::fft::IFftBackend& fftBackend,
     SampledPlateIncidentField baseline,
     std::span<const PlacedSlmSparseCommand> slmCommands,
-    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const ray::ILensPrescriptionResolver* lensPrescriptions,
+    const slm::ISlmResponseResolver* slmResponses,
+    double environmentTemperatureKelvin) {
     const double extentWidth = baseline.diagnostics.sampledExtentWidthMetres;
     const double extentHeight = baseline.diagnostics.sampledExtentHeightMetres;
     auto sampled = wave::sampleBeamFollowingField(
@@ -242,6 +244,9 @@ SampledPlateIncidentField sampleLocalWavePath(
             .centreXMetres = options.centreXMetres,
             .centreYMetres = options.centreYMetres,
             .refractiveIndex = options.refractiveIndex,
+            .slmResponses = slmResponses,
+            .environmentTemperatureKelvin
+                = environmentTemperatureKelvin,
         },
         fftBackend,
         slmCommands,
@@ -491,7 +496,9 @@ SampledPlateIncidentField samplePlateIncidentField(
     const PlateFieldSamplingOptions& options,
     compute::fft::IFftBackend& fftBackend,
     std::span<const PlacedSlmSparseCommand> slmCommands,
-    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const ray::ILensPrescriptionResolver* lensPrescriptions,
+    const slm::ISlmResponseResolver* slmResponses,
+    double environmentTemperatureKelvin) {
     validateSparseSlmCommands(bench, slmCommands);
     auto baseline = samplePlateIncidentField(
         bench, fields, branchId, options);
@@ -511,7 +518,9 @@ SampledPlateIncidentField samplePlateIncidentField(
         fftBackend,
         std::move(baseline),
         slmCommands,
-        lensPrescriptions);
+        lensPrescriptions,
+        slmResponses,
+        environmentTemperatureKelvin);
 }
 
 } // namespace holobench::optics::holography

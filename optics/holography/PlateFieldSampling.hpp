@@ -16,6 +16,7 @@ class IFftBackend;
 
 namespace holobench::optics::slm {
 class CalibratedSlmResponse;
+class ISlmResponseResolver;
 }
 
 namespace holobench::optics::holography {
@@ -110,6 +111,8 @@ struct SampledPlateIncidentField final {
     const PlateFieldSamplingOptions& options,
     compute::fft::IFftBackend& fftBackend,
     std::span<const PlacedSlmSparseCommand> slmCommands = {},
-    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr,
+    const slm::ISlmResponseResolver* slmResponses = nullptr,
+    double environmentTemperatureKelvin = 293.15);
 
 } // namespace holobench::optics::holography

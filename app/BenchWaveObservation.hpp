@@ -14,6 +14,10 @@ namespace holobench::compute::fft {
 class IFftBackend;
 }
 
+namespace holobench::optics::slm {
+class ISlmResponseResolver;
+}
+
 namespace holobench::app {
 
 struct BenchWaveContribution final {
@@ -92,7 +96,9 @@ observeBenchWaveChannels(
     std::size_t maximumSamplesPerAxis,
     bool interactivePreview,
     compute::fft::IFftBackend& fftBackend,
-    const optics::ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
+    const optics::ray::ILensPrescriptionResolver* lensPrescriptions = nullptr,
+    const optics::slm::ISlmResponseResolver* slmResponses = nullptr,
+    double environmentTemperatureKelvin = 293.15);
 
 // Convenience for callers that require exactly one physical channel.
 [[nodiscard]] BenchWaveObservationResult observeBenchWavePattern(
@@ -102,6 +108,8 @@ observeBenchWaveChannels(
     std::size_t maximumSamplesPerAxis,
     bool interactivePreview,
     compute::fft::IFftBackend& fftBackend,
-    const optics::ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
+    const optics::ray::ILensPrescriptionResolver* lensPrescriptions = nullptr,
+    const optics::slm::ISlmResponseResolver* slmResponses = nullptr,
+    double environmentTemperatureKelvin = 293.15);
 
 } // namespace holobench::app

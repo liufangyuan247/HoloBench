@@ -43,6 +43,7 @@
 #include "app/ChimeraBenchWorkflow.hpp"
 #include "app/ChimeraPerspectiveManifest.hpp"
 #include "app/DetectorResponseAssets.hpp"
+#include "app/SlmResponseAssets.hpp"
 #include "app/SlmInterferenceProject.hpp"
 #include "app/UiFont.hpp"
 #include "app/lessons/LessonProgress.hpp"
@@ -876,6 +877,8 @@ bool Application::applyDynamicBenchProject(
             candidateProject.scene, realLensPrescriptionCatalog_);
         validateDetectorResponseAssetBindings(
             candidateProject.scene, detectorResponseCatalog_);
+        validateSlmResponseAssetBindings(
+            candidateProject.scene, slmResponseCatalog_);
         if (benchEditHistoryReady_
             && candidateProject.scene.revision() <= benchProject_.scene.revision()
             && !sameBenchEditState(candidateProject, benchProject_)) {
@@ -961,6 +964,11 @@ void Application::loadBenchProjectFromPath() {
             recovered.project.scene,
             std::filesystem::path(benchProjectPathBuffer_),
             recoveredDetectorCatalog);
+        SlmResponseCatalog recoveredSlmCatalog;
+        restoreSlmResponseAssets(
+            recovered.project.scene,
+            std::filesystem::path(benchProjectPathBuffer_),
+            recoveredSlmCatalog);
         const std::string loadedName = recovered.project.name;
         const auto source = recovered.source;
         const bool ignoredInvalidAutosave = recovered.ignoredInvalidAutosave;
@@ -968,14 +976,17 @@ void Application::loadBenchProjectFromPath() {
         auto previousCatalog = std::move(realLensPrescriptionCatalog_);
         auto previousDetectorCatalog
             = std::move(detectorResponseCatalog_);
+        auto previousSlmCatalog = std::move(slmResponseCatalog_);
         realLensPrescriptionCatalog_ = std::move(recoveredCatalog);
         detectorResponseCatalog_ = std::move(recoveredDetectorCatalog);
+        slmResponseCatalog_ = std::move(recoveredSlmCatalog);
         selectedBenchComponentId_.clear();
         if (applyDynamicBenchProject(
                 std::move(recovered.project),
                 "Loaded optical bench: " + loadedName)) {
             activeLensPrescriptionAsset_.reset();
             activeDetectorResponseAsset_.reset();
+            activeSlmResponseAsset_.reset();
             if (source == BenchProjectRecoverySource::Primary) {
                 discardBenchProjectAutosave(benchProjectPathBuffer_);
                 statusMessage_ = ignoredInvalidAutosave
@@ -990,6 +1001,7 @@ void Application::loadBenchProjectFromPath() {
             realLensPrescriptionCatalog_ = std::move(previousCatalog);
             detectorResponseCatalog_
                 = std::move(previousDetectorCatalog);
+            slmResponseCatalog_ = std::move(previousSlmCatalog);
             selectedBenchComponentId_ = previousSelection;
         }
     } catch (const std::exception& error) {
@@ -1180,8 +1192,16 @@ void Application::executeSelectedChimeraHogel() {
     const auto y = static_cast<std::size_t>(std::clamp(
         chimeraHogelY_, 0,
         static_cast<int>(chimeraRecipe_.hogels.countY - 1U)));
+    chimera::HogelExposureExecutionOptions executionOptions;
+    executionOptions.slmResponses = &slmResponseCatalog_;
+    executionOptions.environmentTemperatureKelvin = 293.15;
     chimera::executeChimeraHogel(
-        *chimeraWorkflow_, benchProject_, *detectorFftBackend_, x, y);
+        *chimeraWorkflow_,
+        benchProject_,
+        *detectorFftBackend_,
+        x,
+        y,
+        executionOptions);
     const auto& channels = chimeraWorkflow_->exposures.back().channels;
     const bool m8Evidence = channels.size() == 3U
         && std::all_of(channels.begin(), channels.end(), [](const auto& channel) {
@@ -1290,6 +1310,9 @@ void Application::runChimeraBatchSlice() {
     }
     const std::size_t slice = static_cast<std::size_t>(
         std::clamp(chimeraBatchSliceHogels_, 1, 4));
+    chimera::HogelExposureExecutionOptions executionOptions;
+    executionOptions.slmResponses = &slmResponseCatalog_;
+    executionOptions.environmentTemperatureKelvin = 293.15;
     const auto executed = chimera::runChimeraBatchSlice(
         *chimeraBatch_,
         chimeraWorkflow_->recipe,
@@ -1297,7 +1320,8 @@ void Application::runChimeraBatchSlice() {
         chimeraWorkflow_->plan,
         benchProject_,
         *detectorFftBackend_,
-        slice);
+        slice,
+        executionOptions);
     for (auto exposure : executed.executedHogels) {
         const auto existing = std::find_if(
             chimeraWorkflow_->exposures.begin(),
@@ -1325,6 +1349,9 @@ void Application::pauseChimeraBatch() {
         throw std::runtime_error("no current CHIMERA batch can be paused");
     }
     std::atomic_bool cancelled {true};
+    chimera::HogelExposureExecutionOptions executionOptions;
+    executionOptions.slmResponses = &slmResponseCatalog_;
+    executionOptions.environmentTemperatureKelvin = 293.15;
     static_cast<void>(chimera::runChimeraBatchSlice(
         *chimeraBatch_,
         chimeraWorkflow_->recipe,
@@ -1333,7 +1360,7 @@ void Application::pauseChimeraBatch() {
         benchProject_,
         *detectorFftBackend_,
         1U,
-        {},
+        executionOptions,
         &cancelled));
     chimera::saveChimeraBatchArtifact(
         *chimeraBatch_, chimeraBatchPathBuffer_);
@@ -1493,7 +1520,9 @@ void Application::recomputeRecordingRecipe(
                 channel.referenceBranchId,
                 options,
                 *detectorFftBackend_,
-                &realLensPrescriptionCatalog_);
+                &realLensPrescriptionCatalog_,
+                &slmResponseCatalog_,
+                293.15);
             field::FieldVisualizationOptions viewOptions;
             viewOptions.colormap = field::ColormapKind::Inferno;
             const auto image = field::renderLinearIntensity(
@@ -1530,7 +1559,9 @@ void Application::recomputeRecordingRecipe(
                     selections,
                     options,
                     *detectorFftBackend_,
-                    &realLensPrescriptionCatalog_);
+                    &realLensPrescriptionCatalog_,
+                    &slmResponseCatalog_,
+                    293.15);
             sandboxRgbRecording_ = std::make_unique<
                 optics::holography::RgbThinPlateRecordingResult>(
                     std::move(recording));
@@ -1574,7 +1605,9 @@ void Application::recomputeRecordingRecipe(
                 recipe.volumeMaterial,
                 recipe.sampling,
                 *detectorFftBackend_,
-                &realLensPrescriptionCatalog_);
+                &realLensPrescriptionCatalog_,
+                &slmResponseCatalog_,
+                293.15);
         sandboxRgbVolumeRecording_ = std::make_unique<
             optics::holography::RgbVolumePlateRecordingResult>(
                 std::move(recording));
@@ -1599,7 +1632,9 @@ void Application::recomputeRecordingRecipe(
         recipe.sampling,
         *detectorFftBackend_,
         {},
-        &realLensPrescriptionCatalog_);
+        &realLensPrescriptionCatalog_,
+        &slmResponseCatalog_,
+        293.15);
     sandboxVolumeReplayWavelengthNanometres_ = static_cast<float>(
         recording.pair.wavelengthMetres * 1e9);
     sandboxVolumeReplayAngleDegrees_ = static_cast<float>(
@@ -2077,7 +2112,9 @@ void Application::reconstructSelectedPlateExperiment() {
                 observation->id,
                 sampling,
                 *detectorFftBackend_,
-                &realLensPrescriptionCatalog_);
+                &realLensPrescriptionCatalog_,
+                &slmResponseCatalog_,
+                293.15);
         const field::RgbIntensityVisualizationOptions displayOptions {
             .channelIntensityGains = {
                 static_cast<double>(sandboxRgbDisplayGains_[0]),
@@ -2135,7 +2172,9 @@ void Application::reconstructSelectedPlateExperiment() {
             observation->id,
             sampling,
             *detectorFftBackend_,
-            &realLensPrescriptionCatalog_);
+            &realLensPrescriptionCatalog_,
+            &slmResponseCatalog_,
+            293.15);
         field::FieldVisualizationOptions viewOptions;
         viewOptions.colormap = field::ColormapKind::Inferno;
         const auto image = field::renderLinearIntensity(
@@ -2775,7 +2814,9 @@ void Application::updateSandboxWaveObservation() {
                     sandboxWaveCommittedSampleLimitIndex_),
             preview,
             *detectorFftBackend_,
-            &realLensPrescriptionCatalog_);
+            &realLensPrescriptionCatalog_,
+            &slmResponseCatalog_,
+            293.15);
         const auto previous = std::find_if(
             results.begin(), results.end(),
             [&](const BenchWaveObservationResult& candidate) {
@@ -3382,6 +3423,28 @@ void Application::loadDetectorResponseForBench() {
             + calibrationId + " from " + path.string();
     } catch (const std::exception& error) {
         errorMessage_ = "Detector response load failed: "
+            + std::string(error.what());
+        statusMessage_.clear();
+    }
+}
+
+void Application::loadSlmResponseForBench() {
+    try {
+        const std::filesystem::path path(placedSlmResponsePathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument(
+                "SLM response path cannot be empty");
+        }
+        auto loaded = loadSlmResponseAsset(path);
+        loaded.provenance.source = path.generic_string();
+        slmResponseCatalog_.registerResponse(loaded);
+        const std::string calibrationId = loaded.calibrationId;
+        activeSlmResponseAsset_ = std::move(loaded);
+        errorMessage_.clear();
+        statusMessage_ = "Loaded verified placed-SLM response "
+            + calibrationId + " from " + path.string();
+    } catch (const std::exception& error) {
+        errorMessage_ = "Placed SLM response load failed: "
             + std::string(error.what());
         statusMessage_.clear();
     }
@@ -8535,6 +8598,43 @@ void Application::drawSandboxInspector() {
                     value.pixelHeight = static_cast<std::size_t>(std::max(pixels[1], 0));
                     value.fillFactor = fill;
                     edited.parameters = value;
+                    ImGui::InputText(
+                        "Placed SLM response JSON",
+                        placedSlmResponsePathBuffer_,
+                        sizeof(placedSlmResponsePathBuffer_));
+                    if (ImGui::Button("Load verified placed SLM response")) {
+                        loadSlmResponseForBench();
+                    }
+                    ImGui::BeginDisabled(
+                        !activeSlmResponseAsset_.has_value());
+                    if (ImGui::Button("Use verified placed SLM response")) {
+                        const auto& response
+                            = activeSlmResponseAsset_->response;
+                        bindSlmResponseAsset(
+                            edited,
+                            *activeSlmResponseAsset_,
+                            {
+                                .minimumVacuumWavelengthMetres
+                                    = response.wavelengths().front()
+                                        .vacuumWavelengthMetres,
+                                .maximumVacuumWavelengthMetres
+                                    = response.wavelengths().back()
+                                        .vacuumWavelengthMetres,
+                                .minimumTemperatureKelvin
+                                    = sandboxCalibrationMinimumTemperatureKelvin_,
+                                .maximumTemperatureKelvin
+                                    = sandboxCalibrationMaximumTemperatureKelvin_,
+                            });
+                        changed = true;
+                    }
+                    ImGui::EndDisabled();
+                    if (activeSlmResponseAsset_.has_value()) {
+                        ImGui::TextDisabled(
+                            "Loaded placed response: %.20s... | SHA-256 %.12s...",
+                            activeSlmResponseAsset_->calibrationId.c_str(),
+                            activeSlmResponseAsset_->provenance
+                                .contentSha256.c_str());
+                    }
                     break;
                 }
                 case bench::BenchComponentKind::ScreenDetector:
@@ -9186,7 +9286,9 @@ void Application::drawSandboxInspector() {
                                                 pair.referenceBranchId,
                                                 recordingOptions,
                                                 *detectorFftBackend_,
-                                                &realLensPrescriptionCatalog_);
+                                                &realLensPrescriptionCatalog_,
+                                                &slmResponseCatalog_,
+                                                293.15);
                                         field::FieldVisualizationOptions viewOptions;
                                         viewOptions.colormap = field::ColormapKind::Inferno;
                                         const auto image = field::renderLinearIntensity(
@@ -9297,7 +9399,9 @@ void Application::drawSandboxInspector() {
                                                     sampling,
                                                     *detectorFftBackend_,
                                                     {},
-                                                    &realLensPrescriptionCatalog_);
+                                                    &realLensPrescriptionCatalog_,
+                                                    &slmResponseCatalog_,
+                                                    293.15);
                                             upsertRecordingRecipe(
                                                 benchProject_,
                                                 makeVolumeRecordingRecipe(
@@ -9421,7 +9525,9 @@ void Application::drawSandboxInspector() {
                                                 rgbSelections,
                                                 options,
                                                 *detectorFftBackend_,
-                                                &realLensPrescriptionCatalog_);
+                                                &realLensPrescriptionCatalog_,
+                                                &slmResponseCatalog_,
+                                                293.15);
                                     upsertRecordingRecipe(
                                         benchProject_,
                                         makeThinRecordingRecipe(
@@ -10121,7 +10227,9 @@ void Application::drawSandboxInspector() {
                                                     component.id,
                                                     sampling,
                                                     *detectorFftBackend_,
-                                                    &realLensPrescriptionCatalog_);
+                                                    &realLensPrescriptionCatalog_,
+                                                    &slmResponseCatalog_,
+                                                    293.15);
                                         field::FieldVisualizationOptions viewOptions;
                                         viewOptions.colormap
                                             = field::ColormapKind::Inferno;

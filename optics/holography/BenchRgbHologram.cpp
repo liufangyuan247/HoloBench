@@ -22,7 +22,9 @@ RgbThinPlateRecordingResult recordRgbThinTransmissionPlateImpl(
     const std::array<PlateBranchPairSelection, 3>& selections,
     const ThinPlateRecordingOptions& options,
     compute::fft::IFftBackend* fftBackend,
-    const ray::ILensPrescriptionResolver* lensPrescriptions);
+    const ray::ILensPrescriptionResolver* lensPrescriptions,
+    const slm::ISlmResponseResolver* slmResponses,
+    double environmentTemperatureKelvin);
 
 } // namespace
 
@@ -143,7 +145,14 @@ RgbThinPlateRecordingResult recordRgbThinTransmissionPlate(
     const std::array<PlateBranchPairSelection, 3>& selections,
     const ThinPlateRecordingOptions& options) {
     return recordRgbThinTransmissionPlateImpl(
-        bench, fields, selections, options, nullptr, nullptr);
+        bench,
+        fields,
+        selections,
+        options,
+        nullptr,
+        nullptr,
+        nullptr,
+        293.15);
 }
 
 RgbThinPlateRecordingResult recordRgbThinTransmissionPlate(
@@ -152,14 +161,18 @@ RgbThinPlateRecordingResult recordRgbThinTransmissionPlate(
     const std::array<PlateBranchPairSelection, 3>& selections,
     const ThinPlateRecordingOptions& options,
     compute::fft::IFftBackend& fftBackend,
-    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const ray::ILensPrescriptionResolver* lensPrescriptions,
+    const slm::ISlmResponseResolver* slmResponses,
+    double environmentTemperatureKelvin) {
     return recordRgbThinTransmissionPlateImpl(
         bench,
         fields,
         selections,
         options,
         &fftBackend,
-        lensPrescriptions);
+        lensPrescriptions,
+        slmResponses,
+        environmentTemperatureKelvin);
 }
 
 namespace {
@@ -170,7 +183,9 @@ RgbThinPlateRecordingResult recordRgbThinTransmissionPlateImpl(
     const std::array<PlateBranchPairSelection, 3>& selections,
     const ThinPlateRecordingOptions& options,
     compute::fft::IFftBackend* fftBackend,
-    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const ray::ILensPrescriptionResolver* lensPrescriptions,
+    const slm::ISlmResponseResolver* slmResponses,
+    double environmentTemperatureKelvin) {
     if (fields.isStaleFor(bench)) {
         throw std::invalid_argument(
             "RGB thin recording requires current plate incident evidence");
@@ -215,7 +230,9 @@ RgbThinPlateRecordingResult recordRgbThinTransmissionPlateImpl(
                 selections[index].referenceBranchId,
                 options,
                 *fftBackend,
-                lensPrescriptions);
+                lensPrescriptions,
+                slmResponses,
+                environmentTemperatureKelvin);
     };
     return {
         .plateComponentId = fields.plateComponentId,
@@ -317,7 +334,9 @@ RgbVolumePlateRecordingResult recordRgbReflectionVolumePlate(
     const VolumePlateMaterial& material,
     const PlateFieldSamplingOptions& sampling,
     compute::fft::IFftBackend& fftBackend,
-    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const ray::ILensPrescriptionResolver* lensPrescriptions,
+    const slm::ISlmResponseResolver* slmResponses,
+    double environmentTemperatureKelvin) {
     auto result = recordRgbReflectionVolumePlate(
         bench, fields, selections, material);
     for (std::size_t index = 0U; index < result.channels.size(); ++index) {
@@ -330,7 +349,9 @@ RgbVolumePlateRecordingResult recordRgbReflectionVolumePlate(
             sampling,
             fftBackend,
             {},
-            lensPrescriptions);
+            lensPrescriptions,
+            slmResponses,
+            environmentTemperatureKelvin);
     }
     return result;
 }
@@ -342,7 +363,9 @@ RgbVolumePlateReplayResult replayRgbReflectionVolumeToObservation(
     std::string observationComponentId,
     const PlateFieldSamplingOptions& sampling,
     compute::fft::IFftBackend& fftBackend,
-    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const ray::ILensPrescriptionResolver* lensPrescriptions,
+    const slm::ISlmResponseResolver* slmResponses,
+    double environmentTemperatureKelvin) {
     if (recording.isStaleFor(bench)) {
         throw std::invalid_argument(
             "RGB reflection replay requires a current three-channel volume recording");
@@ -357,17 +380,23 @@ RgbVolumePlateReplayResult replayRgbReflectionVolumeToObservation(
                 bench, fields, recording.channels[0],
                 recording.channels[0].pair.referenceBranchId,
                 sharedObservationId, sampling, fftBackend,
-                lensPrescriptions),
+                lensPrescriptions,
+                slmResponses,
+                environmentTemperatureKelvin),
             replayVolumeReflectionToObservation(
                 bench, fields, recording.channels[1],
                 recording.channels[1].pair.referenceBranchId,
                 sharedObservationId, sampling, fftBackend,
-                lensPrescriptions),
+                lensPrescriptions,
+                slmResponses,
+                environmentTemperatureKelvin),
             replayVolumeReflectionToObservation(
                 bench, fields, recording.channels[2],
                 recording.channels[2].pair.referenceBranchId,
                 sharedObservationId, sampling, fftBackend,
-                lensPrescriptions),
+                lensPrescriptions,
+                slmResponses,
+                environmentTemperatureKelvin),
         }},
     };
 }

@@ -282,7 +282,9 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
     std::string observationComponentId,
     const PlateFieldSamplingOptions& sampling,
     compute::fft::IFftBackend& fftBackend,
-    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const ray::ILensPrescriptionResolver* lensPrescriptions,
+    const slm::ISlmResponseResolver* slmResponses,
+    double environmentTemperatureKelvin) {
     if (sampling.refractiveIndex != 1.0) {
         throw std::invalid_argument(
             "volume observation replay sampling is defined on the external air-side plate plane and requires refractive index 1");
@@ -383,7 +385,9 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
             sampling,
             fftBackend,
             {},
-            lensPrescriptions);
+            lensPrescriptions,
+            slmResponses,
+            environmentTemperatureKelvin);
     auto reference = recording.referenceIncident.has_value()
         ? *recording.referenceIncident
         : samplePlateIncidentField(
@@ -393,7 +397,9 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
             sampling,
             fftBackend,
             {},
-            lensPrescriptions);
+            lensPrescriptions,
+            slmResponses,
+            environmentTemperatureKelvin);
     auto replay = replayBranchId == recording.pair.referenceBranchId
         ? reference
         : samplePlateIncidentField(
@@ -403,7 +409,9 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
             sampling,
             fftBackend,
             {},
-            lensPrescriptions);
+            lensPrescriptions,
+            slmResponses,
+            environmentTemperatureKelvin);
     requireResolvedCarrier(object, "recorded object");
     requireResolvedCarrier(reference, "recorded reference");
     requireResolvedCarrier(replay, "replay illumination");
@@ -551,6 +559,9 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
             .centreXMetres = 0.0,
             .centreYMetres = 0.0,
             .refractiveIndex = 1.0,
+            .slmResponses = slmResponses,
+            .environmentTemperatureKelvin
+                = environmentTemperatureKelvin,
         };
         auto routedField = wave::sampleDerivedBeamFollowingField(
             bench,

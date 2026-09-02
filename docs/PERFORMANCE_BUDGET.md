@@ -232,8 +232,8 @@ GitHub Actions run 33471184614 passes both Core jobs.
   pupil rays, Airy-convolved geometric aberration/defocus spots, and relative
   linear camera synthesis through the explicit nominal detector-response
   selection path.
-- **Result**: Clang **2173.354 ms**, MSVC **3143.312 ms**, and WSL/GCC
-  **3020.101 ms**, each against a **30000 ms** ceiling; 108/147 pupil rays
+- **Result**: Clang **2256.708 ms**, MSVC **3385.139 ms**, and WSL/GCC
+  **2978.271 ms**, each against a **30000 ms** ceiling; 108/147 pupil rays
   reach the active sensor and the worst geometric RMS is **356.729 um**;
   canonical artifact
   **1,283,337 bytes**; conservative peak estimate **13,866,249 bytes** against

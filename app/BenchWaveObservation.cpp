@@ -162,7 +162,9 @@ struct SampledObservationContribution final {
     std::size_t width,
     std::size_t height,
     compute::fft::IFftBackend& fftBackend,
-    const optics::ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const optics::ray::ILensPrescriptionResolver* lensPrescriptions,
+    const optics::slm::ISlmResponseResolver* slmResponses,
+    double environmentTemperatureKelvin) {
     const auto& observationBeam
         = route.observationInteraction->incidentBeam;
     auto sampled = optics::wave::sampleBeamFollowingField(
@@ -177,6 +179,9 @@ struct SampledObservationContribution final {
             .centreXMetres = 0.0,
             .centreYMetres = 0.0,
             .refractiveIndex = 1.0,
+            .slmResponses = slmResponses,
+            .environmentTemperatureKelvin
+                = environmentTemperatureKelvin,
         },
         fftBackend,
         {},
@@ -380,7 +385,9 @@ std::vector<BenchWaveObservationResult> observeBenchWaveChannels(
     std::size_t maximumSamplesPerAxis,
     bool interactivePreview,
     compute::fft::IFftBackend& fftBackend,
-    const optics::ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const optics::ray::ILensPrescriptionResolver* lensPrescriptions,
+    const optics::slm::ISlmResponseResolver* slmResponses,
+    double environmentTemperatureKelvin) {
     if (traceGraph.sourceRevision != bench.revision()) {
         throw std::invalid_argument(
             "live wave screen requires a current Bench trace graph");
@@ -412,7 +419,9 @@ std::vector<BenchWaveObservationResult> observeBenchWaveChannels(
             width,
             height,
             fftBackend,
-            lensPrescriptions);
+            lensPrescriptions,
+            slmResponses,
+            environmentTemperatureKelvin);
         const bool startsNewChannel = results.empty()
             || results.back().fieldAtObservation.vacuumWavelengthMetres()
                 != beam.wavelengthMetres
@@ -450,7 +459,9 @@ BenchWaveObservationResult observeBenchWavePattern(
     std::size_t maximumSamplesPerAxis,
     bool interactivePreview,
     compute::fft::IFftBackend& fftBackend,
-    const optics::ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const optics::ray::ILensPrescriptionResolver* lensPrescriptions,
+    const optics::slm::ISlmResponseResolver* slmResponses,
+    double environmentTemperatureKelvin) {
     auto channels = observeBenchWaveChannels(
         bench,
         traceGraph,
@@ -458,7 +469,9 @@ BenchWaveObservationResult observeBenchWavePattern(
         maximumSamplesPerAxis,
         interactivePreview,
         fftBackend,
-        lensPrescriptions);
+        lensPrescriptions,
+        slmResponses,
+        environmentTemperatureKelvin);
     if (channels.size() != 1U) {
         throw std::invalid_argument(
             "single-channel observation requires exactly one wavelength and coherence identity");

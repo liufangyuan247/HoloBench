@@ -71,7 +71,9 @@ struct VolumePlateReplayResult final {
     const PlateFieldSamplingOptions& sampling,
     compute::fft::IFftBackend& fftBackend,
     std::span<const PlacedSlmSparseCommand> slmCommands = {},
-    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr,
+    const slm::ISlmResponseResolver* slmResponses = nullptr,
+    double environmentTemperatureKelvin = 293.15);
 
 // Automation may already own the exact sampled fields (for example after a
 // bounded SLM exposure pass). This adapter validates that both fields are

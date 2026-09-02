@@ -89,10 +89,65 @@ void validateOptions(const BeamFollowingFieldOptions& options) {
         || !std::isfinite(options.centreXMetres)
         || !std::isfinite(options.centreYMetres)
         || !std::isfinite(options.refractiveIndex)
-        || options.refractiveIndex <= 0.0) {
+        || options.refractiveIndex <= 0.0
+        || !std::isfinite(options.environmentTemperatureKelvin)
+        || options.environmentTemperatureKelvin <= 0.0) {
         throw std::invalid_argument(
             "beam-following sampling geometry must be positive and finite");
     }
+}
+
+const scene::CalibrationAssetReference* placedSlmResponseReference(
+    const scene::BenchComponent& component) {
+    const scene::CalibrationAssetReference* result = nullptr;
+    for (const auto& reference : component.instrument.calibrationAssets) {
+        if (reference.kind != scene::CalibrationAssetKind::SlmResponse) {
+            continue;
+        }
+        if (result != nullptr) {
+            throw std::invalid_argument(
+                "placed SLM has multiple response calibration references");
+        }
+        result = &reference;
+    }
+    return result;
+}
+
+const optics::slm::CalibratedSlmResponse* resolvePlacedSlmResponse(
+    const scene::BenchComponent& component,
+    double vacuumWavelengthMetres,
+    const BeamFollowingFieldOptions& options,
+    std::string& calibrationId) {
+    const auto* reference = placedSlmResponseReference(component);
+    if (reference == nullptr) {
+        return nullptr;
+    }
+    if (component.instrument.calibrationMode
+            != scene::InstrumentCalibrationMode::Calibrated
+        || options.slmResponses == nullptr) {
+        throw std::invalid_argument(
+            "placed SLM response reference has no verified calibrated resolver");
+    }
+    if (!scene::isCalibrationAssetApplicable(
+            *reference,
+            component.instrument,
+            vacuumWavelengthMetres,
+            options.environmentTemperatureKelvin)) {
+        throw std::invalid_argument(
+            "placed SLM response is outside its wavelength or temperature validity domain");
+    }
+    const auto* response = options.slmResponses->resolveSlmResponse(
+        reference->calibrationId);
+    if (response == nullptr) {
+        throw std::invalid_argument(
+            "placed SLM response is absent from the verified resolver: "
+            + reference->calibrationId);
+    }
+    // Evaluate one endpoint now so a reference whose declared validity has
+    // drifted outside the parsed LUT fails before any field mutation.
+    static_cast<void>(response->evaluate(vacuumWavelengthMetres, 0.0));
+    calibrationId = reference->calibrationId;
+    return response;
 }
 
 EnvelopeSample sourceEnvelope(
@@ -577,7 +632,8 @@ void applyProjectedElement(
     const math::RigidTransform3d& fieldFrame,
     math::Vec3d propagationDirection,
     BeamFollowingFieldDiagnostics& diagnostics,
-    std::span<const PlacedSlmSparseCommand> slmCommands) {
+    std::span<const PlacedSlmSparseCommand> slmCommands,
+    const BeamFollowingFieldOptions& options) {
     if (!requiresBeamFollowingWaveTransform(component.kind)
         || component.kind
             == scene::BenchComponentKind::RealLensAssembly) {
@@ -596,6 +652,25 @@ void applyProjectedElement(
             / std::get<scene::IdealThinLensParameters>(component.parameters)
                 .focalLengthMetres
         : 0.0;
+    const auto* sparse = component.kind
+            == scene::BenchComponentKind::SpatialLightModulator
+        ? sparseCommandFor(slmCommands, component.id)
+        : nullptr;
+    std::string placedCalibrationId;
+    const auto* placedResponse = component.kind
+            == scene::BenchComponentKind::SpatialLightModulator
+        ? resolvePlacedSlmResponse(
+            component,
+            value.vacuumWavelengthMetres(),
+            options,
+            placedCalibrationId)
+        : nullptr;
+    if (placedResponse != nullptr && sparse != nullptr
+        && sparse->calibratedResponse != nullptr) {
+        throw std::invalid_argument(
+            "placed and transient SLM response calibrations conflict for component "
+            + component.id);
+    }
     for (std::size_t y = 0; y < transformed.height(); ++y) {
         for (std::size_t x = 0; x < transformed.width(); ++x) {
             const auto local = projectedLocalPoint(
@@ -666,21 +741,22 @@ void applyProjectedElement(
                 const auto location = locateSlmPixel(p, local.x, local.y);
                 transmitted = location.active;
                 if (transmitted) {
-                    const auto* sparse = sparseCommandFor(
-                        slmCommands, component.id);
                     const double command = sparse == nullptr
                         ? scene::evaluateSlmNormalizedCommand(
                             p, location.column, location.row)
                         : evaluateSparseCommand(
                             *sparse, location.column, location.row);
-                    if (sparse != nullptr
-                        && sparse->calibratedResponse != nullptr) {
-                        const auto response
-                            = sparse->calibratedResponse->evaluate(
+                    const auto* response = placedResponse != nullptr
+                        ? placedResponse
+                        : sparse != nullptr
+                            ? sparse->calibratedResponse
+                            : nullptr;
+                    if (response != nullptr) {
+                        const auto evaluated = response->evaluate(
                                 value.vacuumWavelengthMetres(), command);
                         amplitudeTransmission
-                            = response.amplitudeTransmission;
-                        phase = response.unwrappedPhaseDelayRadians;
+                            = evaluated.amplitudeTransmission;
+                        phase = evaluated.unwrappedPhaseDelayRadians;
                     } else if (p.modulationMode
                         == scene::SlmModulationMode::Amplitude) {
                         amplitudeTransmission = command;
@@ -712,7 +788,6 @@ void applyProjectedElement(
             + ": modeled as its explicit pinhole plane; the compound focusing objective requires separately placed lenses");
     } else if (component.kind
         == scene::BenchComponentKind::SpatialLightModulator) {
-        const auto* sparse = sparseCommandFor(slmCommands, component.id);
         const auto& parameters
             = std::get<scene::SpatialLightModulatorParameters>(
                 component.parameters);
@@ -725,7 +800,11 @@ void applyProjectedElement(
             + std::string(slmOriginName(parameters.commandOrigin))
             + " provenance");
         diagnostics.appliedSlmCommandIds.push_back(parameters.commandId);
-        if (sparse != nullptr && sparse->calibratedResponse != nullptr) {
+        if (placedResponse != nullptr) {
+            diagnostics.appliedSlmCalibrationIds.push_back(
+                placedCalibrationId);
+        } else if (sparse != nullptr
+            && sparse->calibratedResponse != nullptr) {
             diagnostics.appliedSlmCalibrationIds.push_back(
                 sparse->calibrationId);
         }
@@ -912,7 +991,8 @@ BeamFollowingFieldResult propagatePreparedField(
                     fieldFrame,
                     propagationDirection,
                     diagnostics,
-                    slmCommands);
+                    slmCommands,
+                    options);
             }
         }
         if (interaction.hasOutgoingBeam) {

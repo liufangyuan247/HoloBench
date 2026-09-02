@@ -96,6 +96,8 @@ struct HogelExposureExecutionOptions final {
     std::size_t maximumPreviewSampleHeight = 256;
     std::string slmCalibrationId;
     const optics::slm::CalibratedSlmResponse* calibratedSlmResponse = nullptr;
+    const optics::slm::ISlmResponseResolver* slmResponses = nullptr;
+    double environmentTemperatureKelvin = 293.15;
     const optics::holography::CalibratedMaterialDoseResponse*
         calibratedMaterialDoseResponse = nullptr;
 };

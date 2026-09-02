@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <set>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -13,6 +15,7 @@
 namespace chimera = holobench::app::chimera;
 namespace holography = holobench::optics::holography;
 namespace slm = holobench::optics::slm;
+namespace scene = holobench::optics::scene;
 
 namespace {
 
@@ -35,6 +38,23 @@ slm::CalibratedSlmResponse makeMeasuredSlmResponse() {
         .commandResponse = {{0.0, 0.0, 0.0}, {1.0, 0.5, 0.0}},
     }});
 }
+
+class SingleSlmResponseResolver final : public slm::ISlmResponseResolver {
+public:
+    SingleSlmResponseResolver(
+        std::string calibrationId,
+        const slm::CalibratedSlmResponse& response)
+        : calibrationId_(std::move(calibrationId)), response_(&response) {}
+
+    const slm::CalibratedSlmResponse* resolveSlmResponse(
+        std::string_view calibrationId) const noexcept override {
+        return calibrationId == calibrationId_ ? response_ : nullptr;
+    }
+
+private:
+    std::string calibrationId_;
+    const slm::CalibratedSlmResponse* response_ = nullptr;
+};
 
 holography::CalibratedMaterialDoseResponse makeMeasuredMaterialResponse() {
     return {"measured-photopolymer-lot-9", {{
@@ -201,6 +221,60 @@ TEST_CASE("calibrated SLM and material LUTs drive physical hogel exposure eviden
         CHECK(channel.recording.material.isotropicLinearShrinkageFraction
             == doctest::Approx(
                 expected.isotropicLinearShrinkageFraction));
+    }
+}
+
+TEST_CASE("CHIMERA sparse raster uses the verified response bound to its placed SLM") {
+    CanonicalAutomation automation;
+    const auto response = makeMeasuredSlmResponse();
+    const std::string calibrationId = "placed-slm-response";
+    const SingleSlmResponseResolver resolver(calibrationId, response);
+    for (const std::string componentId : {
+             "chimera-slm-red",
+             "chimera-slm-green",
+             "chimera-slm-blue"}) {
+        const auto* placed = automation.bench.scene.find(componentId);
+        REQUIRE(placed != nullptr);
+        auto device = *placed;
+        device.instrument.calibrationMode
+            = scene::InstrumentCalibrationMode::Calibrated;
+        device.instrument.calibrationAssets.push_back({
+            .kind = scene::CalibrationAssetKind::SlmResponse,
+            .calibrationId = calibrationId,
+            .formatVersion = 1,
+            .source = "placed-slm.json",
+            .contentSha256 = std::string(64U, 'a'),
+            .specificationId = device.instrument.specificationId,
+            .specificationVersion = device.instrument.specificationVersion,
+            .validity = {
+                .minimumVacuumWavelengthMetres = 400e-9,
+                .maximumVacuumWavelengthMetres = 700e-9,
+                .minimumTemperatureKelvin = 285.0,
+                .maximumTemperatureKelvin = 305.0,
+            },
+        });
+        automation.bench.scene.replace(device.id, device);
+    }
+
+    holobench::compute::fft::CpuFftBackend fft;
+    chimera::HogelExposureExecutionOptions options;
+    options.slmResponses = &resolver;
+    options.environmentTemperatureKelvin = 293.15;
+    const auto executed = chimera::executeHogelExposure(
+        automation.recipe,
+        automation.dataset,
+        automation.plan,
+        automation.bench,
+        fft,
+        2U,
+        3U,
+        options);
+    REQUIRE(executed.channels.size() == 3U);
+    for (const auto& channel : executed.channels) {
+        CHECK(channel.calibratedSlmResponseApplied);
+        CHECK(channel.slmCalibrationId == calibrationId);
+        CHECK(channel.objectFieldDiagnostics.appliedSlmCalibrationIds
+            == std::vector<std::string> {calibrationId});
     }
 }
 

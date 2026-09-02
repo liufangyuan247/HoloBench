@@ -18,6 +18,7 @@ class ILensPrescriptionResolver;
 
 namespace holobench::optics::slm {
 class CalibratedSlmResponse;
+class ISlmResponseResolver;
 }
 
 namespace holobench::optics::wave {
@@ -51,6 +52,10 @@ struct BeamFollowingFieldOptions final {
     double centreXMetres = 0.0;
     double centreYMetres = 0.0;
     double refractiveIndex = 1.0;
+    // Required only when a routed placed SLM carries a response reference.
+    // Temperature selects validity; format v1 does not interpolate it.
+    const optics::slm::ISlmResponseResolver* slmResponses = nullptr;
+    double environmentTemperatureKelvin = 293.15;
 
     bool operator==(const BeamFollowingFieldOptions&) const = default;
 };

@@ -49,8 +49,8 @@ animated or silently approximated.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: `dev` passes 610/610 tests and `core-ci` passes
-  608/608. Clang, MSVC, and WSL/GCC Core plus Clang/MSVC Application builds
+- **Acceptance evidence**: `dev` passes 614/614 tests and `core-ci` passes
+  612/612. Clang, MSVC, and WSL/GCC Core plus Clang/MSVC Application builds
   pass with warnings as errors;
   the packaged CJK font validates. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
   smoke passes real shelf placement, constrained whole-instrument edits,
@@ -106,7 +106,18 @@ animated or silently approximated.
   calibration and uses the visibly named nominal preview; stale, changed,
   mismatched, out-of-domain, or wrongly attached assets reject without fallback.
   See [ADR 0037](adr/0037-hashed-placed-detector-response.md).
-- **Calibration next slice**: connect SLM, optical-pose, coating, and other
+- **M10.3 hashed placed-SLM response lifecycle implemented and locally
+  validated**: The strict scalar complex-response LUT is bounded to 16 MiB,
+  addressed by exact-byte SHA-256, specification-bound, and restored from a
+  project-relative or absolute source in the same transactional project/catalog
+  swap. A verified response applies to ordinary persisted SLM commands and
+  CHIMERA sparse rasters through the shared beam-following service, changing
+  Screen/Probe fields and holographic recording/replay inputs. Wavelength and
+  temperature validity fail closed; actual field diagnostics and CHIMERA
+  results retain the applied content-addressed calibration ID. Simultaneous
+  placed and transient response truth rejects as ambiguous. See
+  [ADR 0038](adr/0038-hashed-placed-slm-response.md).
+- **Calibration next slice**: connect optical-pose, coating, and other
   supported asset kinds through the same verified lifecycle with explicit
   applied-calibration diagnostics.
 - **M10.4 placed measurement foundation implemented**: The current ordinary
@@ -795,7 +806,7 @@ completion because it is primarily driven through fixed parameter panels:
   `chimera/selected_hogel_rgb_record_reconstruct_camera_cpu` benchmark covers
   a 256x256 three-channel M8 exposure, directional reconstruction, and placed-
   prescription camera capture with 147 pupil rays. On the local Windows/Clang
-  reference run it completed in 2173.354 ms against a 30000 ms ceiling in the
+  reference run it completed in 2256.708 ms against a 30000 ms ceiling in the
   optimized `core-ci` build
   on an Intel Core i7-9750H / Windows 10 19045 host. Canonical artifacts occupied
   1,283,337 bytes and the deliberately conservative twelve-complex-field peak
