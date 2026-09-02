@@ -49,8 +49,8 @@ animated or silently approximated.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: `dev` passes 618/618 tests and `core-ci` passes
-  616/616. Clang, MSVC, and WSL/GCC Core plus Clang/MSVC Application builds
+- **Acceptance evidence**: `dev` passes 623/623 tests and `core-ci` passes
+  621/621. Clang, MSVC, and WSL/GCC Core plus Clang/MSVC Application builds
   pass with warnings as errors;
   the packaged CJK font validates. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
   smoke passes real shelf placement, constrained whole-instrument edits,
@@ -128,9 +128,20 @@ animated or silently approximated.
   measured frame, and the Inspector shows applied ID/hash/frame evidence. A
   virtual Field Probe cannot claim hardware pose calibration. See
   [ADR 0039](adr/0039-hashed-optical-pose-calibration.md).
-- **Calibration next slice**: connect coating and other
-  supported asset kinds through the same verified lifecycle with explicit
-  applied-calibration diagnostics.
+- **M10.5 hashed scalar coating-response lifecycle implemented and locally
+  validated**: Mirrors and beam splitters can bind a strict format-v1 passive
+  power grid over vacuum wavelength and actual acute incidence angle. Exact
+  parsed bytes are SHA-256 bound to instrument specification and
+  wavelength/temperature validity, restored relative to the Bench file, and
+  registered transactionally. Bilinear interpolation drives the ordinary
+  dynamic trace's reflected/transmitted branch power and therefore downstream
+  sampled-field amplitude; missing, changed, stale, wrong-component, or
+  out-of-grid evidence fails instead of using nominal R/T. The model is scalar
+  power only, with no s/p phase, Fresnel interface, multilayer, or ghost claim.
+  See [ADR 0041](adr/0041-hashed-scalar-coating-response.md).
+- **Calibration next slice**: carry the coating resolver through every
+  hologram-derived replay adapter, then connect stage response and other
+  supported asset kinds with explicit applied-calibration diagnostics.
 - **M10.4 placed measurement foundation implemented**: The current ordinary
   Screen / Detector or nonblocking Field Probe retains its exact revision-bound
   complex field, wavelength and coherence identity, peak intensity, integrated
@@ -246,8 +257,8 @@ animated or silently approximated.
   to one wavelength and directional sample; hogels/views/RGB combine as
   intensities. See
   [ADR 0040](adr/0040-bounded-coherent-prescription-pupil-psf.md).
-- **M10.4 next slice**: broader instruments, coating/stage calibration
-  adapters, and additional
+- **M10 next slice**: broader instruments, derived-replay coating propagation,
+  stage calibration adapters, and additional
   physical model families continue under the shared Bench contract.
 
 ## Product rebaseline (2026-09-01)

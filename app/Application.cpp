@@ -42,6 +42,7 @@
 #include "app/BenchSourceSpectrum.hpp"
 #include "app/ChimeraBenchWorkflow.hpp"
 #include "app/ChimeraPerspectiveManifest.hpp"
+#include "app/CoatingResponseAssets.hpp"
 #include "app/DetectorResponseAssets.hpp"
 #include "app/OpticalPoseAssets.hpp"
 #include "app/SlmResponseAssets.hpp"
@@ -882,6 +883,8 @@ bool Application::applyDynamicBenchProject(
         validateBenchProject(candidateProject);
         validateLensPrescriptionAssetBindings(
             candidateProject.scene, realLensPrescriptionCatalog_);
+        validateCoatingResponseAssetBindings(
+            candidateProject.scene, coatingResponseCatalog_);
         validateDetectorResponseAssetBindings(
             candidateProject.scene, detectorResponseCatalog_);
         validateSlmResponseAssetBindings(
@@ -907,7 +910,11 @@ bool Application::applyDynamicBenchProject(
         const auto traceGraph = optics::ray::traceDynamicBench(
             calibratedScene.scene,
             benchTraceBudget_,
-            &realLensPrescriptionCatalog_);
+            &realLensPrescriptionCatalog_,
+            {
+                .coatingResponses = &coatingResponseCatalog_,
+                .temperatureKelvin = 293.15,
+            });
         if (!renderer_ || !renderer_->updateDynamicScene(
                 candidateProject.scene,
                 traceGraph,
@@ -949,7 +956,11 @@ bool Application::showSandboxViewport() {
         const auto traceGraph = optics::ray::traceDynamicBench(
             calibratedScene.scene,
             benchTraceBudget_,
-            &realLensPrescriptionCatalog_);
+            &realLensPrescriptionCatalog_,
+            {
+                .coatingResponses = &coatingResponseCatalog_,
+                .temperatureKelvin = 293.15,
+            });
         if (!renderer_ || !renderer_->updateDynamicScene(
                 benchProject_.scene,
                 traceGraph,
@@ -992,6 +1003,11 @@ void Application::loadBenchProjectFromPath() {
             recovered.project.scene,
             std::filesystem::path(benchProjectPathBuffer_),
             recoveredCatalog);
+        CoatingResponseCatalog recoveredCoatingCatalog;
+        restoreCoatingResponseAssets(
+            recovered.project.scene,
+            std::filesystem::path(benchProjectPathBuffer_),
+            recoveredCoatingCatalog);
         DetectorResponseCatalog recoveredDetectorCatalog;
         restoreDetectorResponseAssets(
             recovered.project.scene,
@@ -1012,11 +1028,13 @@ void Application::loadBenchProjectFromPath() {
         const bool ignoredInvalidAutosave = recovered.ignoredInvalidAutosave;
         const std::string previousSelection = selectedBenchComponentId_;
         auto previousCatalog = std::move(realLensPrescriptionCatalog_);
+        auto previousCoatingCatalog = std::move(coatingResponseCatalog_);
         auto previousDetectorCatalog
             = std::move(detectorResponseCatalog_);
         auto previousSlmCatalog = std::move(slmResponseCatalog_);
         auto previousPoseCatalog = std::move(opticalPoseCatalog_);
         realLensPrescriptionCatalog_ = std::move(recoveredCatalog);
+        coatingResponseCatalog_ = std::move(recoveredCoatingCatalog);
         detectorResponseCatalog_ = std::move(recoveredDetectorCatalog);
         slmResponseCatalog_ = std::move(recoveredSlmCatalog);
         opticalPoseCatalog_ = std::move(recoveredPoseCatalog);
@@ -1025,6 +1043,7 @@ void Application::loadBenchProjectFromPath() {
                 std::move(recovered.project),
                 "Loaded optical bench: " + loadedName)) {
             activeLensPrescriptionAsset_.reset();
+            activeCoatingResponseAsset_.reset();
             activeDetectorResponseAsset_.reset();
             activeSlmResponseAsset_.reset();
             activeOpticalPoseAsset_.reset();
@@ -1040,6 +1059,7 @@ void Application::loadBenchProjectFromPath() {
             }
         } else {
             realLensPrescriptionCatalog_ = std::move(previousCatalog);
+            coatingResponseCatalog_ = std::move(previousCoatingCatalog);
             detectorResponseCatalog_
                 = std::move(previousDetectorCatalog);
             slmResponseCatalog_ = std::move(previousSlmCatalog);
@@ -3452,6 +3472,29 @@ void Application::saveRealLensPrescription(bool csv) {
     } catch (const std::exception& ex) {
         realLensErrorMessage_ = "Prescription save failed: " + std::string(ex.what());
         realLensStatusMessage_.clear();
+    }
+}
+
+void Application::loadCoatingResponseForBench() {
+    try {
+        const std::filesystem::path path(coatingResponsePathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument(
+                "coating response path cannot be empty");
+        }
+        auto loaded = loadCoatingResponseAsset(path);
+        loaded.provenance.source = path.generic_string();
+        const std::string calibrationId
+            = loaded.response.calibrationId();
+        coatingResponseCatalog_.registerResponse(loaded);
+        activeCoatingResponseAsset_ = std::move(loaded);
+        errorMessage_.clear();
+        statusMessage_ = "Loaded verified scalar coating response "
+            + calibrationId + " from " + path.string();
+    } catch (const std::exception& error) {
+        errorMessage_ = "Coating response load failed: "
+            + std::string(error.what());
+        statusMessage_.clear();
     }
 }
 
@@ -8478,6 +8521,49 @@ void Application::drawSandboxInspector() {
                 };
                 auto edited = *selected;
                 bool changed = false;
+                const auto drawCoatingResponseBinding = [this, &edited,
+                                                          &changed]() {
+                    ImGui::InputText(
+                        "Coating response JSON",
+                        coatingResponsePathBuffer_,
+                        sizeof(coatingResponsePathBuffer_));
+                    if (ImGui::Button("Load verified coating response")) {
+                        loadCoatingResponseForBench();
+                    }
+                    ImGui::BeginDisabled(
+                        !activeCoatingResponseAsset_.has_value());
+                    if (ImGui::Button("Use verified coating response")) {
+                        const auto& response
+                            = activeCoatingResponseAsset_->response;
+                        bindCoatingResponseAsset(
+                            edited,
+                            *activeCoatingResponseAsset_,
+                            {
+                                .minimumVacuumWavelengthMetres
+                                    = response.vacuumWavelengthsMetres()
+                                        .front(),
+                                .maximumVacuumWavelengthMetres
+                                    = response.vacuumWavelengthsMetres()
+                                        .back(),
+                                .minimumTemperatureKelvin
+                                    = sandboxCalibrationMinimumTemperatureKelvin_,
+                                .maximumTemperatureKelvin
+                                    = sandboxCalibrationMaximumTemperatureKelvin_,
+                            });
+                        changed = true;
+                    }
+                    ImGui::EndDisabled();
+                    if (activeCoatingResponseAsset_.has_value()) {
+                        ImGui::TextDisabled(
+                            "Loaded scalar coating: %s | SHA-256 %.12s...",
+                            activeCoatingResponseAsset_->response
+                                .calibrationId().c_str(),
+                            activeCoatingResponseAsset_->provenance
+                                .contentSha256.c_str());
+                    }
+                    ImGui::TextDisabled(
+                        "Measured scalar R/T versus wavelength and acute incidence angle; no polarization phase or ghost surfaces.");
+                };
                 switch (edited.kind) {
                 case bench::BenchComponentKind::LaserSource: {
                     auto value = std::get<bench::LaserSourceParameters>(edited.parameters);
@@ -8531,6 +8617,7 @@ void Application::drawSandboxInspector() {
                     value.heightMetres = static_cast<double>(sizeMm[1]) * 1e-3;
                     value.powerReflectivity = reflectivity;
                     edited.parameters = value;
+                    drawCoatingResponseBinding();
                     break;
                 }
                 case bench::BenchComponentKind::BeamSplitterCombiner: {
@@ -8547,6 +8634,7 @@ void Application::drawSandboxInspector() {
                     value.powerTransmissivity = transmissivity;
                     edited.parameters = value;
                     ImGui::TextDisabled("Configured loss: %.3f", 1.0 - reflectivity - transmissivity);
+                    drawCoatingResponseBinding();
                     break;
                 }
                 case bench::BenchComponentKind::IdealThinLens: {

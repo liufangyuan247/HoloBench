@@ -322,9 +322,11 @@ hogels, views, and RGB channels still combine as intensities. See
   component now has a bounded parameter-driven solid body rendered independently
   from diagnostic rays and proxy outlines. Persisted base/post/XYZ/tip-tilt
   assemblies now drive both direct viewport controls and the explicit solver
-  optical frame. Hashed real-lens, detector, SLM, and rigid optical-pose assets
-  now change the ordinary placed solver paths without making PCG triangles the
-  optical truth. The remaining slices broaden calibrated models and physical
+  optical frame. Hashed real-lens, detector, SLM, rigid optical-pose, and scalar
+  mirror/splitter coating assets now change the ordinary placed solver paths
+  without making PCG triangles the optical truth. Coating response is a passive
+  wavelength/incidence-angle R/T grid and does not claim polarization phase or
+  ghost surfaces. The remaining slices broaden calibrated models and physical
   coverage. See [the M10 brief](docs/milestones/M10_DIGITAL_TWIN_INSTRUMENTS.md).
 
 The existing ten guided panel workflows, templates, localization/font,

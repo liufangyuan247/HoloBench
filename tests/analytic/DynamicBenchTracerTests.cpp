@@ -8,6 +8,7 @@
 #include "optics/scene/BenchPathEvidence.hpp"
 
 namespace math = holobench::math;
+namespace material = holobench::optics::material;
 namespace ray = holobench::optics::ray;
 namespace scene = holobench::optics::scene;
 
@@ -30,6 +31,34 @@ scene::BenchComponent placed(
     result.transform = transform;
     return result;
 }
+
+class TestCoatingResolver final : public material::ICoatingResponseResolver {
+public:
+    TestCoatingResolver()
+        : response_(
+            "test-splitter-coating",
+            {450e-9, 650e-9},
+            {0.0, 1.0},
+            {
+                {.powerReflectivity = 0.10,
+                    .powerTransmissivity = 0.80},
+                {.powerReflectivity = 0.30,
+                    .powerTransmissivity = 0.50},
+                {.powerReflectivity = 0.10,
+                    .powerTransmissivity = 0.80},
+                {.powerReflectivity = 0.30,
+                    .powerTransmissivity = 0.50},
+            }) {}
+
+    const material::CalibratedCoatingResponse* resolveCoatingResponse(
+        std::string_view calibrationId) const noexcept override {
+        return calibrationId == response_.calibrationId()
+            ? &response_ : nullptr;
+    }
+
+private:
+    material::CalibratedCoatingResponse response_;
+};
 
 } // namespace
 
@@ -164,6 +193,71 @@ TEST_CASE("dynamic splitter produces deterministic conserved branches reaching t
         CHECK(path[1].componentId == terminal.componentId);
         CHECK_FALSE(path[1].hasOutgoingBeam);
     }
+}
+
+TEST_CASE("verified scalar coating response drives placed splitter branch power") {
+    scene::BenchScene bench;
+    bench.add(scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource, "coated-laser"));
+    constexpr double inverseSqrtTwo = 0.7071067811865475244;
+    auto splitter = placed(
+        scene::BenchComponentKind::BeamSplitterCombiner,
+        "coated-splitter",
+        {
+            .translationMetres = {0.0, 0.0, 1.0},
+            .localXAxisInWorld = {
+                inverseSqrtTwo, 0.0, inverseSqrtTwo},
+            .localYAxisInWorld = {0.0, 1.0, 0.0},
+            .localZAxisInWorld = {
+                -inverseSqrtTwo, 0.0, inverseSqrtTwo},
+        });
+    splitter.instrument.calibrationMode
+        = scene::InstrumentCalibrationMode::Calibrated;
+    splitter.instrument.calibrationAssets.push_back({
+        .kind = scene::CalibrationAssetKind::CoatingResponse,
+        .calibrationId = "test-splitter-coating",
+        .formatVersion = material::kCoatingResponseFormatVersion,
+        .source = "test-splitter-coating.json",
+        .contentSha256 = std::string(64U, 'a'),
+        .specificationId = splitter.instrument.specificationId,
+        .specificationVersion = splitter.instrument.specificationVersion,
+        .validity = {
+            .minimumVacuumWavelengthMetres = 450e-9,
+            .maximumVacuumWavelengthMetres = 650e-9,
+            .minimumTemperatureKelvin = 290.0,
+            .maximumTemperatureKelvin = 300.0,
+        },
+    });
+    bench.add(splitter);
+    bench.add(placed(
+        scene::BenchComponentKind::ScreenDetector,
+        "coated-reflected-screen",
+        facingPositiveX({1.0, 0.0, 1.0})));
+    bench.add(placed(
+        scene::BenchComponentKind::ScreenDetector,
+        "coated-transmitted-screen",
+        {.translationMetres = {0.0, 0.0, 2.0}}));
+
+    const TestCoatingResolver resolver;
+    const ray::DynamicBenchCalibrationContext calibration {
+        .coatingResponses = &resolver,
+        .temperatureKelvin = 293.15,
+    };
+    const auto graph = ray::traceDynamicBench(
+        bench, {}, nullptr, calibration);
+    REQUIRE(graph.interactions.size() == 3U);
+    REQUIRE(graph.interactions.front().outgoing.size() == 2U);
+    const double incidenceAngle = std::acos(inverseSqrtTwo);
+    CHECK(graph.interactions.front().outgoing[0].beam.powerWatts
+        == doctest::Approx(0.10 + 0.20 * incidenceAngle));
+    CHECK(graph.interactions.front().outgoing[1].beam.powerWatts
+        == doctest::Approx(0.80 - 0.30 * incidenceAngle));
+    CHECK(graph.interactions.front().diagnostics.back()
+        == doctest::Contains("test-splitter-coating"));
+    CHECK_THROWS_WITH_AS(
+        static_cast<void>(ray::traceDynamicBench(bench)),
+        doctest::Contains("unresolved, stale, or inapplicable"),
+        std::invalid_argument);
 }
 
 TEST_CASE("ordered Bench path rejects evidence that is absent or ambiguous") {

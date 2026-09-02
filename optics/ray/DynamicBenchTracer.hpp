@@ -1,10 +1,16 @@
 #pragma once
 
+#include "optics/material/CoatingResponse.hpp"
 #include "optics/ray/LensPrescriptionCatalog.hpp"
 #include "optics/scene/BenchInteraction.hpp"
 #include "optics/scene/BenchScene.hpp"
 
 namespace holobench::optics::ray {
+
+struct DynamicBenchCalibrationContext final {
+    const material::ICoatingResponseResolver* coatingResponses = nullptr;
+    double temperatureKelvin = 293.15;
+};
 
 /**
  * Traces one centre ray per laser spectral channel through the dynamic bench.
@@ -14,7 +20,8 @@ namespace holobench::optics::ray {
 [[nodiscard]] scene::BenchTraceGraph traceDynamicBench(
     const scene::BenchScene& bench,
     const scene::TraceBudget& budget = {},
-    const ILensPrescriptionResolver* lensPrescriptions = nullptr);
+    const ILensPrescriptionResolver* lensPrescriptions = nullptr,
+    const DynamicBenchCalibrationContext& calibration = {});
 
 // Traces one solver-derived beam emitted from an ordinary placed component.
 // This is used for fields created by an interaction such as hologram replay;
@@ -25,6 +32,7 @@ namespace holobench::optics::ray {
     const scene::BenchScene& bench,
     const scene::BeamState& seed,
     const scene::TraceBudget& budget = {},
-    const ILensPrescriptionResolver* lensPrescriptions = nullptr);
+    const ILensPrescriptionResolver* lensPrescriptions = nullptr,
+    const DynamicBenchCalibrationContext& calibration = {});
 
 } // namespace holobench::optics::ray

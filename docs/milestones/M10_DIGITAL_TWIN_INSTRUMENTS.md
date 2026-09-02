@@ -117,6 +117,16 @@ the calibrated scene, while the Inspector exposes applied ID/hash/frame
 evidence. Virtual Field Probes cannot claim hardware pose calibration. See
 [ADR 0039](../adr/0039-hashed-optical-pose-calibration.md).
 
+Placed mirrors and beam splitters now accept the same verified lifecycle for a
+strict scalar coating power grid. Exact-byte SHA-256, immutable calibration ID,
+instrument specification, wavelength/temperature validity, and transactional
+relative restoration precede evaluation. The dynamic tracer derives acute
+incidence from actual world placement, bilinearly interpolates passive R/T over
+wavelength and angle, and applies it to branch power; downstream local fields
+therefore inherit the measured amplitude scale. This is not a polarization,
+complex-phase, multilayer, or ghost model. See
+[ADR 0041](../adr/0041-hashed-scalar-coating-response.md).
+
 ### M10.4 — Measurement and general experiment closure
 
 - Field Probe amplitude, intensity, phase, dB, spectral-channel, cursor, and
@@ -198,7 +208,8 @@ plus [ADR 0030](../adr/0030-shared-beam-following-field-paths.md) and
 [ADR 0037](../adr/0037-hashed-placed-detector-response.md),
 [ADR 0038](../adr/0038-hashed-placed-slm-response.md), and
 [ADR 0039](../adr/0039-hashed-optical-pose-calibration.md), plus
-[ADR 0040](../adr/0040-bounded-coherent-prescription-pupil-psf.md).
+[ADR 0040](../adr/0040-bounded-coherent-prescription-pupil-psf.md) and
+[ADR 0041](../adr/0041-hashed-scalar-coating-response.md).
 
 ## Platform extensibility acceptance
 

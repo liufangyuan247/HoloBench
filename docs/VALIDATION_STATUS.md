@@ -15,7 +15,7 @@
 | Free-form Optical Bench (M7/M8) | Validated in documented domains; direct-manipulation acceptance passed | Default dynamic workspace; searchable 12-kind component shelf with click-to-centre and camera-ray/table drag/drop placement; direct Empty/transmission/reflection/RGB/CHIMERA entry points; direct-drag RMB orbit, selected-component `F` framing, and distance-scaled `Shift+WASD` roam; contextual power-preserving R/G/B and independent RGB laser source presets; colour-coded world-translation/local-rotation X/Y/Z handles with accumulated snapping; contextual Bench target aim, co-axial, height, signed-spacing, and nearest-visible-beam alignment as ordinary history/autosave transforms; compact experiment actions; Inspector exact editing; geometry-derived branching; byte-stable project/history/recovery; physical intercepting Screens plus non-blocking movable Field Probes for placed local-wave and holography adapters. Hardware OpenGL smoke uses real ImGui mouse/key events for camera navigation, empty-Bench shelf assembly, constrained move and local rotation handles, Aim +Z with exact frame verification, beam snap, virtual double-slit field observation, all three from-empty Record/Reconstruct workflows, and edit-driven stale suppression. | Accepted shared foundation for the M8/M9 product workflows |
 | Holography Sandbox (M8) | Physics and direct workflow validated in documented scalar domains | Plate-local branch geometry; thin transmission; opposite-side reflection/Denisyuk; independent RGB record/replay, including three wavelength-separated post-plate routes; compact selected-plate Record/replay-target/Reconstruct/stale action bar; clipping-safe persisted relative-exposure preflight; Screen/Probe propagation; current reconstruction texture projected onto the actual placed plate/Screen/Probe transform. Hardware OpenGL input builds all three experiments from Empty using ordinary shelf components and contextual alignment/spectrum actions, then records, reconstructs, and verifies current placed evidence. Performance gates and cross-platform CI pass. | Accepted sandbox basis for CHIMERA automation; not a vector/high-NA or calibrated-colour claim |
 | CHIMERA Automation (M9) | Shared-Bench virtual workflow accepted in documented scalar/paraxial domains; M10 placed-camera wavefront extension locally validated | The deterministic 24-component Bench drives hashed view/hogel data, three ordinary M8 RGB exposures, bounded reconstruction, and a selected placed prescription camera. Each RGB directional sample traces a 49-ray pupil with exact sequential OPL and off-axis entrance phase, then performs bounded coherent superposition on the placed Screen/Probe. Verified physical detector response may apply; a virtual Probe remains nominal. Unsupported paths and stale/missing assets fail without ideal fallback. Batch/checkpoint and sweep contracts remain unchanged. | Accepted virtual printer/reconstruction simulator; global coherent multi-hogel fields, absolute detector/exposure/noise truth, proprietary fidelity, and high-NA/vector extensions remain open |
-| Procedural digital-twin instruments (M10, in progress) | M10.1 PCG, M10.2 assemblies, M10.3 identity/calibration, and M10.4 placed measurement/routed-field/camera foundations locally validated | Twelve PCG instrument kinds remain separate from optical truth. Nominal mechanics and calibrated optical frames are split; hashed lens, detector, SLM, and optical-pose assets fail closed. Shared routed complex fields drive interference, diffraction, thin/volume/RGB/Denisyuk holography, and CHIMERA. The placed camera now exposes geometric pupil statistics plus coherent RMS/peak-to-valley OPD from the exact prescription and sensor pose under a 100-million complex-term ceiling. Core passes 616/616 on Clang, MSVC, and WSL/GCC; Clang/MSVC Application builds and AMD OpenGL action/120-frame smokes pass. The selected-hogel gate is 2.431 s and 13,866,249 peak bytes; the renderer remains 1.887 ms p95. | Active platform milestone; coating/stage calibration adapters, broader instrument models, distortion/noise/polarization, and hardware evidence remain open |
+| Procedural digital-twin instruments (M10, in progress) | M10.1 PCG, M10.2 assemblies, M10.3 identity/calibration, M10.4 placed measurement/routed-field/camera foundations, and the M10.5 scalar-coating slice locally validated | Twelve PCG instrument kinds remain separate from optical truth. Nominal mechanics and calibrated optical frames are split; hashed lens, detector, SLM, optical-pose, and scalar mirror/splitter coating assets fail closed. The coating grid changes ordinary placed branch power by wavelength and actual acute incidence angle without claiming polarization or complex phase. Shared routed complex fields drive interference, diffraction, thin/volume/RGB/Denisyuk holography, and CHIMERA. The placed camera exposes geometric pupil statistics plus coherent RMS/peak-to-valley OPD from the exact prescription and sensor pose under a 100-million complex-term ceiling. Clang dev passes 623/623; Clang, MSVC, and WSL/GCC Release Core pass 621/621; Clang/MSVC Application builds and AMD OpenGL action/120-frame smokes pass. The selected-hogel gate is 2.431 s and 13,866,249 peak bytes; the renderer remains 1.887 ms p95. | Active platform milestone; derived-replay coating plumbing, stage calibration, broader instrument models, distortion/noise/polarization, and hardware evidence remain open |
 
 ## Optical experiment Bench follow-up (2026-09-01)
 
@@ -97,6 +97,26 @@
 - The selected-hogel RGB record/reconstruct/coherent-camera benchmark completes
   in 2430.925 ms against 30000 ms and retains the 13,866,249-byte peak estimate
   against 64 MiB. Source behavior has no GPU vendor/model conditional.
+
+## M10 hashed scalar-coating follow-up (2026-09-02)
+
+- Strict format-v1 JSON stores a passive scalar power grid over vacuum
+  wavelength and acute incidence angle. Bilinear interpolation never
+  extrapolates, enforces `R >= 0`, `T >= 0`, and `R + T <= 1`, and reports the
+  remaining fraction as absorption.
+- Exact parsed bytes determine the SHA-256 content address. Calibration ID,
+  format, source, instrument specification, wavelength/temperature validity,
+  and mirror/splitter component compatibility are checked before use;
+  project-relative restoration is transactional and rejects tampering.
+- The dynamic tracer computes incidence from the actual world-space incoming
+  direction and optical surface normal. Verified values replace nominal
+  mirror/splitter branch power and therefore scale downstream local complex
+  fields; unresolved, stale, or out-of-grid evidence fails closed. PCG state
+  and GPU identity do not participate.
+- Clang dev passes 623/623; Clang, MSVC, and WSL/GCC Release Core pass 621/621.
+  Clang and MSVC warnings-as-errors Application builds pass. AMD Radeon Pro
+  5300M / OpenGL 4.6 action and 120-frame smokes exit 0. A source scan finds no
+  GPU vendor, model, device-ID, renderer, or driver conditional.
 
 ## M1 Validation Breakdown
 

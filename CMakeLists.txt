@@ -87,6 +87,7 @@ add_library(holobench_optics STATIC
     optics/holography/ThinHologram.cpp
     optics/holography/VolumeHologram.cpp
     optics/io/LensPrescriptionIO.cpp
+    optics/material/CoatingResponse.cpp
     optics/material/OpticalMaterial.cpp
     optics/sensor/CameraSpectralResponse.cpp
     optics/slm/SpatialLightModulator.cpp
@@ -147,6 +148,7 @@ add_library(holobench_app_logic STATIC
     app/ChimeraPerspectiveManifest.cpp
     app/ChimeraReconstruction.cpp
     app/ChimeraRecipe.cpp
+    app/CoatingResponseAssets.cpp
     app/DetectorResponseAssets.cpp
     app/OpticalPoseAssets.cpp
     app/SlmResponseAssets.cpp
@@ -448,6 +450,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/BenchVolumeHologramReplayTests.cpp
         tests/analytic/MaterialDoseResponseTests.cpp
         tests/analytic/CameraSpectralResponseTests.cpp
+        tests/analytic/CoatingResponseTests.cpp
         tests/analytic/BenchSceneTests.cpp
         tests/analytic/DynamicBenchTracerTests.cpp
         tests/analytic/ChromaticAnalysisTests.cpp
@@ -502,6 +505,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/app/ChimeraPerspectiveManifestTests.cpp
         tests/app/ChimeraReconstructionTests.cpp
         tests/app/ChimeraRecipeTests.cpp
+        tests/app/CoatingResponseAssetsTests.cpp
         tests/app/DetectorResponseAssetsTests.cpp
         tests/app/OpticalPoseAssetsTests.cpp
         tests/app/SlmResponseAssetsTests.cpp

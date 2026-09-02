@@ -30,6 +30,73 @@ struct CandidateHit final {
     math::Vec3d localPointMetres {};
 };
 
+struct ResolvedCoatingPower final {
+    double powerReflectivity = 0.0;
+    double powerTransmissivity = 0.0;
+    std::string diagnostic;
+};
+
+ResolvedCoatingPower resolveCoatingPower(
+    const scene::BenchComponent& component,
+    const scene::BeamState& incoming,
+    const DynamicBenchCalibrationContext& calibration,
+    double nominalReflectivity,
+    double nominalTransmissivity) {
+    const scene::CalibrationAssetReference* reference = nullptr;
+    for (const auto& candidate : component.instrument.calibrationAssets) {
+        if (candidate.kind != scene::CalibrationAssetKind::CoatingResponse) {
+            continue;
+        }
+        if (reference != nullptr) {
+            throw std::invalid_argument(
+                "a coated component requires exactly one coating response asset");
+        }
+        reference = &candidate;
+    }
+    if (reference == nullptr) {
+        return {
+            .powerReflectivity = nominalReflectivity,
+            .powerTransmissivity = nominalTransmissivity,
+            .diagnostic = {},
+        };
+    }
+    if ((component.kind != scene::BenchComponentKind::PlanarMirror
+            && component.kind
+                != scene::BenchComponentKind::BeamSplitterCombiner)
+        || component.instrument.calibrationMode
+            != scene::InstrumentCalibrationMode::Calibrated
+        || calibration.coatingResponses == nullptr
+        || !scene::isCalibrationAssetApplicable(
+            *reference,
+            component.instrument,
+            incoming.wavelengthMetres,
+            calibration.temperatureKelvin)) {
+        throw std::invalid_argument(
+            "coating response asset is unresolved, stale, or inapplicable for component "
+            + component.id);
+    }
+    const auto* response = calibration.coatingResponses
+        ->resolveCoatingResponse(reference->calibrationId);
+    if (response == nullptr) {
+        throw std::invalid_argument(
+            "coating response is absent from the verified catalog: "
+            + reference->calibrationId);
+    }
+    const auto direction = math::normalized(incoming.direction);
+    const auto normal = component.transform.localZAxisInWorld;
+    const double incidenceAngle = std::acos(std::clamp(
+        std::abs(math::dot(direction, normal)), 0.0, 1.0));
+    const auto evaluated = response->evaluate(
+        incoming.wavelengthMetres, incidenceAngle);
+    return {
+        .powerReflectivity = evaluated.power.powerReflectivity,
+        .powerTransmissivity = evaluated.power.powerTransmissivity,
+        .diagnostic = "applied scalar coating response '"
+            + evaluated.calibrationId + "' at "
+            + std::to_string(incidenceAngle) + " rad incidence",
+    };
+}
+
 math::RigidTransform3d makeBeamFrame(math::Vec3d originMetres, math::Vec3d direction) {
     const math::Vec3d zAxis = math::normalized(direction);
     const math::Vec3d referenceAxis = std::abs(math::dot(zAxis, {0.0, 1.0, 0.0})) < 0.999
@@ -307,8 +374,8 @@ void appendTermination(
 
 scene::OpticalInteraction interactMirror(
     const scene::BeamState& incoming,
-    const CandidateHit& hit) {
-    const auto& value = std::get<scene::PlanarMirrorParameters>(hit.component->parameters);
+    const CandidateHit& hit,
+    const ResolvedCoatingPower& coating) {
     const math::Vec3d direction = math::normalized(incoming.direction);
     const math::Vec3d normal = hit.component->transform.localZAxisInWorld;
     const math::Vec3d reflected = direction - normal * (2.0 * math::dot(direction, normal));
@@ -316,9 +383,13 @@ scene::OpticalInteraction interactMirror(
         incoming,
         hit,
         reflected,
-        value.powerReflectivity,
+        coating.powerReflectivity,
         scene::BranchInteractionKind::Reflected,
-        value.powerReflectivity < 1.0 ? "mirror absorbs configured residual power" : "");
+        coating.diagnostic.empty()
+            ? (coating.powerReflectivity < 1.0
+                    ? "mirror absorbs configured residual power"
+                    : "")
+            : coating.diagnostic);
 }
 
 scene::OpticalInteraction interactThinLens(
@@ -493,8 +564,14 @@ scene::BenchTraceGraph traceDynamicBenchImpl(
     const scene::BenchScene& bench,
     const scene::TraceBudget& budget,
     const ILensPrescriptionResolver* lensPrescriptions,
+    const DynamicBenchCalibrationContext& calibration,
     const scene::BeamState* derivedSeed) {
     scene::validateTraceBudget(budget);
+    if (!std::isfinite(calibration.temperatureKelvin)
+        || calibration.temperatureKelvin <= 0.0) {
+        throw std::invalid_argument(
+            "dynamic Bench calibration temperature must be finite and positive");
+    }
     static_cast<void>(scene::BenchScene(bench.components(), bench.revision()));
 
     scene::BenchTraceGraph graph {
@@ -611,7 +688,15 @@ scene::BenchTraceGraph traceDynamicBenchImpl(
         appendSegment(graph, current.beam, hit->pointMetres);
         switch (hit->component->kind) {
         case scene::BenchComponentKind::PlanarMirror: {
-            auto interaction = interactMirror(current.beam, *hit);
+            const auto& parameters = std::get<scene::PlanarMirrorParameters>(
+                hit->component->parameters);
+            const auto coating = resolveCoatingPower(
+                *hit->component,
+                current.beam,
+                calibration,
+                parameters.powerReflectivity,
+                0.0);
+            auto interaction = interactMirror(current.beam, *hit, coating);
             if (interaction.outgoing.front().beam.powerWatts == 0.0) {
                 graph.interactions.push_back(std::move(interaction));
                 appendTermination(graph, current.beam,
@@ -628,8 +713,16 @@ scene::BenchTraceGraph traceDynamicBenchImpl(
         }
         case scene::BenchComponentKind::BeamSplitterCombiner: {
             const auto& parameters = std::get<scene::BeamSplitterParameters>(hit->component->parameters);
-            const std::size_t outputCount = static_cast<std::size_t>(parameters.powerReflectivity > 0.0)
-                + static_cast<std::size_t>(parameters.powerTransmissivity > 0.0);
+            const auto coating = resolveCoatingPower(
+                *hit->component,
+                current.beam,
+                calibration,
+                parameters.powerReflectivity,
+                parameters.powerTransmissivity);
+            const std::size_t outputCount = static_cast<std::size_t>(
+                    coating.powerReflectivity > 0.0)
+                + static_cast<std::size_t>(
+                    coating.powerTransmissivity > 0.0);
             if (outputCount > budget.maximumBranches - createdBranchCount) {
                 graph.interactions.push_back({
                     .componentId = hit->component->id,
@@ -644,12 +737,22 @@ scene::BenchTraceGraph traceDynamicBenchImpl(
                     "splitter outputs exceed the configured branch budget");
                 break;
             }
+            auto calibratedSplitter = *hit->component;
+            auto calibratedParameters = parameters;
+            calibratedParameters.powerReflectivity
+                = coating.powerReflectivity;
+            calibratedParameters.powerTransmissivity
+                = coating.powerTransmissivity;
+            calibratedSplitter.parameters = calibratedParameters;
             auto interaction = scene::interactIdealBeamSplitter(
                 current.beam,
-                *hit->component,
+                calibratedSplitter,
                 hit->pointMetres,
                 nextBranchId,
                 nextBranchId + 1);
+            if (!coating.diagnostic.empty()) {
+                interaction.diagnostics.push_back(coating.diagnostic);
+            }
             if (interaction.outgoing.empty()) {
                 graph.interactions.push_back(std::move(interaction));
                 appendTermination(graph, current.beam,
@@ -845,18 +948,20 @@ scene::BenchTraceGraph traceDynamicBenchImpl(
 scene::BenchTraceGraph traceDynamicBench(
     const scene::BenchScene& bench,
     const scene::TraceBudget& budget,
-    const ILensPrescriptionResolver* lensPrescriptions) {
+    const ILensPrescriptionResolver* lensPrescriptions,
+    const DynamicBenchCalibrationContext& calibration) {
     return traceDynamicBenchImpl(
-        bench, budget, lensPrescriptions, nullptr);
+        bench, budget, lensPrescriptions, calibration, nullptr);
 }
 
 scene::BenchTraceGraph traceDerivedBenchBeam(
     const scene::BenchScene& bench,
     const scene::BeamState& seed,
     const scene::TraceBudget& budget,
-    const ILensPrescriptionResolver* lensPrescriptions) {
+    const ILensPrescriptionResolver* lensPrescriptions,
+    const DynamicBenchCalibrationContext& calibration) {
     return traceDynamicBenchImpl(
-        bench, budget, lensPrescriptions, &seed);
+        bench, budget, lensPrescriptions, calibration, &seed);
 }
 
 } // namespace holobench::optics::ray

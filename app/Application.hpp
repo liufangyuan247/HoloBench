@@ -23,6 +23,7 @@
 #include "app/ChimeraBatch.hpp"
 #include "app/ChimeraParameterSweep.hpp"
 #include "app/ChimeraRecipe.hpp"
+#include "app/CoatingResponseAssets.hpp"
 #include "app/DetectorResponseAssets.hpp"
 #include "app/LessonEditHistory.hpp"
 #include "app/LensPrescriptionAssets.hpp"
@@ -519,6 +520,7 @@ private:
     void refreshRealLensWorkbench();
     void loadRealLensPrescription(bool csv);
     void saveRealLensPrescription(bool csv);
+    void loadCoatingResponseForBench();
     void loadDetectorResponseForBench();
     void loadOpticalPoseForBench();
     void loadSlmResponseForBench();
@@ -772,6 +774,9 @@ private:
     optics::ray::LensPrescriptionCatalog realLensPrescriptionCatalog_;
     std::optional<LoadedLensPrescriptionAsset>
         activeLensPrescriptionAsset_;
+    CoatingResponseCatalog coatingResponseCatalog_;
+    std::optional<LoadedCoatingResponseAsset>
+        activeCoatingResponseAsset_;
     DetectorResponseCatalog detectorResponseCatalog_;
     std::optional<LoadedDetectorResponseAsset>
         activeDetectorResponseAsset_;
@@ -851,6 +856,8 @@ private:
     char chimeraBatchPathBuffer_[512] = "chimera_batch.json";
     char reflectionProjectPathBuffer_[512] = "reflection_workbench.json";
     char realLensPathBuffer_[512] = "holobench_lens.json";
+    char coatingResponsePathBuffer_[512]
+        = "holobench_coating_response.json";
     char detectorResponsePathBuffer_[512]
         = "holobench_detector_response.json";
     char opticalPosePathBuffer_[512]

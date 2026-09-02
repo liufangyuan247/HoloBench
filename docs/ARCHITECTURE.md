@@ -127,6 +127,9 @@ The following wave and Fourier-optics architecture decisions are locked:
 - Exact-byte content-addressed optical-pose calibration, transactional runtime
   restoration, and the split between nominal mechanical/PCG frames and derived
   solver/proxy frames (ADR 0039).
+- Exact-byte scalar coating-response grids, passive wavelength/acute-angle
+  interpolation, and fail-closed application to placed mirror/splitter branch
+  power without using PCG material state (ADR 0041).
 - Revision-bound complex-field measurements on placed Screen/Probe instruments,
   validity-masked phase, peak-relative dB, cursor and physical cross-section
   semantics (ADR 0028).
