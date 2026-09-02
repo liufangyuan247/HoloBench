@@ -179,9 +179,13 @@ placed Real Lens Assembly and Screen/Probe sensor plane. Independent RGB chief
 rays traverse the wavelength-dependent sequential prescription and authoritative
 Bench route; physical apertures clip them, the placed sensor pose determines
 their hit coordinates, prescription-derived paraxial focal lengths drive the
-bounded Airy readout, and a strict measured spectral LUT maps each optical
-wavelength into linear camera RGB response. The former request-driven ideal
-finite-pupil camera remains only a deterministic analytic oracle.
+bounded Airy readout, and a strict declared spectral LUT maps each optical
+wavelength into linear camera RGB response. A physical Screen / Detector can
+bind a SHA-256-verified response JSON that is restored relative to the Bench
+and actually drives capture; a virtual Probe or uncalibrated detector is
+labelled as an explicit nominal preview. The former request-driven ideal
+finite-pupil camera remains only a deterministic analytic oracle. See
+[ADR 0037](docs/adr/0037-hashed-placed-detector-response.md).
 The placed camera additionally traces a bounded 49-ray pupil bundle per
 wavelength. Prescription aberration, vignetting, and actual sensor defocus form
 a geometric spot that is convolved with the corresponding Airy core; the UI

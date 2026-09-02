@@ -1,5 +1,7 @@
 #include "app/ChimeraBenchWorkflow.hpp"
 
+#include "app/DetectorResponseAssets.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -133,6 +135,31 @@ void captureChimeraCameraImage(
       workflow.recipe, *workflow.reconstruction, request, cameraResponse,
       bench.scene, sourcePlateComponentId, lensComponentId,
       observationComponentId, lensPrescriptions);
+  workflow.cameraImage = std::move(image);
+  workflow.observationComponentId = std::move(observationComponentId);
+}
+
+void captureChimeraCameraImage(
+    ChimeraBenchWorkflow &workflow, const BenchProject &bench,
+    const CameraSensorRequest &request,
+    const PlacedDetectorResponseSelection &detectorResponse,
+    const optics::ray::ILensPrescriptionResolver &lensPrescriptions,
+    std::string lensComponentId,
+    std::string observationComponentId,
+    std::string sourcePlateComponentId) {
+  validatePlacedDetectorResponseSelection(detectorResponse);
+  requireCurrent(workflow, bench);
+  if (!workflow.reconstruction) {
+    throw std::invalid_argument(
+        "CHIMERA directional reconstruction must run before camera capture");
+  }
+  workflow.cameraImage.reset();
+  workflow.observationComponentId.clear();
+  auto image = synthesizePlacedCameraImage(
+      workflow.recipe, *workflow.reconstruction, request,
+      *detectorResponse.response, bench.scene, sourcePlateComponentId,
+      lensComponentId, observationComponentId, lensPrescriptions);
+  applyPlacedDetectorResponseEvidence(image, detectorResponse);
   workflow.cameraImage = std::move(image);
   workflow.observationComponentId = std::move(observationComponentId);
 }

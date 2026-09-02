@@ -4,9 +4,11 @@
 #include <string>
 
 #include "app/ChimeraBenchWorkflow.hpp"
+#include "app/DetectorResponseAssets.hpp"
 #include "compute/fft/CpuFftBackend.hpp"
 
 namespace chimera = holobench::app::chimera;
+namespace app = holobench::app;
 namespace scene = holobench::optics::scene;
 namespace sensor = holobench::optics::sensor;
 namespace ray = holobench::optics::ray;
@@ -64,14 +66,28 @@ TEST_CASE("CHIMERA Bench workflow closes dataset exposure reconstruction and "
   request.pixelWidth = 65U;
   request.pixelHeight = 65U;
   const auto prescriptions = nominalLensCatalog();
+  const auto nominalResponse = nominalRgbResponse();
+  const std::array wavelengths {450e-9, 532e-9, 638e-9};
+  const app::DetectorResponseCatalog detectorCatalog;
+  const auto detectorSelection = app::selectPlacedDetectorResponse(
+      bench.scene,
+      "chimera-reconstruction-probe",
+      detectorCatalog,
+      nominalResponse,
+      wavelengths,
+      293.15);
   chimera::captureChimeraCameraImage(workflow, bench, request,
-                                     nominalRgbResponse(),
+                                     detectorSelection,
                                      prescriptions,
                                      "chimera-camera-lens",
                                      "chimera-reconstruction-probe");
   REQUIRE(workflow.cameraImage.has_value());
   CHECK(workflow.observationComponentId == "chimera-reconstruction-probe");
   CHECK(workflow.cameraImage->usedPlacedSequentialLens);
+  CHECK_FALSE(workflow.cameraImage->usedPlacedDetectorCalibration);
+  CHECK(workflow.cameraImage->detectorResponseContentSha256.empty());
+  CHECK(workflow.cameraImage->detectorResponseTemperatureKelvin ==
+        doctest::Approx(293.15));
   CHECK(workflow.cameraImage->sourceSceneRevision == bench.scene.revision());
   CHECK(workflow.cameraImage->lensComponentId == "chimera-camera-lens");
   CHECK(workflow.cameraImage->lensPrescriptionId ==

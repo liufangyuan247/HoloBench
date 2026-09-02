@@ -133,6 +133,9 @@ struct CameraImageResult final {
     std::string sourceReconstructionJobId;
     std::string sourceRecipeId;
     std::string cameraCalibrationId;
+    bool usedPlacedDetectorCalibration = false;
+    std::string detectorResponseContentSha256;
+    double detectorResponseTemperatureKelvin = 0.0;
     bool usedPlacedSequentialLens = false;
     std::uint64_t sourceSceneRevision = 0;
     std::string sourcePlateComponentId;

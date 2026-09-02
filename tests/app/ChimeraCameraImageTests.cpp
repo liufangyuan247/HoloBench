@@ -5,7 +5,9 @@
 #include <numeric>
 
 #include "app/ChimeraCameraImage.hpp"
+#include "app/DetectorResponseAssets.hpp"
 
+namespace app = holobench::app;
 namespace chimera = holobench::app::chimera;
 namespace ray = holobench::optics::ray;
 namespace scene = holobench::optics::scene;
@@ -325,6 +327,90 @@ TEST_CASE("placed camera sensor motion produces prescription defocus") {
         > focused.metrics.maximumGeometricRmsRadiusMetres);
     CHECK(defocused.rgbSensorAxialDistanceMetres[1]
         == doctest::Approx(focused.rgbSensorAxialDistanceMetres[1] + 0.01));
+}
+
+TEST_CASE("placed physical detector applies its verified spectral response") {
+    const auto recipe = chimera::makeCanonicalChimeraRecipe();
+    auto reconstruction = makeDirectionalEvidence(recipe);
+    reconstruction.samples.resize(1U);
+    auto bench = chimera::compileChimeraRecipe(recipe).project.scene;
+    auto detector = *bench.find("chimera-reconstruction-probe");
+    const auto probe = std::get<scene::FieldProbeParameters>(
+        detector.parameters);
+    detector.kind = scene::BenchComponentKind::ScreenDetector;
+    detector.instrument = scene::makeDefaultInstrumentIdentity(
+        scene::BenchComponentKind::ScreenDetector);
+    detector.parameters = scene::ScreenDetectorParameters {
+        .widthMetres = probe.widthMetres,
+        .heightMetres = probe.heightMetres,
+        .sampleWidth = probe.sampleWidth,
+        .sampleHeight = probe.sampleHeight,
+    };
+    app::LoadedDetectorResponseAsset asset {
+        .response = {"placed-measured-detector", {
+            {450e-9, {0.02, 0.03, 0.70}},
+            {532e-9, {0.04, 0.75, 0.05}},
+            {638e-9, {0.80, 0.06, 0.01}},
+        }},
+        .provenance = {
+            .formatVersion
+                = sensor::kCameraSpectralResponseFormatVersion,
+            .source = "placed-detector.json",
+            .contentSha256 = std::string(64U, 'a'),
+        },
+    };
+    app::bindDetectorResponseAsset(
+        detector,
+        asset,
+        {
+            .minimumVacuumWavelengthMetres = 450e-9,
+            .maximumVacuumWavelengthMetres = 638e-9,
+            .minimumTemperatureKelvin = 285.0,
+            .maximumTemperatureKelvin = 305.0,
+        });
+    bench.replace(detector.id, detector);
+    app::DetectorResponseCatalog detectorResponses;
+    detectorResponses.registerResponse(
+        asset.response, asset.provenance);
+    const std::array wavelengths {450e-9, 532e-9, 638e-9};
+    const auto selected = app::selectPlacedDetectorResponse(
+        bench,
+        detector.id,
+        detectorResponses,
+        makeRgbCameraResponse(),
+        wavelengths,
+        293.15);
+    REQUIRE(selected.response != nullptr);
+
+    const ray::LensPrescriptionCatalog prescriptions({
+        ray::makeDefaultNBk7BiconvexPrescription(),
+    });
+    chimera::CameraSensorRequest request;
+    request.jobId = "placed-calibrated-detector";
+    request.pixelWidth = 65U;
+    request.pixelHeight = 65U;
+    auto image = chimera::synthesizePlacedCameraImage(
+        recipe,
+        reconstruction,
+        request,
+        *selected.response,
+        bench,
+        "chimera-plate",
+        "chimera-camera-lens",
+        detector.id,
+        prescriptions);
+    app::applyPlacedDetectorResponseEvidence(image, selected);
+
+    CHECK(image.cameraCalibrationId == "placed-measured-detector");
+    CHECK(image.usedPlacedDetectorCalibration);
+    CHECK(image.detectorResponseContentSha256
+        == asset.provenance.contentSha256);
+    CHECK(image.detectorResponseTemperatureKelvin
+        == doctest::Approx(293.15));
+    CHECK(image.metrics.sensorDepositedSampleCount == 1U);
+    CHECK(image.metrics.totalIdealSensorSignal.red > 0.0);
+    CHECK(image.metrics.totalIdealSensorSignal.green > 0.0);
+    CHECK(image.metrics.totalIdealSensorSignal.blue > 0.0);
 }
 
 TEST_CASE("moving the placed camera lens clips the same directional evidence") {

@@ -64,8 +64,10 @@ Airy-convolved geometric spot/defocus readout, and draws that image on the
 physical generated reconstruction Probe. Any ordinary
 component edit makes the complete automation state stale. Hardware OpenGL smoke
 drives the three actions with real ImGui mouse events and verifies the submitted
-Probe texture. The bundled camera response is explicitly a nominal relative
-preview, not measured calibration.
+Probe texture. A selected physical Screen / Detector can instead resolve and
+apply a SHA-256-verified spectral-response asset; the bundled virtual-Probe
+response remains explicitly a nominal relative preview, not measured
+calibration.
 
 Batch execution is now resumable through a strict hashed format-v1 artifact.
 It checkpoints only complete RGB hogels in deterministic row-major order,

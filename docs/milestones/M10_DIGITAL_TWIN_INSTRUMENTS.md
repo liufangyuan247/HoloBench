@@ -87,6 +87,15 @@ transactionally on drift. Every later Bench edit revalidates the binding, and
 editing imported optical truth requires a new ID plus reload before rebinding.
 See [ADR 0032](../adr/0032-hashed-lens-prescription-assets.md).
 
+Physical Screen / Detector response assets now use the same fail-closed
+lifecycle. Exact JSON bytes are hashed before parse, calibration IDs remain
+immutable, relative project paths restore transactionally, and wavelength /
+temperature validity is checked at capture. A bound response actually drives
+the placed CHIMERA camera and retains ID/hash/temperature evidence; a virtual
+Field Probe is never labelled as calibrated hardware and uses the explicit
+nominal preview. See
+[ADR 0037](../adr/0037-hashed-placed-detector-response.md).
+
 ### M10.4 — Measurement and general experiment closure
 
 - Field Probe amplitude, intensity, phase, dB, spectral-channel, cursor, and
@@ -162,7 +171,8 @@ plus [ADR 0030](../adr/0030-shared-beam-following-field-paths.md) and
 [ADR 0033](../adr/0033-recorded-volume-wavefront-evidence.md), plus
 [ADR 0034](../adr/0034-derived-field-routing-from-placed-planes.md), and
 [ADR 0035](../adr/0035-chimera-placed-prescription-camera.md), and
-[ADR 0036](../adr/0036-chimera-prescription-spot-defocus.md).
+[ADR 0036](../adr/0036-chimera-prescription-spot-defocus.md), plus
+[ADR 0037](../adr/0037-hashed-placed-detector-response.md).
 
 ## Platform extensibility acceptance
 

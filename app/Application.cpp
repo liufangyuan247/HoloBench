@@ -42,6 +42,7 @@
 #include "app/BenchSourceSpectrum.hpp"
 #include "app/ChimeraBenchWorkflow.hpp"
 #include "app/ChimeraPerspectiveManifest.hpp"
+#include "app/DetectorResponseAssets.hpp"
 #include "app/SlmInterferenceProject.hpp"
 #include "app/UiFont.hpp"
 #include "app/lessons/LessonProgress.hpp"
@@ -873,6 +874,8 @@ bool Application::applyDynamicBenchProject(
         validateBenchProject(candidateProject);
         validateLensPrescriptionAssetBindings(
             candidateProject.scene, realLensPrescriptionCatalog_);
+        validateDetectorResponseAssetBindings(
+            candidateProject.scene, detectorResponseCatalog_);
         if (benchEditHistoryReady_
             && candidateProject.scene.revision() <= benchProject_.scene.revision()
             && !sameBenchEditState(candidateProject, benchProject_)) {
@@ -953,17 +956,26 @@ void Application::loadBenchProjectFromPath() {
             recovered.project.scene,
             std::filesystem::path(benchProjectPathBuffer_),
             recoveredCatalog);
+        DetectorResponseCatalog recoveredDetectorCatalog;
+        restoreDetectorResponseAssets(
+            recovered.project.scene,
+            std::filesystem::path(benchProjectPathBuffer_),
+            recoveredDetectorCatalog);
         const std::string loadedName = recovered.project.name;
         const auto source = recovered.source;
         const bool ignoredInvalidAutosave = recovered.ignoredInvalidAutosave;
         const std::string previousSelection = selectedBenchComponentId_;
         auto previousCatalog = std::move(realLensPrescriptionCatalog_);
+        auto previousDetectorCatalog
+            = std::move(detectorResponseCatalog_);
         realLensPrescriptionCatalog_ = std::move(recoveredCatalog);
+        detectorResponseCatalog_ = std::move(recoveredDetectorCatalog);
         selectedBenchComponentId_.clear();
         if (applyDynamicBenchProject(
                 std::move(recovered.project),
                 "Loaded optical bench: " + loadedName)) {
             activeLensPrescriptionAsset_.reset();
+            activeDetectorResponseAsset_.reset();
             if (source == BenchProjectRecoverySource::Primary) {
                 discardBenchProjectAutosave(benchProjectPathBuffer_);
                 statusMessage_ = ignoredInvalidAutosave
@@ -976,6 +988,8 @@ void Application::loadBenchProjectFromPath() {
             }
         } else {
             realLensPrescriptionCatalog_ = std::move(previousCatalog);
+            detectorResponseCatalog_
+                = std::move(previousDetectorCatalog);
             selectedBenchComponentId_ = previousSelection;
         }
     } catch (const std::exception& error) {
@@ -1210,11 +1224,25 @@ void Application::reconstructSelectedChimeraHogel() {
     request.pixelHeight = 129U;
     request.pixelPitchXMetres = 10e-6;
     request.pixelPitchYMetres = 10e-6;
+    const auto nominalDetectorResponse
+        = makeNominalChimeraCameraResponse();
+    const std::array detectorWavelengths {
+        chimeraRecipe_.rgb[0].wavelengthMetres,
+        chimeraRecipe_.rgb[1].wavelengthMetres,
+        chimeraRecipe_.rgb[2].wavelengthMetres,
+    };
+    const auto detectorSelection = selectPlacedDetectorResponse(
+        benchProject_.scene,
+        sandboxObservationComponentId_,
+        detectorResponseCatalog_,
+        nominalDetectorResponse,
+        detectorWavelengths,
+        293.15);
     chimera::captureChimeraCameraImage(
         *chimeraWorkflow_,
         benchProject_,
         request,
-        makeNominalChimeraCameraResponse(),
+        detectorSelection,
         realLensPrescriptionCatalog_,
         chimeraCameraLensComponentId_,
         sandboxObservationComponentId_);
@@ -1357,11 +1385,25 @@ void Application::reconstructChimeraBatchRegion() {
     request.pixelHeight = 129U;
     request.pixelPitchXMetres = 10e-6;
     request.pixelPitchYMetres = 10e-6;
+    const auto nominalDetectorResponse
+        = makeNominalChimeraCameraResponse();
+    const std::array detectorWavelengths {
+        chimeraRecipe_.rgb[0].wavelengthMetres,
+        chimeraRecipe_.rgb[1].wavelengthMetres,
+        chimeraRecipe_.rgb[2].wavelengthMetres,
+    };
+    const auto detectorSelection = selectPlacedDetectorResponse(
+        benchProject_.scene,
+        sandboxObservationComponentId_,
+        detectorResponseCatalog_,
+        nominalDetectorResponse,
+        detectorWavelengths,
+        293.15);
     chimera::captureChimeraCameraImage(
         *chimeraWorkflow_,
         benchProject_,
         request,
-        makeNominalChimeraCameraResponse(),
+        detectorSelection,
         realLensPrescriptionCatalog_,
         chimeraCameraLensComponentId_,
         sandboxObservationComponentId_);
@@ -3319,6 +3361,29 @@ void Application::saveRealLensPrescription(bool csv) {
     } catch (const std::exception& ex) {
         realLensErrorMessage_ = "Prescription save failed: " + std::string(ex.what());
         realLensStatusMessage_.clear();
+    }
+}
+
+void Application::loadDetectorResponseForBench() {
+    try {
+        const std::filesystem::path path(detectorResponsePathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument(
+                "detector response path cannot be empty");
+        }
+        auto loaded = loadDetectorResponseAsset(path);
+        detectorResponseCatalog_.registerResponse(
+            loaded.response, loaded.provenance);
+        const std::string calibrationId
+            = loaded.response.calibrationId();
+        activeDetectorResponseAsset_ = std::move(loaded);
+        errorMessage_.clear();
+        statusMessage_ = "Loaded verified detector response "
+            + calibrationId + " from " + path.string();
+    } catch (const std::exception& error) {
+        errorMessage_ = "Detector response load failed: "
+            + std::string(error.what());
+        statusMessage_.clear();
     }
 }
 
@@ -7199,6 +7264,13 @@ void Application::drawChimeraAutomationBar() {
             image.metrics.pupilRaySensorHitCount,
             image.metrics.pupilRayTraceCount,
             image.metrics.maximumGeometricRmsRadiusMetres * 1e6);
+        ImGui::TextDisabled(
+            "detector response %s | %s | %.2f K",
+            image.cameraCalibrationId.c_str(),
+            image.usedPlacedDetectorCalibration
+                ? "verified placed calibration"
+                : "explicit nominal preview",
+            image.detectorResponseTemperatureKelvin);
     }
     ImGui::BeginDisabled(!current);
     if (ImGui::Button("New Print Batch")) {
@@ -8491,6 +8563,44 @@ void Application::drawSandboxInspector() {
                             .sampleWidth = static_cast<std::size_t>(std::max(samples[0], 0)),
                             .sampleHeight = static_cast<std::size_t>(std::max(samples[1], 0)),
                         };
+                        ImGui::InputText(
+                            "Detector response JSON",
+                            detectorResponsePathBuffer_,
+                            sizeof(detectorResponsePathBuffer_));
+                        if (ImGui::Button("Load verified detector response")) {
+                            loadDetectorResponseForBench();
+                        }
+                        ImGui::BeginDisabled(
+                            !activeDetectorResponseAsset_.has_value());
+                        if (ImGui::Button("Use verified detector response")) {
+                            const auto& response
+                                = activeDetectorResponseAsset_->response;
+                            bindDetectorResponseAsset(
+                                edited,
+                                *activeDetectorResponseAsset_,
+                                {
+                                    .minimumVacuumWavelengthMetres
+                                        = response.points().front()
+                                            .vacuumWavelengthMetres,
+                                    .maximumVacuumWavelengthMetres
+                                        = response.points().back()
+                                            .vacuumWavelengthMetres,
+                                    .minimumTemperatureKelvin
+                                        = sandboxCalibrationMinimumTemperatureKelvin_,
+                                    .maximumTemperatureKelvin
+                                        = sandboxCalibrationMaximumTemperatureKelvin_,
+                                });
+                            changed = true;
+                        }
+                        ImGui::EndDisabled();
+                        if (activeDetectorResponseAsset_.has_value()) {
+                            ImGui::TextDisabled(
+                                "Loaded response: %s | SHA-256 %.12s...",
+                                activeDetectorResponseAsset_->response
+                                    .calibrationId().c_str(),
+                                activeDetectorResponseAsset_->provenance
+                                    .contentSha256.c_str());
+                        }
                     } else {
                         edited.parameters = bench::FieldProbeParameters {
                             .widthMetres = static_cast<double>(sizeMm[0]) * 1e-3,
@@ -13045,6 +13155,12 @@ void Application::runSandboxInteractionSmoke() {
         || chimeraWorkflow_->cameraImage->metrics
                 .maximumGeometricRmsRadiusMetres
             <= 0.0
+        || chimeraWorkflow_->cameraImage->usedPlacedDetectorCalibration
+        || !chimeraWorkflow_->cameraImage
+                ->detectorResponseContentSha256.empty()
+        || chimeraWorkflow_->cameraImage
+                ->detectorResponseTemperatureKelvin
+            != 293.15
         || chimeraWorkflow_->observationComponentId
             != "chimera-reconstruction-probe"
         || !chimeraCameraTexture_

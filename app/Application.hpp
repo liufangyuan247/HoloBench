@@ -23,6 +23,7 @@
 #include "app/ChimeraBatch.hpp"
 #include "app/ChimeraParameterSweep.hpp"
 #include "app/ChimeraRecipe.hpp"
+#include "app/DetectorResponseAssets.hpp"
 #include "app/LessonEditHistory.hpp"
 #include "app/LensPrescriptionAssets.hpp"
 #include "app/HolographyLabPipeline.hpp"
@@ -516,6 +517,7 @@ private:
     void refreshRealLensWorkbench();
     void loadRealLensPrescription(bool csv);
     void saveRealLensPrescription(bool csv);
+    void loadDetectorResponseForBench();
     void loadSlmCalibration();
     void saveSlmCalibration();
     void loadReflectionRefractionProject();
@@ -765,6 +767,9 @@ private:
     optics::ray::LensPrescriptionCatalog realLensPrescriptionCatalog_;
     std::optional<LoadedLensPrescriptionAsset>
         activeLensPrescriptionAsset_;
+    DetectorResponseCatalog detectorResponseCatalog_;
+    std::optional<LoadedDetectorResponseAsset>
+        activeDetectorResponseAsset_;
     slmui::SlmInterferenceUiState slmInterferenceUiState_;
     project::ProjectProvenance slmProjectProvenance_;
     std::string slmProjectName_ = "SLM & Interference Experiment";
@@ -835,6 +840,8 @@ private:
     char chimeraBatchPathBuffer_[512] = "chimera_batch.json";
     char reflectionProjectPathBuffer_[512] = "reflection_workbench.json";
     char realLensPathBuffer_[512] = "holobench_lens.json";
+    char detectorResponsePathBuffer_[512]
+        = "holobench_detector_response.json";
     char slmCalibrationPathBuffer_[512] = "slm_response.json";
     char slmProjectPathBuffer_[512] = "slm_experiment.json";
     char waveProjectPathBuffer_[512] = "wave_workbench.json";

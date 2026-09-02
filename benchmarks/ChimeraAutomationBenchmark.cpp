@@ -9,6 +9,7 @@
 #include <string>
 
 #include "app/ChimeraBenchWorkflow.hpp"
+#include "app/DetectorResponseAssets.hpp"
 #include "compute/fft/CpuFftBackend.hpp"
 
 namespace chimera = holobench::app::chimera;
@@ -48,8 +49,19 @@ int main() {
     const holobench::optics::ray::LensPrescriptionCatalog prescriptions({
         holobench::optics::ray::makeDefaultNBk7BiconvexPrescription(),
     });
+    const auto nominalResponse = nominalCameraResponse();
+    const std::array wavelengths {450e-9, 532e-9, 638e-9};
+    const holobench::app::DetectorResponseCatalog detectorCatalog;
+    const auto detectorSelection
+        = holobench::app::selectPlacedDetectorResponse(
+            bench.scene,
+            "chimera-reconstruction-probe",
+            detectorCatalog,
+            nominalResponse,
+            wavelengths,
+            293.15);
     chimera::captureChimeraCameraImage(workflow, bench, camera,
-                                       nominalCameraResponse(),
+                                       detectorSelection,
                                        prescriptions,
                                        "chimera-camera-lens",
                                        "chimera-reconstruction-probe");
@@ -73,6 +85,8 @@ int main() {
         workflow.cameraImage->metrics.pupilRayTraceCount !=
             3U * chimera::kPlacedCameraPupilRayCount ||
         workflow.cameraImage->metrics.pupilRaySensorHitCount <= 3U ||
+        workflow.cameraImage->usedPlacedDetectorCalibration ||
+        workflow.cameraImage->detectorResponseTemperatureKelvin != 293.15 ||
         !std::isfinite(milliseconds)) {
       throw std::runtime_error(
           "M9 benchmark did not retain complete RGB/camera evidence");
@@ -86,13 +100,15 @@ int main() {
         "target_ms=%.3f time_target_met=%s artifact_bytes=%zu "
         "estimated_peak_working_bytes=%zu memory_budget_bytes=%zu "
         "memory_target_met=%s pupil_rays=%zu pupil_sensor_hits=%zu "
-        "max_geometric_rms_um=%.6f dataset_hash=%s plan_hash=%s\n",
+        "max_geometric_rms_um=%.6f detector_response=%s "
+        "detector_mode=nominal-preview dataset_hash=%s plan_hash=%s\n",
         milliseconds, kMaximumSelectedHogelMilliseconds,
         timeMet ? "true" : "false", artifactBytes, estimatedWorkingBytes,
         kMaximumEstimatedWorkingBytes, memoryMet ? "true" : "false",
         workflow.cameraImage->metrics.pupilRayTraceCount,
         workflow.cameraImage->metrics.pupilRaySensorHitCount,
         workflow.cameraImage->metrics.maximumGeometricRmsRadiusMetres * 1e6,
+        workflow.cameraImage->cameraCalibrationId.c_str(),
         workflow.dataset.contentHash.c_str(),
         workflow.plan.contentHash.c_str());
     return timeMet && memoryMet ? 0 : 2;

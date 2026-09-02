@@ -3,7 +3,9 @@
 ## Status
 
 Accepted as the bounded M9 analytic camera oracle. The product Bench path is
-superseded by [ADR 0035](0035-chimera-placed-prescription-camera.md).
+superseded by [ADR 0035](0035-chimera-placed-prescription-camera.md), with
+placed response-asset binding added by
+[ADR 0037](0037-hashed-placed-detector-response.md).
 
 ## Context
 
@@ -68,4 +70,6 @@ remain future calibrated-camera work.
 The ideal request-driven pupil/focal model remains covered as a deterministic
 reference test. It is no longer called by `captureChimeraCameraImage`; the
 editable product workflow resolves placed prescription optics and sensor pose
-under ADR 0035.
+under ADR 0035. ADR 0037 additionally makes a physical Screen / Detector's
+exact-byte verified response authoritative; the virtual-Probe path is labelled
+as a nominal preview.

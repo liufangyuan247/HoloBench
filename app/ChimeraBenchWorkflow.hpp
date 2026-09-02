@@ -15,6 +15,10 @@ namespace holobench::compute::fft {
 class IFftBackend;
 }
 
+namespace holobench::app {
+struct PlacedDetectorResponseSelection;
+}
+
 namespace holobench::app::chimera {
 
 // Product-level state for CHIMERA automation on an ordinary editable Bench.
@@ -58,10 +62,23 @@ void reconstructChimeraViews(
     std::span<const std::string> viewIds,
     std::string jobId = "chimera-bench-directional-preview");
 
+// Lower-level analytic/compatibility entry point for callers that already own
+// a response object. Product UI and benchmarks use the placed selection below.
 void captureChimeraCameraImage(
     ChimeraBenchWorkflow &workflow, const BenchProject &bench,
     const CameraSensorRequest &request,
     const optics::sensor::CalibratedCameraSpectralResponse &cameraResponse,
+    const optics::ray::ILensPrescriptionResolver &lensPrescriptions,
+    std::string lensComponentId,
+    std::string observationComponentId,
+    std::string sourcePlateComponentId = "chimera-plate");
+
+// Product path: carries the placed detector's verified-vs-nominal selection
+// into the immutable camera result instead of accepting an unlabelled LUT.
+void captureChimeraCameraImage(
+    ChimeraBenchWorkflow &workflow, const BenchProject &bench,
+    const CameraSensorRequest &request,
+    const PlacedDetectorResponseSelection &detectorResponse,
     const optics::ray::ILensPrescriptionResolver &lensPrescriptions,
     std::string lensComponentId,
     std::string observationComponentId,

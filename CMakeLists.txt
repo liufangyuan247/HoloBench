@@ -145,6 +145,7 @@ add_library(holobench_app_logic STATIC
     app/ChimeraPerspectiveManifest.cpp
     app/ChimeraReconstruction.cpp
     app/ChimeraRecipe.cpp
+    app/DetectorResponseAssets.cpp
     app/LessonEditHistory.cpp
     app/LensPrescriptionAssets.cpp
     app/HolographyLabPipeline.cpp
@@ -496,6 +497,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/app/ChimeraPerspectiveManifestTests.cpp
         tests/app/ChimeraReconstructionTests.cpp
         tests/app/ChimeraRecipeTests.cpp
+        tests/app/DetectorResponseAssetsTests.cpp
         tests/app/SlmInterferenceUiStateTests.cpp
         tests/app/HolographyUiStateTests.cpp
         tests/app/HolographyProjectTests.cpp

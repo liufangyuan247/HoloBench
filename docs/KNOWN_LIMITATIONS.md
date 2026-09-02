@@ -226,6 +226,10 @@
   shared circular clear aperture. A fixed 49-ray pupil bundle now traces the
   prescription onto the actual sensor, so geometric aberration, vignetting,
   chromatic spot shift, and sensor defocus broaden the Airy-convolved result.
+  A physical Screen / Detector may apply one exact-byte SHA-256-verified
+  relative spectral-response LUT; a virtual Probe cannot claim that hardware
+  calibration and uses the explicit nominal preview. The LUT is not absolute
+  quantum efficiency, exposure, gain, noise, saturation, or CFA truth.
   This is not a coherent aberrated-wavefront PSF: pupil optical-path phase and
   diffraction interference are not yet integrated. An otherwise reachable
   camera route with additional
@@ -234,7 +238,8 @@
   polarization, noise, saturation, absolute photoelectrons, Bayer sampling,
   and ICC/display colour transforms remain unmodelled. See
   [ADR 0035](adr/0035-chimera-placed-prescription-camera.md) and
-  [ADR 0036](adr/0036-chimera-prescription-spot-defocus.md).
+  [ADR 0036](adr/0036-chimera-prescription-spot-defocus.md), plus
+  [ADR 0037](adr/0037-hashed-placed-detector-response.md).
 - The dynamic bench has its own bounded scene-wide undo/redo timeline. The
   separate legacy history still covers lesson-relevant fixed optical-bench,
   Wave Detector, Sampling Debugger, and SLM inputs, but not Real Lens or the

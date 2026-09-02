@@ -230,12 +230,16 @@ GitHub Actions run 33471184614 passes both Core jobs.
   M8 volume recordings, directional reconstruction, three wavelength-specific
   placed sequential-prescription/Bench chief-ray paths, 147 total prescription
   pupil rays, Airy-convolved geometric aberration/defocus spots, and relative
-  linear camera synthesis.
-- **Result**: **2227.268 ms** against a **30000 ms** ceiling; 108/147 pupil rays
+  linear camera synthesis through the explicit nominal detector-response
+  selection path.
+- **Result**: Clang **2173.354 ms**, MSVC **3143.312 ms**, and WSL/GCC
+  **3020.101 ms**, each against a **30000 ms** ceiling; 108/147 pupil rays
   reach the active sensor and the worst geometric RMS is **356.729 um**;
   canonical artifact
   **1,283,337 bytes**; conservative peak estimate **13,866,249 bytes** against
   **64 MiB**.
+  All three runs retained `detector_response=nominal-m9-benchmark-camera` and
+  `detector_mode=nominal-preview`, with identical dataset and plan hashes.
 
 ### Benchmark profile: `chimera/editable_24_component_bench_renderer`
 

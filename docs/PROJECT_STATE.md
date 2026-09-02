@@ -49,8 +49,8 @@ animated or silently approximated.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: `dev` passes 607/607 tests and `core-ci` passes
-  605/605. Clang, MSVC, and WSL/GCC Core plus Clang/MSVC Application builds
+- **Acceptance evidence**: `dev` passes 610/610 tests and `core-ci` passes
+  608/608. Clang, MSVC, and WSL/GCC Core plus Clang/MSVC Application builds
   pass with warnings as errors;
   the packaged CJK font validates. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
   smoke passes real shelf placement, constrained whole-instrument edits,
@@ -95,7 +95,18 @@ animated or silently approximated.
   changed/deleted asset. Editing an imported workbench prescription removes its
   bindable status until it is saved under a new ID and reloaded. See
   [ADR 0032](adr/0032-hashed-lens-prescription-assets.md).
-- **Calibration next slice**: connect coating, detector, SLM, pose, and other
+- **M10.3 hashed detector-response lifecycle implemented and locally
+  validated**: A physical Screen / Detector imports the bounded format-v1
+  spectral-response JSON through exact-byte SHA-256, immutable calibration ID,
+  specification binding, and explicit wavelength/temperature validity. Project
+  load verifies hash before parse, resolves relative paths, rebuilds a fresh
+  catalog, and swaps it transactionally. CHIMERA capture selects the response
+  from the actual placed observation component and retains calibration
+  ID/hash/temperature/applied state. A virtual Field Probe cannot claim hardware
+  calibration and uses the visibly named nominal preview; stale, changed,
+  mismatched, out-of-domain, or wrongly attached assets reject without fallback.
+  See [ADR 0037](adr/0037-hashed-placed-detector-response.md).
+- **Calibration next slice**: connect SLM, optical-pose, coating, and other
   supported asset kinds through the same verified lifecycle with explicit
   applied-calibration diagnostics.
 - **M10.4 placed measurement foundation implemented**: The current ordinary
@@ -205,8 +216,8 @@ animated or silently approximated.
   work ceiling, and exercised by workflow/OpenGL smoke gates. See
   [ADR 0036](adr/0036-chimera-prescription-spot-defocus.md).
 - **M10.4 next slice**: coherent prescription wavefront/aberration PSF,
-  broader instruments, calibration adapters, and additional physical model
-  families continue under the shared Bench contract.
+  broader instruments, SLM/pose/coating calibration adapters, and additional
+  physical model families continue under the shared Bench contract.
 
 ## Product rebaseline (2026-09-01)
 
@@ -784,7 +795,7 @@ completion because it is primarily driven through fixed parameter panels:
   `chimera/selected_hogel_rgb_record_reconstruct_camera_cpu` benchmark covers
   a 256x256 three-channel M8 exposure, directional reconstruction, and placed-
   prescription camera capture with 147 pupil rays. On the local Windows/Clang
-  reference run it completed in 2227.268 ms against a 30000 ms ceiling in the
+  reference run it completed in 2173.354 ms against a 30000 ms ceiling in the
   optimized `core-ci` build
   on an Intel Core i7-9750H / Windows 10 19045 host. Canonical artifacts occupied
   1,283,337 bytes and the deliberately conservative twelve-complex-field peak
@@ -897,9 +908,11 @@ completion because it is primarily driven through fixed parameter panels:
   selected placed real-lens prescription, traces 638/532/450 nm chief rays and
   their physical clipping independently through the exact Bench route, and
   intersects the actual Screen/Probe transform. Prescription-derived paraxial
-  EFL supplies the wavelength-specific Airy PSF; a measured three-channel
+  EFL supplies the wavelength-specific Airy PSF; a declared three-channel
   spectral response maps each optical wavelength into relative linear sensor
-  signal. Results retain revision, component/prescription identity,
+  signal. A physical Screen / Detector may bind and apply an exact-byte
+  hash-verified LUT, while the virtual Probe path remains explicitly nominal.
+  Results retain revision, component/prescription identity,
   accepted/rejected surface paths, chromatic focal lengths and hit coordinates,
   plus a 49-ray pupil spot that responds to geometric aberration, vignetting,
   and sensor defocus before Airy convolution. Results retain pupil throughput,
@@ -907,7 +920,8 @@ completion because it is primarily driven through fixed parameter panels:
   or unsupported truth rejects without an ideal fallback. See
   [ADR 0023](adr/0023-chimera-calibrated-camera-image.md) and
   [ADR 0035](adr/0035-chimera-placed-prescription-camera.md) and
-  [ADR 0036](adr/0036-chimera-prescription-spot-defocus.md).
+  [ADR 0036](adr/0036-chimera-prescription-spot-defocus.md), plus
+  [ADR 0037](adr/0037-hashed-placed-detector-response.md).
 - **Deterministic parameter sweep**: Explicit axes cover hogel pitch, FOV,
   SLM/field sampling, relay focal length and stop, reference geometry,
   exposure, plate thickness, and shrinkage. A bounded Cartesian product retains
