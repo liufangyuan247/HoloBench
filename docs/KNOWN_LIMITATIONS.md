@@ -198,9 +198,11 @@
 - Post-plate routed reflection reconstruction remains scalar, coherent,
   sampled 2-D beam-following propagation. High-NA/vector fields, polarization,
   coatings, Fresnel loss, ghosts, scattering, and full three-dimensional
-  propagation through the emulsion are not implied. RGB post-plate routed
-  reconstruction and CHIMERA's finite-pupil camera prescription path remain
-  follow-up work.
+  propagation through the emulsion are not implied. RGB channels now route
+  independently through the placed post-plate path and combine only as display
+  intensities; this does not imply cross-wavelength interference or calibrated
+  colour. CHIMERA's finite-pupil camera prescription path remains follow-up
+  work.
 - Plate-local source fields use scalar envelopes. A collimated source is a hard
   circular profile, an object source is rectangular, and the current Gaussian
   adapter uses the configured source radius at the observer without propagated

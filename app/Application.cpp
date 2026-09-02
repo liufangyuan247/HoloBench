@@ -2016,10 +2016,6 @@ void Application::reconstructSelectedPlateExperiment() {
             throw std::invalid_argument(
                 "record a current RGB reflection/Denisyuk volume set first");
         }
-        if (observation->id != plate->id) {
-            throw std::invalid_argument(
-                "RGB Denisyuk direct replay is displayed on its recorded plate");
-        }
         const auto fields = holography::collectPlateIncidentFields(
             benchProject_.scene, benchTraceGraph_, plate->id);
         holography::PlateFieldSamplingOptions sampling {
@@ -2043,7 +2039,7 @@ void Application::reconstructSelectedPlateExperiment() {
                 benchProject_.scene,
                 fields,
                 *sandboxRgbVolumeRecording_,
-                plate->id,
+                observation->id,
                 sampling,
                 *detectorFftBackend_,
                 &realLensPrescriptionCatalog_);
@@ -2057,19 +2053,20 @@ void Application::reconstructSelectedPlateExperiment() {
             .displayGamma = static_cast<double>(sandboxRgbDisplayGamma_),
         };
         const auto image = field::renderUncalibratedRgbIntensity(
-            replay.channels[0].reconstructedAtPlate,
-            replay.channels[1].reconstructedAtPlate,
-            replay.channels[2].reconstructedAtPlate,
+            replay.channels[0].reconstructedAtObservation,
+            replay.channels[1].reconstructedAtObservation,
+            replay.channels[2].reconstructedAtObservation,
             displayOptions);
         if (!sandboxRgbReplayTexture_
             || !sandboxRgbReplayTexture_->uploadImage(image)) {
             throw std::runtime_error(
-                "OpenGL rejected the RGB Denisyuk plate texture");
+                "OpenGL rejected the RGB Denisyuk reconstruction texture");
         }
         sandboxRgbVolumeReplay_ = std::make_unique<
             holography::RgbVolumePlateReplayResult>(std::move(replay));
-        statusMessage_
-            = "RGB reflection reconstruction visible on plate under RGB replay";
+        sandboxRgbReplayViewIndex_ = 0;
+        statusMessage_ = "Reconstructed three independent RGB reflection channels on "
+            + observation->id;
     } else if (kind == SandboxRecordedExperiment::ReflectionDenisyuk) {
         if (!sandboxVolumeRecording_
             || sandboxVolumeRecording_->plateComponentId != plate->id
@@ -9549,6 +9546,212 @@ void Application::drawSandboxInspector() {
                                 }
                             }
                         }
+                        if (sandboxRgbVolumeRecording_
+                            && sandboxRgbVolumeRecording_->plateComponentId
+                                == selected->id) {
+                            ImGui::SeparatorText(
+                                "Recorded RGB Reflection Volume Set");
+                            const bool stale
+                                = sandboxRgbVolumeRecording_->isStaleFor(
+                                    benchProject_.scene);
+                            if (stale) {
+                                ImGui::TextColored(
+                                    ImVec4(1.0F, 0.45F, 0.25F, 1.0F),
+                                    "STALE RGB volume recording: bench revision changed.");
+                            } else {
+                                ImGui::TextColored(
+                                    ImVec4(0.35F, 0.9F, 0.45F, 1.0F),
+                                    "Three current wavelength-separated channels at revision %llu",
+                                    static_cast<unsigned long long>(
+                                        sandboxRgbVolumeRecording_
+                                            ->sourceRevision));
+                            }
+                            constexpr std::array<const char*, 3>
+                                kRgbVolumeNames {"Red", "Green", "Blue"};
+                            for (std::size_t channel = 0U; channel < 3U;
+                                 ++channel) {
+                                const auto& recorded
+                                    = sandboxRgbVolumeRecording_
+                                          ->channels[channel];
+                                ImGui::TextWrapped(
+                                    "%s: %.3f nm | object #%llu + reference #%llu | period %.6g nm | nominal efficiency %.3f%%",
+                                    kRgbVolumeNames[channel],
+                                    recorded.pair.wavelengthMetres * 1e9,
+                                    static_cast<unsigned long long>(
+                                        recorded.pair.objectBranchId),
+                                    static_cast<unsigned long long>(
+                                        recorded.pair.referenceBranchId),
+                                    recorded.recordedGratingPeriodMetres * 1e9,
+                                    recorded.nominalReplay.kogelnik
+                                            .diffractionEfficiency
+                                        * 100.0);
+                            }
+
+                            if (sandboxRgbVolumeReplay_
+                                && sandboxRgbVolumeReplay_->plateComponentId
+                                    == selected->id) {
+                                ImGui::SeparatorText(
+                                    "RGB Volume Reconstruction");
+                                const auto& replay
+                                    = *sandboxRgbVolumeReplay_;
+                                if (replay.isStaleFor(benchProject_.scene)) {
+                                    ImGui::TextColored(
+                                        ImVec4(1.0F, 0.45F, 0.25F, 1.0F),
+                                        "STALE RGB reconstruction: bench revision changed.");
+                                }
+                                bool refreshRgbVolumeView = ImGui::InputFloat3(
+                                    "RGB volume display gains##rgb-volume",
+                                    sandboxRgbDisplayGains_,
+                                    "%.3f");
+                                refreshRgbVolumeView |= ImGui::InputFloat(
+                                    "RGB volume display gamma##rgb-volume",
+                                    &sandboxRgbDisplayGamma_,
+                                    0.1F,
+                                    0.5F,
+                                    "%.3f");
+                                if (refreshRgbVolumeView) {
+                                    try {
+                                        const auto image
+                                            = field::renderUncalibratedRgbIntensity(
+                                                replay.channels[0]
+                                                    .reconstructedAtObservation,
+                                                replay.channels[1]
+                                                    .reconstructedAtObservation,
+                                                replay.channels[2]
+                                                    .reconstructedAtObservation,
+                                                {
+                                                    .channelIntensityGains = {
+                                                        static_cast<double>(
+                                                            sandboxRgbDisplayGains_[0]),
+                                                        static_cast<double>(
+                                                            sandboxRgbDisplayGains_[1]),
+                                                        static_cast<double>(
+                                                            sandboxRgbDisplayGains_[2]),
+                                                    },
+                                                    .referenceIntensity = 0.0,
+                                                    .displayGamma
+                                                        = static_cast<double>(
+                                                            sandboxRgbDisplayGamma_),
+                                                });
+                                        if (!sandboxRgbReplayTexture_
+                                            || !sandboxRgbReplayTexture_
+                                                ->uploadImage(image)) {
+                                            throw std::runtime_error(
+                                                "OpenGL rejected the RGB volume replay view");
+                                        }
+                                        errorMessage_.clear();
+                                    } catch (const std::exception& error) {
+                                        errorMessage_
+                                            = "RGB volume visualization failed: "
+                                            + std::string(error.what());
+                                        statusMessage_.clear();
+                                    }
+                                }
+                                ImGui::TextWrapped(
+                                    "R/G/B propagated independently from %s to %s; colour is composed only from display intensities.",
+                                    replay.plateComponentId.c_str(),
+                                    replay.observationComponentId.c_str());
+                                for (std::size_t channel = 0U; channel < 3U;
+                                     ++channel) {
+                                    const auto& observation
+                                        = replay.channels[channel];
+                                    ImGui::TextColored(
+                                        observation.usedRoutedWavePath
+                                            ? ImVec4(
+                                                  0.35F, 0.9F, 0.45F, 1.0F)
+                                            : ImVec4(
+                                                  0.55F, 0.75F, 1.0F, 1.0F),
+                                        "%s %.3f nm: %s | %.6g W reconstructed",
+                                        kRgbVolumeNames[channel],
+                                        observation.reconstructedAtObservation
+                                                .vacuumWavelengthMetres()
+                                            * 1e9,
+                                        observation.usedRoutedWavePath
+                                            ? "placed routed path"
+                                            : "direct plate/observation transfer",
+                                        observation
+                                            .reconstructedPowerOnSampledWindowWatts);
+                                    if (!observation.usedRoutedWavePath) {
+                                        continue;
+                                    }
+                                    const auto& routed
+                                        = observation.routedWavePath;
+                                    ImGui::TextWrapped(
+                                        "%zu propagation segments | %zux%zu working grid%s%s",
+                                        routed.propagatedSegmentCount,
+                                        routed.workingSampleWidth,
+                                        routed.workingSampleHeight,
+                                        observation
+                                                .usedSourcePlaneToBeamFrameRotation
+                                            ? " | plate-to-beam rotation"
+                                            : "",
+                                        routed.usedTargetTangentProjection
+                                            ? " | target-tangent projection"
+                                            : "");
+                                    if (observation
+                                            .usedSourcePlaneToBeamFrameRotation) {
+                                        const auto& rotation = observation
+                                            .sourcePlaneToBeamFrameRotation;
+                                        ImGui::TextWrapped(
+                                            "Plate tangent -> beam-normal spectrum: %zu propagated, %zu evanescent, %zu outside source band, %zu opposite hemisphere, %zu interpolated bins",
+                                            rotation.propagatingOutputBinCount,
+                                            rotation.evanescentOutputBinCount,
+                                            rotation.sourceBandRejectedBinCount,
+                                            rotation.oppositeHemisphereBinCount,
+                                            rotation.interpolatedOutputBinCount);
+                                    }
+                                    if (!routed.appliedWaveComponentIds
+                                             .empty()) {
+                                        const std::string components
+                                            = joinedBenchIdentifiers(
+                                                routed
+                                                    .appliedWaveComponentIds);
+                                        ImGui::TextWrapped(
+                                            "Applied placed elements: %s",
+                                            components.c_str());
+                                    }
+                                    if (!routed
+                                             .appliedRealLensPrescriptionIds
+                                             .empty()) {
+                                        const std::string prescriptions
+                                            = joinedBenchIdentifiers(
+                                                routed
+                                                    .appliedRealLensPrescriptionIds);
+                                        ImGui::TextWrapped(
+                                            "Applied real-lens prescriptions: %s",
+                                            prescriptions.c_str());
+                                    }
+                                    if (routed.supportTouchesBoundary) {
+                                        ImGui::TextColored(
+                                            ImVec4(
+                                                1.0F,
+                                                0.65F,
+                                                0.25F,
+                                                1.0F),
+                                            "Sampled support touches the routed boundary.");
+                                    }
+                                    for (const auto& warning
+                                         : routed.warnings) {
+                                        ImGui::TextWrapped(
+                                            "Model warning: %s",
+                                            warning.c_str());
+                                    }
+                                }
+                                if (sandboxRgbReplayTexture_
+                                    && sandboxRgbReplayTexture_->isValid()) {
+                                    const float imageSize = std::clamp(
+                                        ImGui::GetContentRegionAvail().x,
+                                        160.0F,
+                                        360.0F);
+                                    ImGui::Image(
+                                        toImTextureID(
+                                            sandboxRgbReplayTexture_->handle()),
+                                        ImVec2(imageSize, imageSize),
+                                        ImVec2(0.0F, 1.0F),
+                                        ImVec2(1.0F, 0.0F));
+                                }
+                            }
+                        }
                         if (sandboxVolumeRecording_
                             && sandboxVolumeRecording_->plateComponentId
                                 == selected->id) {
@@ -13193,6 +13396,46 @@ int Application::run(const RunOptions& options) {
                     + sandboxReconstructionOverlayDiagnostic_ + ")");
             }
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+            auto rgbVolumeProject = makeRgbDenisyukHolographyPreset();
+            auto rgbVolumeProbe
+                = optics::scene::makeDefaultBenchComponent(
+                    optics::scene::BenchComponentKind::FieldProbe,
+                    "rgb-volume-reconstruction-probe");
+            rgbVolumeProbe.transform = {
+                .translationMetres = {0.0, 0.0, -0.03},
+                .localXAxisInWorld = {-1.0, 0.0, 0.0},
+                .localYAxisInWorld = {0.0, 1.0, 0.0},
+                .localZAxisInWorld = {0.0, 0.0, -1.0},
+            };
+            rgbVolumeProject.scene.add(std::move(rgbVolumeProbe));
+            exerciseExperiment(
+                std::move(rgbVolumeProject),
+                SandboxExperimentMode::RgbReflectionDenisyuk,
+                "rgb-volume-reconstruction-probe");
+            if (!sandboxRgbVolumeRecording_
+                || !sandboxRgbVolumeReplay_
+                || sandboxRgbVolumeRecording_->isStaleFor(
+                    benchProject_.scene)
+                || sandboxRgbVolumeReplay_->isStaleFor(
+                    benchProject_.scene)
+                || sandboxRgbVolumeReplay_->observationComponentId
+                    != "rgb-volume-reconstruction-probe"
+                || !sandboxRgbReplayTexture_
+                || !sandboxRgbReplayTexture_->isValid()) {
+                throw std::runtime_error(
+                    "RGB Denisyuk Record/Reconstruct did not target the placed Probe");
+            }
+            for (const auto& channel : sandboxRgbVolumeReplay_->channels) {
+                if (field::computeIntegratedIntensity(
+                        channel.reconstructedAtObservation)
+                    <= 0.0) {
+                    throw std::runtime_error(
+                        "RGB Denisyuk placed Probe received an empty channel");
+                }
+            }
+            sandboxRecordedExperiment_ = SandboxRecordedExperiment::None;
+            sandboxObservationComponentId_.clear();
         } catch (const std::exception& ex) {
             SDL_Log(
                 "OpenGL smoke check failed: Bench experiment actions: %s",

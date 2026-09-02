@@ -59,6 +59,11 @@ validity rules.
   applied component and real-lens prescription IDs, folds, target projection,
   boundary state, numerical bin counts, and approximation warnings for the
   Inspector.
+- RGB reflection replay invokes this contract independently for the recorded
+  red, green, and blue channels. Each wavelength retains its own route,
+  prescription evaluation, complex field, diagnostics, and failure state;
+  only observation-plane intensities enter the uncalibrated display-colour
+  transform. Complex amplitudes from different wavelengths are never added.
 - Initial acceptance covers scalar coherent fields, resolved transverse
   carriers, representable sampling, and the existing centred/coaxial low-NA
   real-lens adapter. It does not claim high-NA vector diffraction,
@@ -73,6 +78,8 @@ validity rules.
   trace and invalidates the revision-bound result.
 - Future reusable interactions that emit a sampled field can enter the same
   placed-derived-source contract without gaining a private experiment solver.
-- RGB derived-field routing and CHIMERA camera prescription integration remain
-  follow-up work; this decision supplies their shared route rather than
-  hard-coding either workflow.
+- RGB reflection/Denisyuk reconstruction now uses the same placed route for all
+  three channels and can target the recorded plate, a Screen, or a non-blocking
+  Field Probe. The preset still defaults to direct observation on its plate.
+- CHIMERA camera prescription integration remains follow-up work; this decision
+  supplies its shared route rather than hard-coding that workflow.
