@@ -7,10 +7,13 @@
 #include <stdexcept>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "compute/fft/IFftBackend.hpp"
 #include "compute/propagation/TiltedPlanePropagator.hpp"
 #include "core/field/FieldObservables.hpp"
+#include "optics/ray/DynamicBenchTracer.hpp"
+#include "optics/scene/BenchPathEvidence.hpp"
 
 namespace holobench::optics::holography {
 namespace {
@@ -161,6 +164,99 @@ void requireMatchingRecordedSampling(
         throw std::invalid_argument(
             "volume replay sampling must match the recorded sampled wave evidence");
     }
+}
+
+math::RigidTransform3d makeBeamNormalFrame(
+    const math::RigidTransform3d& sourcePlane,
+    math::Vec3d originMetres,
+    math::Vec3d direction) {
+    const math::Vec3d zAxis = math::normalized(direction);
+    math::Vec3d xCandidate = sourcePlane.localXAxisInWorld
+        - zAxis * math::dot(sourcePlane.localXAxisInWorld, zAxis);
+    if (math::lengthSquared(xCandidate) <= 1e-12) {
+        xCandidate = sourcePlane.localYAxisInWorld
+            - zAxis * math::dot(sourcePlane.localYAxisInWorld, zAxis);
+    }
+    const math::Vec3d xAxis = math::normalized(xCandidate);
+    const math::Vec3d yAxis = math::cross(zAxis, xAxis);
+    math::RigidTransform3d result {
+        .translationMetres = originMetres,
+        .localXAxisInWorld = xAxis,
+        .localYAxisInWorld = yAxis,
+        .localZAxisInWorld = zAxis,
+    };
+    math::validateRigidTransform(result);
+    return result;
+}
+
+struct DerivedObservationPath final {
+    scene::BeamState terminalBeam;
+    std::vector<scene::BenchPathInteraction> interactions;
+};
+
+DerivedObservationPath traceDerivedObservationPath(
+    const scene::BenchScene& bench,
+    const scene::BenchComponent& plate,
+    const PlateIncidentBranch& replayBranch,
+    math::Vec3d sourcePoint,
+    math::Vec3d reconstructedDirectionWorld,
+    double reconstructedPowerWatts,
+    std::string_view observationComponentId,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const auto sourceFrame = makeBeamNormalFrame(
+        plate.transform, sourcePoint, reconstructedDirectionWorld);
+    const scene::BeamState seed {
+        .wavelengthMetres = replayBranch.beam.wavelengthMetres,
+        .powerWatts = reconstructedPowerWatts,
+        .phaseRadians = 0.0,
+        .coherenceId = replayBranch.beam.coherenceId,
+        .accumulatedOpticalPathMetres = 0.0,
+        .originMetres = sourcePoint,
+        .direction = reconstructedDirectionWorld,
+        .localFrame = sourceFrame,
+        .provenance = {
+            .branchId = 1U,
+            .parentBranchId = 0U,
+            .componentPath = {plate.id},
+        },
+    };
+    const auto trace = ray::traceDerivedBenchBeam(
+        bench, seed, {}, lensPrescriptions);
+    const scene::OpticalInteraction* terminal = nullptr;
+    for (const auto& interaction : trace.interactions) {
+        if (interaction.componentId != observationComponentId
+            || interaction.incidentBeam.provenance.componentPath.empty()
+            || interaction.incidentBeam.provenance.componentPath.front()
+                != plate.id) {
+            continue;
+        }
+        if (terminal != nullptr) {
+            throw std::invalid_argument(
+                "derived volume reconstruction reaches the selected observation through more than one branch");
+        }
+        terminal = &interaction;
+    }
+    if (terminal == nullptr) {
+        const auto failure = std::find_if(
+            trace.terminations.begin(),
+            trace.terminations.end(),
+            [](const auto& termination) {
+                return termination.reason
+                    == scene::TraceTerminationReason::InvalidInteraction;
+            });
+        std::string reason
+            = "derived volume reconstruction centre ray does not reach the selected observation";
+        if (failure != trace.terminations.end()) {
+            reason = "derived volume reconstruction path failed: "
+                + failure->detail;
+        }
+        throw std::invalid_argument(reason);
+    }
+    return {
+        .terminalBeam = terminal->incidentBeam,
+        .interactions = scene::collectBenchPathInteractions(
+            trace, *terminal),
+    };
 }
 
 } // namespace
@@ -378,22 +474,97 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
         sample *= amplitudeScale;
     }
 
+    auto inputPlane = plate->transform;
+    inputPlane.translationMetres = math::transformPointLocalToWorld(
+        plate->transform,
+        {sampling.centreXMetres, sampling.centreYMetres, 0.0});
+    DerivedObservationPath derivedPath;
+    bool routed = false;
+    if (!observeAtRecordedPlate) {
+        derivedPath = traceDerivedObservationPath(
+            bench,
+            *plate,
+            replayBranch,
+            inputPlane.translationMetres,
+            reconstructedDirectionWorld,
+            targetPower,
+            observationComponentId,
+            lensPrescriptions);
+        routed = std::any_of(
+            derivedPath.interactions.begin(),
+            std::prev(derivedPath.interactions.end()),
+            [&](const auto& interaction) {
+                const auto* component = bench.find(interaction.componentId);
+                return component != nullptr
+                    && wave::requiresBeamFollowingWaveTransform(
+                        component->kind);
+            });
+    }
+
     auto reconstructedAtObservation = reconstructedAtPlate;
     compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
-    const bool tilted = !observeAtRecordedPlate && !parallelAxisAligned;
-    const bool shifted = !tilted
+    const bool tilted = !routed
+        && !observeAtRecordedPlate && !parallelAxisAligned;
+    const bool shifted = !routed && !tilted
         && !observeAtRecordedPlate
         && (samplingOffsetX != 0.0 || samplingOffsetY != 0.0);
     compute::propagation::AngularSpectrumDiagnostics propagation;
     compute::propagation::TiltedPlaneDiagnostics tiltedPropagation;
+    compute::propagation::TiltedPlaneDiagnostics sourceRotation;
+    wave::BeamFollowingFieldDiagnostics routedDiagnostics;
+    bool rotatedToBeamFrame = false;
     if (observeAtRecordedPlate) {
         // This is the reconstructed exit field at the emulsion plane itself;
         // no fictitious zero-distance propagation or separate probe is used.
-    } else if (tilted) {
-        auto inputPlane = plate->transform;
-        inputPlane.translationMetres = math::transformPointLocalToWorld(
+    } else if (routed) {
+        const auto sourceFrame = makeBeamNormalFrame(
             plate->transform,
-            {sampling.centreXMetres, sampling.centreYMetres, 0.0});
+            inputPlane.translationMetres,
+            reconstructedDirectionWorld);
+        const bool sourceFramesMatch
+            = math::dot(
+                sourceFrame.localXAxisInWorld,
+                inputPlane.localXAxisInWorld) >= 1.0 - kParallelTolerance
+            && math::dot(
+                sourceFrame.localYAxisInWorld,
+                inputPlane.localYAxisInWorld) >= 1.0 - kParallelTolerance
+            && math::dot(
+                sourceFrame.localZAxisInWorld,
+                inputPlane.localZAxisInWorld) >= 1.0 - kParallelTolerance;
+        if (!sourceFramesMatch) {
+            compute::propagation::TiltedPlanePropagator tiltedPropagator(
+                fftBackend);
+            sourceRotation = tiltedPropagator.propagatePaddedInPlace(
+                reconstructedAtObservation,
+                inputPlane,
+                sourceFrame,
+                reconstructedDirectionWorld);
+            rotatedToBeamFrame = true;
+        }
+        const wave::BeamFollowingFieldOptions routedOptions {
+            .sampleWidth = reconstructedAtObservation.width(),
+            .sampleHeight = reconstructedAtObservation.height(),
+            .extentWidthMetres
+                = object.diagnostics.sampledExtentWidthMetres,
+            .extentHeightMetres
+                = object.diagnostics.sampledExtentHeightMetres,
+            .centreXMetres = 0.0,
+            .centreYMetres = 0.0,
+            .refractiveIndex = 1.0,
+        };
+        auto routedField = wave::sampleDerivedBeamFollowingField(
+            bench,
+            reconstructedAtObservation,
+            sourceFrame,
+            derivedPath.terminalBeam,
+            derivedPath.interactions,
+            routedOptions,
+            fftBackend,
+            {},
+            lensPrescriptions);
+        reconstructedAtObservation = std::move(routedField.fieldAtTarget);
+        routedDiagnostics = std::move(routedField.diagnostics);
+    } else if (tilted) {
         compute::propagation::TiltedPlanePropagator tiltedPropagator(
             fftBackend);
         tiltedPropagation = tiltedPropagator.propagatePaddedInPlace(
@@ -425,6 +596,8 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
         .observationOffsetYMetres = observerCentre.y,
         .usedShiftedPaddedPropagation = shifted,
         .usedTiltedPlanePropagation = tilted,
+        .usedRoutedWavePath = routed,
+        .usedSourcePlaneToBeamFrameRotation = rotatedToBeamFrame,
         .replayPowerOnSampledWindowWatts
             = replay.diagnostics.integratedPowerWatts,
         .reconstructedPowerOnSampledWindowWatts = targetPower,
@@ -432,6 +605,8 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
         .reconstructedAtObservation = std::move(reconstructedAtObservation),
         .propagation = propagation,
         .tiltedPropagation = tiltedPropagation,
+        .sourcePlaneToBeamFrameRotation = sourceRotation,
+        .routedWavePath = std::move(routedDiagnostics),
     };
 }
 

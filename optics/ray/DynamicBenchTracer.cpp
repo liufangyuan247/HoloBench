@@ -489,12 +489,11 @@ RealLensInteractionResult interactRealLens(
     };
 }
 
-} // namespace
-
-scene::BenchTraceGraph traceDynamicBench(
+scene::BenchTraceGraph traceDynamicBenchImpl(
     const scene::BenchScene& bench,
     const scene::TraceBudget& budget,
-    const ILensPrescriptionResolver* lensPrescriptions) {
+    const ILensPrescriptionResolver* lensPrescriptions,
+    const scene::BeamState* derivedSeed) {
     scene::validateTraceBudget(budget);
     static_cast<void>(scene::BenchScene(bench.components(), bench.revision()));
 
@@ -518,7 +517,30 @@ scene::BenchTraceGraph traceDynamicBench(
     std::deque<PendingBranch> pending;
     std::uint64_t nextBranchId = 1;
     std::size_t createdBranchCount = 0;
+    if (derivedSeed != nullptr) {
+        scene::validateBeamState(*derivedSeed);
+        const auto* source = derivedSeed->provenance.componentPath.size() == 1U
+            ? bench.find(derivedSeed->provenance.componentPath.front())
+            : nullptr;
+        if (derivedSeed->provenance.branchId == 0U
+            || derivedSeed->provenance.parentBranchId != 0U
+            || source == nullptr) {
+            throw std::invalid_argument(
+                "derived Bench beam must start at one current placed component with root provenance");
+        }
+        if (derivedSeed->provenance.branchId
+            == std::numeric_limits<std::uint64_t>::max()) {
+            throw std::invalid_argument(
+                "derived Bench beam branch ID leaves no child-branch identity space");
+        }
+        pending.push_back({.beam = *derivedSeed, .hopCount = 0U});
+        nextBranchId = derivedSeed->provenance.branchId + 1U;
+        createdBranchCount = 1U;
+    }
     for (const auto* source : sources) {
+        if (derivedSeed != nullptr) {
+            break;
+        }
         std::vector<scene::SpectralChannel> channels;
         if (source->kind == scene::BenchComponentKind::LaserSource) {
             channels = std::get<scene::LaserSourceParameters>(source->parameters).channels;
@@ -816,6 +838,25 @@ scene::BenchTraceGraph traceDynamicBench(
     }
 
     return graph;
+}
+
+} // namespace
+
+scene::BenchTraceGraph traceDynamicBench(
+    const scene::BenchScene& bench,
+    const scene::TraceBudget& budget,
+    const ILensPrescriptionResolver* lensPrescriptions) {
+    return traceDynamicBenchImpl(
+        bench, budget, lensPrescriptions, nullptr);
+}
+
+scene::BenchTraceGraph traceDerivedBenchBeam(
+    const scene::BenchScene& bench,
+    const scene::BeamState& seed,
+    const scene::TraceBudget& budget,
+    const ILensPrescriptionResolver* lensPrescriptions) {
+    return traceDynamicBenchImpl(
+        bench, budget, lensPrescriptions, &seed);
 }
 
 } // namespace holobench::optics::ray

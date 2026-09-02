@@ -130,14 +130,21 @@ exposure fields and their applied prescription diagnostics; reconstruction
 reuses those record-time fields and rejects a changed sampling grid. CHIMERA
 attaches its bounded sparse-SLM object/reference previews to the same M8 record
 contract while preserving an unresolved-carrier flag that direct replay must
-reject.
+reject. Reflection-volume reconstruction is now an explicit derived field from
+the ordinary placed plate: the exact centre ray follows the current Bench and
+the sampled field reuses the same beam-following element and real-prescription
+adapters to the selected Screen/Probe. The Inspector retains plate-to-beam
+rotation, routed component/prescription, boundary, and approximation evidence;
+no temporary source, private holography graph, or PCG geometry participates in
+the physics.
 See
 [ADR 0028](../adr/0028-revision-bound-placed-field-measurements.md) and
 [ADR 0029](../adr/0029-coherent-merge-and-independent-measurement-channels.md),
 plus [ADR 0030](../adr/0030-shared-beam-following-field-paths.md) and
 [ADR 0031](../adr/0031-placed-real-lens-prescription-adapter.md),
 [ADR 0032](../adr/0032-hashed-lens-prescription-assets.md), and
-[ADR 0033](../adr/0033-recorded-volume-wavefront-evidence.md).
+[ADR 0033](../adr/0033-recorded-volume-wavefront-evidence.md), plus
+[ADR 0034](../adr/0034-derived-field-routing-from-placed-planes.md).
 
 ## Platform extensibility acceptance
 

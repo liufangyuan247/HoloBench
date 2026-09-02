@@ -49,8 +49,9 @@ animated or silently approximated.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: `dev` passes 600/600 tests and `core-ci` passes
-  598/598. Clang and MSVC core/application builds pass with warnings as errors;
+- **Acceptance evidence**: `dev` passes 602/602 tests and `core-ci` passes
+  600/600. Clang, MSVC, and WSL/GCC Core plus Clang/MSVC Application builds
+  pass with warnings as errors;
   the packaged CJK font validates. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
   smoke passes real shelf placement, constrained whole-instrument edits,
   post/XYZ and yaw/pitch mechanical drags, optical-frame updates, all M7/M8
@@ -164,7 +165,20 @@ animated or silently approximated.
   recording; a bounded unresolved carrier remains explicit and is rejected by
   direct field replay. See
   [ADR 0033](adr/0033-recorded-volume-wavefront-evidence.md).
-- **M10.4 next slice**: camera-path prescription wavefronts, broader
+- **M10.4 placed derived-field routing implemented and locally validated**:
+  A reflection-volume reconstruction now starts at its ordinary placed plate,
+  traces its exact derived centre ray through the current Bench, rotates the
+  retained plate-tangent complex field to a beam-normal frame when required,
+  and reuses the shared 2x-padded beam-following service to the selected
+  Screen/Probe. A placed supported real prescription therefore shapes the
+  reconstructed wave through its surface-sag, aperture, intermediate-index,
+  and thickness model. Missing resolution or an invalid/blocked path rejects;
+  there is no temporary laser, private holography graph, or PCG-derived
+  physics. Inspector evidence exposes the rotation bins, routed grid/segments,
+  applied components/prescriptions, boundary state, and warnings. See
+  [ADR 0034](adr/0034-derived-field-routing-from-placed-planes.md).
+- **M10.4 next slice**: RGB post-plate routing, CHIMERA camera-path prescription
+  wavefronts, broader
   instruments, and additional physical model families continue under the
   shared Bench contract.
 

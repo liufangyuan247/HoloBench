@@ -257,10 +257,10 @@ ray::SequentialLensPrescription requireSupportedWaveLens(
 
 void validateSupportedPath(
     const scene::BenchScene& bench,
-    const scene::BenchComponent& source,
+    math::Vec3d initialDirection,
     std::span<const scene::BenchPathInteraction> path,
     const ray::ILensPrescriptionResolver* lensPrescriptions) {
-    math::Vec3d pathDirection = source.transform.localZAxisInWorld;
+    math::Vec3d pathDirection = math::normalized(initialDirection);
     for (const auto& interaction : path) {
         const auto* component = bench.find(interaction.componentId);
         if (component == nullptr) {
@@ -838,81 +838,51 @@ bool isBoundarySample(
     return x == 0U || y == 0U || x + 1U == width || y + 1U == height;
 }
 
-} // namespace
-
-bool requiresBeamFollowingWaveTransform(
-    scene::BenchComponentKind kind) noexcept {
-    switch (kind) {
-    case scene::BenchComponentKind::PlanarMirror:
-    case scene::BenchComponentKind::BeamSplitterCombiner:
-    case scene::BenchComponentKind::IdealThinLens:
-    case scene::BenchComponentKind::RealLensAssembly:
-    case scene::BenchComponentKind::Aperture:
-    case scene::BenchComponentKind::SpatialFilter:
-    case scene::BenchComponentKind::SpatialLightModulator:
-        return true;
-    default:
-        return false;
+void validateFiniteField(const field::ComplexField2D& value) {
+    for (const auto& sample : value.samples()) {
+        if (!std::isfinite(sample.real()) || !std::isfinite(sample.imag())) {
+            throw std::invalid_argument(
+                "derived beam-following source field must be finite");
+        }
     }
 }
 
-void validateBeamFollowingFieldPath(
-    const scene::BenchScene& bench,
-    const scene::BeamState& terminalBeam,
-    std::span<const scene::BenchPathInteraction> pathInteractions,
-    const ray::ILensPrescriptionResolver* lensPrescriptions) {
-    scene::validateBeamState(terminalBeam);
-    const auto& source = requireSource(bench, terminalBeam);
-    static_cast<void>(requireTarget(
-        bench, terminalBeam, pathInteractions));
-    validateSupportedPath(
-        bench, source, pathInteractions, lensPrescriptions);
+field::ComplexField2D padCentered(
+    const field::ComplexField2D& input) {
+    field::ComplexField2D result(
+        input.width() * 2U,
+        input.height() * 2U,
+        input.pitchXMetres(),
+        input.pitchYMetres(),
+        input.vacuumWavelengthMetres(),
+        input.refractiveIndex());
+    const std::size_t offsetX = input.width() / 2U;
+    const std::size_t offsetY = input.height() / 2U;
+    for (std::size_t y = 0; y < input.height(); ++y) {
+        for (std::size_t x = 0; x < input.width(); ++x) {
+            result.at(x + offsetX, y + offsetY) = input.at(x, y);
+        }
+    }
+    return result;
 }
 
-BeamFollowingFieldResult sampleBeamFollowingField(
+BeamFollowingFieldResult propagatePreparedField(
     const scene::BenchScene& bench,
-    const scene::BeamState& terminalBeam,
+    field::ComplexField2D propagated,
+    math::Vec3d previousPoint,
+    math::Vec3d propagationDirection,
+    math::RigidTransform3d fieldFrame,
+    const scene::BenchComponent& target,
     std::span<const scene::BenchPathInteraction> pathInteractions,
     const BeamFollowingFieldOptions& options,
     compute::fft::IFftBackend& fftBackend,
     std::span<const PlacedSlmSparseCommand> slmCommands,
-    const ray::ILensPrescriptionResolver* lensPrescriptions) {
-    validateOptions(options);
-    validateSparseSlmCommands(bench, slmCommands);
-    validateBeamFollowingFieldPath(
-        bench, terminalBeam, pathInteractions, lensPrescriptions);
-    const auto& source = requireSource(bench, terminalBeam);
-    const auto& target = requireTarget(
-        bench, terminalBeam, pathInteractions);
-    field::ComplexField2D propagated(
-        options.sampleWidth * 2U,
-        options.sampleHeight * 2U,
-        options.extentWidthMetres / static_cast<double>(options.sampleWidth),
-        options.extentHeightMetres / static_cast<double>(options.sampleHeight),
-        terminalBeam.wavelengthMetres,
-        options.refractiveIndex);
-    const double amplitudeScale = std::sqrt(
-        terminalBeam.powerWatts
-        / sourceNormalizationAreaSquareMetres(source));
-    const auto sourcePhase = finitePhasor(terminalBeam.phaseRadians);
-    for (std::size_t y = 0; y < propagated.height(); ++y) {
-        for (std::size_t x = 0; x < propagated.width(); ++x) {
-            const auto envelope = sourceEnvelope(
-                source,
-                propagated.xCoordinateMetres(x),
-                propagated.yCoordinateMetres(y));
-            propagated.at(x, y) = envelope.amplitude
-                * amplitudeScale * sourcePhase;
-        }
-    }
-
+    const ray::ILensPrescriptionResolver* lensPrescriptions,
+    double boundaryReferenceIntensity) {
     BeamFollowingFieldDiagnostics diagnostics;
     diagnostics.workingSampleWidth = propagated.width();
     diagnostics.workingSampleHeight = propagated.height();
     compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
-    math::Vec3d previousPoint = source.transform.translationMetres;
-    math::Vec3d propagationDirection = source.transform.localZAxisInWorld;
-    math::RigidTransform3d fieldFrame = source.transform;
     for (const auto& interaction : pathInteractions) {
         const double distance = math::length(
             interaction.hitPointMetres - previousPoint);
@@ -978,7 +948,7 @@ BeamFollowingFieldResult sampleBeamFollowingField(
         diagnostics);
     const double boundaryThresholdSquared
         = kBoundaryEnvelopeThreshold * kBoundaryEnvelopeThreshold
-        * amplitudeScale * amplitudeScale;
+        * boundaryReferenceIntensity;
     for (std::size_t y = 0; y < sampled.height(); ++y) {
         for (std::size_t x = 0; x < sampled.width(); ++x) {
             if (isBoundarySample(x, y, sampled.width(), sampled.height())
@@ -1004,6 +974,154 @@ BeamFollowingFieldResult sampleBeamFollowingField(
         .fieldAtTarget = std::move(sampled),
         .diagnostics = std::move(diagnostics),
     };
+}
+
+} // namespace
+
+bool requiresBeamFollowingWaveTransform(
+    scene::BenchComponentKind kind) noexcept {
+    switch (kind) {
+    case scene::BenchComponentKind::PlanarMirror:
+    case scene::BenchComponentKind::BeamSplitterCombiner:
+    case scene::BenchComponentKind::IdealThinLens:
+    case scene::BenchComponentKind::RealLensAssembly:
+    case scene::BenchComponentKind::Aperture:
+    case scene::BenchComponentKind::SpatialFilter:
+    case scene::BenchComponentKind::SpatialLightModulator:
+        return true;
+    default:
+        return false;
+    }
+}
+
+void validateBeamFollowingFieldPath(
+    const scene::BenchScene& bench,
+    const scene::BeamState& terminalBeam,
+    std::span<const scene::BenchPathInteraction> pathInteractions,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    scene::validateBeamState(terminalBeam);
+    const auto& source = requireSource(bench, terminalBeam);
+    static_cast<void>(requireTarget(
+        bench, terminalBeam, pathInteractions));
+    validateSupportedPath(
+        bench,
+        source.transform.localZAxisInWorld,
+        pathInteractions,
+        lensPrescriptions);
+}
+
+BeamFollowingFieldResult sampleBeamFollowingField(
+    const scene::BenchScene& bench,
+    const scene::BeamState& terminalBeam,
+    std::span<const scene::BenchPathInteraction> pathInteractions,
+    const BeamFollowingFieldOptions& options,
+    compute::fft::IFftBackend& fftBackend,
+    std::span<const PlacedSlmSparseCommand> slmCommands,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    validateOptions(options);
+    validateSparseSlmCommands(bench, slmCommands);
+    validateBeamFollowingFieldPath(
+        bench, terminalBeam, pathInteractions, lensPrescriptions);
+    const auto& source = requireSource(bench, terminalBeam);
+    const auto& target = requireTarget(
+        bench, terminalBeam, pathInteractions);
+    field::ComplexField2D propagated(
+        options.sampleWidth * 2U,
+        options.sampleHeight * 2U,
+        options.extentWidthMetres / static_cast<double>(options.sampleWidth),
+        options.extentHeightMetres / static_cast<double>(options.sampleHeight),
+        terminalBeam.wavelengthMetres,
+        options.refractiveIndex);
+    const double amplitudeScale = std::sqrt(
+        terminalBeam.powerWatts
+        / sourceNormalizationAreaSquareMetres(source));
+    const auto sourcePhase = finitePhasor(terminalBeam.phaseRadians);
+    for (std::size_t y = 0; y < propagated.height(); ++y) {
+        for (std::size_t x = 0; x < propagated.width(); ++x) {
+            const auto envelope = sourceEnvelope(
+                source,
+                propagated.xCoordinateMetres(x),
+                propagated.yCoordinateMetres(y));
+            propagated.at(x, y) = envelope.amplitude
+                * amplitudeScale * sourcePhase;
+        }
+    }
+
+    return propagatePreparedField(
+        bench,
+        std::move(propagated),
+        source.transform.translationMetres,
+        source.transform.localZAxisInWorld,
+        source.transform,
+        target,
+        pathInteractions,
+        options,
+        fftBackend,
+        slmCommands,
+        lensPrescriptions,
+        amplitudeScale * amplitudeScale);
+}
+
+BeamFollowingFieldResult sampleDerivedBeamFollowingField(
+    const scene::BenchScene& bench,
+    const field::ComplexField2D& fieldAtSource,
+    const math::RigidTransform3d& sourceFrame,
+    const scene::BeamState& terminalBeam,
+    std::span<const scene::BenchPathInteraction> pathInteractions,
+    const BeamFollowingFieldOptions& options,
+    compute::fft::IFftBackend& fftBackend,
+    std::span<const PlacedSlmSparseCommand> slmCommands,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    validateOptions(options);
+    validateSparseSlmCommands(bench, slmCommands);
+    scene::validateBeamState(terminalBeam);
+    math::validateRigidTransform(sourceFrame);
+    const auto& target = requireTarget(
+        bench, terminalBeam, pathInteractions);
+    validateSupportedPath(
+        bench,
+        sourceFrame.localZAxisInWorld,
+        pathInteractions,
+        lensPrescriptions);
+    validateFiniteField(fieldAtSource);
+    const double expectedPitchX = options.extentWidthMetres
+        / static_cast<double>(options.sampleWidth);
+    const double expectedPitchY = options.extentHeightMetres
+        / static_cast<double>(options.sampleHeight);
+    if (fieldAtSource.width() != options.sampleWidth
+        || fieldAtSource.height() != options.sampleHeight
+        || fieldAtSource.pitchXMetres() != expectedPitchX
+        || fieldAtSource.pitchYMetres() != expectedPitchY
+        || fieldAtSource.refractiveIndex() != options.refractiveIndex
+        || fieldAtSource.vacuumWavelengthMetres()
+            != terminalBeam.wavelengthMetres
+        || !approximatelyAligned(
+            sourceFrame.localZAxisInWorld,
+            pathInteractions.front().incidentBeam.direction)) {
+        throw std::invalid_argument(
+            "derived beam-following source field, frame, and traced path do not share one sampling contract");
+    }
+    double peakIntensity = 0.0;
+    for (const auto& sample : fieldAtSource.samples()) {
+        peakIntensity = std::max(peakIntensity, std::norm(sample));
+    }
+    if (!std::isfinite(peakIntensity) || peakIntensity <= 0.0) {
+        throw std::invalid_argument(
+            "derived beam-following source field has no finite non-zero signal");
+    }
+    return propagatePreparedField(
+        bench,
+        padCentered(fieldAtSource),
+        sourceFrame.translationMetres,
+        sourceFrame.localZAxisInWorld,
+        sourceFrame,
+        target,
+        pathInteractions,
+        options,
+        fftBackend,
+        slmCommands,
+        lensPrescriptions,
+        peakIntensity);
 }
 
 } // namespace holobench::optics::wave

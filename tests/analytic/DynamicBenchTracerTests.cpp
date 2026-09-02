@@ -67,6 +67,51 @@ TEST_CASE("dynamic tracer follows arbitrary 3D mirror geometry and accumulates e
     CHECK(graph.terminations[0].reason == scene::TraceTerminationReason::Absorbed);
 }
 
+TEST_CASE("derived beam routing starts at an ordinary placed optical component") {
+    scene::BenchScene bench;
+    bench.add(scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::HolographicPlate,
+        "derived-source-plate"));
+    bench.add(placed(
+        scene::BenchComponentKind::ScreenDetector,
+        "derived-target-screen",
+        {.translationMetres = {0.0, 0.0, 0.25}}));
+    const scene::BeamState seed {
+        .wavelengthMetres = 532e-9,
+        .powerWatts = 0.1,
+        .phaseRadians = 0.0,
+        .coherenceId = "derived-reconstruction",
+        .accumulatedOpticalPathMetres = 0.0,
+        .originMetres = {0.0, 0.0, 0.0},
+        .direction = {0.0, 0.0, 1.0},
+        .localFrame = {},
+        .provenance = {
+            .branchId = 41U,
+            .parentBranchId = 0U,
+            .componentPath = {"derived-source-plate"},
+        },
+    };
+
+    const auto graph = ray::traceDerivedBenchBeam(bench, seed);
+    REQUIRE(graph.interactions.size() == 1U);
+    CHECK(graph.interactions.front().componentId
+        == "derived-target-screen");
+    CHECK(graph.interactions.front().incidentBeam.provenance.componentPath
+        == std::vector<std::string> {
+            "derived-source-plate", "derived-target-screen"});
+    const auto path = scene::collectBenchPathInteractions(
+        graph, graph.interactions.front());
+    REQUIRE(path.size() == 1U);
+    CHECK(path.front().componentId == "derived-target-screen");
+
+    auto invalid = seed;
+    invalid.provenance.componentPath.push_back("derived-target-screen");
+    CHECK_THROWS_WITH_AS(
+        static_cast<void>(ray::traceDerivedBenchBeam(bench, invalid)),
+        doctest::Contains("one current placed component"),
+        std::invalid_argument);
+}
+
 TEST_CASE("dynamic splitter produces deterministic conserved branches reaching two screens") {
     scene::BenchScene bench;
     bench.add(scene::makeDefaultBenchComponent(

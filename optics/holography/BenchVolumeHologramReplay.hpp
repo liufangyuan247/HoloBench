@@ -7,6 +7,7 @@
 #include "compute/propagation/TiltedPlanePropagator.hpp"
 #include "optics/holography/BenchVolumeHologram.hpp"
 #include "optics/holography/PlateFieldSampling.hpp"
+#include "optics/wave/BeamFollowingField.hpp"
 
 namespace holobench::compute::fft {
 class IFftBackend;
@@ -28,12 +29,17 @@ struct VolumePlateObservationReplayResult final {
     double observationOffsetYMetres = 0.0;
     bool usedShiftedPaddedPropagation = false;
     bool usedTiltedPlanePropagation = false;
+    bool usedRoutedWavePath = false;
+    bool usedSourcePlaneToBeamFrameRotation = false;
     double replayPowerOnSampledWindowWatts = 0.0;
     double reconstructedPowerOnSampledWindowWatts = 0.0;
     field::ComplexField2D reconstructedAtPlate;
     field::ComplexField2D reconstructedAtObservation;
     compute::propagation::AngularSpectrumDiagnostics propagation;
     compute::propagation::TiltedPlaneDiagnostics tiltedPropagation;
+    compute::propagation::TiltedPlaneDiagnostics
+        sourcePlaneToBeamFrameRotation;
+    wave::BeamFollowingFieldDiagnostics routedWavePath;
 
     [[nodiscard]] bool isStaleFor(
         const scene::BenchScene& bench) const noexcept;
@@ -44,8 +50,11 @@ struct VolumePlateObservationReplayResult final {
 // field to a placed Screen/Probe, or exposes the reconstructed exit field on
 // the recorded plate itself. The field transfer uses the sampled
 // object-reference phase product and normalizes its outgoing power to the
-// Kogelnik diffraction efficiency. Parallel decenter uses shifted ASM;
-// non-grazing rotated observations use 2x-padded rotated-spectrum interpolation.
+// Kogelnik diffraction efficiency. When the exact derived centre ray reaches
+// supported placed elements before the observation, the shared beam-following
+// service applies that routed path (including a verified real prescription).
+// A direct parallel decenter uses shifted ASM; a direct non-grazing rotated
+// observation uses 2x-padded rotated-spectrum interpolation.
 [[nodiscard]] VolumePlateObservationReplayResult
 replayVolumeReflectionToObservation(
     const scene::BenchScene& bench,

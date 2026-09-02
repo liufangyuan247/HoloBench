@@ -102,4 +102,22 @@ void validateBeamFollowingFieldPath(
     std::span<const PlacedSlmSparseCommand> slmCommands = {},
     const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
 
+// Propagates an already sampled field created at an ordinary placed source
+// plane (for example a holographic plate reconstruction) through an exact
+// derived centre-ray path. The source field must already be expressed in the
+// beam-normal sourceFrame on the requested output pitch. It is centred in the
+// same 2x working grid and uses the identical placed-element adapters as an
+// emitted laser/object field; no synthetic source component or private solver
+// graph is introduced.
+[[nodiscard]] BeamFollowingFieldResult sampleDerivedBeamFollowingField(
+    const scene::BenchScene& bench,
+    const field::ComplexField2D& fieldAtSource,
+    const math::RigidTransform3d& sourceFrame,
+    const scene::BeamState& terminalBeam,
+    std::span<const scene::BenchPathInteraction> pathInteractions,
+    const BeamFollowingFieldOptions& options,
+    compute::fft::IFftBackend& fftBackend,
+    std::span<const PlacedSlmSparseCommand> slmCommands = {},
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
+
 } // namespace holobench::optics::wave

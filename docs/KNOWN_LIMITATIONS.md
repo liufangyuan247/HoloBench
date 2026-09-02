@@ -175,12 +175,19 @@
   parameters, but deliberately do not persist numerical field caches.
 - Thin/RGB and reflection-volume replay keep the recorded transverse pitch and
   accept a sufficiently large Screen/Detector or Field Probe on the physical
-  output side. Parallel decenter within half the sampled extent uses 2x-padded
-  shifted ASM. Non-grazing rotations use 2x-padded rotated angular-spectrum
+  output side. A reflection-volume reconstruction is an explicit derived field
+  emitted from the placed plate: its exact centre ray follows ordinary Bench
+  geometry and, when it meets supported instruments, its sampled field enters
+  the same 2x-padded beam-following service used by ordinary sources. This
+  includes the bounded real-prescription adapter; no temporary source, private
+  experiment graph, or render-mesh routing is introduced. Parallel direct
+  decenter within half the sampled extent uses 2x-padded shifted ASM.
+  Non-grazing direct rotations use 2x-padded rotated angular-spectrum
   interpolation and expose evanescent, source-band-rejected,
   opposite-hemisphere, and interpolated bin counts. Larger offsets and grazing
   planes reject; the scalar interpolation does not add polarization or vector
-  diffraction.
+  diffraction. See
+  [ADR 0034](adr/0034-derived-field-routing-from-placed-planes.md).
 - Product reflection/RGB volume recording requires resolved sampled transverse
   carriers and reuses the retained object/reference fields for reconstruction.
   A CHIMERA hogel preview may deliberately retain `carrierSampled=false`
@@ -188,6 +195,12 @@
   preview cannot be used for direct sampled-field replay. Derived fields are
   recomputed from the persisted recipe after load and are not embedded in
   project JSON.
+- Post-plate routed reflection reconstruction remains scalar, coherent,
+  sampled 2-D beam-following propagation. High-NA/vector fields, polarization,
+  coatings, Fresnel loss, ghosts, scattering, and full three-dimensional
+  propagation through the emulsion are not implied. RGB post-plate routed
+  reconstruction and CHIMERA's finite-pupil camera prescription path remain
+  follow-up work.
 - Plate-local source fields use scalar envelopes. A collimated source is a hard
   circular profile, an object source is rectangular, and the current Gaussian
   adapter uses the configured source radius at the observer without propagated

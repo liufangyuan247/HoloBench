@@ -108,6 +108,9 @@ The following wave and Fourier-optics architecture decisions are locked:
 - Revision-bound sampled object/reference evidence for volume recording,
   record-grid-locked reflection replay, and explicitly unresolved bounded
   automation previews (ADR 0033).
+- Placed-component provenance for solver-derived fields, ordinary Bench
+  centre-ray routing, and reuse of the shared beam-following element adapters
+  without synthetic sources or experiment-private graphs (ADR 0034).
 - Beam-following placed local fields, ideal fold-frame transport, projected
   zero-thickness elements, and explicit powered/vector fallback boundaries
   (ADR 0012).

@@ -9714,7 +9714,7 @@ void Application::drawSandboxInspector() {
                             ImGui::SeparatorText(
                                 "Reconstruct to Placed Observation");
                             ImGui::TextDisabled(
-                                "Uses recorded reference branch #%llu as the physical replay illumination. Parallel decenter and non-grazing rotated Screen/Probe planes use explicit padded spectrum transforms.",
+                                "Uses recorded reference branch #%llu as the physical replay illumination. The reconstructed field follows ordinary placed Bench elements to the selected Screen/Probe; direct decenter and rotated planes retain explicit padded spectrum transforms.",
                                 static_cast<unsigned long long>(
                                     recording.pair.referenceBranchId));
                             bool hasVolumeObservationComponent = false;
@@ -9850,7 +9850,58 @@ void Application::drawSandboxInspector() {
                                     observation.braggReplay.volume.kogelnik
                                             .diffractionEfficiency
                                         * 100.0);
-                                if (observation.usedTiltedPlanePropagation) {
+                                if (observation.usedRoutedWavePath) {
+                                    const auto& routed
+                                        = observation.routedWavePath;
+                                    ImGui::TextColored(
+                                        ImVec4(0.35F, 0.9F, 0.45F, 1.0F),
+                                        "Placed routed wave path: %zu segments on %zux%zu working grid",
+                                        routed.propagatedSegmentCount,
+                                        routed.workingSampleWidth,
+                                        routed.workingSampleHeight);
+                                    if (observation
+                                            .usedSourcePlaneToBeamFrameRotation) {
+                                        const auto& rotation = observation
+                                            .sourcePlaneToBeamFrameRotation;
+                                        ImGui::TextWrapped(
+                                            "Plate tangent -> beam-normal spectrum: %zu propagated, %zu evanescent, %zu outside source band, %zu opposite hemisphere, %zu interpolated bins",
+                                            rotation.propagatingOutputBinCount,
+                                            rotation.evanescentOutputBinCount,
+                                            rotation.sourceBandRejectedBinCount,
+                                            rotation.oppositeHemisphereBinCount,
+                                            rotation.interpolatedOutputBinCount);
+                                    }
+                                    for (const auto& componentId
+                                         : routed.appliedWaveComponentIds) {
+                                        ImGui::BulletText(
+                                            "Applied placed wave element: %s",
+                                            componentId.c_str());
+                                    }
+                                    for (const auto& prescriptionId
+                                         : routed.appliedRealLensPrescriptionIds) {
+                                        ImGui::BulletText(
+                                            "Applied real-lens prescription: %s",
+                                            prescriptionId.c_str());
+                                    }
+                                    if (routed.usedFoldedPath) {
+                                        ImGui::TextDisabled(
+                                            "The field frame followed a folded mirror/splitter path.");
+                                    }
+                                    if (routed.usedTargetTangentProjection) {
+                                        ImGui::TextDisabled(
+                                            "The routed field was projected onto the selected observation tangent plane.");
+                                    }
+                                    if (routed.supportTouchesBoundary) {
+                                        ImGui::TextColored(
+                                            ImVec4(1.0F, 0.65F, 0.25F, 1.0F),
+                                            "Routed field support touches the sampled boundary; enlarge the analysis window before quantitative use.");
+                                    }
+                                    for (const auto& warning : routed.warnings) {
+                                        ImGui::TextWrapped(
+                                            "Model warning: %s",
+                                            warning.c_str());
+                                    }
+                                } else if (observation.usedTiltedPlanePropagation) {
                                     ImGui::TextWrapped(
                                         "Rotated spectrum: %zu propagated, %zu evanescent, %zu outside source band, %zu interpolated bins",
                                         observation.tiltedPropagation.propagatingOutputBinCount,
