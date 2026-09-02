@@ -26,6 +26,7 @@
 #include "app/DetectorResponseAssets.hpp"
 #include "app/LessonEditHistory.hpp"
 #include "app/LensPrescriptionAssets.hpp"
+#include "app/OpticalPoseAssets.hpp"
 #include "app/HolographyLabPipeline.hpp"
 #include "app/HolographyUiState.hpp"
 #include "app/RealLensWorkbenchPipeline.hpp"
@@ -519,6 +520,7 @@ private:
     void loadRealLensPrescription(bool csv);
     void saveRealLensPrescription(bool csv);
     void loadDetectorResponseForBench();
+    void loadOpticalPoseForBench();
     void loadSlmResponseForBench();
     void loadSlmCalibration();
     void saveSlmCalibration();
@@ -554,6 +556,7 @@ private:
         BenchProject candidateProject,
         std::string statusMessage,
         bool recordHistory = true);
+    [[nodiscard]] BenchProject calibratedBenchProject() const;
     void recordBenchEdit();
     void undoBenchEdit();
     void redoBenchEdit();
@@ -772,6 +775,8 @@ private:
     DetectorResponseCatalog detectorResponseCatalog_;
     std::optional<LoadedDetectorResponseAsset>
         activeDetectorResponseAsset_;
+    OpticalPoseCatalog opticalPoseCatalog_;
+    std::optional<LoadedOpticalPoseAsset> activeOpticalPoseAsset_;
     SlmResponseCatalog slmResponseCatalog_;
     std::optional<LoadedSlmResponseAsset> activeSlmResponseAsset_;
     slmui::SlmInterferenceUiState slmInterferenceUiState_;
@@ -830,6 +835,8 @@ private:
     optics::ray::BenchTracerOptions tracerOptions_;
 
     BenchProject benchProject_;
+    optics::scene::BenchScene opticalBenchScene_;
+    std::vector<AppliedOpticalPoseEvidence> appliedOpticalPoses_;
     BenchEditHistory benchEditHistory_;
     bool benchEditHistoryReady_ = false;
     optics::scene::BenchTraceGraph benchTraceGraph_;
@@ -846,6 +853,8 @@ private:
     char realLensPathBuffer_[512] = "holobench_lens.json";
     char detectorResponsePathBuffer_[512]
         = "holobench_detector_response.json";
+    char opticalPosePathBuffer_[512]
+        = "holobench_optical_pose.json";
     char placedSlmResponsePathBuffer_[512]
         = "holobench_slm_response.json";
     char slmCalibrationPathBuffer_[512] = "slm_response.json";

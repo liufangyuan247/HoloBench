@@ -251,6 +251,10 @@ GitHub Actions run 33471184614 passes both Core jobs.
   per-frame GPU synchronization.
 - **Result**: average **472.80 FPS**, p50 **2.067 ms**, p95 **2.373 ms**, max
   **3.261 ms**, meeting the p95 **< 33.333 ms** target.
+- **M10 optical-pose split-scene revalidation (2026-09-02)**: the same profile
+  measured average **654.52 FPS**, p50 **1.464 ms**, p95 **1.887 ms**, max
+  **4.508 ms**. Proxy lookup is order-validated and linear in component count;
+  the mechanical/solver scene split adds no vendor-specific path or global cap.
 
 Both gates are vendor-neutral. NVIDIA evidence is appended after user-hardware
 validation; it does not change code paths, precision, dispatch caps, or budgets

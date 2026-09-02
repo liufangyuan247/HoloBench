@@ -1056,12 +1056,22 @@ bool OpticalBenchRenderer::updateScene(
 bool OpticalBenchRenderer::updateDynamicScene(
     const optics::scene::BenchScene& scene,
     const optics::scene::BenchTraceGraph& traceGraph,
-    std::string_view selectedComponentId) {
+    std::string_view selectedComponentId,
+    const optics::scene::BenchScene* opticalProxyScene) {
     namespace bench = optics::scene;
     if (traceGraph.sourceRevision != scene.revision()) {
         return false;
     }
     static_cast<void>(bench::BenchScene(scene.components(), scene.revision()));
+    if (opticalProxyScene != nullptr) {
+        static_cast<void>(bench::BenchScene(
+            opticalProxyScene->components(), opticalProxyScene->revision()));
+        if (opticalProxyScene->revision() != scene.revision()
+            || opticalProxyScene->components().size()
+                != scene.components().size()) {
+            return false;
+        }
+    }
     if (!selectedComponentId.empty() && scene.find(selectedComponentId) == nullptr) {
         return false;
     }
@@ -1140,7 +1150,10 @@ bool OpticalBenchRenderer::updateDynamicScene(
         return glm::vec4(rgb, alpha);
     };
 
-    for (const auto& component : scene.components()) {
+    for (std::size_t componentIndex = 0U;
+         componentIndex < scene.components().size();
+         ++componentIndex) {
+        const auto& component = scene.components()[componentIndex];
         const auto solid = generateProceduralInstrumentMesh(
             component,
             {
@@ -1157,9 +1170,27 @@ bool OpticalBenchRenderer::updateDynamicScene(
             solid.triangles.begin(),
             solid.triangles.end());
 
-        const auto world = [&component](math::Vec3d local) {
-            return math::transformPointLocalToWorld(component.transform, local);
+        const auto* opticalComponent = opticalProxyScene == nullptr
+            ? &component
+            : &opticalProxyScene->components()[componentIndex];
+        if (opticalComponent->id != component.id
+            || opticalComponent->kind != component.kind
+            || opticalComponent->parameters != component.parameters) {
+            return false;
+        }
+        const auto world = [opticalComponent](math::Vec3d local) {
+            return math::transformPointLocalToWorld(
+                opticalComponent->transform, local);
         };
+        if (opticalComponent->transform.translationMetres
+            != component.transform.translationMetres) {
+            if (!addLine(
+                    component.transform.translationMetres,
+                    opticalComponent->transform.translationMetres,
+                    {1.0F, 0.72F, 0.18F, 0.95F})) {
+                return false;
+            }
+        }
         const glm::vec4 color = componentColor(component.kind);
         double width = 0.03;
         double height = 0.03;

@@ -108,6 +108,7 @@ add_library(holobench_optics STATIC
     optics/scene/InstrumentCalibration.cpp
     optics/scene/NumericalAperture.cpp
     optics/scene/OpticalBenchScene.cpp
+    optics/scene/OpticalPoseCalibration.cpp
     optics/scene/SceneProjectAdapter.cpp
     optics/wave/FieldElements.cpp
     optics/wave/FieldSources.cpp
@@ -146,6 +147,7 @@ add_library(holobench_app_logic STATIC
     app/ChimeraReconstruction.cpp
     app/ChimeraRecipe.cpp
     app/DetectorResponseAssets.cpp
+    app/OpticalPoseAssets.cpp
     app/SlmResponseAssets.cpp
     app/LessonEditHistory.cpp
     app/LensPrescriptionAssets.cpp
@@ -499,6 +501,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/app/ChimeraReconstructionTests.cpp
         tests/app/ChimeraRecipeTests.cpp
         tests/app/DetectorResponseAssetsTests.cpp
+        tests/app/OpticalPoseAssetsTests.cpp
         tests/app/SlmResponseAssetsTests.cpp
         tests/app/SlmInterferenceUiStateTests.cpp
         tests/app/HolographyUiStateTests.cpp

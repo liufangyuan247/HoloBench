@@ -43,6 +43,7 @@
 #include "app/ChimeraBenchWorkflow.hpp"
 #include "app/ChimeraPerspectiveManifest.hpp"
 #include "app/DetectorResponseAssets.hpp"
+#include "app/OpticalPoseAssets.hpp"
 #include "app/SlmResponseAssets.hpp"
 #include "app/SlmInterferenceProject.hpp"
 #include "app/UiFont.hpp"
@@ -839,6 +840,12 @@ bool Application::applyBenchScene(
         std::move(candidateProject), std::move(newStatusMessage), recordHistory);
 }
 
+BenchProject Application::calibratedBenchProject() const {
+    BenchProject result = benchProject_;
+    result.scene = opticalBenchScene_;
+    return result;
+}
+
 bool Application::placeSandboxComponent(
     optics::scene::BenchComponentKind kind,
     const math::Vec3d& positionMetres,
@@ -879,6 +886,8 @@ bool Application::applyDynamicBenchProject(
             candidateProject.scene, detectorResponseCatalog_);
         validateSlmResponseAssetBindings(
             candidateProject.scene, slmResponseCatalog_);
+        validateOpticalPoseAssetBindings(
+            candidateProject.scene, opticalPoseCatalog_);
         if (benchEditHistoryReady_
             && candidateProject.scene.revision() <= benchProject_.scene.revision()
             && !sameBenchEditState(candidateProject, benchProject_)) {
@@ -888,15 +897,27 @@ bool Application::applyDynamicBenchProject(
         const std::string selection
             = candidateProject.scene.find(selectedBenchComponentId_) != nullptr
             ? selectedBenchComponentId_ : std::string {};
-        const auto traceGraph = optics::ray::traceDynamicBench(
+        const auto activeWavelengths = collectActiveVacuumWavelengths(
+            candidateProject.scene);
+        auto calibratedScene = makeCalibratedOpticalScene(
             candidateProject.scene,
+            opticalPoseCatalog_,
+            activeWavelengths,
+            293.15);
+        const auto traceGraph = optics::ray::traceDynamicBench(
+            calibratedScene.scene,
             benchTraceBudget_,
             &realLensPrescriptionCatalog_);
         if (!renderer_ || !renderer_->updateDynamicScene(
-                candidateProject.scene, traceGraph, selection)) {
+                candidateProject.scene,
+                traceGraph,
+                selection,
+                &calibratedScene.scene)) {
             throw std::runtime_error("renderer rejected dynamic bench geometry");
         }
         benchProject_ = std::move(candidateProject);
+        opticalBenchScene_ = std::move(calibratedScene.scene);
+        appliedOpticalPoses_ = std::move(calibratedScene.appliedPoses);
         benchTraceGraph_ = traceGraph;
         selectedBenchComponentId_ = selection;
         viewportMode_ = ViewportMode::Sandbox;
@@ -918,14 +939,26 @@ bool Application::applyDynamicBenchProject(
 
 bool Application::showSandboxViewport() {
     try {
-        const auto traceGraph = optics::ray::traceDynamicBench(
+        const auto activeWavelengths = collectActiveVacuumWavelengths(
+            benchProject_.scene);
+        auto calibratedScene = makeCalibratedOpticalScene(
             benchProject_.scene,
+            opticalPoseCatalog_,
+            activeWavelengths,
+            293.15);
+        const auto traceGraph = optics::ray::traceDynamicBench(
+            calibratedScene.scene,
             benchTraceBudget_,
             &realLensPrescriptionCatalog_);
         if (!renderer_ || !renderer_->updateDynamicScene(
-                benchProject_.scene, traceGraph, selectedBenchComponentId_)) {
+                benchProject_.scene,
+                traceGraph,
+                selectedBenchComponentId_,
+                &calibratedScene.scene)) {
             throw std::runtime_error("renderer rejected dynamic bench geometry");
         }
+        opticalBenchScene_ = std::move(calibratedScene.scene);
+        appliedOpticalPoses_ = std::move(calibratedScene.appliedPoses);
         benchTraceGraph_ = traceGraph;
         viewportMode_ = ViewportMode::Sandbox;
         errorMessage_.clear();
@@ -969,6 +1002,11 @@ void Application::loadBenchProjectFromPath() {
             recovered.project.scene,
             std::filesystem::path(benchProjectPathBuffer_),
             recoveredSlmCatalog);
+        OpticalPoseCatalog recoveredPoseCatalog;
+        restoreOpticalPoseAssets(
+            recovered.project.scene,
+            std::filesystem::path(benchProjectPathBuffer_),
+            recoveredPoseCatalog);
         const std::string loadedName = recovered.project.name;
         const auto source = recovered.source;
         const bool ignoredInvalidAutosave = recovered.ignoredInvalidAutosave;
@@ -977,9 +1015,11 @@ void Application::loadBenchProjectFromPath() {
         auto previousDetectorCatalog
             = std::move(detectorResponseCatalog_);
         auto previousSlmCatalog = std::move(slmResponseCatalog_);
+        auto previousPoseCatalog = std::move(opticalPoseCatalog_);
         realLensPrescriptionCatalog_ = std::move(recoveredCatalog);
         detectorResponseCatalog_ = std::move(recoveredDetectorCatalog);
         slmResponseCatalog_ = std::move(recoveredSlmCatalog);
+        opticalPoseCatalog_ = std::move(recoveredPoseCatalog);
         selectedBenchComponentId_.clear();
         if (applyDynamicBenchProject(
                 std::move(recovered.project),
@@ -987,6 +1027,7 @@ void Application::loadBenchProjectFromPath() {
             activeLensPrescriptionAsset_.reset();
             activeDetectorResponseAsset_.reset();
             activeSlmResponseAsset_.reset();
+            activeOpticalPoseAsset_.reset();
             if (source == BenchProjectRecoverySource::Primary) {
                 discardBenchProjectAutosave(benchProjectPathBuffer_);
                 statusMessage_ = ignoredInvalidAutosave
@@ -1002,6 +1043,7 @@ void Application::loadBenchProjectFromPath() {
             detectorResponseCatalog_
                 = std::move(previousDetectorCatalog);
             slmResponseCatalog_ = std::move(previousSlmCatalog);
+            opticalPoseCatalog_ = std::move(previousPoseCatalog);
             selectedBenchComponentId_ = previousSelection;
         }
     } catch (const std::exception& error) {
@@ -1125,8 +1167,9 @@ void Application::buildChimeraBench(
 }
 
 void Application::prepareChimeraAutomation() {
+    const auto physicsProject = calibratedBenchProject();
     auto workflow = chimera::prepareChimeraBenchWorkflow(
-        chimeraRecipe_, benchProject_);
+        chimeraRecipe_, physicsProject);
     chimeraHogelX_ = std::clamp(
         chimeraHogelX_, 0,
         static_cast<int>(chimeraRecipe_.hogels.countX - 1U));
@@ -1154,8 +1197,9 @@ void Application::prepareChimeraAutomation() {
 void Application::prepareChimeraAutomationFromManifest() {
     auto views = chimera::loadPerspectiveViewManifest(
         chimeraViewManifestPathBuffer_, chimeraRecipe_);
+    const auto physicsProject = calibratedBenchProject();
     auto workflow = chimera::prepareChimeraBenchWorkflow(
-        chimeraRecipe_, benchProject_, std::move(views));
+        chimeraRecipe_, physicsProject, std::move(views));
     chimeraHogelX_ = std::clamp(
         chimeraHogelX_, 0,
         static_cast<int>(chimeraRecipe_.hogels.countX - 1U));
@@ -1195,9 +1239,10 @@ void Application::executeSelectedChimeraHogel() {
     chimera::HogelExposureExecutionOptions executionOptions;
     executionOptions.slmResponses = &slmResponseCatalog_;
     executionOptions.environmentTemperatureKelvin = 293.15;
+    const auto physicsProject = calibratedBenchProject();
     chimera::executeChimeraHogel(
         *chimeraWorkflow_,
-        benchProject_,
+        physicsProject,
         *detectorFftBackend_,
         x,
         y,
@@ -1235,8 +1280,9 @@ void Application::reconstructSelectedChimeraHogel() {
         static_cast<std::size_t>(chimeraViewIndex_)];
     const std::array hogels {chimera::HogelSelection {.x = x, .y = y}};
     const std::array views {view.viewId};
+    const auto physicsProject = calibratedBenchProject();
     chimera::reconstructChimeraViews(
-        *chimeraWorkflow_, benchProject_, hogels, views);
+        *chimeraWorkflow_, physicsProject, hogels, views);
 
     chimera::CameraSensorRequest request;
     request.jobId = "chimera-bench-camera-preview";
@@ -1260,7 +1306,7 @@ void Application::reconstructSelectedChimeraHogel() {
         293.15);
     chimera::captureChimeraCameraImage(
         *chimeraWorkflow_,
-        benchProject_,
+        physicsProject,
         request,
         detectorSelection,
         realLensPrescriptionCatalog_,
@@ -1283,9 +1329,10 @@ void Application::reconstructSelectedChimeraHogel() {
 }
 
 void Application::createChimeraBatch() {
+    const auto physicsProject = calibratedBenchProject();
     if (!chimeraWorkflow_
         || !chimera::isChimeraBenchWorkflowCurrent(
-            *chimeraWorkflow_, benchProject_)) {
+            *chimeraWorkflow_, physicsProject)) {
         throw std::runtime_error(
             "prepare current CHIMERA data before creating a batch");
     }
@@ -1295,7 +1342,7 @@ void Application::createChimeraBatch() {
             chimeraWorkflow_->recipe,
             chimeraWorkflow_->dataset,
             chimeraWorkflow_->plan,
-            benchProject_));
+            physicsProject));
     chimera::saveChimeraBatchArtifact(
         *chimeraBatch_, chimeraBatchPathBuffer_);
     errorMessage_.clear();
@@ -1313,12 +1360,13 @@ void Application::runChimeraBatchSlice() {
     chimera::HogelExposureExecutionOptions executionOptions;
     executionOptions.slmResponses = &slmResponseCatalog_;
     executionOptions.environmentTemperatureKelvin = 293.15;
+    const auto physicsProject = calibratedBenchProject();
     const auto executed = chimera::runChimeraBatchSlice(
         *chimeraBatch_,
         chimeraWorkflow_->recipe,
         chimeraWorkflow_->dataset,
         chimeraWorkflow_->plan,
-        benchProject_,
+        physicsProject,
         *detectorFftBackend_,
         slice,
         executionOptions);
@@ -1352,12 +1400,13 @@ void Application::pauseChimeraBatch() {
     chimera::HogelExposureExecutionOptions executionOptions;
     executionOptions.slmResponses = &slmResponseCatalog_;
     executionOptions.environmentTemperatureKelvin = 293.15;
+    const auto physicsProject = calibratedBenchProject();
     static_cast<void>(chimera::runChimeraBatchSlice(
         *chimeraBatch_,
         chimeraWorkflow_->recipe,
         chimeraWorkflow_->dataset,
         chimeraWorkflow_->plan,
-        benchProject_,
+        physicsProject,
         *detectorFftBackend_,
         1U,
         executionOptions,
@@ -1374,12 +1423,13 @@ void Application::reconstructChimeraBatchRegion() {
         throw std::runtime_error(
             "the current CHIMERA batch has no completed hogel region");
     }
+    const auto physicsProject = calibratedBenchProject();
     chimera::validateChimeraBatchForWorkflow(
         *chimeraBatch_,
         chimeraWorkflow_->recipe,
         chimeraWorkflow_->dataset,
         chimeraWorkflow_->plan,
-        benchProject_);
+        physicsProject);
     const std::size_t count = std::min(
         chimeraBatch_->completedHogels.size(),
         static_cast<std::size_t>(std::clamp(
@@ -1401,7 +1451,7 @@ void Application::reconstructChimeraBatchRegion() {
     const std::array views {view.viewId};
     chimera::reconstructChimeraViews(
         *chimeraWorkflow_,
-        benchProject_,
+        physicsProject,
         hogels,
         views,
         "chimera-batch-region-preview");
@@ -1428,7 +1478,7 @@ void Application::reconstructChimeraBatchRegion() {
         293.15);
     chimera::captureChimeraCameraImage(
         *chimeraWorkflow_,
-        benchProject_,
+        physicsProject,
         request,
         detectorSelection,
         realLensPrescriptionCatalog_,
@@ -1514,7 +1564,7 @@ void Application::recomputeRecordingRecipe(
         if (resolved.channels.size() == 1U) {
             const auto& channel = resolved.channels.front();
             auto recording = optics::holography::recordThinTransmissionPlate(
-                benchProject_.scene,
+                opticalBenchScene_,
                 fields,
                 channel.objectBranchId,
                 channel.referenceBranchId,
@@ -1554,7 +1604,7 @@ void Application::recomputeRecordingRecipe(
             };
             auto recording
                 = optics::holography::recordRgbThinTransmissionPlate(
-                    benchProject_.scene,
+                    opticalBenchScene_,
                     fields,
                     selections,
                     options,
@@ -1599,7 +1649,7 @@ void Application::recomputeRecordingRecipe(
         };
         auto recording
             = optics::holography::recordRgbReflectionVolumePlate(
-                benchProject_.scene,
+                opticalBenchScene_,
                 fields,
                 selections,
                 recipe.volumeMaterial,
@@ -1624,7 +1674,7 @@ void Application::recomputeRecordingRecipe(
     }
     const auto& channel = resolved.channels.front();
     auto recording = optics::holography::recordVolumePlate(
-        benchProject_.scene,
+        opticalBenchScene_,
         fields,
         channel.objectBranchId,
         channel.referenceBranchId,
@@ -1666,7 +1716,7 @@ void Application::recordSelectedPlateExperiment(bool recordHistory) {
             "select a holographic plate before recording");
     }
     const auto fields = holography::collectPlateIncidentFields(
-        benchProject_.scene, benchTraceGraph_, plate->id);
+        opticalBenchScene_, benchTraceGraph_, plate->id);
 
     std::vector<const HologramRecordingRecipe*> matchingRecipes;
     for (const auto& recipe : benchProject_.recordingRecipes) {
@@ -2022,7 +2072,7 @@ void Application::reconstructSelectedPlateExperiment() {
                 "record a current thin transmission exposure first");
         }
         auto replay = holography::replayThinTransmissionToObservation(
-            benchProject_.scene,
+            opticalBenchScene_,
             *sandboxPlateRecording_,
             observation->id,
             replayKind,
@@ -2048,7 +2098,7 @@ void Application::reconstructSelectedPlateExperiment() {
                 "record a current RGB exposure set first");
         }
         auto replay = holography::replayRgbThinTransmissionToObservation(
-            benchProject_.scene,
+            opticalBenchScene_,
             *sandboxRgbRecording_,
             observation->id,
             replayKind,
@@ -2087,7 +2137,7 @@ void Application::reconstructSelectedPlateExperiment() {
                 "record a current RGB reflection/Denisyuk volume set first");
         }
         const auto fields = holography::collectPlateIncidentFields(
-            benchProject_.scene, benchTraceGraph_, plate->id);
+            opticalBenchScene_, benchTraceGraph_, plate->id);
         holography::PlateFieldSamplingOptions sampling {
             .sampleWidth = static_cast<std::size_t>(sandboxPlateSampleSize_),
             .sampleHeight = static_cast<std::size_t>(sandboxPlateSampleSize_),
@@ -2106,7 +2156,7 @@ void Application::reconstructSelectedPlateExperiment() {
         }
         auto replay
             = holography::replayRgbReflectionVolumeToObservation(
-                benchProject_.scene,
+                opticalBenchScene_,
                 fields,
                 *sandboxRgbVolumeRecording_,
                 observation->id,
@@ -2147,7 +2197,7 @@ void Application::reconstructSelectedPlateExperiment() {
                 "record a current reflection/Denisyuk volume grating first");
         }
         const auto fields = holography::collectPlateIncidentFields(
-            benchProject_.scene, benchTraceGraph_, plate->id);
+            opticalBenchScene_, benchTraceGraph_, plate->id);
         holography::PlateFieldSamplingOptions sampling {
             .sampleWidth = static_cast<std::size_t>(sandboxPlateSampleSize_),
             .sampleHeight = static_cast<std::size_t>(sandboxPlateSampleSize_),
@@ -2165,7 +2215,7 @@ void Application::reconstructSelectedPlateExperiment() {
             }
         }
         auto replay = holography::replayVolumeReflectionToObservation(
-            benchProject_.scene,
+            opticalBenchScene_,
             fields,
             *sandboxVolumeRecording_,
             sandboxVolumeRecording_->pair.referenceBranchId,
@@ -2802,7 +2852,7 @@ void Application::updateSandboxWaveObservation() {
             ? previousChannel->coherenceId
             : std::string {};
         auto results = observeBenchWaveChannels(
-            benchProject_.scene,
+            opticalBenchScene_,
             benchTraceGraph_,
             observation->id,
             preview
@@ -3423,6 +3473,28 @@ void Application::loadDetectorResponseForBench() {
             + calibrationId + " from " + path.string();
     } catch (const std::exception& error) {
         errorMessage_ = "Detector response load failed: "
+            + std::string(error.what());
+        statusMessage_.clear();
+    }
+}
+
+void Application::loadOpticalPoseForBench() {
+    try {
+        const std::filesystem::path path(opticalPosePathBuffer_);
+        if (path.empty()) {
+            throw std::invalid_argument(
+                "optical-pose path cannot be empty");
+        }
+        auto loaded = loadOpticalPoseAsset(path);
+        loaded.provenance.source = path.generic_string();
+        opticalPoseCatalog_.registerCalibration(loaded);
+        const std::string calibrationId = loaded.calibrationId;
+        activeOpticalPoseAsset_ = std::move(loaded);
+        errorMessage_.clear();
+        statusMessage_ = "Loaded verified optical-pose calibration "
+            + calibrationId + " from " + path.string();
+    } catch (const std::exception& error) {
+        errorMessage_ = "Optical-pose load failed: "
             + std::string(error.what());
         statusMessage_.clear();
     }
@@ -6863,7 +6935,7 @@ void Application::drawSandboxExperimentBar() {
     std::string analysisError;
     try {
         const auto fields = holography::collectPlateIncidentFields(
-            benchProject_.scene, benchTraceGraph_, selected->id);
+            opticalBenchScene_, benchTraceGraph_, selected->id);
         for (const auto& branch : fields.branches) {
             if (branch.role == holography::RecordingBranchRole::Object) {
                 ++objectCount;
@@ -7141,7 +7213,7 @@ void Application::drawChimeraAutomationBar() {
     const bool prepared = chimeraWorkflow_ != nullptr;
     const bool current = prepared
         && chimera::isChimeraBenchWorkflowCurrent(
-            *chimeraWorkflow_, benchProject_);
+            *chimeraWorkflow_, calibratedBenchProject());
     ImGui::BeginChild(
         "##chimera_automation_bar",
         ImVec2(0.0F, 218.0F),
@@ -7579,7 +7651,7 @@ void Application::drawSandboxInspector() {
                     chimeraWorkflow_->recipe,
                     chimeraWorkflow_->dataset,
                     chimeraWorkflow_->plan,
-                    benchProject_);
+                    calibratedBenchProject());
                 chimeraWorkflow_->exposures
                     = chimera::restoreChimeraBatchReconstructionEvidence(
                         loaded);
@@ -8055,6 +8127,77 @@ void Application::drawSandboxInspector() {
                 ImGui::TextDisabled(
                     "%zu attached calibration reference(s); identity metadata never selects a GPU path",
                     selected->instrument.calibrationAssets.size());
+                ImGui::InputText(
+                    "Optical-pose JSON",
+                    opticalPosePathBuffer_,
+                    sizeof(opticalPosePathBuffer_));
+                if (ImGui::Button("Load verified optical-pose calibration")) {
+                    loadOpticalPoseForBench();
+                }
+                ImGui::BeginDisabled(
+                    !activeOpticalPoseAsset_.has_value()
+                    || selected->kind
+                        == bench::BenchComponentKind::FieldProbe);
+                if (ImGui::Button("Use verified optical-pose calibration")) {
+                    try {
+                        auto candidate = benchProject_.scene;
+                        auto edited = *candidate.find(
+                            selectedBenchComponentId_);
+                        bindOpticalPoseAsset(
+                            edited,
+                            *activeOpticalPoseAsset_,
+                            {
+                                .minimumVacuumWavelengthMetres
+                                    = static_cast<double>(
+                                        sandboxCalibrationMinimumWavelengthNanometres_)
+                                        * 1e-9,
+                                .maximumVacuumWavelengthMetres
+                                    = static_cast<double>(
+                                        sandboxCalibrationMaximumWavelengthNanometres_)
+                                        * 1e-9,
+                                .minimumTemperatureKelvin
+                                    = sandboxCalibrationMinimumTemperatureKelvin_,
+                                .maximumTemperatureKelvin
+                                    = sandboxCalibrationMaximumTemperatureKelvin_,
+                            });
+                        candidate.replace(edited.id, edited);
+                        static_cast<void>(applyBenchScene(
+                            std::move(candidate),
+                            "Applied verified optical-pose calibration"));
+                    } catch (const std::exception& error) {
+                        errorMessage_ = "Optical-pose binding failed: "
+                            + std::string(error.what());
+                        statusMessage_.clear();
+                    }
+                }
+                ImGui::EndDisabled();
+                if (activeOpticalPoseAsset_.has_value()) {
+                    ImGui::TextDisabled(
+                        "Loaded pose: %.22s... | SHA-256 %.12s...",
+                        activeOpticalPoseAsset_->calibrationId.c_str(),
+                        activeOpticalPoseAsset_->provenance
+                            .contentSha256.c_str());
+                }
+                const auto appliedPose = std::find_if(
+                    appliedOpticalPoses_.begin(),
+                    appliedOpticalPoses_.end(),
+                    [&](const auto& evidence) {
+                        return evidence.componentId == selected->id;
+                    });
+                if (appliedPose != appliedOpticalPoses_.end()) {
+                    const auto offsetMillimetres
+                        = (appliedPose->calibratedOpticalFrame
+                               .translationMetres
+                            - appliedPose->nominalOpticalFrame
+                                  .translationMetres)
+                        * 1000.0;
+                    ImGui::TextWrapped(
+                        "Applied solver frame: %s | world offset %.4f, %.4f, %.4f mm. Mechanical readings and PCG body remain nominal.",
+                        appliedPose->calibrationId.c_str(),
+                        offsetMillimetres.x,
+                        offsetMillimetres.y,
+                        offsetMillimetres.z);
+                }
                 bool calibrationAssetRemoved = false;
                 for (std::size_t assetIndex = 0;
                      assetIndex
@@ -9129,7 +9272,7 @@ void Application::drawSandboxInspector() {
                         }
                         const auto fields
                             = optics::holography::collectPlateIncidentFields(
-                                benchProject_.scene,
+                                opticalBenchScene_,
                                 benchTraceGraph_,
                                 selected->id);
                         std::size_t savedRecipeCount = 0U;
@@ -9280,7 +9423,7 @@ void Application::drawSandboxInspector() {
                                         }
                                         auto recording
                                             = optics::holography::recordThinTransmissionPlate(
-                                                benchProject_.scene,
+                                                opticalBenchScene_,
                                                 fields,
                                                 pair.objectBranchId,
                                                 pair.referenceBranchId,
@@ -9391,7 +9534,7 @@ void Application::drawSandboxInspector() {
                                                 };
                                             auto recording
                                                 = optics::holography::recordVolumePlate(
-                                                    benchProject_.scene,
+                                                    opticalBenchScene_,
                                                     fields,
                                                     pair.objectBranchId,
                                                     pair.referenceBranchId,
@@ -9520,7 +9663,7 @@ void Application::drawSandboxInspector() {
                                     auto rgbRecording
                                         = optics::holography::
                                             recordRgbThinTransmissionPlate(
-                                                benchProject_.scene,
+                                                opticalBenchScene_,
                                                 fields,
                                                 rgbSelections,
                                                 options,
@@ -9635,7 +9778,7 @@ void Application::drawSandboxInspector() {
                                         auto rgbReplay
                                             = optics::holography::
                                                 replayRgbThinTransmissionToObservation(
-                                                    benchProject_.scene,
+                                                    opticalBenchScene_,
                                                     *sandboxRgbRecording_,
                                                     component.id,
                                                     replayKind,
@@ -10116,7 +10259,7 @@ void Application::drawSandboxInspector() {
                                 try {
                                     auto replay
                                         = optics::holography::replayVolumePlate(
-                                            benchProject_.scene,
+                                            opticalBenchScene_,
                                             recording,
                                             static_cast<double>(
                                                 sandboxVolumeReplayWavelengthNanometres_)
@@ -10220,7 +10363,7 @@ void Application::drawSandboxInspector() {
                                         auto observationReplay
                                             = optics::holography::
                                                 replayVolumeReflectionToObservation(
-                                                    benchProject_.scene,
+                                                    opticalBenchScene_,
                                                     fields,
                                                     recording,
                                                     recording.pair.referenceBranchId,
@@ -10525,7 +10668,7 @@ void Application::drawSandboxInspector() {
                                             : optics::holography::ThinPlateReplayKind::ConjugateReference;
                                         auto replay
                                             = optics::holography::replayThinTransmissionToObservation(
-                                                benchProject_.scene,
+                                                opticalBenchScene_,
                                                 *sandboxPlateRecording_,
                                                 component.id,
                                                 replayKind,
@@ -11453,7 +11596,7 @@ void Application::drawWorkspace() {
                 std::string_view reconstructionObservationId;
                 if (chimeraWorkflow_
                     && chimera::isChimeraBenchWorkflowCurrent(
-                        *chimeraWorkflow_, benchProject_)
+                        *chimeraWorkflow_, calibratedBenchProject())
                     && chimeraWorkflow_->cameraImage
                     && !chimeraWorkflow_->cameraImage->isStaleFor(
                         benchProject_.scene)
@@ -13224,7 +13367,7 @@ void Application::runSandboxInteractionSmoke() {
         "Generate CHIMERA dataset and exposure plan action");
     if (!chimeraWorkflow_
         || !chimera::isChimeraBenchWorkflowCurrent(
-            *chimeraWorkflow_, benchProject_)
+            *chimeraWorkflow_, calibratedBenchProject())
         || chimeraWorkflow_->dataset.sourceViews.size() != 15U
         || chimeraWorkflow_->plan.events.size() != 624U) {
         throw std::runtime_error(

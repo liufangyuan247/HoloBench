@@ -320,8 +320,10 @@ not a coherent aberrated-wavefront PSF.
   component now has a bounded parameter-driven solid body rendered independently
   from diagnostic rays and proxy outlines. Persisted base/post/XYZ/tip-tilt
   assemblies now drive both direct viewport controls and the explicit solver
-  optical frame. The remaining slices add calibration identity and general
-  measurement closure. See [the M10 brief](docs/milestones/M10_DIGITAL_TWIN_INSTRUMENTS.md).
+  optical frame. Hashed real-lens, detector, SLM, and rigid optical-pose assets
+  now change the ordinary placed solver paths without making PCG triangles the
+  optical truth. The remaining slices broaden calibrated models and physical
+  coverage. See [the M10 brief](docs/milestones/M10_DIGITAL_TWIN_INSTRUMENTS.md).
 
 The existing ten guided panel workflows, templates, localization/font,
 progress, history, and teaching benchmarks remain tested reference assets.

@@ -49,8 +49,8 @@ animated or silently approximated.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: `dev` passes 614/614 tests and `core-ci` passes
-  612/612. Clang, MSVC, and WSL/GCC Core plus Clang/MSVC Application builds
+- **Acceptance evidence**: `dev` passes 616/616 tests and `core-ci` passes
+  614/614. Clang, MSVC, and WSL/GCC Core plus Clang/MSVC Application builds
   pass with warnings as errors;
   the packaged CJK font validates. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
   smoke passes real shelf placement, constrained whole-instrument edits,
@@ -117,7 +117,18 @@ animated or silently approximated.
   results retain the applied content-addressed calibration ID. Simultaneous
   placed and transient response truth rejects as ambiguous. See
   [ADR 0038](adr/0038-hashed-placed-slm-response.md).
-- **Calibration next slice**: connect optical-pose, coating, and other
+- **M10.3 hashed optical-pose lifecycle implemented and locally validated**:
+  A bounded strict rigid-offset JSON is addressed by the SHA-256 of the exact
+  bytes, specification-bound, validity-checked, and restored transactionally.
+  The persisted scene remains the nominal mechanical/PCG truth; a derived
+  calibrated scene moves only solver optical frames. Dynamic rays,
+  Screen/Probe fields, thin/volume/RGB/Denisyuk recording and replay, and
+  CHIMERA exposure/reconstruction/camera paths consume that scene. The
+  renderer keeps PCG solids nominal while proxy outlines and rays follow the
+  measured frame, and the Inspector shows applied ID/hash/frame evidence. A
+  virtual Field Probe cannot claim hardware pose calibration. See
+  [ADR 0039](adr/0039-hashed-optical-pose-calibration.md).
+- **Calibration next slice**: connect coating and other
   supported asset kinds through the same verified lifecycle with explicit
   applied-calibration diagnostics.
 - **M10.4 placed measurement foundation implemented**: The current ordinary
@@ -227,7 +238,7 @@ animated or silently approximated.
   work ceiling, and exercised by workflow/OpenGL smoke gates. See
   [ADR 0036](adr/0036-chimera-prescription-spot-defocus.md).
 - **M10.4 next slice**: coherent prescription wavefront/aberration PSF,
-  broader instruments, SLM/pose/coating calibration adapters, and additional
+  broader instruments, coating/stage calibration adapters, and additional
   physical model families continue under the shared Bench contract.
 
 ## Product rebaseline (2026-09-01)
@@ -814,7 +825,8 @@ completion because it is primarily driven through fixed parameter panels:
   into Windows and Linux core CI. The separate
   `chimera/editable_24_component_bench_renderer` hardware gate renders the
   generated ordinary Bench at 1920x1080 with 60 warm-up and 120 measured,
-  GPU-synchronized frames. AMD Radeon Pro 5300M measured 2.373 ms p95 against
+  GPU-synchronized frames. The latest AMD Radeon Pro 5300M revalidation after
+  the split nominal/calibrated renderer measured 1.887 ms p95 against
   a 33.333 ms ceiling with all 24 components and 128 displayed ray segments.
   This renderer gate is separate from the 1024x1024 wave-compute targets. A
   fresh optimized `app-ci` validation on the same GPU recorded ASM p95

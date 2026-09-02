@@ -167,8 +167,11 @@
   settling, angle/polarization dependence, diffraction orders, surface
   flatness, or hardware electronics. Format v5 persists per-component
   calibration references. Verified real-lens, detector-response, and SLM
-  response assets now resolve into placed-instrument behavior; coating, pose,
-  stage, and other general calibration asset adapters remain open.
+  response and rigid optical-pose assets now resolve into placed-instrument
+  behavior; coating, stage, and other general calibration asset adapters remain
+  open. Optical-pose format v1 is one static local rigid correction bounded to
+  100 mm and 30 degrees. It does not model stage hysteresis, temperature-curve
+  interpolation, elastic deformation, surface figure, drift, or uncertainty.
 - Plate candidates currently infer object branches from an Object/Wavefront
   Source and reference branches from a Laser Source. They classify same-side
   transmission versus opposite-side reflection geometry and reject
@@ -253,6 +256,7 @@
 - Direct hardware control remains a long-term roadmap module. Bench format v5
   now persists generic instrument identity and hashed external calibration
   references with visible nominal/calibrated/stale state. Real-lens, physical
-  detector-response, and placed-SLM response assets resolve into their declared
-  solver paths, but most other asset kinds are not yet connected. A stored
+  detector-response, placed-SLM response, and optical-pose assets resolve into
+  their declared solver paths, but most other asset kinds are not yet
+  connected. A stored
   reference is evidence, not a claim that calibrated physics was applied.

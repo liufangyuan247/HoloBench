@@ -107,6 +107,16 @@ one instrument truth. A placed binding and transient response are an explicit
 conflict, never an implicit precedence rule. See
 [ADR 0038](../adr/0038-hashed-placed-slm-response.md).
 
+Measured optical pose now uses a strict format-v1 rigid-offset asset with the
+same exact-byte, content-addressed, specification-bound, transactional
+lifecycle. The persisted mechanical/PCG scene stays nominal; a separate
+derived optical scene composes verified local offsets and is the input to
+dynamic rays, Screen/Probe fields, holography, Denisyuk, and CHIMERA paths.
+The renderer draws solids from the nominal scene and proxy outlines/rays from
+the calibrated scene, while the Inspector exposes applied ID/hash/frame
+evidence. Virtual Field Probes cannot claim hardware pose calibration. See
+[ADR 0039](../adr/0039-hashed-optical-pose-calibration.md).
+
 ### M10.4 — Measurement and general experiment closure
 
 - Field Probe amplitude, intensity, phase, dB, spectral-channel, cursor, and
@@ -183,7 +193,9 @@ plus [ADR 0030](../adr/0030-shared-beam-following-field-paths.md) and
 [ADR 0034](../adr/0034-derived-field-routing-from-placed-planes.md), and
 [ADR 0035](../adr/0035-chimera-placed-prescription-camera.md), and
 [ADR 0036](../adr/0036-chimera-prescription-spot-defocus.md), plus
-[ADR 0037](../adr/0037-hashed-placed-detector-response.md).
+[ADR 0037](../adr/0037-hashed-placed-detector-response.md),
+[ADR 0038](../adr/0038-hashed-placed-slm-response.md), and
+[ADR 0039](../adr/0039-hashed-optical-pose-calibration.md).
 
 ## Platform extensibility acceptance
 

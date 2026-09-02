@@ -47,7 +47,8 @@ public:
     [[nodiscard]] bool updateDynamicScene(
         const optics::scene::BenchScene& scene,
         const optics::scene::BenchTraceGraph& traceGraph,
-        std::string_view selectedComponentId = {});
+        std::string_view selectedComponentId = {},
+        const optics::scene::BenchScene* opticalProxyScene = nullptr);
 
     void render(int width, int height, const OrbitCamera& camera);
 
