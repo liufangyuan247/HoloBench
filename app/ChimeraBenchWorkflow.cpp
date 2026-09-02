@@ -116,23 +116,24 @@ void reconstructChimeraViews(ChimeraBenchWorkflow &workflow,
 
 void captureChimeraCameraImage(
     ChimeraBenchWorkflow &workflow, const BenchProject &bench,
-    const CameraImageRequest &request,
+    const CameraSensorRequest &request,
     const optics::sensor::CalibratedCameraSpectralResponse &cameraResponse,
-    std::string observationComponentId) {
+    const optics::ray::ILensPrescriptionResolver &lensPrescriptions,
+    std::string lensComponentId,
+    std::string observationComponentId,
+    std::string sourcePlateComponentId) {
   requireCurrent(workflow, bench);
   if (!workflow.reconstruction) {
     throw std::invalid_argument(
         "CHIMERA directional reconstruction must run before camera capture");
   }
-  const auto *observation = bench.scene.find(observationComponentId);
-  if (observation == nullptr ||
-      (observation->kind != optics::scene::BenchComponentKind::ScreenDetector &&
-       observation->kind != optics::scene::BenchComponentKind::FieldProbe)) {
-    throw std::invalid_argument(
-        "CHIMERA camera output requires a placed Screen or Field Probe");
-  }
-  workflow.cameraImage = synthesizeCameraImage(
-      workflow.recipe, *workflow.reconstruction, request, cameraResponse);
+  workflow.cameraImage.reset();
+  workflow.observationComponentId.clear();
+  auto image = synthesizePlacedCameraImage(
+      workflow.recipe, *workflow.reconstruction, request, cameraResponse,
+      bench.scene, sourcePlateComponentId, lensComponentId,
+      observationComponentId, lensPrescriptions);
+  workflow.cameraImage = std::move(image);
   workflow.observationComponentId = std::move(observationComponentId);
 }
 

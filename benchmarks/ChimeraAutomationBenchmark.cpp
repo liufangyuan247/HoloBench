@@ -42,13 +42,16 @@ int main() {
     const std::array hogels{chimera::HogelSelection{.x = 3U, .y = 2U}};
     const std::array views{std::string("view-x2-y1")};
     chimera::reconstructChimeraViews(workflow, bench, hogels, views);
-    chimera::CameraImageRequest camera;
+    chimera::CameraSensorRequest camera;
     camera.pixelWidth = 129U;
     camera.pixelHeight = 129U;
-    camera.focalLengthMetres = 2.5e-3;
-    camera.pupilPlaneDistanceMetres = 0.03;
+    const holobench::optics::ray::LensPrescriptionCatalog prescriptions({
+        holobench::optics::ray::makeDefaultNBk7BiconvexPrescription(),
+    });
     chimera::captureChimeraCameraImage(workflow, bench, camera,
                                        nominalCameraResponse(),
+                                       prescriptions,
+                                       "chimera-camera-lens",
                                        "chimera-reconstruction-probe");
     const auto finish = std::chrono::steady_clock::now();
     const double milliseconds =

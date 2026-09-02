@@ -42,7 +42,7 @@ Performance claims are accepted only when they identify hardware, build type, sc
 - `fourier/four_f_1024_square_gpu_recompute` — Validated on AMD Radeon Pro 5300M (M3)
 - `ray/real_lens_default_729_refresh` — Validated on Intel Core i7-9750H (M4)
 - `chimera/selected_hogel_rgb_record_reconstruct_camera_cpu` — Validated on Intel Core i7-9750H (M9)
-- `chimera/editable_23_component_bench_renderer` — Validated on AMD Radeon Pro 5300M (M9)
+- `chimera/editable_24_component_bench_renderer` — Validated on AMD Radeon Pro 5300M (M10 placed-camera extension)
 - `wave/asm_2048_square_single_step` — Target for M2 Angular Spectrum Method
 - `project/load_reference_scene` — Target for scene load latency
 
@@ -227,22 +227,23 @@ GitHub Actions run 33471184614 passes both Core jobs.
 - **Hardware Profile**: Intel Core i7-9750H, Windows 10 19045, optimized
   `core-ci` build.
 - **Workload**: One 256x256 selected hogel passes through three independent RGB
-  M8 volume recordings, directional reconstruction, finite-pupil Airy response,
-  and relative linear camera synthesis.
-- **Result**: **1161.105 ms** against a **30000 ms** ceiling; canonical artifact
-  **1,273,819 bytes**; conservative peak estimate **13,856,731 bytes** against
+  M8 volume recordings, directional reconstruction, three wavelength-specific
+  placed sequential-prescription/Bench chief-ray paths, finite-pupil Airy
+  response, and relative linear camera synthesis.
+- **Result**: **2120.586 ms** against a **30000 ms** ceiling; canonical artifact
+  **1,283,337 bytes**; conservative peak estimate **13,866,249 bytes** against
   **64 MiB**.
 
-### Benchmark profile: `chimera/editable_23_component_bench_renderer`
+### Benchmark profile: `chimera/editable_24_component_bench_renderer`
 
 - **Hardware Profile**: AMD Radeon Pro 5300M, OpenGL 4.6 Core / GLSL 4.60,
   optimized `app-ci` application.
-- **Workload**: The canonical 23-component ordinary editable CHIMERA Bench at
+- **Workload**: The canonical 24-component ordinary editable CHIMERA Bench at
   1920x1080 with 128 displayed ray segments.
 - **Execution Parameters**: 60 warm-up and 120 measured frames, VSync disabled,
   per-frame GPU synchronization.
-- **Result**: average **555.24 FPS**, p50 **1.681 ms**, p95 **2.503 ms**, max
-  **3.033 ms**, meeting the p95 **< 33.333 ms** target.
+- **Result**: average **472.80 FPS**, p50 **2.067 ms**, p95 **2.373 ms**, max
+  **3.261 ms**, meeting the p95 **< 33.333 ms** target.
 
 Both gates are vendor-neutral. NVIDIA evidence is appended after user-hardware
 validation; it does not change code paths, precision, dispatch caps, or budgets

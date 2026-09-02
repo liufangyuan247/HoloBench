@@ -9,6 +9,7 @@
 namespace chimera = holobench::app::chimera;
 namespace scene = holobench::optics::scene;
 namespace sensor = holobench::optics::sensor;
+namespace ray = holobench::optics::ray;
 
 namespace {
 
@@ -19,6 +20,12 @@ sensor::CalibratedCameraSpectralResponse nominalRgbResponse() {
               {532e-9, {0.10, 1.0, 0.10}},
               {638e-9, {1.0, 0.10, 0.05}},
           }};
+}
+
+ray::LensPrescriptionCatalog nominalLensCatalog() {
+  return ray::LensPrescriptionCatalog({
+      ray::makeDefaultNBk7BiconvexPrescription(),
+  });
 }
 
 } // namespace
@@ -53,16 +60,23 @@ TEST_CASE("CHIMERA Bench workflow closes dataset exposure reconstruction and "
   CHECK(workflow.reconstruction->metrics.reconstructedDirectionalSampleCount ==
         1U);
 
-  chimera::CameraImageRequest request;
+  chimera::CameraSensorRequest request;
   request.pixelWidth = 65U;
   request.pixelHeight = 65U;
-  request.focalLengthMetres = 2.5e-3;
-  request.pupilPlaneDistanceMetres = 0.03;
+  const auto prescriptions = nominalLensCatalog();
   chimera::captureChimeraCameraImage(workflow, bench, request,
                                      nominalRgbResponse(),
+                                     prescriptions,
+                                     "chimera-camera-lens",
                                      "chimera-reconstruction-probe");
   REQUIRE(workflow.cameraImage.has_value());
   CHECK(workflow.observationComponentId == "chimera-reconstruction-probe");
+  CHECK(workflow.cameraImage->usedPlacedSequentialLens);
+  CHECK(workflow.cameraImage->sourceSceneRevision == bench.scene.revision());
+  CHECK(workflow.cameraImage->lensComponentId == "chimera-camera-lens");
+  CHECK(workflow.cameraImage->lensPrescriptionId ==
+        "default_n_bk7_biconvex");
+  CHECK(workflow.cameraImage->metrics.prescriptionTraceCompletedCount == 3U);
   CHECK(workflow.cameraImage->metrics.sensorDepositedSampleCount == 1U);
   const auto display = chimera::renderChimeraCameraImage(*workflow.cameraImage);
   CHECK(display.width() == 65U);
@@ -70,6 +84,14 @@ TEST_CASE("CHIMERA Bench workflow closes dataset exposure reconstruction and "
   CHECK(std::any_of(
       display.rgbaBytes().begin(), display.rgbaBytes().end(),
       [](std::uint8_t value) { return value > 0U && value < 255U; }));
+  const ray::LensPrescriptionCatalog empty;
+  CHECK_THROWS_AS(
+      chimera::captureChimeraCameraImage(
+          workflow, bench, request, nominalRgbResponse(), empty,
+          "chimera-camera-lens", "chimera-reconstruction-probe"),
+      std::invalid_argument);
+  CHECK_FALSE(workflow.cameraImage.has_value());
+  CHECK(workflow.observationComponentId.empty());
 }
 
 TEST_CASE("CHIMERA Bench workflow invalidates every derived action after an "
@@ -100,8 +122,12 @@ TEST_CASE(
   const std::array views{std::string("view-x2-y1")};
   chimera::reconstructChimeraViews(workflow, bench, hogels, views);
 
+  const auto prescriptions = nominalLensCatalog();
+
   CHECK_THROWS_AS(chimera::captureChimeraCameraImage(workflow, bench, {},
                                                      nominalRgbResponse(),
+                                                     prescriptions,
+                                                     "chimera-camera-lens",
                                                      "chimera-plate"),
                   std::invalid_argument);
 }

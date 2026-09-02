@@ -2,10 +2,14 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "app/ChimeraReconstruction.hpp"
+#include "optics/ray/LensPrescriptionCatalog.hpp"
+#include "optics/scene/BenchScene.hpp"
 #include "optics/sensor/CameraSpectralResponse.hpp"
 
 namespace holobench::app::chimera {
@@ -33,6 +37,39 @@ struct CameraImageRequest final {
     bool operator==(const CameraImageRequest&) const = default;
 };
 
+// Raster/readout controls for a camera whose optical truth comes from placed
+// Bench components. Unlike CameraImageRequest, this request contains no pupil,
+// focal-length, or pose knobs: those are resolved from the RealLensAssembly,
+// its immutable prescription, and the placed sensor plane.
+struct CameraSensorRequest final {
+    int formatVersion = kCameraImageRequestFormatVersion;
+    std::string jobId = "chimera-placed-camera-image";
+    std::size_t pixelWidth = 256;
+    std::size_t pixelHeight = 256;
+    double pixelPitchXMetres = 10e-6;
+    double pixelPitchYMetres = 10e-6;
+    double psfSupportFirstDarkRings = 4.0;
+
+    bool operator==(const CameraSensorRequest&) const = default;
+};
+
+struct CameraSpectralRayEvidence final {
+    double wavelengthMetres = 0.0;
+    std::string prescriptionTraceStatus;
+    std::size_t prescriptionSurfaceCount = 0;
+    double firstSurfaceXMetres = 0.0;
+    double firstSurfaceYMetres = 0.0;
+    bool enteredPupil = false;
+    bool intersectedSensorPlane = false;
+    double sensorCentreXMetres = 0.0;
+    double sensorCentreYMetres = 0.0;
+    bool depositedOnSensor = false;
+    LinearRgb idealSensorSignal;
+    LinearRgb depositedSensorSignal;
+
+    bool operator==(const CameraSpectralRayEvidence&) const = default;
+};
+
 struct CameraRayContribution final {
     std::size_t hogelX = 0;
     std::size_t hogelY = 0;
@@ -45,6 +82,7 @@ struct CameraRayContribution final {
     bool depositedOnSensor = false;
     LinearRgb idealSensorSignal;
     LinearRgb depositedSensorSignal;
+    std::vector<CameraSpectralRayEvidence> spectralRays;
 
     bool operator==(const CameraRayContribution&) const = default;
 };
@@ -56,6 +94,9 @@ struct CameraImageMetrics final {
     std::size_t sensorDepositedSampleCount = 0;
     std::size_t sensorMissedSampleCount = 0;
     std::size_t kernelEvaluationCount = 0;
+    std::size_t prescriptionTraceCompletedCount = 0;
+    std::size_t prescriptionTraceRejectedCount = 0;
+    std::size_t sensorPlaneMissedChannelCount = 0;
     double maximumFirstDarkRadiusMetres = 0.0;
     double maximumPsfSupportRadiusPixels = 0.0;
     std::array<double, 3> rgbFirstDarkRadiusMetres {};
@@ -73,6 +114,15 @@ struct CameraImageResult final {
     std::string sourceReconstructionJobId;
     std::string sourceRecipeId;
     std::string cameraCalibrationId;
+    bool usedPlacedSequentialLens = false;
+    std::uint64_t sourceSceneRevision = 0;
+    std::string sourcePlateComponentId;
+    std::string lensComponentId;
+    std::string lensPrescriptionId;
+    std::string observationComponentId;
+    double placedClearApertureDiameterMetres = 0.0;
+    std::array<double, 3> rgbEffectiveFocalLengthMetres {};
+    std::array<double, 3> rgbSensorAxialDistanceMetres {};
     double pupilCentreXMetres = 0.0;
     double pupilCentreYMetres = 0.0;
     double pupilPlaneDistanceMetres = 0.0;
@@ -91,6 +141,8 @@ struct CameraImageResult final {
     [[nodiscard]] const LinearRgb& at(
         std::size_t column,
         std::size_t row) const;
+    [[nodiscard]] bool isStaleFor(
+        const optics::scene::BenchScene& bench) const noexcept;
     bool operator==(const CameraImageResult&) const = default;
 };
 
@@ -103,5 +155,21 @@ struct CameraImageResult final {
     const ReconstructionResult& reconstruction,
     const CameraImageRequest& request,
     const optics::sensor::CalibratedCameraSpectralResponse& cameraResponse);
+
+// Traces every RGB directional sample from the placed holographic plate
+// through the placed sequential lens prescription and onto the placed sensor
+// plane. Physical clipping is retained as per-channel evidence; missing or
+// ambiguous optical truth is rejected instead of falling back to the ideal
+// camera above.
+[[nodiscard]] CameraImageResult synthesizePlacedCameraImage(
+    const ChimeraRecipe& recipe,
+    const ReconstructionResult& reconstruction,
+    const CameraSensorRequest& request,
+    const optics::sensor::CalibratedCameraSpectralResponse& cameraResponse,
+    const optics::scene::BenchScene& bench,
+    std::string_view sourcePlateComponentId,
+    std::string_view lensComponentId,
+    std::string_view observationComponentId,
+    const optics::ray::ILensPrescriptionResolver& lensPrescriptions);
 
 } // namespace holobench::app::chimera

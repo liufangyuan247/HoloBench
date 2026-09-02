@@ -49,8 +49,8 @@ animated or silently approximated.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: `dev` passes 603/603 tests and `core-ci` passes
-  601/601. Clang, MSVC, and WSL/GCC Core plus Clang/MSVC Application builds
+- **Acceptance evidence**: `dev` passes 606/606 tests and `core-ci` passes
+  604/604. Clang, MSVC, and WSL/GCC Core plus Clang/MSVC Application builds
   pass with warnings as errors;
   the packaged CJK font validates. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
   smoke passes real shelf placement, constrained whole-instrument edits,
@@ -181,9 +181,22 @@ animated or silently approximated.
   rotation bins, routed grid/segments, applied components/prescriptions,
   boundary state, and warnings. See
   [ADR 0034](adr/0034-derived-field-routing-from-placed-planes.md).
-- **M10.4 next slice**: CHIMERA camera-path prescription wavefronts, broader
-  instruments, and additional physical model families continue under the
-  shared Bench contract.
+- **M10.4 CHIMERA placed prescription camera implemented and locally
+  validated**: The canonical editable Bench now contains an ordinary Real Lens
+  Assembly between the holographic plate and reconstruction Probe. Product
+  capture exposes selectable lens/sensor IDs and no longer accepts virtual
+  pupil/focal controls. Each RGB chief ray follows the authoritative derived
+  Bench route and the placed sequential prescription independently, including
+  wavelength-dependent refraction, physical surface/component clipping, and
+  actual sensor-plane pose. A bounded prescription-derived RGB paraxial EFL
+  supplies the Airy readout only. Revision, component/prescription IDs, focal
+  lengths, surface counts, pupil/sensor coordinates, and trace rejection are
+  inspectable. Missing assets, reversed or ambiguous paths, and unmodelled
+  intervening optics fail instead of falling back to the legacy ideal camera.
+  See [ADR 0035](adr/0035-chimera-placed-prescription-camera.md).
+- **M10.4 next slice**: full CHIMERA prescription wavefront/aberration and
+  defocus integration, broader instruments, and additional physical model
+  families continue under the shared Bench contract.
 
 ## Product rebaseline (2026-09-01)
 
@@ -761,30 +774,32 @@ completion because it is primarily driven through fixed parameter panels:
   `chimera/selected_hogel_rgb_record_reconstruct_camera_cpu` benchmark covers
   a 256x256 three-channel M8 exposure, directional reconstruction, and finite-
   pupil camera capture. On the local Windows/Clang reference run it completed
-  in 1161.105 ms against a 30000 ms ceiling in the optimized `core-ci` build
+  in 2120.586 ms against a 30000 ms ceiling in the optimized `core-ci` build
   on an Intel Core i7-9750H / Windows 10 19045 host. Canonical artifacts occupied
-  1,273,819 bytes and the deliberately conservative twelve-complex-field peak
-  estimate was 13,856,731 bytes against a 64 MiB budget. The gate is now wired
+  1,283,337 bytes and the deliberately conservative twelve-complex-field peak
+  estimate was 13,866,249 bytes against a 64 MiB budget. The gate is now wired
   into Windows and Linux core CI. The separate
-  `chimera/editable_23_component_bench_renderer` hardware gate renders the
+  `chimera/editable_24_component_bench_renderer` hardware gate renders the
   generated ordinary Bench at 1920x1080 with 60 warm-up and 120 measured,
-  GPU-synchronized frames. AMD Radeon Pro 5300M measured 2.503 ms p95 against
-  a 33.333 ms ceiling with all 23 components and 128 displayed ray segments.
+  GPU-synchronized frames. AMD Radeon Pro 5300M measured 2.373 ms p95 against
+  a 33.333 ms ceiling with all 24 components and 128 displayed ray segments.
   This renderer gate is separate from the 1024x1024 wave-compute targets. A
   fresh optimized `app-ci` validation on the same GPU recorded ASM p95
   30.335 ms against 50 ms and 4-f p95 270.187 ms against 300 ms. Debug-build
   timings are not performance evidence. NVIDIA compute parity remains an
   additive later validation on the user's hardware.
-- **Shared-Bench automation workflow**: The generated 23-component ordinary
+- **Shared-Bench automation workflow**: The generated 24-component ordinary
   Bench now exposes contextual Generate Dataset/Plan, Expose Selected RGB Hogel,
   and Reconstruct View to Probe actions. Product workflow state binds recipe,
   dataset hash, 624-event canonical plan, accumulated hogel exposures,
   directional reconstruction, camera image, project identity, and exact scene
   revision. Moving any ordinary component makes all derived automation stale.
   A selected hogel executes three independent M8 volume recordings through its
-  placed SLM/object/reference paths. A selected view then passes through the
-  bounded finite-pupil, wavelength-specific Airy camera model and its relative
-  RGB image is drawn on the physical generated reconstruction Probe. The
+  placed SLM/object/reference paths. A selected view then sends each wavelength
+  through the selected placed Real Lens Assembly's sequential prescription and
+  authoritative Bench path onto the selected Probe. Prescription-derived EFL
+  and physical aperture drive the bounded Airy readout, and the relative RGB
+  image is drawn on that physical sensor plane. The
   hardware OpenGL gate clicks this complete path with real ImGui mouse input
   and requires the placed Probe texture submission. The bundled camera LUT is
   clearly identified as a nominal preview rather than measured calibration.
@@ -794,10 +809,11 @@ completion because it is primarily driven through fixed parameter panels:
   folded-reference, plate/material, and exposure sampling. Canonical bytes
   round-trip deterministically; unknown schema/version and invalid physical or
   colour identity reject.
-- **Recipe-to-bench compiler**: Compiler v1 creates one ordinary editable
-  `BenchProject` with 23 placed components: three object source/SLM/relay/stop
-  arms, three laser/fold-mirror/splitter reference arms, one volume plate, and
-  one reflection-side Probe. Stable generated IDs and a provenance table retain
+- **Recipe-to-bench compiler**: Compiler v1 plus the M10 camera extension
+  creates one ordinary editable `BenchProject` with 24 placed components: three
+  object source/SLM/relay/stop arms, three laser/fold-mirror/splitter reference
+  arms, one volume plate, one reflection-side Probe, and one placed sequential
+  camera lens. Stable generated IDs and a provenance table retain
   recipe/compiler/role/channel identity. The application can build the
   canonical recipe or load a recipe JSON and then edit/save the result through
   the normal Bench surface.
@@ -864,15 +880,19 @@ completion because it is primarily driven through fixed parameter panels:
   two hogels/two views without constructing a hidden 3D wave volume. It remains
   an ideal scalar directional preview rather than a calibrated camera image.
   See [ADR 0019](adr/0019-chimera-directional-reconstruction-preview.md).
-- **Calibrated finite-pupil camera image**: A bounded ideal on-axis camera now
-  intersects every reconstructed hogel/view direction with a positioned finite
-  circular pupil. Accepted rays map by physical focal angle to a finite sensor;
-  each independent optical wavelength receives its own Airy PSF and measured
-  three-channel spectral response. The result retains accepted/rejected ray
-  evidence, calibration ID, row orientation, ideal/deposited signal totals,
-  sensor-edge loss, Airy support, and bounded work. It remains relative linear
-  camera signal rather than display RGB or absolute photoelectrons. See
-  [ADR 0023](adr/0023-chimera-calibrated-camera-image.md).
+- **Placed prescription finite-pupil camera image**: ADR 0023's bounded ideal
+  on-axis camera remains an analytic oracle. Product capture now resolves a
+  selected placed real-lens prescription, traces 638/532/450 nm chief rays and
+  their physical clipping independently through the exact Bench route, and
+  intersects the actual Screen/Probe transform. Prescription-derived paraxial
+  EFL supplies the wavelength-specific Airy PSF; a measured three-channel
+  spectral response maps each optical wavelength into relative linear sensor
+  signal. Results retain revision, component/prescription identity,
+  accepted/rejected surface paths, chromatic focal lengths and hit coordinates,
+  sensor-edge loss, Airy support, and bounded work. Missing or unsupported
+  truth rejects without an ideal fallback. See
+  [ADR 0023](adr/0023-chimera-calibrated-camera-image.md) and
+  [ADR 0035](adr/0035-chimera-placed-prescription-camera.md).
 - **Deterministic parameter sweep**: Explicit axes cover hogel pitch, FOV,
   SLM/field sampling, relay focal length and stop, reference geometry,
   exposure, plate thickness, and shrinkage. A bounded Cartesian product retains
@@ -895,7 +915,7 @@ completion because it is primarily driven through fixed parameter panels:
   actions with real ImGui mouse events for all three hologram modes and the
   CHIMERA prepare/expose/reconstruct path, requires current textures on the
   physical Screen/Probe, verifies edit-driven stale suppression, validates the
-  generated 23-component Bench and its six plate branches, and exits without GL
+  generated 24-component Bench and its six plate branches, and exits without GL
   errors on AMD Radeon Pro 5300M. GitHub Actions runs
   [33469016367](https://github.com/liufangyuan247/HoloBench/actions/runs/33469016367),
   [33470678082](https://github.com/liufangyuan247/HoloBench/actions/runs/33470678082),

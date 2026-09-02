@@ -411,7 +411,7 @@ CompileResult compileChimeraRecipe(const ChimeraRecipe& recipe) {
     auto probe = component(
         scene::BenchComponentKind::FieldProbe,
         componentId("reconstruction-probe"),
-        aimedTransform({0.0, 0.0, -0.03}, {0.0, 0.0, 0.0}));
+        frameWithZAxis({0.0, 0.0, -0.098}, {0.0, 0.0, -1.0}));
     auto probeParameters = std::get<scene::FieldProbeParameters>(probe.parameters);
     probeParameters.widthMetres = std::max(0.05, 2.0 * plateWidth);
     probeParameters.heightMetres = std::max(0.05, 2.0 * plateHeight);
@@ -419,6 +419,20 @@ CompileResult compileChimeraRecipe(const ChimeraRecipe& recipe) {
     probeParameters.sampleHeight = recipe.exposure.sampleHeight;
     probe.parameters = probeParameters;
     addGenerated(result, std::move(probe), "reconstruction_probe", "", recipe);
+
+    // The camera is an ordinary editable Bench assembly. Its first prescription
+    // surface faces replay light travelling from the plate toward -Z; the
+    // sensor is a separate placed plane rather than a hidden image sink.
+    auto cameraLens = component(
+        scene::BenchComponentKind::RealLensAssembly,
+        componentId("camera-lens"),
+        frameWithZAxis({0.0, 0.0, -0.05}, {0.0, 0.0, -1.0}));
+    auto cameraLensParameters
+        = std::get<scene::RealLensAssemblyParameters>(cameraLens.parameters);
+    cameraLensParameters.prescriptionId = "default_n_bk7_biconvex";
+    cameraLensParameters.clearApertureDiameterMetres = 0.01;
+    cameraLens.parameters = cameraLensParameters;
+    addGenerated(result, std::move(cameraLens), "camera_lens", "", recipe);
 
     for (std::size_t index = 0; index < recipe.rgb.size(); ++index) {
         const auto& arm = recipe.rgb[index];

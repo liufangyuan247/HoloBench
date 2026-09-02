@@ -36,7 +36,7 @@ TEST_CASE("canonical CHIMERA recipe compiles to a feasible ordinary editable ben
     CHECK(first.feasible());
     CHECK(first.project.projectId == "chimera-canonical-chimera");
     CHECK(first.project.recordingRecipes.size() == 3U);
-    CHECK(first.generatedComponents.size() == 23U);
+    CHECK(first.generatedComponents.size() == 24U);
     CHECK(app::serializeBenchProject(first.project)
         == app::serializeBenchProject(second.project));
     CHECK(first.generatedComponents == second.generatedComponents);
@@ -56,6 +56,13 @@ TEST_CASE("canonical CHIMERA recipe compiles to a feasible ordinary editable ben
     CHECK(first.project.scene.find("chimera-reference-splitter-blue") != nullptr);
     CHECK(first.project.scene.find("chimera-plate") != nullptr);
     CHECK(first.project.scene.find("chimera-reconstruction-probe") != nullptr);
+    const auto* cameraLens
+        = first.project.scene.find("chimera-camera-lens");
+    REQUIRE(cameraLens != nullptr);
+    CHECK(cameraLens->kind == scene::BenchComponentKind::RealLensAssembly);
+    CHECK(std::get<scene::RealLensAssemblyParameters>(cameraLens->parameters)
+            .prescriptionId
+        == "default_n_bk7_biconvex");
 
     const auto* slm = first.project.scene.find("chimera-slm-red");
     REQUIRE(slm != nullptr);
@@ -80,6 +87,9 @@ TEST_CASE("compiled CHIMERA branches resolve three independent reflection recipe
         compiled.project.scene, trace, "chimera-plate");
     REQUIRE(fields.branches.size() == 6U);
     holobench::compute::fft::CpuFftBackend fft;
+    const ray::LensPrescriptionCatalog prescriptions({
+        ray::makeDefaultNBk7BiconvexPrescription(),
+    });
     auto previewSampling = compiled.project.recordingRecipes.front().sampling;
     previewSampling.sampleWidth = 128U;
     previewSampling.sampleHeight = 128U;
@@ -109,7 +119,8 @@ TEST_CASE("compiled CHIMERA branches resolve three independent reflection recipe
             resolved.channels.front().referenceBranchId,
             "chimera-reconstruction-probe",
             previewSampling,
-            fft);
+            fft,
+            &prescriptions);
         CHECK(replay.braggReplay.volume.kogelnik.diffractionEfficiency > 0.0);
         CHECK(replay.reconstructedPowerOnSampledWindowWatts > 0.0);
         CHECK_FALSE(replay.isStaleFor(compiled.project.scene));

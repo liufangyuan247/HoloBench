@@ -692,6 +692,7 @@ private:
     int chimeraHogelX_ = 3;
     int chimeraHogelY_ = 2;
     int chimeraViewIndex_ = 7;
+    std::string chimeraCameraLensComponentId_ = "chimera-camera-lens";
     float chimeraCameraDisplayGamma_ = 2.2F;
     std::unique_ptr<chimera::ChimeraBatchArtifact> chimeraBatch_;
     std::unique_ptr<chimera::ChimeraSweepResult> chimeraSweepResult_;

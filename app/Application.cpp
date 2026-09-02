@@ -1068,6 +1068,7 @@ void Application::buildChimeraBench(
         const bool feasible = compiled.feasible();
         chimeraConstraintReport_ = compiled.constraints;
         selectedBenchComponentId_ = "chimera-plate";
+        chimeraCameraLensComponentId_ = "chimera-camera-lens";
         sandboxObservationComponentId_ = "chimera-reconstruction-probe";
         const std::string status = "Compiled " + std::move(sourceLabel)
             + " to an editable CHIMERA-like bench"
@@ -1203,15 +1204,8 @@ void Application::reconstructSelectedChimeraHogel() {
     chimera::reconstructChimeraViews(
         *chimeraWorkflow_, benchProject_, hogels, views);
 
-    chimera::CameraImageRequest request;
+    chimera::CameraSensorRequest request;
     request.jobId = "chimera-bench-camera-preview";
-    request.pupilPlaneDistanceMetres = 0.03;
-    request.pupilCentreXMetres = request.pupilPlaneDistanceMetres
-        * std::tan(view.horizontalAngleRadians);
-    request.pupilCentreYMetres = request.pupilPlaneDistanceMetres
-        * std::tan(view.verticalAngleRadians);
-    request.pupilDiameterMetres = 2e-3;
-    request.focalLengthMetres = 2.5e-3;
     request.pixelWidth = 129U;
     request.pixelHeight = 129U;
     request.pixelPitchXMetres = 10e-6;
@@ -1221,6 +1215,8 @@ void Application::reconstructSelectedChimeraHogel() {
         benchProject_,
         request,
         makeNominalChimeraCameraResponse(),
+        realLensPrescriptionCatalog_,
+        chimeraCameraLensComponentId_,
         sandboxObservationComponentId_);
     const auto display = chimera::renderChimeraCameraImage(
         *chimeraWorkflow_->cameraImage,
@@ -1234,7 +1230,8 @@ void Application::reconstructSelectedChimeraHogel() {
     errorMessage_.clear();
     statusMessage_ = "Reconstructed " + view.viewId + " from hogel ("
         + std::to_string(x) + ", " + std::to_string(y)
-        + ") on placed observation " + sandboxObservationComponentId_;
+        + ") through placed lens " + chimeraCameraLensComponentId_
+        + " onto " + sandboxObservationComponentId_;
 }
 
 void Application::createChimeraBatch() {
@@ -1354,15 +1351,8 @@ void Application::reconstructChimeraBatchRegion() {
         views,
         "chimera-batch-region-preview");
 
-    chimera::CameraImageRequest request;
+    chimera::CameraSensorRequest request;
     request.jobId = "chimera-batch-region-camera-preview";
-    request.pupilPlaneDistanceMetres = 0.03;
-    request.pupilCentreXMetres = request.pupilPlaneDistanceMetres
-        * std::tan(view.horizontalAngleRadians);
-    request.pupilCentreYMetres = request.pupilPlaneDistanceMetres
-        * std::tan(view.verticalAngleRadians);
-    request.pupilDiameterMetres = 2e-3;
-    request.focalLengthMetres = 2.5e-3;
     request.pixelWidth = 129U;
     request.pixelHeight = 129U;
     request.pixelPitchXMetres = 10e-6;
@@ -1372,6 +1362,8 @@ void Application::reconstructChimeraBatchRegion() {
         benchProject_,
         request,
         makeNominalChimeraCameraResponse(),
+        realLensPrescriptionCatalog_,
+        chimeraCameraLensComponentId_,
         sandboxObservationComponentId_);
     const auto display = chimera::renderChimeraCameraImage(
         *chimeraWorkflow_->cameraImage,
@@ -1384,7 +1376,8 @@ void Application::reconstructChimeraBatchRegion() {
     }
     errorMessage_.clear();
     statusMessage_ = "Reconstructed bounded " + std::to_string(count)
-        + "-hogel batch region for " + view.viewId + " on "
+        + "-hogel batch region for " + view.viewId + " through "
+        + chimeraCameraLensComponentId_ + " onto "
         + sandboxObservationComponentId_;
 }
 
@@ -7023,7 +7016,7 @@ void Application::drawChimeraAutomationBar() {
             *chimeraWorkflow_, benchProject_);
     ImGui::BeginChild(
         "##chimera_automation_bar",
-        ImVec2(0.0F, 184.0F),
+        ImVec2(0.0F, 218.0F),
         ImGuiChildFlags_Borders);
     ImGui::TextUnformatted("CHIMERA Automation on this editable Bench");
     ImGui::SameLine();
@@ -7111,6 +7104,25 @@ void Application::drawChimeraAutomationBar() {
         }
         ImGui::EndCombo();
     }
+    const char* lensPreview = chimeraCameraLensComponentId_.empty()
+        ? "No Real Lens"
+        : chimeraCameraLensComponentId_.c_str();
+    ImGui::SetNextItemWidth(190.0F);
+    if (ImGui::BeginCombo("Camera Lens", lensPreview)) {
+        for (const auto& component : benchProject_.scene.components()) {
+            if (component.kind
+                != optics::scene::BenchComponentKind::RealLensAssembly) {
+                continue;
+            }
+            const bool selected
+                = component.id == chimeraCameraLensComponentId_;
+            if (ImGui::Selectable(component.id.c_str(), selected)) {
+                chimeraCameraLensComponentId_ = component.id;
+            }
+            if (selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
     ImGui::SameLine();
     const char* observationPreview = sandboxObservationComponentId_.empty()
         ? "No Screen / Probe"
@@ -7147,8 +7159,9 @@ void Application::drawChimeraAutomationBar() {
                         == static_cast<std::size_t>(std::max(0, chimeraHogelY_));
             });
     ImGui::BeginDisabled(
-        !selectedExposed || sandboxObservationComponentId_.empty());
-    if (ImGui::Button("Reconstruct View to Probe")) {
+        !selectedExposed || chimeraCameraLensComponentId_.empty()
+        || sandboxObservationComponentId_.empty());
+    if (ImGui::Button("Reconstruct Through Placed Camera")) {
         try {
             reconstructSelectedChimeraHogel();
         } catch (const std::exception& error) {
@@ -7167,6 +7180,20 @@ void Application::drawChimeraAutomationBar() {
             metrics.reconstructedDirectionalSampleCount,
             metrics.maximumNearestViewCrosstalkFraction,
             metrics.allRequestedViewsResolvable ? "resolvable" : "unresolved");
+    }
+    if (current && chimeraWorkflow_->cameraImage
+        && chimeraWorkflow_->cameraImage->usedPlacedSequentialLens) {
+        const auto& image = *chimeraWorkflow_->cameraImage;
+        ImGui::TextDisabled(
+            "camera %s / %s | prescription %s | RGB EFL %.2f / %.2f / %.2f mm | traces %zu ok, %zu rejected",
+            image.lensComponentId.c_str(),
+            image.observationComponentId.c_str(),
+            image.lensPrescriptionId.c_str(),
+            image.rgbEffectiveFocalLengthMetres[0] * 1e3,
+            image.rgbEffectiveFocalLengthMetres[1] * 1e3,
+            image.rgbEffectiveFocalLengthMetres[2] * 1e3,
+            image.metrics.prescriptionTraceCompletedCount,
+            image.metrics.prescriptionTraceRejectedCount);
     }
     ImGui::BeginDisabled(!current);
     if (ImGui::Button("New Print Batch")) {
@@ -11205,6 +11232,8 @@ void Application::drawWorkspace() {
                     && chimera::isChimeraBenchWorkflowCurrent(
                         *chimeraWorkflow_, benchProject_)
                     && chimeraWorkflow_->cameraImage
+                    && !chimeraWorkflow_->cameraImage->isStaleFor(
+                        benchProject_.scene)
                     && !chimeraWorkflow_->observationComponentId.empty()
                     && chimeraCameraTexture_
                     && chimeraCameraTexture_->isValid()) {
@@ -12962,10 +12991,10 @@ void Application::runSandboxInteractionSmoke() {
     click(sandboxUiEvidence_.chimeraPreset, "CHIMERA Bench action");
     drawInputFrame({-1000.0F, -1000.0F}, 0);
     if (benchProject_.projectId != "chimera-canonical-chimera"
-        || benchProject_.scene.components().size() != 23U
+        || benchProject_.scene.components().size() != 24U
         || selectedBenchComponentId_ != "chimera-plate") {
         throw std::runtime_error(
-            "CHIMERA action did not build the ordinary editable 23-component Bench");
+            "CHIMERA action did not build the ordinary editable 24-component Bench");
     }
     click(
         sandboxUiEvidence_.chimeraPrepare,
@@ -12995,13 +13024,23 @@ void Application::runSandboxInteractionSmoke() {
         "Reconstruct CHIMERA view to placed Probe action");
     if (!chimeraWorkflow_->reconstruction
         || !chimeraWorkflow_->cameraImage
+        || !chimeraWorkflow_->cameraImage->usedPlacedSequentialLens
+        || chimeraWorkflow_->cameraImage->lensComponentId
+            != "chimera-camera-lens"
+        || chimeraWorkflow_->cameraImage->lensPrescriptionId
+            != "default_n_bk7_biconvex"
+        || chimeraWorkflow_->cameraImage->sourceSceneRevision
+            != benchProject_.scene.revision()
+        || chimeraWorkflow_->cameraImage->metrics
+                .prescriptionTraceCompletedCount
+            != 3U
         || chimeraWorkflow_->observationComponentId
             != "chimera-reconstruction-probe"
         || !chimeraCameraTexture_
         || !chimeraCameraTexture_->isValid()
         || !sandboxReconstructionOverlaySubmitted_) {
         throw std::runtime_error(
-            "CHIMERA reconstruction action did not submit current camera evidence on the placed Probe (status="
+            "CHIMERA reconstruction action did not submit prescription-routed camera evidence on the placed Probe (status="
             + statusMessage_ + ", error=" + errorMessage_ + ", overlay="
             + sandboxReconstructionOverlayDiagnostic_ + ")");
     }
@@ -13133,7 +13172,7 @@ int Application::run(const RunOptions& options) {
         SDL_Log(
             "[Benchmark] benchmark=%s avg_fps=%.2f p50_ms=%.3f p95_ms=%.3f max_ms=%.3f target_p95_ms=%.3f target_met=%s viewport_width=%d viewport_height=%d window_width=%d window_height=%d ray_count=%zu displayed_segments=%zu dynamic_components=%zu warmup_frames=%d measured_frames=%zu vsync=%d gpu_sync=%s",
             options.chimeraBenchmark
-                ? "chimera/editable_23_component_bench_renderer"
+                ? "chimera/editable_24_component_bench_renderer"
                 : "application/default_bench_renderer",
             avgFps,
             p50_ms,
@@ -13453,7 +13492,7 @@ int Application::run(const RunOptions& options) {
                 compiled.project.scene, trace, "chimera-plate");
             const std::string bytes = serializeBenchProject(compiled.project);
             if (!compiled.feasible()
-                || compiled.generatedComponents.size() != 23U
+                || compiled.generatedComponents.size() != 24U
                 || fields.branches.size() != 6U
                 || !renderer_
                 || !renderer_->updateDynamicScene(

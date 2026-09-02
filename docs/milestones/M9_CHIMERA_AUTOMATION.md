@@ -21,8 +21,9 @@ work, not hidden claims or blockers for this virtual milestone.
 Current implementation status (2026-09-01): C9.1 format-v1 recipe parsing,
 validation, deterministic recipe-to-bench compiler, stable generated-component
 provenance, constraint report, three independent M8 reflection recording
-recipes, and Lab build controls are implemented. The canonical output is a
-23-component ordinary editable bench. Format-v1 hashed hogel/angular datasets,
+recipes, and Lab build controls are implemented. M10 subsequently extended the
+canonical output to a 24-component ordinary editable bench with a placed real
+camera lens. Format-v1 hashed hogel/angular datasets,
 deterministic synthetic perspective-view oracles, Fourier-lens position
 mapping, and sparse RGB SLM commands are implemented. Decoder-neutral real
 perspective rasters, strict P3/P6 inputs, explicit linear/sRGB transfer, and
@@ -44,19 +45,21 @@ same path now evaluates one deterministic bounded representative hogel for each
 calibrated sweep candidate, retains all RGB dose/material evidence in result
 format v2, rejects extrapolation per candidate, and permits exposure ranking
 only from successful measured responses.
-The directional result now also feeds a bounded ideal on-axis camera. A placed
-finite pupil selects actual hogel/view directions, independent wavelengths use
-their own circular-pupil Airy kernels, and a strict measured spectral LUT maps
-optical intensity into linear sensor RGB with explicit edge-loss and work
-accounting. Distortion, defocus, noise, and absolute photoelectron calibration
-remain explicit later extensions rather than being hidden behind display colour.
+The directional result originally fed the bounded ideal on-axis oracle in ADR
+0023. The M10 product path now uses the selected placed Real Lens Assembly and
+Probe: three wavelengths traverse the sequential prescription and exact Bench
+route independently, physical apertures clip them, and actual sensor pose sets
+their hit coordinates. Prescription-derived paraxial EFL still supplies the
+bounded Airy readout. Distortion, aberration wavefronts, defocus, noise, and
+absolute photoelectron calibration remain explicit later extensions.
 
 The first shared-Bench product slice is now operational. The contextual
 `CHIMERA Automation` bar binds a canonical perspective dataset and deterministic
 exposure plan to the exact current Bench revision, executes a selected hogel as
 three independent RGB M8 volume recordings, reconstructs a selected directional
-view, applies a finite-pupil wavelength-specific Airy camera preview, and draws
-that image on the physical generated reconstruction Probe. Any ordinary
+view, routes its RGB camera chief rays through a selected placed real
+prescription, applies the wavelength-specific Airy readout, and draws that image
+on the physical generated reconstruction Probe. Any ordinary
 component edit makes the complete automation state stale. Hardware OpenGL smoke
 drives the three actions with real ImGui mouse events and verifies the submitted
 Probe texture. The bundled camera response is explicitly a nominal relative
@@ -74,11 +77,12 @@ covers RGB M8 exposure through finite-pupil camera output with a 30 s latency
 ceiling and a conservative 64 MiB working-memory budget; Windows/Linux CI now
 runs the gate.
 
-The named GPU display gate is
-`chimera/editable_23_component_bench_renderer`: the canonical 23-component
+The named GPU display gate is now
+`chimera/editable_24_component_bench_renderer`: the canonical 24-component
 Bench renders at 1920x1080 after 60 warm-up frames, with 120 synchronized
 measurements and a 33.333 ms p95 ceiling. AMD Radeon Pro 5300M measured
-2.503 ms p95. This is a CHIMERA layout/beam renderer budget, separate from the
+2.373 ms p95 after the M10 placed-camera extension. This is a CHIMERA
+layout/beam renderer budget, separate from the
 1024x1024 wave-compute gates. A fresh optimized build on the same GPU measured
 ASM at 30.335 ms p95 against 50 ms and 4-f at 270.187 ms p95 against 300 ms;
 Debug-build timings are not performance evidence. NVIDIA parity remains an

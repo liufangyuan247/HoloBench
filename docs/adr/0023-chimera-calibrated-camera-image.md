@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted for the bounded M9 virtual reconstruction camera.
+Accepted as the bounded M9 analytic camera oracle. The product Bench path is
+superseded by [ADR 0035](0035-chimera-placed-prescription-camera.md).
 
 ## Context
 
@@ -63,3 +64,8 @@ ideal relative-signal camera: distortion, focus depth, lens aberrations,
 polarization, coherent multi-hogel field superposition, noise, saturation,
 absolute photoelectrons, CFA/Bayer sampling, and colour-management transforms
 remain future calibrated-camera work.
+
+The ideal request-driven pupil/focal model remains covered as a deterministic
+reference test. It is no longer called by `captureChimeraCameraImage`; the
+editable product workflow resolves placed prescription optics and sensor pose
+under ADR 0035.

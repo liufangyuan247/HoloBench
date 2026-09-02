@@ -25,9 +25,10 @@ recording derives the grating from the actual opposite-side plate branches and
 reconstructs a Bragg-weighted sampled field on a placed reflection-side
 Screen/Probe. The RGB preset records and replays three independent spectral
 channels and combines only their display intensities. CHIMERA recipes now build
-an ordinary editable 23-component Bench and drive hashed view/hogel data,
-selected or resumable RGB exposure, bounded reconstruction, camera preview,
-and transparent parameter sweeps on that same scene. Steam/store/distribution
+an ordinary editable 24-component Bench, including a placed prescription camera
+lens and sensor plane, and drive hashed view/hogel data, selected or resumable
+RGB exposure, bounded reconstruction, camera preview, and transparent parameter
+sweeps on that same scene. Steam/store/distribution
 work is removed from scope. For the current repository state and roadmap, see
 [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) and
 [HoloBench_CHIMERA_Project_Plan.md](HoloBench_CHIMERA_Project_Plan.md).
@@ -149,10 +150,11 @@ Inspector reports whether each recipe still resolves uniquely and can
 recompute it without silently selecting another path.
 
 M9 now has a strict versioned CHIMERA recipe and deterministic recipe-to-bench
-compiler. The canonical recipe creates a normal 23-component RGB reflection
+compiler. The canonical recipe creates a normal 24-component RGB reflection
 printer layout with placed SLM/relay/stop object arms, folded mirror/splitter
-reference arms, one volume plate, one reconstruction Probe, and three ordinary
-M8 recording recipes. The Lab can build the canonical layout or load a recipe
+reference arms, one volume plate, one placed prescription camera lens, one
+reconstruction Probe/sensor plane, and three ordinary M8 recording recipes. The
+Lab can build the canonical layout or load a recipe
 JSON, displays explicit FOV/NA/sampling/material constraints, and leaves every
 generated component editable through the same Bench UI and save format.
 The same automation path now generates hashed hogel/angular data and RGB
@@ -172,10 +174,14 @@ the calibrated index modulation and shrinkage in the ordinary M8 recorder.
 The deterministic CHIMERA sweep can consume the same calibrations on a bounded
 representative hogel, retain every RGB dose/material metric, and rank exposure
 candidates without extrapolating beyond the measured domain.
-Directional reconstruction can now feed a bounded finite-pupil camera: pupil
-position selects arriving hogel/view rays, wavelength-specific Airy kernels
-deposit them on a finite sensor, and a strict measured spectral LUT maps the
-independent optical wavelengths into linear camera RGB response.
+Directional reconstruction now feeds the product camera through the selected
+placed Real Lens Assembly and Screen/Probe sensor plane. Independent RGB chief
+rays traverse the wavelength-dependent sequential prescription and authoritative
+Bench route; physical apertures clip them, the placed sensor pose determines
+their hit coordinates, prescription-derived paraxial focal lengths drive the
+bounded Airy readout, and a strict measured spectral LUT maps each optical
+wavelength into linear camera RGB response. The former request-driven ideal
+finite-pupil camera remains only a deterministic analytic oracle.
 
 ## M1 Features
 

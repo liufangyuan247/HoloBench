@@ -201,8 +201,9 @@
   propagation through the emulsion are not implied. RGB channels now route
   independently through the placed post-plate path and combine only as display
   intensities; this does not imply cross-wavelength interference or calibrated
-  colour. CHIMERA's finite-pupil camera prescription path remains follow-up
-  work.
+  colour. CHIMERA camera chief rays now traverse a selected placed sequential
+  prescription, but its diffraction readout is still the bounded paraxial Airy
+  approximation described below.
 - Plate-local source fields use scalar envelopes. A collimated source is a hard
   circular profile, an object source is rectangular, and the current Gaussian
   adapter uses the configured source radius at the observer without propagated
@@ -217,12 +218,18 @@
   modeled. Calibrated parameter sweeps use one explicitly reported bounded
   representative hogel per candidate; they do not yet reuse exposure-invariant
   sampled fields or claim whole-plate chemistry.
-- M9 camera composition uses an ideal on-axis thin camera with a finite circular
-  pupil, wavelength-specific scalar Airy kernels, a finite sensor, and measured
-  linear spectral response. It does not yet model distortion, depth-dependent
-  focus, measured lens aberration, coherent multi-hogel field superposition,
-  polarization, noise, saturation, absolute photoelectrons, Bayer sampling, or
-  an ICC/display colour transform.
+- The legacy M9 ideal on-axis finite-pupil camera remains an analytic test
+  oracle only. Product CHIMERA capture now takes pupil, refraction, clipping,
+  chromatic chief-ray location, and sensor pose from a placed Real Lens
+  Assembly prescription plus placed Screen/Probe. Its wavelength-specific Airy
+  kernel uses prescription-derived paraxial effective focal length and the
+  shared circular clear aperture; it does not yet derive a full aberrated or
+  defocused wavefront PSF. An otherwise reachable camera route with additional
+  intervening optics rejects until those elements have a declared camera model.
+  Distortion, coatings, ghosts, coherent multi-hogel field superposition,
+  polarization, noise, saturation, absolute photoelectrons, Bayer sampling,
+  and ICC/display colour transforms remain unmodelled. See
+  [ADR 0035](adr/0035-chimera-placed-prescription-camera.md).
 - The dynamic bench has its own bounded scene-wide undo/redo timeline. The
   separate legacy history still covers lesson-relevant fixed optical-bench,
   Wave Detector, Sampling Debugger, and SLM inputs, but not Real Lens or the

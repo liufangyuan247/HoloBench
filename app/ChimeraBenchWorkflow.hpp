@@ -60,9 +60,12 @@ void reconstructChimeraViews(
 
 void captureChimeraCameraImage(
     ChimeraBenchWorkflow &workflow, const BenchProject &bench,
-    const CameraImageRequest &request,
+    const CameraSensorRequest &request,
     const optics::sensor::CalibratedCameraSpectralResponse &cameraResponse,
-    std::string observationComponentId);
+    const optics::ray::ILensPrescriptionResolver &lensPrescriptions,
+    std::string lensComponentId,
+    std::string observationComponentId,
+    std::string sourcePlateComponentId = "chimera-plate");
 
 // Display encoding only. CameraImageResult retains the original relative
 // linear sensor signal and calibration provenance.

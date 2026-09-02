@@ -7,6 +7,8 @@
 #include "app/ChimeraCameraImage.hpp"
 
 namespace chimera = holobench::app::chimera;
+namespace ray = holobench::optics::ray;
+namespace scene = holobench::optics::scene;
 namespace sensor = holobench::optics::sensor;
 
 namespace {
@@ -198,5 +200,133 @@ TEST_CASE("camera composition rejects invalid provenance dimensions and work") {
     CHECK_THROWS_AS(
         static_cast<void>(chimera::synthesizeCameraImage(
             recipe, wrong, request, response)),
+        std::invalid_argument);
+}
+
+TEST_CASE("placed CHIMERA camera traces RGB through the editable prescription") {
+    const auto recipe = chimera::makeCanonicalChimeraRecipe();
+    auto reconstruction = makeDirectionalEvidence(recipe);
+    reconstruction.samples.resize(1U);
+    const auto bench = chimera::compileChimeraRecipe(recipe).project;
+    const ray::LensPrescriptionCatalog prescriptions({
+        ray::makeDefaultNBk7BiconvexPrescription(),
+    });
+    chimera::CameraSensorRequest request;
+    request.jobId = "placed-prescription-camera";
+    request.pixelWidth = 65U;
+    request.pixelHeight = 65U;
+
+    const auto image = chimera::synthesizePlacedCameraImage(
+        recipe,
+        reconstruction,
+        request,
+        makeRgbCameraResponse(),
+        bench.scene,
+        "chimera-plate",
+        "chimera-camera-lens",
+        "chimera-reconstruction-probe",
+        prescriptions);
+    CHECK(image.usedPlacedSequentialLens);
+    CHECK(image.sourceSceneRevision == bench.scene.revision());
+    CHECK_FALSE(image.isStaleFor(bench.scene));
+    CHECK(image.lensComponentId == "chimera-camera-lens");
+    CHECK(image.lensPrescriptionId == "default_n_bk7_biconvex");
+    CHECK(image.placedClearApertureDiameterMetres
+        == doctest::Approx(0.01));
+    CHECK(image.rgbEffectiveFocalLengthMetres[0]
+        > image.rgbEffectiveFocalLengthMetres[1]);
+    CHECK(image.rgbEffectiveFocalLengthMetres[1]
+        > image.rgbEffectiveFocalLengthMetres[2]);
+    CHECK(image.metrics.prescriptionTraceCompletedCount == 3U);
+    CHECK(image.metrics.prescriptionTraceRejectedCount == 0U);
+    REQUIRE(image.contributions.size() == 1U);
+    REQUIRE(image.contributions.front().spectralRays.size() == 3U);
+    for (const auto& spectral : image.contributions.front().spectralRays) {
+        CHECK(spectral.prescriptionTraceStatus == "completed");
+        CHECK(spectral.prescriptionSurfaceCount == 2U);
+        CHECK(spectral.enteredPupil);
+        CHECK(spectral.intersectedSensorPlane);
+        CHECK(spectral.depositedOnSensor);
+    }
+    CHECK(image.metrics.sensorDepositedSampleCount == 1U);
+    auto edited = bench.scene;
+    auto sensorPlane = *edited.find("chimera-reconstruction-probe");
+    sensorPlane.transform.translationMetres.z -= 1e-3;
+    edited.replace("chimera-reconstruction-probe", std::move(sensorPlane));
+    CHECK(image.isStaleFor(edited));
+}
+
+TEST_CASE("moving the placed camera lens clips the same directional evidence") {
+    const auto recipe = chimera::makeCanonicalChimeraRecipe();
+    auto reconstruction = makeDirectionalEvidence(recipe);
+    reconstruction.samples.resize(1U);
+    auto bench = chimera::compileChimeraRecipe(recipe).project;
+    auto lens = *bench.scene.find("chimera-camera-lens");
+    lens.transform.translationMetres.x += 0.02;
+    auto edited = bench.scene;
+    edited.replace("chimera-camera-lens", std::move(lens));
+    bench.scene = std::move(edited);
+    const ray::LensPrescriptionCatalog prescriptions({
+        ray::makeDefaultNBk7BiconvexPrescription(),
+    });
+    chimera::CameraSensorRequest request;
+    request.jobId = "decentred-prescription-camera";
+    request.pixelWidth = 65U;
+    request.pixelHeight = 65U;
+
+    const auto image = chimera::synthesizePlacedCameraImage(
+        recipe,
+        reconstruction,
+        request,
+        makeRgbCameraResponse(),
+        bench.scene,
+        "chimera-plate",
+        "chimera-camera-lens",
+        "chimera-reconstruction-probe",
+        prescriptions);
+    CHECK(image.sourceSceneRevision == bench.scene.revision());
+    CHECK(image.metrics.prescriptionTraceCompletedCount == 0U);
+    CHECK(image.metrics.prescriptionTraceRejectedCount == 3U);
+    CHECK(image.metrics.pupilAcceptedSampleCount == 0U);
+    CHECK(image.metrics.pupilRejectedSampleCount == 1U);
+    CHECK(image.metrics.sensorDepositedSampleCount == 0U);
+    CHECK(sumImage(image) == chimera::LinearRgb {});
+}
+
+TEST_CASE("placed CHIMERA camera rejects an unmodelled intervening Bench optic") {
+    const auto recipe = chimera::makeCanonicalChimeraRecipe();
+    auto reconstruction = makeDirectionalEvidence(recipe);
+    reconstruction.samples.resize(1U);
+    auto bench = chimera::compileChimeraRecipe(recipe).project;
+    auto aperture = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::Aperture,
+        "camera-intervening-aperture");
+    aperture.transform.translationMetres = {0.0, 0.0, -0.025};
+    auto apertureParameters
+        = std::get<scene::ApertureParameters>(aperture.parameters);
+    apertureParameters.widthMetres = 0.02;
+    apertureParameters.heightMetres = 0.02;
+    aperture.parameters = apertureParameters;
+    bench.scene.add(std::move(aperture));
+    const ray::LensPrescriptionCatalog prescriptions({
+        ray::makeDefaultNBk7BiconvexPrescription(),
+    });
+    chimera::CameraSensorRequest request;
+    request.jobId = "intervening-optic-camera";
+    request.pixelWidth = 65U;
+    request.pixelHeight = 65U;
+
+    CHECK_THROWS_WITH_AS(
+        static_cast<void>(chimera::synthesizePlacedCameraImage(
+            recipe,
+            reconstruction,
+            request,
+            makeRgbCameraResponse(),
+            bench.scene,
+            "chimera-plate",
+            "chimera-camera-lens",
+            "chimera-reconstruction-probe",
+            prescriptions)),
+        doctest::Contains("additional placed optics"),
         std::invalid_argument);
 }

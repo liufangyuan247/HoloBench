@@ -138,6 +138,15 @@ plate, Screen, or Probe. RGB channels combine only as observation-plane display
 intensities. The Inspector retains per-channel plate-to-beam rotation, routed
 component/prescription, boundary, and approximation evidence; no temporary
 source, private holography graph, or PCG geometry participates in the physics.
+The CHIMERA product camera now also resolves a user-selected placed Real Lens
+Assembly and Screen/Probe. Every RGB chief ray traverses the wavelength-
+dependent sequential prescription and authoritative Bench route; component and
+surface apertures clip physically, the placed sensor pose sets the hit, and a
+prescription-derived RGB paraxial EFL drives the bounded Airy readout. Results
+retain exact revision, IDs, prescription, three focal lengths, per-channel
+surface/coordinate/status evidence, and fail closed on missing assets,
+reversed paths, ambiguous branches, or unsupported intervening optics. The
+former request-driven ideal camera remains only an analytic oracle.
 See
 [ADR 0028](../adr/0028-revision-bound-placed-field-measurements.md) and
 [ADR 0029](../adr/0029-coherent-merge-and-independent-measurement-channels.md),
@@ -145,7 +154,8 @@ plus [ADR 0030](../adr/0030-shared-beam-following-field-paths.md) and
 [ADR 0031](../adr/0031-placed-real-lens-prescription-adapter.md),
 [ADR 0032](../adr/0032-hashed-lens-prescription-assets.md), and
 [ADR 0033](../adr/0033-recorded-volume-wavefront-evidence.md), plus
-[ADR 0034](../adr/0034-derived-field-routing-from-placed-planes.md).
+[ADR 0034](../adr/0034-derived-field-routing-from-placed-planes.md), and
+[ADR 0035](../adr/0035-chimera-placed-prescription-camera.md).
 
 ## Platform extensibility acceptance
 
