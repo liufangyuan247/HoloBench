@@ -49,8 +49,8 @@ animated or silently approximated.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: `dev` passes 616/616 tests and `core-ci` passes
-  614/614. Clang, MSVC, and WSL/GCC Core plus Clang/MSVC Application builds
+- **Acceptance evidence**: `dev` passes 618/618 tests and `core-ci` passes
+  616/616. Clang, MSVC, and WSL/GCC Core plus Clang/MSVC Application builds
   pass with warnings as errors;
   the packaged CJK font validates. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
   smoke passes real shelf placement, constrained whole-instrument edits,
@@ -221,8 +221,7 @@ animated or silently approximated.
   pupil/focal controls. Each RGB chief ray follows the authoritative derived
   Bench route and the placed sequential prescription independently, including
   wavelength-dependent refraction, physical surface/component clipping, and
-  actual sensor-plane pose. A bounded prescription-derived RGB paraxial EFL
-  supplies the Airy readout only. Revision, component/prescription IDs, focal
+  actual sensor-plane pose. Revision, component/prescription IDs, focal
   lengths, surface counts, pupil/sensor coordinates, and trace rejection are
   inspectable. Missing assets, reversed or ambiguous paths, and unmodelled
   intervening optics fail instead of falling back to the legacy ideal camera.
@@ -230,15 +229,25 @@ animated or silently approximated.
 - **M10.4 bounded prescription spot/defocus implemented and locally
   validated**: Each accepted RGB direction launches a deterministic 49-ray
   bundle over the effective placed pupil. Sequential marginal rays retain
-  prescription aberration, dispersion, vignetting, and the actual sensor pose;
-  their geometric intercepts are convolved with the corresponding Airy core.
+  prescription aberration, dispersion, vignetting, and the actual sensor pose.
   Moving the sensor 10 mm away from the canonical image plane increases the
   measured green RMS spot radius. Per-channel centroid/RMS/radius and pupil
   trace/hit evidence are visible, bounded by the existing 100-million kernel
   work ceiling, and exercised by workflow/OpenGL smoke gates. See
   [ADR 0036](adr/0036-chimera-prescription-spot-defocus.md).
-- **M10.4 next slice**: coherent prescription wavefront/aberration PSF,
-  broader instruments, coating/stage calibration adapters, and additional
+- **M10.4 bounded coherent prescription PSF implemented and locally
+  validated**: Exact glass/air optical path from every surviving pupil ray plus
+  the off-axis entrance-plane phase drives scalar Huygens superposition on the
+  actual placed sensor. Aberration and defocus now enter as pupil phase rather
+  than independent Airy kernels. Results retain per-channel wavefront RMS and
+  peak-to-valley OPD under the cumulative 100-million complex-term ceiling.
+  Constructive/destructive phase oracles, sensor-motion evidence, CHIMERA
+  workflow tests, and hardware interaction smoke pass. Coherence remains local
+  to one wavelength and directional sample; hogels/views/RGB combine as
+  intensities. See
+  [ADR 0040](adr/0040-bounded-coherent-prescription-pupil-psf.md).
+- **M10.4 next slice**: broader instruments, coating/stage calibration
+  adapters, and additional
   physical model families continue under the shared Bench contract.
 
 ## Product rebaseline (2026-09-01)
@@ -817,8 +826,8 @@ completion because it is primarily driven through fixed parameter panels:
   `chimera/selected_hogel_rgb_record_reconstruct_camera_cpu` benchmark covers
   a 256x256 three-channel M8 exposure, directional reconstruction, and placed-
   prescription camera capture with 147 pupil rays. On the local Windows/Clang
-  reference run it completed in 2256.708 ms against a 30000 ms ceiling in the
-  optimized `core-ci` build
+  coherent-pupil reference run completed in 2430.925 ms against a 30000 ms
+  ceiling in the optimized `core-ci` build
   on an Intel Core i7-9750H / Windows 10 19045 host. Canonical artifacts occupied
   1,283,337 bytes and the deliberately conservative twelve-complex-field peak
   estimate was 13,866,249 bytes against a 64 MiB budget. The gate is now wired
@@ -843,9 +852,10 @@ completion because it is primarily driven through fixed parameter panels:
   placed SLM/object/reference paths. A selected view then sends each wavelength
   through the selected placed Real Lens Assembly's sequential prescription and
   authoritative Bench path onto the selected Probe. A 49-ray bundle per colour
-  retains geometric aberration, marginal clipping, and actual sensor defocus;
-  prescription-derived EFL and physical aperture supply each Airy core, and the
-  relative RGB image is drawn on that physical sensor plane. The
+  retains exact sequential optical path, off-axis entrance phase, geometric
+  aberration, marginal clipping, and actual sensor defocus. Bounded coherent
+  pupil superposition draws the relative RGB image on that physical sensor
+  plane. The
   hardware OpenGL gate clicks this complete path with real ImGui mouse input
   and requires the placed Probe texture submission. The bundled camera LUT is
   clearly identified as a nominal preview rather than measured calibration.
@@ -930,21 +940,22 @@ completion because it is primarily driven through fixed parameter panels:
   on-axis camera remains an analytic oracle. Product capture now resolves a
   selected placed real-lens prescription, traces 638/532/450 nm chief rays and
   their physical clipping independently through the exact Bench route, and
-  intersects the actual Screen/Probe transform. Prescription-derived paraxial
-  EFL supplies the wavelength-specific Airy PSF; a declared three-channel
+  intersects the actual Screen/Probe transform. A declared three-channel
   spectral response maps each optical wavelength into relative linear sensor
   signal. A physical Screen / Detector may bind and apply an exact-byte
   hash-verified LUT, while the virtual Probe path remains explicitly nominal.
   Results retain revision, component/prescription identity,
   accepted/rejected surface paths, chromatic focal lengths and hit coordinates,
-  plus a 49-ray pupil spot that responds to geometric aberration, vignetting,
-  and sensor defocus before Airy convolution. Results retain pupil throughput,
-  centroid/RMS/radius, sensor-edge loss, Airy support, and bounded work. Missing
+  plus a 49-ray pupil wavefront whose exact optical paths interfere on the
+  placed sensor. Results retain pupil throughput, centroid/RMS/radius,
+  wavefront RMS/peak-to-valley OPD, sensor-edge loss, finite support, and
+  bounded work. Missing
   or unsupported truth rejects without an ideal fallback. See
   [ADR 0023](adr/0023-chimera-calibrated-camera-image.md) and
   [ADR 0035](adr/0035-chimera-placed-prescription-camera.md) and
   [ADR 0036](adr/0036-chimera-prescription-spot-defocus.md), plus
-  [ADR 0037](adr/0037-hashed-placed-detector-response.md).
+  [ADR 0037](adr/0037-hashed-placed-detector-response.md) and
+  [ADR 0040](adr/0040-bounded-coherent-prescription-pupil-psf.md).
 - **Deterministic parameter sweep**: Explicit axes cover hogel pitch, FOV,
   SLM/field sampling, relay focal length and stop, reference geometry,
   exposure, plate thickness, and shrinkage. A bounded Cartesian product retains
@@ -993,8 +1004,7 @@ completion because it is primarily driven through fixed parameter panels:
    multi-selection/equal-spacing ergonomics only where the real workflow needs it.
 3. Attach measured SLM, material, camera, and stage evidence when physical
    hardware and calibration data become available.
-4. Add coherent aberrated-wavefront PSF, distortion, sensor noise,
-   polarization, or high-NA vector
+4. Add distortion, sensor noise, polarization, or high-NA vector
    solvers only under a separately validated hardware/digital-twin milestone.
 5. Keep Steam, store, packaging, and distribution closed unless the user
    explicitly reopens that scope.

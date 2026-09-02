@@ -66,9 +66,10 @@ sensor changes the physical intersection and advances the revision. The legacy
 `synthesizeCameraImage` ideal on-axis function remains an analytic regression
 oracle, not the shared-Bench product path.
 
-ADR 0036 subsequently adds a bounded prescription-traced pupil spot, so sensor
-motion, geometric aberration, marginal clipping, and defocus now affect the
-Airy-convolved readout. It is still not a coherent aberrated-wavefront PSF.
+ADR 0036 subsequently added a bounded prescription-traced pupil spot. ADR 0040
+now uses the exact per-ray optical path and off-axis entrance phase for bounded
+coherent pupil superposition on the placed sensor instead of depositing an
+Airy kernel at each geometric intercept.
 Distortion, coatings, ghosts, polarization, noise, saturation, CFA sampling,
 and absolute photoelectron calibration remain open. Additional intervening
 camera optics must first gain a declared and validated camera model.

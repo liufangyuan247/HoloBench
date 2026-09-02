@@ -229,25 +229,27 @@
 - The legacy M9 ideal on-axis finite-pupil camera remains an analytic test
   oracle only. Product CHIMERA capture now takes pupil, refraction, clipping,
   chromatic chief-ray location, and sensor pose from a placed Real Lens
-  Assembly prescription plus placed Screen/Probe. Its wavelength-specific Airy
-  kernel uses prescription-derived paraxial effective focal length and the
-  shared circular clear aperture. A fixed 49-ray pupil bundle now traces the
-  prescription onto the actual sensor, so geometric aberration, vignetting,
-  chromatic spot shift, and sensor defocus broaden the Airy-convolved result.
+  Assembly prescription plus placed Screen/Probe. A fixed 49-ray pupil bundle
+  retains exact sequential glass/air optical path and off-axis entrance phase;
+  bounded scalar Huygens superposition evaluates the resulting coherent pupil
+  on the actual sensor. Geometric aberration, vignetting, chromatic spot shift,
+  and sensor defocus therefore change both intercepts and phase.
   A physical Screen / Detector may apply one exact-byte SHA-256-verified
   relative spectral-response LUT; a virtual Probe cannot claim that hardware
   calibration and uses the explicit nominal preview. The LUT is not absolute
   quantum efficiency, exposure, gain, noise, saturation, or CFA truth.
-  This is not a coherent aberrated-wavefront PSF: pupil optical-path phase and
-  diffraction interference are not yet integrated. An otherwise reachable
-  camera route with additional
+  This is a bounded scalar coherent PSF within one wavelength/directional
+  sample, not a dense metrology pupil or global coherent print simulation.
+  Different hogels, views, and wavelengths still combine as sensor
+  intensities. An otherwise reachable camera route with additional
   intervening optics rejects until those elements have a declared camera model.
   Distortion, coatings, ghosts, coherent multi-hogel field superposition,
   polarization, noise, saturation, absolute photoelectrons, Bayer sampling,
   and ICC/display colour transforms remain unmodelled. See
   [ADR 0035](adr/0035-chimera-placed-prescription-camera.md) and
   [ADR 0036](adr/0036-chimera-prescription-spot-defocus.md), plus
-  [ADR 0037](adr/0037-hashed-placed-detector-response.md).
+  [ADR 0037](adr/0037-hashed-placed-detector-response.md) and
+  [ADR 0040](adr/0040-bounded-coherent-prescription-pupil-psf.md).
 - The dynamic bench has its own bounded scene-wide undo/redo timeline. The
   separate legacy history still covers lesson-relevant fixed optical-bench,
   Wave Detector, Sampling Debugger, and SLM inputs, but not Real Lens or the

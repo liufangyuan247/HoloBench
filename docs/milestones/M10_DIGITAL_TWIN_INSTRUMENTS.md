@@ -171,18 +171,20 @@ source, private holography graph, or PCG geometry participates in the physics.
 The CHIMERA product camera now also resolves a user-selected placed Real Lens
 Assembly and Screen/Probe. Every RGB chief ray traverses the wavelength-
 dependent sequential prescription and authoritative Bench route; component and
-surface apertures clip physically, the placed sensor pose sets the hit, and a
-prescription-derived RGB paraxial EFL drives the bounded Airy readout. Results
+surface apertures clip physically, and the placed sensor pose sets the hit.
+Results
 retain exact revision, IDs, prescription, three focal lengths, per-channel
 surface/coordinate/status evidence, and fail closed on missing assets,
 reversed paths, ambiguous branches, or unsupported intervening optics. The
 former request-driven ideal camera remains only an analytic oracle.
 Each accepted channel also traces a deterministic 49-ray bundle spanning the
-effective pupil. Prescription aberration, marginal clipping, and the actual
-sensor's axial/tilted pose form a geometric spot whose individual intercepts
-receive the wavelength-specific Airy core. Per-channel centroid/RMS/radius and
-completed/rejected/sensor-hit counts are inspectable. This adds physical
-defocus without claiming coherent aberrated-wavefront diffraction.
+effective pupil. Exact sequential glass/air optical path and the off-axis
+entrance phase drive bounded scalar Huygens superposition on the actual placed
+sensor. Prescription aberration and sensor defocus therefore enter as phase,
+not as independent Airy kernels at geometric intercepts. Per-channel
+centroid/RMS/radius, wavefront RMS/peak-to-valley OPD, and
+completed/rejected/sensor-hit counts are inspectable. Different wavelengths,
+views, and hogels remain independent intensity contributions.
 See
 [ADR 0028](../adr/0028-revision-bound-placed-field-measurements.md) and
 [ADR 0029](../adr/0029-coherent-merge-and-independent-measurement-channels.md),
@@ -195,7 +197,8 @@ plus [ADR 0030](../adr/0030-shared-beam-following-field-paths.md) and
 [ADR 0036](../adr/0036-chimera-prescription-spot-defocus.md), plus
 [ADR 0037](../adr/0037-hashed-placed-detector-response.md),
 [ADR 0038](../adr/0038-hashed-placed-slm-response.md), and
-[ADR 0039](../adr/0039-hashed-optical-pose-calibration.md).
+[ADR 0039](../adr/0039-hashed-optical-pose-calibration.md), plus
+[ADR 0040](../adr/0040-bounded-coherent-prescription-pupil-psf.md).
 
 ## Platform extensibility acceptance
 

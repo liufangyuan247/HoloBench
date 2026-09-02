@@ -178,8 +178,7 @@ Directional reconstruction now feeds the product camera through the selected
 placed Real Lens Assembly and Screen/Probe sensor plane. Independent RGB chief
 rays traverse the wavelength-dependent sequential prescription and authoritative
 Bench route; physical apertures clip them, the placed sensor pose determines
-their hit coordinates, prescription-derived paraxial focal lengths drive the
-bounded Airy readout, and a strict declared spectral LUT maps each optical
+their hit coordinates, and a strict declared spectral LUT maps each optical
 wavelength into linear camera RGB response. A physical Screen / Detector can
 bind a SHA-256-verified response JSON that is restored relative to the Bench
 and actually drives capture; a virtual Probe or uncalibrated detector is
@@ -187,10 +186,13 @@ labelled as an explicit nominal preview. The former request-driven ideal
 finite-pupil camera remains only a deterministic analytic oracle. See
 [ADR 0037](docs/adr/0037-hashed-placed-detector-response.md).
 The placed camera additionally traces a bounded 49-ray pupil bundle per
-wavelength. Prescription aberration, vignetting, and actual sensor defocus form
-a geometric spot that is convolved with the corresponding Airy core; the UI
-reports pupil throughput and worst RMS spot radius. This hybrid is explicitly
-not a coherent aberrated-wavefront PSF.
+wavelength. Exact sequential optical path plus off-axis entrance phase drive
+scalar coherent superposition on the actual placed sensor; prescription
+aberration and defocus therefore enter as pupil phase rather than independent
+Airy kernels. The UI reports pupil throughput, geometric RMS spot radius, and
+wavefront RMS OPD. Coherence is bounded to one wavelength/directional sample;
+hogels, views, and RGB channels still combine as intensities. See
+[ADR 0040](docs/adr/0040-bounded-coherent-prescription-pupil-psf.md).
 
 ## M1 Features
 

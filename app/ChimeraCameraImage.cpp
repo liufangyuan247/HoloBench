@@ -10,10 +10,10 @@
 #include <vector>
 
 #include "compute/fourier/PsfMtf.hpp"
-#include "optics/analysis/SpotDiagram.hpp"
 #include "optics/ray/DynamicBenchTracer.hpp"
 #include "optics/scene/BenchPathEvidence.hpp"
 #include "optics/scene/BenchScene.hpp"
+#include "optics/wave/SequentialPupilPsf.hpp"
 
 namespace holobench::app::chimera {
 namespace {
@@ -283,6 +283,163 @@ bool psfMayReachSensor(
         && sensorX - channel.supportRadiusMetres <= halfWidth
         && sensorY + channel.supportRadiusMetres >= -halfHeight
         && sensorY - channel.supportRadiusMetres <= halfHeight;
+}
+
+LinearRgb depositCoherentPrescriptionPsf(
+    CameraImageResult& result,
+    const CameraImageRequest& request,
+    const PsfChannel& channel,
+    const math::RigidTransform3d& sensorLocalToWorld,
+    const optics::wave::SequentialPupilWavefront& wavefront,
+    const LinearRgb& signal) {
+    if (wavefront.samples.empty()) return {};
+    double minimumX = std::numeric_limits<double>::infinity();
+    double maximumX = -std::numeric_limits<double>::infinity();
+    double minimumY = std::numeric_limits<double>::infinity();
+    double maximumY = -std::numeric_limits<double>::infinity();
+    for (const auto& sample : wavefront.samples) {
+        minimumX = std::min(minimumX, sample.imageXMetres);
+        maximumX = std::max(maximumX, sample.imageXMetres);
+        minimumY = std::min(minimumY, sample.imageYMetres);
+        maximumY = std::max(maximumY, sample.imageYMetres);
+    }
+    minimumX -= channel.supportRadiusMetres;
+    maximumX += channel.supportRadiusMetres;
+    minimumY -= channel.supportRadiusMetres;
+    maximumY += channel.supportRadiusMetres;
+    const double halfRasterWidth = 0.5
+        * static_cast<double>(request.pixelWidth) * request.pixelPitchXMetres;
+    const double halfRasterHeight = 0.5
+        * static_cast<double>(request.pixelHeight) * request.pixelPitchYMetres;
+    if (maximumX < -halfRasterWidth || minimumX > halfRasterWidth
+        || maximumY < -halfRasterHeight || minimumY > halfRasterHeight) {
+        return {};
+    }
+
+    const double minimumColumnValue = minimumX / request.pixelPitchXMetres
+        + 0.5 * static_cast<double>(request.pixelWidth) - 0.5;
+    const double maximumColumnValue = maximumX / request.pixelPitchXMetres
+        + 0.5 * static_cast<double>(request.pixelWidth) - 0.5;
+    const double minimumRowValue = 0.5 * static_cast<double>(request.pixelHeight)
+        - maximumY / request.pixelPitchYMetres - 0.5;
+    const double maximumRowValue = 0.5 * static_cast<double>(request.pixelHeight)
+        - minimumY / request.pixelPitchYMetres - 0.5;
+    constexpr double kLongLongLimit = static_cast<double>(
+        std::numeric_limits<long long>::max() / 2LL);
+    if (!std::isfinite(minimumColumnValue)
+        || !std::isfinite(maximumColumnValue)
+        || !std::isfinite(minimumRowValue)
+        || !std::isfinite(maximumRowValue)
+        || std::abs(minimumColumnValue) > kLongLongLimit
+        || std::abs(maximumColumnValue) > kLongLongLimit
+        || std::abs(minimumRowValue) > kLongLongLimit
+        || std::abs(maximumRowValue) > kLongLongLimit) {
+        throw std::invalid_argument(
+            "placed coherent camera PSF support is not representable");
+    }
+    const long long minimumColumn = static_cast<long long>(
+        std::floor(minimumColumnValue));
+    const long long maximumColumn = static_cast<long long>(
+        std::ceil(maximumColumnValue));
+    const long long minimumRow = static_cast<long long>(
+        std::floor(minimumRowValue));
+    const long long maximumRow = static_cast<long long>(
+        std::ceil(maximumRowValue));
+    if (maximumColumn < minimumColumn || maximumRow < minimumRow) {
+        throw std::logic_error("placed coherent camera PSF support inverted");
+    }
+    const auto columnCount = static_cast<std::size_t>(
+        maximumColumn - minimumColumn + 1LL);
+    const auto rowCount = static_cast<std::size_t>(
+        maximumRow - minimumRow + 1LL);
+    if (columnCount > kMaximumCameraKernelEvaluations / rowCount
+        || columnCount * rowCount
+            > kMaximumCameraKernelEvaluations / wavefront.samples.size()) {
+        throw std::invalid_argument(
+            "placed coherent camera PSF work exceeds its safety limit");
+    }
+    const std::size_t termCount
+        = columnCount * rowCount * wavefront.samples.size();
+    if (result.metrics.kernelEvaluationCount
+        > kMaximumCameraKernelEvaluations - termCount) {
+        throw std::invalid_argument(
+            "placed coherent camera composition exceeds its kernel-work limit");
+    }
+
+    std::vector<WeightedPixel> inside;
+    inside.reserve(std::min(
+        columnCount * rowCount,
+        std::min(
+            request.pixelWidth * request.pixelHeight,
+            std::size_t {65'536U})));
+    constexpr std::size_t kCoherentPointBatchSize = 4'096U;
+    std::vector<math::Vec3d> points;
+    points.reserve(std::min(columnCount, kCoherentPointBatchSize));
+    double normalization = 0.0;
+    for (long long row = minimumRow; row <= maximumRow; ++row) {
+        const double pixelY = (0.5 * static_cast<double>(request.pixelHeight)
+                - static_cast<double>(row) - 0.5)
+            * request.pixelPitchYMetres;
+        for (long long batchStart = minimumColumn;
+             batchStart <= maximumColumn;) {
+            points.clear();
+            const auto remaining = static_cast<std::size_t>(
+                maximumColumn - batchStart + 1LL);
+            const std::size_t batchSize = std::min(
+                remaining, kCoherentPointBatchSize);
+            for (std::size_t offset = 0U; offset < batchSize; ++offset) {
+                const long long column
+                    = batchStart + static_cast<long long>(offset);
+                const double pixelX = (static_cast<double>(column) + 0.5
+                        - 0.5 * static_cast<double>(request.pixelWidth))
+                    * request.pixelPitchXMetres;
+                points.push_back(math::transformPointLocalToWorld(
+                    sensorLocalToWorld, {pixelX, pixelY, 0.0}));
+            }
+            const auto evaluated = optics::wave::evaluateCoherentPupil(
+                wavefront, points);
+            normalization += evaluated.intensitySum;
+            result.metrics.kernelEvaluationCount
+                += evaluated.complexTermCount;
+            if (row >= 0
+                && row < static_cast<long long>(request.pixelHeight)) {
+                for (std::size_t offset = 0U;
+                     offset < evaluated.relativeIntensities.size();
+                     ++offset) {
+                    const long long column
+                        = batchStart + static_cast<long long>(offset);
+                    if (column < 0
+                        || column
+                            >= static_cast<long long>(request.pixelWidth)) {
+                        continue;
+                    }
+                    inside.push_back({
+                        .index = static_cast<std::size_t>(row)
+                                * request.pixelWidth
+                            + static_cast<std::size_t>(column),
+                        .weight = evaluated.relativeIntensities[offset],
+                    });
+                }
+            }
+            batchStart += static_cast<long long>(batchSize);
+        }
+    }
+    if (!std::isfinite(normalization) || normalization <= 0.0) {
+        throw std::runtime_error(
+            "placed coherent camera PSF has no sampled support");
+    }
+    LinearRgb deposited;
+    for (const auto& pixel : inside) {
+        const double normalized = pixel.weight / normalization;
+        const LinearRgb share {
+            .red = signal.red * normalized,
+            .green = signal.green * normalized,
+            .blue = signal.blue * normalized,
+        };
+        addSignal(result.rowMajorLinearSensorSignal[pixel.index], share);
+        addSignal(deposited, share);
+    }
+    return deposited;
 }
 
 void validateSensorRequest(const CameraSensorRequest& request) {
@@ -633,6 +790,7 @@ CameraImageResult synthesizeCameraImage(
         .detectorResponseContentSha256 = {},
         .detectorResponseTemperatureKelvin = 0.0,
         .usedPlacedSequentialLens = false,
+        .usedCoherentPrescriptionPsf = false,
         .sourceSceneRevision = 0,
         .sourcePlateComponentId = {},
         .lensComponentId = {},
@@ -903,6 +1061,7 @@ CameraImageResult synthesizePlacedCameraImage(
         .detectorResponseContentSha256 = {},
         .detectorResponseTemperatureKelvin = 0.0,
         .usedPlacedSequentialLens = true,
+        .usedCoherentPrescriptionPsf = true,
         .sourceSceneRevision = bench.revision(),
         .sourcePlateComponentId = plate->id,
         .lensComponentId = lens->id,
@@ -930,8 +1089,8 @@ CameraImageResult synthesizePlacedCameraImage(
         .metrics = {},
         .limitations = {
             "chief rays and a fixed 49-ray concentric-ring pupil bundle are traced wavelength-by-wavelength through the placed sequential prescription; finite-aperture clipping and sensor-plane pose are physical Bench inputs",
-            "prescription aberration and sensor defocus broaden the geometric pupil spot; each pupil intercept is convolved with the wavelength-specific paraxial Airy core, not a coherent sampled wavefront PSF",
-            "each directional sample remains an incoherent ray bundle; full coherent multi-hogel field superposition is not performed",
+            "the exact sequential optical path of every surviving pupil ray drives bounded scalar Huygens superposition on the placed sensor; aberration and defocus therefore enter as phase, while finite support remains explicit",
+            "each reconstructed directional sample and RGB wavelength is coherent only across its own pupil; independent hogels, views, and wavelengths still combine as sensor intensities rather than one global coherent field",
             "sensor values are linear relative signals from the declared spectral LUT; placed-calibration evidence distinguishes verified assets from the nominal preview",
             "sensor row zero maps to positive placed-sensor local Y",
         },
@@ -1036,10 +1195,13 @@ CameraImageResult synthesizePlacedCameraImage(
                 .pupilRayCompletedCount = 0U,
                 .pupilRayRejectedCount = 0U,
                 .pupilRaySensorHitCount = 0U,
+                .usedCoherentPupilPsf = false,
                 .geometricCentroidXMetres = 0.0,
                 .geometricCentroidYMetres = 0.0,
                 .geometricRmsRadiusMetres = 0.0,
                 .geometricRadiusMetres = 0.0,
+                .wavefrontRmsOpticalPathDifferenceMetres = 0.0,
+                .wavefrontPeakToValleyOpticalPathDifferenceMetres = 0.0,
                 .idealSensorSignal = {},
                 .depositedSensorSignal = {},
             };
@@ -1090,63 +1252,86 @@ CameraImageResult synthesizePlacedCameraImage(
             }
             const auto pupilRays = makePlacedCameraPupilBundle(
                 incident, placedPrescription, clearApertureDiameter);
-            const auto spot = optics::analysis::computeSpotDiagram(
+            std::vector<double> incidentOpticalPathOffsets;
+            incidentOpticalPathOffsets.reserve(pupilRays.size());
+            for (const auto& pupilRay : pupilRays) {
+                incidentOpticalPathOffsets.push_back(math::dot(
+                    incident.direction,
+                    pupilRay.originMetres - incident.originMetres));
+            }
+            const auto wavefront = optics::wave::traceSequentialPupilWavefront(
                 pupilRays,
                 placedPrescription,
                 observation->transform,
+                sensorX,
+                sensorY,
                 traceOptions,
-                0U);
+                incidentOpticalPathOffsets);
             evidence.pupilRayCount = pupilRays.size();
-            evidence.pupilRayCompletedCount = spot.samples.size();
-            evidence.pupilRayRejectedCount = spot.rejectedRays.size();
+            evidence.pupilRayCompletedCount = wavefront.samples.size();
+            evidence.pupilRayRejectedCount = wavefront.rejectedRayCount;
+            evidence.usedCoherentPupilPsf = !wavefront.samples.empty();
             evidence.geometricCentroidXMetres
-                = spot.statistics.centroidXMetres;
+                = wavefront.geometricCentroidXMetres;
             evidence.geometricCentroidYMetres
-                = spot.statistics.centroidYMetres;
+                = wavefront.geometricCentroidYMetres;
             evidence.geometricRmsRadiusMetres
-                = spot.statistics.rmsRadiusMetres;
+                = wavefront.geometricRmsRadiusMetres;
             evidence.geometricRadiusMetres
-                = spot.statistics.geometricRadiusMetres;
+                = wavefront.geometricRadiusMetres;
+            evidence.wavefrontRmsOpticalPathDifferenceMetres
+                = wavefront.rmsOpticalPathDifferenceMetres;
+            evidence.wavefrontPeakToValleyOpticalPathDifferenceMetres
+                = wavefront.peakToValleyOpticalPathDifferenceMetres;
             result.metrics.pupilRayTraceCount += pupilRays.size();
-            result.metrics.pupilRayTraceCompletedCount += spot.samples.size();
+            result.metrics.pupilRayTraceCompletedCount
+                += wavefront.samples.size();
             result.metrics.pupilRayTraceRejectedCount
-                += spot.rejectedRays.size();
+                += wavefront.rejectedRayCount;
             result.metrics.maximumGeometricRmsRadiusMetres = std::max(
                 result.metrics.maximumGeometricRmsRadiusMetres,
-                spot.statistics.rmsRadiusMetres);
+                wavefront.geometricRmsRadiusMetres);
             result.metrics.maximumGeometricRadiusMetres = std::max(
                 result.metrics.maximumGeometricRadiusMetres,
-                spot.statistics.geometricRadiusMetres);
+                wavefront.geometricRadiusMetres);
+            result.metrics.maximumWavefrontRmsOpticalPathDifferenceMetres
+                = std::max(
+                    result.metrics
+                        .maximumWavefrontRmsOpticalPathDifferenceMetres,
+                    wavefront.rmsOpticalPathDifferenceMetres);
+            result.metrics
+                .maximumWavefrontPeakToValleyOpticalPathDifferenceMetres
+                = std::max(
+                    result.metrics
+                        .maximumWavefrontPeakToValleyOpticalPathDifferenceMetres,
+                    wavefront.peakToValleyOpticalPathDifferenceMetres);
             const double opticalIntensity = opticalChannelIntensity(
                 sample.reconstructedLinearIntensity, index);
-            for (const auto& spotSample : spot.samples) {
-                if (std::abs(spotSample.imageXMetres)
+            double sensorAcceptedPower = 0.0;
+            for (const auto& pupilSample : wavefront.samples) {
+                if (std::abs(pupilSample.imageXMetres)
                         > observationHalfWidth(*observation)
-                    || std::abs(spotSample.imageYMetres)
+                    || std::abs(pupilSample.imageYMetres)
                         > observationHalfHeight(*observation)) {
                     continue;
                 }
                 ++evidence.pupilRaySensorHitCount;
                 ++result.metrics.pupilRaySensorHitCount;
-                if (opticalIntensity <= 0.0) continue;
-                const auto raySignal = scaledResponse(
-                    opticalIntensity * spotSample.power,
+                sensorAcceptedPower += pupilSample.exitRay.power;
+            }
+            if (opticalIntensity > 0.0 && sensorAcceptedPower > 0.0) {
+                const auto coherentSignal = scaledResponse(
+                    opticalIntensity * sensorAcceptedPower,
                     channels[index].cameraResponse);
-                addSignal(evidence.idealSensorSignal, raySignal);
-                if (psfMayReachSensor(
-                        raster,
-                        channels[index],
-                        spotSample.imageXMetres,
-                        spotSample.imageYMetres)) {
-                    const auto deposited = depositPsf(
-                        result,
-                        raster,
-                        channels[index],
-                        spotSample.imageXMetres,
-                        spotSample.imageYMetres,
-                        raySignal);
-                    addSignal(evidence.depositedSensorSignal, deposited);
-                }
+                addSignal(evidence.idealSensorSignal, coherentSignal);
+                const auto deposited = depositCoherentPrescriptionPsf(
+                    result,
+                    raster,
+                    channels[index],
+                    observation->transform,
+                    wavefront,
+                    coherentSignal);
+                addSignal(evidence.depositedSensorSignal, deposited);
             }
             addSignal(contribution.idealSensorSignal,
                 evidence.idealSensorSignal);

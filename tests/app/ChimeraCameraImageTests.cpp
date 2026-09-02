@@ -229,6 +229,7 @@ TEST_CASE("placed CHIMERA camera traces RGB through the editable prescription") 
         "chimera-reconstruction-probe",
         prescriptions);
     CHECK(image.usedPlacedSequentialLens);
+    CHECK(image.usedCoherentPrescriptionPsf);
     CHECK(image.sourceSceneRevision == bench.scene.revision());
     CHECK_FALSE(image.isStaleFor(bench.scene));
     CHECK(image.lensComponentId == "chimera-camera-lens");
@@ -265,7 +266,13 @@ TEST_CASE("placed CHIMERA camera traces RGB through the editable prescription") 
             == spectral.pupilRayCount);
         CHECK(spectral.pupilRaySensorHitCount > 1U);
         CHECK(spectral.geometricRmsRadiusMetres > 0.0);
+        CHECK(spectral.usedCoherentPupilPsf);
+        CHECK(spectral.wavefrontRmsOpticalPathDifferenceMetres >= 0.0);
+        CHECK(spectral.wavefrontPeakToValleyOpticalPathDifferenceMetres
+            >= spectral.wavefrontRmsOpticalPathDifferenceMetres);
     }
+    CHECK(image.metrics.maximumWavefrontPeakToValleyOpticalPathDifferenceMetres
+        > 0.0);
     CHECK(image.metrics.sensorDepositedSampleCount == 1U);
     auto edited = bench.scene;
     auto sensorPlane = *edited.find("chimera-reconstruction-probe");
@@ -325,6 +332,10 @@ TEST_CASE("placed camera sensor motion produces prescription defocus") {
         > focusedGreen.geometricRmsRadiusMetres);
     CHECK(defocused.metrics.maximumGeometricRmsRadiusMetres
         > focused.metrics.maximumGeometricRmsRadiusMetres);
+    CHECK(std::abs(
+        defocused.metrics.maximumWavefrontRmsOpticalPathDifferenceMetres
+        - focused.metrics.maximumWavefrontRmsOpticalPathDifferenceMetres)
+        > 1e-9);
     CHECK(defocused.rgbSensorAxialDistanceMetres[1]
         == doctest::Approx(focused.rgbSensorAxialDistanceMetres[1] + 0.01));
 }

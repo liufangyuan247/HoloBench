@@ -73,10 +73,13 @@ struct CameraSpectralRayEvidence final {
     std::size_t pupilRayCompletedCount = 0;
     std::size_t pupilRayRejectedCount = 0;
     std::size_t pupilRaySensorHitCount = 0;
+    bool usedCoherentPupilPsf = false;
     double geometricCentroidXMetres = 0.0;
     double geometricCentroidYMetres = 0.0;
     double geometricRmsRadiusMetres = 0.0;
     double geometricRadiusMetres = 0.0;
+    double wavefrontRmsOpticalPathDifferenceMetres = 0.0;
+    double wavefrontPeakToValleyOpticalPathDifferenceMetres = 0.0;
     LinearRgb idealSensorSignal;
     LinearRgb depositedSensorSignal;
 
@@ -116,6 +119,8 @@ struct CameraImageMetrics final {
     std::size_t pupilRaySensorHitCount = 0;
     double maximumGeometricRmsRadiusMetres = 0.0;
     double maximumGeometricRadiusMetres = 0.0;
+    double maximumWavefrontRmsOpticalPathDifferenceMetres = 0.0;
+    double maximumWavefrontPeakToValleyOpticalPathDifferenceMetres = 0.0;
     double maximumFirstDarkRadiusMetres = 0.0;
     double maximumPsfSupportRadiusPixels = 0.0;
     std::array<double, 3> rgbFirstDarkRadiusMetres {};
@@ -137,6 +142,7 @@ struct CameraImageResult final {
     std::string detectorResponseContentSha256;
     double detectorResponseTemperatureKelvin = 0.0;
     bool usedPlacedSequentialLens = false;
+    bool usedCoherentPrescriptionPsf = false;
     std::uint64_t sourceSceneRevision = 0;
     std::string sourcePlateComponentId;
     std::string lensComponentId;

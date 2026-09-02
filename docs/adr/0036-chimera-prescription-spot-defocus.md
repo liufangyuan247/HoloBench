@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted for the bounded M10 placed-camera readout.
+Accepted geometric foundation; its Airy-convolution decision is superseded by
+ADR 0040 for the placed-camera readout.
 
 ## Context
 
@@ -12,7 +13,8 @@ changed the chief-ray intersection without producing geometric defocus, and
 prescription aberration outside the chief ray was invisible. That behavior was
 not sufficient for an adjustable digital-twin camera.
 
-A full coherent prescription wavefront PSF remains a separate model: it needs
+At the time of ADR 0036, a full coherent prescription wavefront PSF remained a
+separate model: it needed
 bounded pupil-field sampling, optical-path phase, propagation to the tilted
 sensor, reference evidence, and a performance contract. The current product
 must not label a geometric spot as that coherent result.
@@ -58,3 +60,7 @@ between hogels, distortion calibration, coatings, ghosts, polarization,
 detector noise, CFA sampling, or absolute photoelectrons. Those capabilities
 must be added as reusable physical/calibration models rather than inferred from
 the PCG mesh or from an experiment name.
+
+ADR 0040 subsequently retains this 49-ray geometry and its clipping/spot
+evidence but replaces per-intercept Airy intensity deposition with bounded
+coherent superposition driven by exact sequential optical path.

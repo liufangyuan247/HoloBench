@@ -7395,10 +7395,12 @@ void Application::drawChimeraAutomationBar() {
             image.metrics.prescriptionTraceCompletedCount,
             image.metrics.prescriptionTraceRejectedCount);
         ImGui::TextDisabled(
-            "pupil rays %zu/%zu reached the sensor plane | max geometric RMS %.2f um | Airy-convolved spot/defocus",
+            "pupil rays %zu/%zu reached the sensor plane | max geometric RMS %.2f um | max coherent OPD RMS %.2f nm",
             image.metrics.pupilRaySensorHitCount,
             image.metrics.pupilRayTraceCount,
-            image.metrics.maximumGeometricRmsRadiusMetres * 1e6);
+            image.metrics.maximumGeometricRmsRadiusMetres * 1e6,
+            image.metrics.maximumWavefrontRmsOpticalPathDifferenceMetres
+                * 1e9);
         ImGui::TextDisabled(
             "detector response %s | %s | %.2f K",
             image.cameraCalibrationId.c_str(),
@@ -13391,6 +13393,7 @@ void Application::runSandboxInteractionSmoke() {
     if (!chimeraWorkflow_->reconstruction
         || !chimeraWorkflow_->cameraImage
         || !chimeraWorkflow_->cameraImage->usedPlacedSequentialLens
+        || !chimeraWorkflow_->cameraImage->usedCoherentPrescriptionPsf
         || chimeraWorkflow_->cameraImage->lensComponentId
             != "chimera-camera-lens"
         || chimeraWorkflow_->cameraImage->lensPrescriptionId
@@ -13405,6 +13408,9 @@ void Application::runSandboxInteractionSmoke() {
         || chimeraWorkflow_->cameraImage->metrics.pupilRaySensorHitCount <= 3U
         || chimeraWorkflow_->cameraImage->metrics
                 .maximumGeometricRmsRadiusMetres
+            <= 0.0
+        || chimeraWorkflow_->cameraImage->metrics
+                .maximumWavefrontPeakToValleyOpticalPathDifferenceMetres
             <= 0.0
         || chimeraWorkflow_->cameraImage->usedPlacedDetectorCalibration
         || !chimeraWorkflow_->cameraImage

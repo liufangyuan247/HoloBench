@@ -102,6 +102,9 @@ The following wave and Fourier-optics architecture decisions are locked:
 - Runtime prescription-ID resolution, first-surface Bench anchoring, exact
   placed sequential routing, and the bounded scalar low-NA surface-phase model
   (ADR 0031).
+- Bounded sequential-pupil tracing, explicit off-axis entrance phase, and
+  optical-path-driven coherent PSF evaluation on an arbitrarily placed sensor
+  plane (ADR 0040).
 - Exact-byte hashed external prescription identity, immutable catalog
   provenance, atomic calibrated component binding, project-relative restoration,
   and fail-closed candidate-edit validation (ADR 0032).

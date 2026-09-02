@@ -112,6 +112,7 @@ add_library(holobench_optics STATIC
     optics/scene/SceneProjectAdapter.cpp
     optics/wave/FieldElements.cpp
     optics/wave/FieldSources.cpp
+    optics/wave/SequentialPupilPsf.cpp
     optics/wave/CoherentInterference.cpp
     optics/wave/BeamFollowingField.cpp
 )
@@ -469,6 +470,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/OpticalMaterialTests.cpp
         tests/analytic/RotationalSurfaceTests.cpp
         tests/analytic/SequentialLensTests.cpp
+        tests/analytic/SequentialPupilPsfTests.cpp
         tests/analytic/SnellTests.cpp
         tests/analytic/SpotDiagramTests.cpp
         tests/analytic/ThinLensTests.cpp

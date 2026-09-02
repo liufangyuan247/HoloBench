@@ -229,12 +229,15 @@ GitHub Actions run 33471184614 passes both Core jobs.
 - **Workload**: One 256x256 selected hogel passes through three independent RGB
   M8 volume recordings, directional reconstruction, three wavelength-specific
   placed sequential-prescription/Bench chief-ray paths, 147 total prescription
-  pupil rays, Airy-convolved geometric aberration/defocus spots, and relative
+  pupil rays, exact glass/air OPL plus off-axis entrance phase, bounded coherent
+  pupil superposition on the placed sensor, and relative
   linear camera synthesis through the explicit nominal detector-response
   selection path.
-- **Result**: Clang **2256.708 ms**, MSVC **3385.139 ms**, and WSL/GCC
-  **2978.271 ms**, each against a **30000 ms** ceiling; 108/147 pupil rays
-  reach the active sensor and the worst geometric RMS is **356.729 um**;
+- **Result**: Clang **2430.925 ms**, MSVC **3423.970 ms**, and WSL/GCC
+  **3315.119 ms**, each against a **30000 ms** ceiling; 108/147 pupil rays
+  reach the active sensor, the worst geometric RMS is **356.729 um**, and the
+  latest Clang run retains **10312.899 nm RMS / 30558.393 nm peak-to-valley**
+  wavefront OPD evidence;
   canonical artifact
   **1,283,337 bytes**; conservative peak estimate **13,866,249 bytes** against
   **64 MiB**.

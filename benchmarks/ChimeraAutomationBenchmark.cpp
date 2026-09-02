@@ -85,6 +85,10 @@ int main() {
         workflow.cameraImage->metrics.pupilRayTraceCount !=
             3U * chimera::kPlacedCameraPupilRayCount ||
         workflow.cameraImage->metrics.pupilRaySensorHitCount <= 3U ||
+        !workflow.cameraImage->usedCoherentPrescriptionPsf ||
+        workflow.cameraImage->metrics
+                .maximumWavefrontPeakToValleyOpticalPathDifferenceMetres <=
+            0.0 ||
         workflow.cameraImage->usedPlacedDetectorCalibration ||
         workflow.cameraImage->detectorResponseTemperatureKelvin != 293.15 ||
         !std::isfinite(milliseconds)) {
@@ -100,7 +104,8 @@ int main() {
         "target_ms=%.3f time_target_met=%s artifact_bytes=%zu "
         "estimated_peak_working_bytes=%zu memory_budget_bytes=%zu "
         "memory_target_met=%s pupil_rays=%zu pupil_sensor_hits=%zu "
-        "max_geometric_rms_um=%.6f detector_response=%s "
+        "max_geometric_rms_um=%.6f max_wavefront_rms_nm=%.6f "
+        "max_wavefront_ptv_nm=%.6f detector_response=%s "
         "detector_mode=nominal-preview dataset_hash=%s plan_hash=%s\n",
         milliseconds, kMaximumSelectedHogelMilliseconds,
         timeMet ? "true" : "false", artifactBytes, estimatedWorkingBytes,
@@ -108,6 +113,12 @@ int main() {
         workflow.cameraImage->metrics.pupilRayTraceCount,
         workflow.cameraImage->metrics.pupilRaySensorHitCount,
         workflow.cameraImage->metrics.maximumGeometricRmsRadiusMetres * 1e6,
+        workflow.cameraImage->metrics
+                .maximumWavefrontRmsOpticalPathDifferenceMetres *
+            1e9,
+        workflow.cameraImage->metrics
+                .maximumWavefrontPeakToValleyOpticalPathDifferenceMetres *
+            1e9,
         workflow.cameraImage->cameraCalibrationId.c_str(),
         workflow.dataset.contentHash.c_str(),
         workflow.plan.contentHash.c_str());
