@@ -150,11 +150,12 @@
   footprint; and an oblique plate restores the resolved centre carrier.
   Tilted powered lenses, non-ideal direction changes, and general prescription
   paths remain explicit. The bounded real-lens adapter is passed through
-  FFT-refined single-channel and RGB thin-transmission plate recording. The
-  reflection-volume recorder still represents each branch by its local centre
-  direction and coupled-wave material response; it does not claim a general
-  prescribed-lens wavefront exposure. Vector/polarization and high-NA
-  longitudinal effects remain explicit. Placed
+  FFT-refined single-channel/RGB thin-transmission and reflection-volume plate
+  recording. Volume recording retains the revision-bound sampled object and
+  reference fields, while exact local centre directions still define the
+  analytic grating vector and the scalar Kogelnik model supplies diffraction
+  efficiency. This is not a three-dimensional index-volume, vector,
+  polarization, or high-NA solver. Placed
   SLMs apply persisted ideal amplitude/phase commands using
   uniform, wrapped linear-ramp, or checkerboard recipes with bit-depth
   quantization and manual/automation provenance. M9 transient hogel rasters can
@@ -180,6 +181,13 @@
   opposite-hemisphere, and interpolated bin counts. Larger offsets and grazing
   planes reject; the scalar interpolation does not add polarization or vector
   diffraction.
+- Product reflection/RGB volume recording requires resolved sampled transverse
+  carriers and reuses the retained object/reference fields for reconstruction.
+  A CHIMERA hogel preview may deliberately retain `carrierSampled=false`
+  alongside its exact analytic grating vector and dose evidence; that bounded
+  preview cannot be used for direct sampled-field replay. Derived fields are
+  recomputed from the persisted recipe after load and are not embedded in
+  project JSON.
 - Plate-local source fields use scalar envelopes. A collimated source is a hard
   circular profile, an object source is rectangular, and the current Gaussian
   adapter uses the configured source radius at the observer without propagated

@@ -96,9 +96,11 @@ measurement.
   prescription remains immediately reproducible.
 - Product thin-transmission recording passes the runtime resolver into both
   object and reference branch sampling and retains the applied prescription ID.
-  Missing resolution rejects the full recording. Reflection-volume recording
-  remains a separate centre-direction/coupled-wave model and does not claim a
-  general prescription-shaped exposure wavefront.
+  Missing resolution rejects the full recording. The subsequent record-time
+  sampled-field contract for reflection-volume exposure and reconstruction is
+  specified by
+  [ADR 0033](0033-recorded-volume-wavefront-evidence.md); it retains the
+  centre-direction/coupled-wave model for grating geometry and efficiency.
 - Deterministic tests cover rigid placement, exact thick-lens centre-ray
   routing and optical path, a resolved scalar focal field, missing-resolver
   rejection, and the high-slope validity gate.

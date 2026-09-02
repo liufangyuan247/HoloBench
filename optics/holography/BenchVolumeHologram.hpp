@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
+#include "optics/holography/PlateFieldSampling.hpp"
 #include "optics/holography/PlateIncidentFields.hpp"
 #include "optics/holography/VolumeHologram.hpp"
 
@@ -29,6 +31,8 @@ struct VolumePlateRecordingResult final {
     VolumePlateMaterial material;
     VolumeHologramParameters nominalReplayParameters;
     VolumeHologramResult nominalReplay;
+    std::optional<SampledPlateIncidentField> objectIncident;
+    std::optional<SampledPlateIncidentField> referenceIncident;
 
     [[nodiscard]] bool isStaleFor(const scene::BenchScene& bench) const noexcept;
 };
@@ -53,6 +57,37 @@ struct VolumePlateReplayResult final {
     std::uint64_t objectBranchId,
     std::uint64_t referenceBranchId,
     const VolumePlateMaterial& material = {});
+
+// Product recording retains the exact sampled object/reference fields that
+// wrote the volume grating. Every supported placed wave transform must be
+// applied by the shared beam-following service; an unresolved real-lens
+// prescription or other unsupported element rejects the complete recording.
+[[nodiscard]] VolumePlateRecordingResult recordVolumePlate(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    std::uint64_t objectBranchId,
+    std::uint64_t referenceBranchId,
+    const VolumePlateMaterial& material,
+    const PlateFieldSamplingOptions& sampling,
+    compute::fft::IFftBackend& fftBackend,
+    std::span<const PlacedSlmSparseCommand> slmCommands = {},
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
+
+// Automation may already own the exact sampled fields (for example after a
+// bounded SLM exposure pass). This adapter validates that both fields are
+// current, branch-matched, co-sampled external-plane evidence before attaching
+// them to the same volume-recording contract. It preserves a false
+// carrierSampled diagnostic when an automation preview intentionally cannot
+// resolve the optical carrier; direct field replay continues to reject that
+// evidence rather than treating it as a resolved reconstruction.
+[[nodiscard]] VolumePlateRecordingResult recordVolumePlateFromSampledFields(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    std::uint64_t objectBranchId,
+    std::uint64_t referenceBranchId,
+    const VolumePlateMaterial& material,
+    SampledPlateIncidentField objectIncident,
+    SampledPlateIncidentField referenceIncident);
 
 [[nodiscard]] VolumePlateReplayResult replayVolumePlate(
     const scene::BenchScene& bench,

@@ -1536,7 +1536,10 @@ void Application::recomputeRecordingRecipe(
                 benchProject_.scene,
                 fields,
                 selections,
-                recipe.volumeMaterial);
+                recipe.volumeMaterial,
+                recipe.sampling,
+                *detectorFftBackend_,
+                &realLensPrescriptionCatalog_);
         sandboxRgbVolumeRecording_ = std::make_unique<
             optics::holography::RgbVolumePlateRecordingResult>(
                 std::move(recording));
@@ -1557,7 +1560,11 @@ void Application::recomputeRecordingRecipe(
         fields,
         channel.objectBranchId,
         channel.referenceBranchId,
-        recipe.volumeMaterial);
+        recipe.volumeMaterial,
+        recipe.sampling,
+        *detectorFftBackend_,
+        {},
+        &realLensPrescriptionCatalog_);
     sandboxVolumeReplayWavelengthNanometres_ = static_cast<float>(
         recording.pair.wavelengthMetres * 1e9);
     sandboxVolumeReplayAngleDegrees_ = static_cast<float>(
@@ -2038,7 +2045,8 @@ void Application::reconstructSelectedPlateExperiment() {
                 *sandboxRgbVolumeRecording_,
                 plate->id,
                 sampling,
-                *detectorFftBackend_);
+                *detectorFftBackend_,
+                &realLensPrescriptionCatalog_);
         const field::RgbIntensityVisualizationOptions displayOptions {
             .channelIntensityGains = {
                 static_cast<double>(sandboxRgbDisplayGains_[0]),
@@ -2094,7 +2102,8 @@ void Application::reconstructSelectedPlateExperiment() {
             sandboxVolumeRecording_->pair.referenceBranchId,
             observation->id,
             sampling,
-            *detectorFftBackend_);
+            *detectorFftBackend_,
+            &realLensPrescriptionCatalog_);
         field::FieldVisualizationOptions viewOptions;
         viewOptions.colormap = field::ColormapKind::Inferno;
         const auto image = field::renderLinearIntensity(
@@ -9092,6 +9101,10 @@ void Application::drawSandboxInspector() {
                                     == optics::holography::PlateRecordingGeometry::Reflection) {
                                     if (ImGui::Button("Record volume reflection")) {
                                         try {
+                                            if (!detectorFftBackend_) {
+                                                throw std::runtime_error(
+                                                    "CPU FFT backend is unavailable");
+                                            }
                                             if (sandboxPlateSampleSize_ < 2
                                                 || sandboxPlateSampleSize_ > 4096) {
                                                 throw std::invalid_argument(
@@ -9141,7 +9154,11 @@ void Application::drawSandboxInspector() {
                                                     fields,
                                                     pair.objectBranchId,
                                                     pair.referenceBranchId,
-                                                    material);
+                                                    material,
+                                                    sampling,
+                                                    *detectorFftBackend_,
+                                                    {},
+                                                    &realLensPrescriptionCatalog_);
                                             upsertRecordingRecipe(
                                                 benchProject_,
                                                 makeVolumeRecordingRecipe(
@@ -9576,6 +9593,59 @@ void Application::drawSandboxInspector() {
                                 recording.nominalReplay.kogelnik.detuningParameter,
                                 recording.nominalReplay.kogelnik.diffractionEfficiency
                                     * 100.0);
+                            if (recording.objectIncident.has_value()
+                                && recording.referenceIncident.has_value()) {
+                                ImGui::TextColored(
+                                    ImVec4(0.35F, 0.9F, 0.45F, 1.0F),
+                                    "Recorded sampled wavefront evidence retained");
+                                const auto drawRecordedPath = [](
+                                    const char* label,
+                                    const optics::holography::
+                                        SampledPlateIncidentField& incident) {
+                                    const auto& path = incident.diagnostics;
+                                    ImGui::Text(
+                                        "%s field: %.7g W on window | %s",
+                                        label,
+                                        path.integratedPowerWatts,
+                                        path.appliedLocalWavePath
+                                            ? "shared sampled path"
+                                            : "direct source envelope");
+                                    if (!path.appliedWaveComponentIds.empty()) {
+                                        const std::string elements
+                                            = joinedBenchIdentifiers(
+                                                path.appliedWaveComponentIds);
+                                        ImGui::TextWrapped(
+                                            "Applied %s elements: %s",
+                                            label,
+                                            elements.c_str());
+                                    }
+                                    if (!path.appliedRealLensPrescriptionIds
+                                             .empty()) {
+                                        const std::string prescriptions
+                                            = joinedBenchIdentifiers(
+                                                path.appliedRealLensPrescriptionIds);
+                                        ImGui::TextWrapped(
+                                            "%s real-lens prescriptions: %s",
+                                            label,
+                                            prescriptions.c_str());
+                                    }
+                                    for (const auto& warning : path.warnings) {
+                                        ImGui::TextColored(
+                                            ImVec4(1.0F, 0.68F, 0.25F, 1.0F),
+                                            "%s: %s",
+                                            label,
+                                            warning.c_str());
+                                    }
+                                };
+                                drawRecordedPath(
+                                    "Object", *recording.objectIncident);
+                                drawRecordedPath(
+                                    "Reference", *recording.referenceIncident);
+                            } else {
+                                ImGui::TextColored(
+                                    ImVec4(1.0F, 0.68F, 0.25F, 1.0F),
+                                    "Legacy geometric-only volume recording; record again to retain sampled wavefront evidence.");
+                            }
 
                             ImGui::SeparatorText("Volume Replay");
                             ImGui::InputFloat(
@@ -9705,7 +9775,8 @@ void Application::drawSandboxInspector() {
                                                     recording.pair.referenceBranchId,
                                                     component.id,
                                                     sampling,
-                                                    *detectorFftBackend_);
+                                                    *detectorFftBackend_,
+                                                    &realLensPrescriptionCatalog_);
                                         field::FieldVisualizationOptions viewOptions;
                                         viewOptions.colormap
                                             = field::ColormapKind::Inferno;

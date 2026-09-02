@@ -98,7 +98,10 @@ void saveChimeraBatchArtifact(const ChimeraBatchArtifact &artifact,
 loadChimeraBatchArtifact(const std::filesystem::path &path);
 
 // Executes a bounded row-major slice. Cancellation is observed only between
-// hogels so a checkpoint never contains a partial RGB exposure.
+// hogels so a checkpoint never contains a partial RGB exposure. Returned
+// exposures retain detached diagnostics and compact reconstruction evidence,
+// but discard the sampled object/reference wavefronts after summarization so
+// slice memory does not scale by six complex fields per completed RGB hogel.
 [[nodiscard]] ChimeraBatchSliceResult
 runChimeraBatchSlice(ChimeraBatchArtifact &artifact,
                      const ChimeraRecipe &recipe, const HogelDataset &dataset,

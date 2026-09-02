@@ -130,12 +130,21 @@ TEST_CASE("single hogel exposure invokes three independent M8 volume recordings"
         CHECK(channel.usedBoundedPreviewSampling);
         CHECK(channel.objectFieldDiagnostics.appliedLocalWavePath);
         CHECK(channel.objectFieldDiagnostics.integratedPowerWatts > 0.0);
+        CHECK(channel.referenceFieldDiagnostics.integratedPowerWatts > 0.0);
         CHECK(channel.objectFieldDiagnostics.sampledCentreXMetres
             == doctest::Approx(channel.stageXMetres));
         CHECK(channel.objectFieldDiagnostics.sampledCentreYMetres
             == doctest::Approx(channel.stageYMetres));
         CHECK(channel.recording.pair.geometry
             == holography::PlateRecordingGeometry::Reflection);
+        REQUIRE(channel.recording.objectIncident.has_value());
+        REQUIRE(channel.recording.referenceIncident.has_value());
+        CHECK(channel.recording.objectIncident->diagnostics
+            .appliedSlmCommandIds
+            == channel.objectFieldDiagnostics.appliedSlmCommandIds);
+        CHECK(channel.recording.referenceIncident->diagnostics
+            .integratedPowerWatts
+            == channel.referenceFieldDiagnostics.integratedPowerWatts);
         CHECK(channel.recording.nominalReplay.kogelnik.diffractionEfficiency
             > 0.0);
         channels.insert(channel.channelId);

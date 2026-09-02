@@ -65,7 +65,27 @@ TEST_CASE(
                                     &cancelled);
   REQUIRE(slice.executedHogels.size() == 1U);
   CHECK(slice.executedHogels.front().hogelX == 0U);
+  REQUIRE(slice.executedHogels.front().channels.size() == 3U);
+  for (const auto &channel : slice.executedHogels.front().channels) {
+    CHECK_FALSE(channel.recording.objectIncident.has_value());
+    CHECK_FALSE(channel.recording.referenceIncident.has_value());
+    CHECK(channel.objectFieldDiagnostics.integratedPowerWatts > 0.0);
+    CHECK(channel.referenceFieldDiagnostics.integratedPowerWatts > 0.0);
+    CHECK(channel.recording.nominalReplay.kogelnikEfficiencyEvaluated);
+  }
   CHECK(slice.stopReason == chimera::ChimeraBatchStopReason::SliceLimit);
+
+  const chimera::ReconstructionRequest compactRequest{
+      .formatVersion = chimera::kReconstructionRequestFormatVersion,
+      .jobId = "compact-slice-reconstruction",
+      .hogels = {{.x = 0U, .y = 0U}},
+      .viewIds = {"view-x2-y1"},
+  };
+  const auto compactReconstruction = chimera::reconstructDirectionalViews(
+      fixture.recipe, fixture.dataset, fixture.plan, compactRequest,
+      slice.executedHogels);
+  CHECK(compactReconstruction.metrics.reconstructedHogelCount == 1U);
+
   const std::string checkpoint =
       chimera::serializeChimeraBatchArtifact(artifact);
   auto resumed = chimera::parseChimeraBatchArtifact(checkpoint);

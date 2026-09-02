@@ -54,6 +54,7 @@ replayVolumeReflectionToObservation(
     std::uint64_t replayBranchId,
     std::string observationComponentId,
     const PlateFieldSamplingOptions& sampling,
-    compute::fft::IFftBackend& fftBackend);
+    compute::fft::IFftBackend& fftBackend,
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
 
 } // namespace holobench::optics::holography

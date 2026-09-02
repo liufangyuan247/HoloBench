@@ -105,6 +105,9 @@ The following wave and Fourier-optics architecture decisions are locked:
 - Exact-byte hashed external prescription identity, immutable catalog
   provenance, atomic calibrated component binding, project-relative restoration,
   and fail-closed candidate-edit validation (ADR 0032).
+- Revision-bound sampled object/reference evidence for volume recording,
+  record-grid-locked reflection replay, and explicitly unresolved bounded
+  automation previews (ADR 0033).
 - Beam-following placed local fields, ideal fold-frame transport, projected
   zero-thickness elements, and explicit powered/vector fallback boundaries
   (ADR 0012).

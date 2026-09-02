@@ -118,8 +118,16 @@ TEST_CASE("RGB Denisyuk records independent volume gratings and replays on the p
     const auto fields = holography::collectPlateIncidentFields(
         project.scene, trace, "plate-h1");
     const auto selections = holography::selectRgbReflectionPairs(fields);
+    holobench::compute::fft::CpuFftBackend fft;
+    const holography::PlateFieldSamplingOptions sampling {
+        .sampleWidth = 256U,
+        .sampleHeight = 256U,
+        .refractiveIndex = 1.0,
+        .extentWidthMetres = 1e-3,
+        .extentHeightMetres = 1e-3,
+    };
     const auto recording = holography::recordRgbReflectionVolumePlate(
-        project.scene, fields, selections);
+        project.scene, fields, selections, {}, sampling, fft);
     CHECK(recording.channels[0].pair.wavelengthMetres
         == doctest::Approx(638e-9));
     CHECK(recording.channels[1].pair.wavelengthMetres
@@ -130,16 +138,10 @@ TEST_CASE("RGB Denisyuk records independent volume gratings and replays on the p
         CHECK(channel.pair.geometry
             == holography::PlateRecordingGeometry::Reflection);
         CHECK(channel.nominalReplay.kogelnik.diffractionEfficiency > 0.0);
+        CHECK(channel.objectIncident.has_value());
+        CHECK(channel.referenceIncident.has_value());
     }
 
-    holobench::compute::fft::CpuFftBackend fft;
-    const holography::PlateFieldSamplingOptions sampling {
-        .sampleWidth = 256U,
-        .sampleHeight = 256U,
-        .refractiveIndex = 1.0,
-        .extentWidthMetres = 1e-3,
-        .extentHeightMetres = 1e-3,
-    };
     const auto replay
         = holography::replayRgbReflectionVolumeToObservation(
             project.scene,

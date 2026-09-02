@@ -53,6 +53,57 @@ math::Vec3d refractIntoMaterial(
     return {internalX, internalY, internalZ};
 }
 
+VolumePlateRecordingResult attachSampledFields(
+    VolumePlateRecordingResult recording,
+    SampledPlateIncidentField objectIncident,
+    SampledPlateIncidentField referenceIncident,
+    const scene::BenchScene& bench) {
+    const auto sameSampling = [&] {
+        return objectIncident.field.width() == referenceIncident.field.width()
+            && objectIncident.field.height() == referenceIncident.field.height()
+            && objectIncident.field.pitchXMetres()
+                == referenceIncident.field.pitchXMetres()
+            && objectIncident.field.pitchYMetres()
+                == referenceIncident.field.pitchYMetres()
+            && objectIncident.field.refractiveIndex() == 1.0
+            && referenceIncident.field.refractiveIndex() == 1.0
+            && objectIncident.diagnostics.sampledExtentWidthMetres
+                == referenceIncident.diagnostics.sampledExtentWidthMetres
+            && objectIncident.diagnostics.sampledExtentHeightMetres
+                == referenceIncident.diagnostics.sampledExtentHeightMetres
+            && objectIncident.diagnostics.sampledCentreXMetres
+                == referenceIncident.diagnostics.sampledCentreXMetres
+            && objectIncident.diagnostics.sampledCentreYMetres
+                == referenceIncident.diagnostics.sampledCentreYMetres;
+    };
+    if (objectIncident.isStaleFor(bench)
+        || referenceIncident.isStaleFor(bench)
+        || objectIncident.plateComponentId != recording.plateComponentId
+        || referenceIncident.plateComponentId != recording.plateComponentId
+        || objectIncident.branchId != recording.pair.objectBranchId
+        || referenceIncident.branchId != recording.pair.referenceBranchId
+        || objectIncident.role != RecordingBranchRole::Object
+        || referenceIncident.role != RecordingBranchRole::Reference
+        || objectIncident.field.vacuumWavelengthMetres()
+            != recording.pair.wavelengthMetres
+        || referenceIncident.field.vacuumWavelengthMetres()
+            != recording.pair.wavelengthMetres
+        || !sameSampling()) {
+        throw std::invalid_argument(
+            "volume recording sampled fields do not match the current branch pair");
+    }
+    if (!std::isfinite(objectIncident.diagnostics.integratedPowerWatts)
+        || objectIncident.diagnostics.integratedPowerWatts <= 0.0
+        || !std::isfinite(referenceIncident.diagnostics.integratedPowerWatts)
+        || referenceIncident.diagnostics.integratedPowerWatts <= 0.0) {
+        throw std::invalid_argument(
+            "volume recording requires non-zero finite sampled object and reference power");
+    }
+    recording.objectIncident = std::move(objectIncident);
+    recording.referenceIncident = std::move(referenceIncident);
+    return recording;
+}
+
 } // namespace
 
 bool VolumePlateRecordingResult::isStaleFor(
@@ -60,7 +111,11 @@ bool VolumePlateRecordingResult::isStaleFor(
     const auto* plate = bench.find(plateComponentId);
     return sourceRevision != bench.revision()
         || plate == nullptr
-        || plate->kind != scene::BenchComponentKind::HolographicPlate;
+        || plate->kind != scene::BenchComponentKind::HolographicPlate
+        || objectIncident.has_value() != referenceIncident.has_value()
+        || (objectIncident.has_value()
+            && (objectIncident->isStaleFor(bench)
+                || referenceIncident->isStaleFor(bench)));
 }
 
 bool VolumePlateReplayResult::isStaleFor(
@@ -143,7 +198,77 @@ VolumePlateRecordingResult recordVolumePlate(
         .material = material,
         .nominalReplayParameters = parameters,
         .nominalReplay = nominalReplay,
+        .objectIncident = std::nullopt,
+        .referenceIncident = std::nullopt,
     };
+}
+
+VolumePlateRecordingResult recordVolumePlate(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    std::uint64_t objectBranchId,
+    std::uint64_t referenceBranchId,
+    const VolumePlateMaterial& material,
+    const PlateFieldSamplingOptions& sampling,
+    compute::fft::IFftBackend& fftBackend,
+    std::span<const PlacedSlmSparseCommand> slmCommands,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    if (sampling.refractiveIndex != 1.0) {
+        throw std::invalid_argument(
+            "volume recording samples the external plate plane and requires refractive index 1");
+    }
+    auto recording = recordVolumePlate(
+        bench,
+        fields,
+        objectBranchId,
+        referenceBranchId,
+        material);
+    auto objectIncident = samplePlateIncidentField(
+        bench,
+        fields,
+        objectBranchId,
+        sampling,
+        fftBackend,
+        slmCommands,
+        lensPrescriptions);
+    auto referenceIncident = samplePlateIncidentField(
+        bench,
+        fields,
+        referenceBranchId,
+        sampling,
+        fftBackend,
+        slmCommands,
+        lensPrescriptions);
+    if (!objectIncident.diagnostics.carrierSampled
+        || !referenceIncident.diagnostics.carrierSampled) {
+        throw std::invalid_argument(
+            "volume recording sampling does not resolve both transverse carriers");
+    }
+    return attachSampledFields(
+        std::move(recording),
+        std::move(objectIncident),
+        std::move(referenceIncident),
+        bench);
+}
+
+VolumePlateRecordingResult recordVolumePlateFromSampledFields(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    std::uint64_t objectBranchId,
+    std::uint64_t referenceBranchId,
+    const VolumePlateMaterial& material,
+    SampledPlateIncidentField objectIncident,
+    SampledPlateIncidentField referenceIncident) {
+    return attachSampledFields(
+        recordVolumePlate(
+            bench,
+            fields,
+            objectBranchId,
+            referenceBranchId,
+            material),
+        std::move(objectIncident),
+        std::move(referenceIncident),
+        bench);
 }
 
 VolumePlateReplayResult replayVolumePlate(

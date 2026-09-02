@@ -103,6 +103,15 @@ selectRgbReflectionPairs(const PlateIncidentFieldSet& fields);
     const std::array<PlateBranchPairSelection, 3>& selections,
     const VolumePlateMaterial& material = {});
 
+[[nodiscard]] RgbVolumePlateRecordingResult recordRgbReflectionVolumePlate(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    const std::array<PlateBranchPairSelection, 3>& selections,
+    const VolumePlateMaterial& material,
+    const PlateFieldSamplingOptions& sampling,
+    compute::fft::IFftBackend& fftBackend,
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
+
 // The observation may be the recorded HolographicPlate itself. In that case
 // the three reconstructed exit fields need no separate Probe.
 [[nodiscard]] RgbVolumePlateReplayResult
@@ -112,6 +121,7 @@ replayRgbReflectionVolumeToObservation(
     const RgbVolumePlateRecordingResult& recording,
     std::string observationComponentId,
     const PlateFieldSamplingOptions& sampling,
-    compute::fft::IFftBackend& fftBackend);
+    compute::fft::IFftBackend& fftBackend,
+    const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr);
 
 } // namespace holobench::optics::holography

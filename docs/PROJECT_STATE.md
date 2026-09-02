@@ -49,8 +49,8 @@ animated or silently approximated.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: `dev` passes 599/599 tests and `core-ci` passes
-  597/597. Clang and MSVC core/application builds pass with warnings as errors;
+- **Acceptance evidence**: `dev` passes 600/600 tests and `core-ci` passes
+  598/598. Clang and MSVC core/application builds pass with warnings as errors;
   the packaged CJK font validates. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
   smoke passes real shelf placement, constrained whole-instrument edits,
   post/XYZ and yaw/pitch mechanical drags, optical-frame updates, all M7/M8
@@ -155,9 +155,18 @@ animated or silently approximated.
   prescription is applied to the physical plate field and retained in its
   diagnostics; a missing resolver rejects the recording. See
   [ADR 0031](adr/0031-placed-real-lens-prescription-adapter.md).
-- **M10.4 next slice**: general reflection-volume prescription wavefronts and
-  camera paths remain separate validated extensions; broader instruments and
-  physical model families continue under the shared Bench contract.
+- **M10.4 reflection-volume wavefront evidence implemented and locally
+  validated**: Product single/RGB Denisyuk recording now retains the exact
+  revision-bound sampled object/reference fields produced by the shared
+  beam-following path, including applied real-lens prescription IDs. Replay
+  reuses those record-time fields and rejects a changed grid. CHIMERA attaches
+  its already sampled sparse-SLM object field plus reference field to each M8
+  recording; a bounded unresolved carrier remains explicit and is rejected by
+  direct field replay. See
+  [ADR 0033](adr/0033-recorded-volume-wavefront-evidence.md).
+- **M10.4 next slice**: camera-path prescription wavefronts, broader
+  instruments, and additional physical model families continue under the
+  shared Bench contract.
 
 ## Product rebaseline (2026-09-01)
 
@@ -404,9 +413,9 @@ The required interaction is now explicit:
   decentered observation, non-grazing rotated observation planes, and placed
   SLM command/provenance behavior. Named M8 performance scenes and remote
   Windows/Linux cross-compiler validation pass. The later bounded real-lens
-  Screen/Probe and thin-transmission plate adapter covers only its declared
-  coaxial low-NA domain; general reflection-volume prescription wavefronts and
-  vector/high-NA physics remain explicit scope limits
+  Screen/Probe, thin-transmission, and reflection-volume plate adapters cover
+  only their declared coaxial low-NA domain; general vector/high-NA physics
+  remains an explicit scope limit
   rather than hidden claims. Real input-driven empty-Bench assembly, placed reconstruction,
   and stale invalidation now add direct-manipulation product evidence.
 
@@ -470,7 +479,7 @@ The required interaction is now explicit:
 - **Interactive Sampling Debugger**: A dedicated dockable window exposes requested-angle and relative-z controls, Nyquist/padding/wrap warnings, colour-classified angular spectrum and energy fractions, fixed-grid complex probes at the source and arbitrary positive/negative z, radial Airy PSF, and explicitly labelled incoherent MTF. Refresh is explicit rather than per-frame.
 - **Interactive 4-f filtering**: The Sampling Debugger exposes independent `f1`/`f2` controls and pass-all, circular low-pass, high-pass, and band-pass filters in physical Fourier-plane units. A 2x2 view shows the object, Fourier plane before filtering, Fourier plane after filtering, and inverted image plane. Each log image is peak-normalized independently for shape inspection, while geometric sample counts and integrated-intensity transmission remain explicit diagnostics.
 - **Sampling diagnostics foundation**: Reports physical extent, Nyquist angles, requested-band aliasing, periodic wrap-around, required padding factor, aperture/support boundary clearance, and sampled evanescent bins. Caller support claims are checked against every non-zero sample.
-- **M3 named performance gates**: On the reference Windows workstation, `fourier/sampling_debugger_256_square_cpu_refresh` records p50 **117.736 ms** and p95 **118.458 ms** against a 250 ms budget on an Intel Core i7-9750H. `fourier/four_f_1024_square_gpu_recompute` records p50 **243.114 ms** and p95 **249.959 ms** against a 300 ms budget on AMD Radeon Pro 5300M. The GPU benchmark uses runtime capabilities and the existing exact driver quirk only; it introduces no vendor/model dispatch or precision limit.
+- **M3 named performance gates**: On the reference Windows workstation, `fourier/sampling_debugger_256_square_cpu_refresh` records p50 **117.736 ms** and p95 **118.458 ms** against a 250 ms budget on an Intel Core i7-9750H. `fourier/four_f_1024_square_gpu_recompute` records p50 **243.114 ms** and p95 **249.959 ms** against a 300 ms budget on AMD Radeon Pro 5300M. The GPU benchmark uses only runtime capabilities and validated numerical probes; no vendor, model, device ID, renderer, or driver identity selects behavior or a precision limit.
 - **M3 GPU parity**: The OpenGL executable now passes 9/9 cases and 3175/3175 assertions with both Clang and MSVC. The 4-f case compares the unfiltered Fourier plane, filtered Fourier plane, final image, filter geometry, physical sampling, and integrated-intensity transmission against the double-precision CPU reference; the ninth case exercises the capability-selected twiddle path at 1024 points against the CPU FFT.
 - **Teaching workflow**: An always-open guide maps Fourier-plane centre-to-edge position to average-to-fine spatial detail, explains low-pass blur and the pupil/NA effect on PSF/MTF, and explicitly warns that Nyquist, padding, boundary, or wrap failures can create plausible-looking numerical artefacts.
 - **Cross-platform gate**: Windows Clang warnings-as-errors core/application builds pass with 229/229 headless tests. Windows MSVC 19.44 `/W4 /WX` builds every application, benchmark, CPU-test, and GPU-test target and passes 230/230 registered tests. Ubuntu/WSL GCC 15.2 warnings-as-errors builds the same targets, passes all 229 deterministic tests, and skips the registered GPU executable with code 77 only because WSL exposes no compatible OpenGL 4.6 context.

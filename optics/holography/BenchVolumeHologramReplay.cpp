@@ -128,6 +128,41 @@ void requireResolvedCarrier(
     }
 }
 
+void requireMatchingRecordedSampling(
+    const VolumePlateRecordingResult& recording,
+    const scene::HolographicPlateParameters& plate,
+    const PlateFieldSamplingOptions& sampling) {
+    if (!recording.objectIncident.has_value()
+        || !recording.referenceIncident.has_value()) {
+        return;
+    }
+    const auto& object = *recording.objectIncident;
+    const auto& reference = *recording.referenceIncident;
+    const double extentWidth = sampling.extentWidthMetres == 0.0
+        ? plate.widthMetres : sampling.extentWidthMetres;
+    const double extentHeight = sampling.extentHeightMetres == 0.0
+        ? plate.heightMetres : sampling.extentHeightMetres;
+    const auto matches = [&](const SampledPlateIncidentField& incident) {
+        return incident.field.width() == sampling.sampleWidth
+            && incident.field.height() == sampling.sampleHeight
+            && incident.field.refractiveIndex() == sampling.refractiveIndex
+            && incident.diagnostics.sampledExtentWidthMetres == extentWidth
+            && incident.diagnostics.sampledExtentHeightMetres == extentHeight
+            && incident.diagnostics.sampledCentreXMetres
+                == sampling.centreXMetres
+            && incident.diagnostics.sampledCentreYMetres
+                == sampling.centreYMetres;
+    };
+    if (!matches(object) || !matches(reference)
+        || object.field.width() != reference.field.width()
+        || object.field.height() != reference.field.height()
+        || object.field.pitchXMetres() != reference.field.pitchXMetres()
+        || object.field.pitchYMetres() != reference.field.pitchYMetres()) {
+        throw std::invalid_argument(
+            "volume replay sampling must match the recorded sampled wave evidence");
+    }
+}
+
 } // namespace
 
 bool VolumePlateObservationReplayResult::isStaleFor(
@@ -150,7 +185,8 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
     std::uint64_t replayBranchId,
     std::string observationComponentId,
     const PlateFieldSamplingOptions& sampling,
-    compute::fft::IFftBackend& fftBackend) {
+    compute::fft::IFftBackend& fftBackend,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
     if (sampling.refractiveIndex != 1.0) {
         throw std::invalid_argument(
             "volume observation replay sampling is defined on the external air-side plate plane and requires refractive index 1");
@@ -169,6 +205,9 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
     if (plate == nullptr) {
         throw std::invalid_argument("volume replay plate was not found");
     }
+    const auto& plateParameters
+        = std::get<scene::HolographicPlateParameters>(plate->parameters);
+    requireMatchingRecordedSampling(recording, plateParameters, sampling);
     const auto& observer = requireObservation(bench, observationComponentId);
     const bool observeAtRecordedPlate
         = observer.id == recording.plateComponentId;
@@ -239,14 +278,36 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
             "volume replay observation plane is grazing the reconstructed direction");
     }
 
-    auto object = samplePlateIncidentField(
-        bench, fields, recording.pair.objectBranchId, sampling, fftBackend);
-    auto reference = samplePlateIncidentField(
-        bench, fields, recording.pair.referenceBranchId, sampling, fftBackend);
+    auto object = recording.objectIncident.has_value()
+        ? *recording.objectIncident
+        : samplePlateIncidentField(
+            bench,
+            fields,
+            recording.pair.objectBranchId,
+            sampling,
+            fftBackend,
+            {},
+            lensPrescriptions);
+    auto reference = recording.referenceIncident.has_value()
+        ? *recording.referenceIncident
+        : samplePlateIncidentField(
+            bench,
+            fields,
+            recording.pair.referenceBranchId,
+            sampling,
+            fftBackend,
+            {},
+            lensPrescriptions);
     auto replay = replayBranchId == recording.pair.referenceBranchId
         ? reference
         : samplePlateIncidentField(
-            bench, fields, replayBranchId, sampling, fftBackend);
+            bench,
+            fields,
+            replayBranchId,
+            sampling,
+            fftBackend,
+            {},
+            lensPrescriptions);
     requireResolvedCarrier(object, "recorded object");
     requireResolvedCarrier(reference, "recorded reference");
     requireResolvedCarrier(replay, "replay illumination");

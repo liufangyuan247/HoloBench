@@ -310,13 +310,39 @@ RgbVolumePlateRecordingResult recordRgbReflectionVolumePlate(
     };
 }
 
+RgbVolumePlateRecordingResult recordRgbReflectionVolumePlate(
+    const scene::BenchScene& bench,
+    const PlateIncidentFieldSet& fields,
+    const std::array<PlateBranchPairSelection, 3>& selections,
+    const VolumePlateMaterial& material,
+    const PlateFieldSamplingOptions& sampling,
+    compute::fft::IFftBackend& fftBackend,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    auto result = recordRgbReflectionVolumePlate(
+        bench, fields, selections, material);
+    for (std::size_t index = 0U; index < result.channels.size(); ++index) {
+        result.channels[index] = recordVolumePlate(
+            bench,
+            fields,
+            selections[index].objectBranchId,
+            selections[index].referenceBranchId,
+            material,
+            sampling,
+            fftBackend,
+            {},
+            lensPrescriptions);
+    }
+    return result;
+}
+
 RgbVolumePlateReplayResult replayRgbReflectionVolumeToObservation(
     const scene::BenchScene& bench,
     const PlateIncidentFieldSet& fields,
     const RgbVolumePlateRecordingResult& recording,
     std::string observationComponentId,
     const PlateFieldSamplingOptions& sampling,
-    compute::fft::IFftBackend& fftBackend) {
+    compute::fft::IFftBackend& fftBackend,
+    const ray::ILensPrescriptionResolver* lensPrescriptions) {
     if (recording.isStaleFor(bench)) {
         throw std::invalid_argument(
             "RGB reflection replay requires a current three-channel volume recording");
@@ -330,15 +356,18 @@ RgbVolumePlateReplayResult replayRgbReflectionVolumeToObservation(
             replayVolumeReflectionToObservation(
                 bench, fields, recording.channels[0],
                 recording.channels[0].pair.referenceBranchId,
-                sharedObservationId, sampling, fftBackend),
+                sharedObservationId, sampling, fftBackend,
+                lensPrescriptions),
             replayVolumeReflectionToObservation(
                 bench, fields, recording.channels[1],
                 recording.channels[1].pair.referenceBranchId,
-                sharedObservationId, sampling, fftBackend),
+                sharedObservationId, sampling, fftBackend,
+                lensPrescriptions),
             replayVolumeReflectionToObservation(
                 bench, fields, recording.channels[2],
                 recording.channels[2].pair.referenceBranchId,
-                sharedObservationId, sampling, fftBackend),
+                sharedObservationId, sampling, fftBackend,
+                lensPrescriptions),
         }},
     };
 }

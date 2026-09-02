@@ -180,6 +180,13 @@ summarizeExposure(const ExecutedHogelExposure &exposure) {
   return result;
 }
 
+void discardBatchSampledWavefronts(ExecutedHogelExposure &exposure) {
+  for (auto &channel : exposure.channels) {
+    channel.recording.objectIncident.reset();
+    channel.recording.referenceIncident.reset();
+  }
+}
+
 void validateProvenance(const ChimeraBatchArtifact &artifact,
                         const ChimeraRecipe &recipe,
                         const HogelDataset &dataset, const ExposurePlan &plan,
@@ -580,6 +587,11 @@ ChimeraBatchSliceResult runChimeraBatchSlice(
         index / artifact.hogelCountX, options);
     artifact.completedHogels.push_back(summarizeExposure(exposure));
     ++artifact.nextLinearHogelIndex;
+    // A direct exposure owns its sampled recording wavefronts. A batch result
+    // crosses an explicit compact checkpoint boundary: retain the detached
+    // path diagnostics and reconstruction summary, but do not accumulate six
+    // preview complex fields for every completed RGB hogel in the slice.
+    discardBatchSampledWavefronts(exposure);
     result.executedHogels.push_back(std::move(exposure));
   }
   if (artifact.nextLinearHogelIndex == result.totalHogelCount) {

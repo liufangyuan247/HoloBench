@@ -709,7 +709,7 @@ ExecutedHogelExposure executeHogelExposure(
             sampling.sampleHeight, options.maximumPreviewSampleHeight);
         sampling.centreXMetres = stageEvent->stageXMetres;
         sampling.centreYMetres = stageEvent->stageYMetres;
-        const auto sampledObject = optics::holography::samplePlateIncidentField(
+        auto sampledObject = optics::holography::samplePlateIncidentField(
             channelProject.scene,
             fields,
             pair.objectBranchId,
@@ -726,7 +726,13 @@ ExecutedHogelExposure executeHogelExposure(
             throw std::invalid_argument(
                 "placed sparse SLM command produced no sampled object field");
         }
-        optics::holography::PlateFieldSamplingDiagnostics referenceDiagnostics;
+        auto sampledReference
+            = optics::holography::samplePlateIncidentField(
+                channelProject.scene,
+                fields,
+                pair.referenceBranchId,
+                sampling,
+                fftBackend);
         double objectIrradiance = 0.0;
         double referenceIrradiance = 0.0;
         double fringeVisibility = 0.0;
@@ -735,14 +741,6 @@ ExecutedHogelExposure executeHogelExposure(
         auto material = recordingRecipe.volumeMaterial;
         std::string materialCalibrationId;
         if (options.calibratedMaterialDoseResponse != nullptr) {
-            const auto sampledReference
-                = optics::holography::samplePlateIncidentField(
-                    channelProject.scene,
-                    fields,
-                    pair.referenceBranchId,
-                    sampling,
-                    fftBackend);
-            referenceDiagnostics = sampledReference.diagnostics;
             const double sampledArea
                 = sampledObject.diagnostics.sampledExtentWidthMetres
                 * sampledObject.diagnostics.sampledExtentHeightMetres;
@@ -790,12 +788,17 @@ ExecutedHogelExposure executeHogelExposure(
                 = evaluated.isotropicLinearShrinkageFraction;
             materialCalibrationId = evaluated.calibrationId;
         }
-        auto recording = optics::holography::recordVolumePlate(
+        auto objectFieldDiagnostics = sampledObject.diagnostics;
+        auto referenceFieldDiagnostics = sampledReference.diagnostics;
+        auto recording
+            = optics::holography::recordVolumePlateFromSampledFields(
             channelProject.scene,
             fields,
             pair.objectBranchId,
             pair.referenceBranchId,
-            material);
+            material,
+            std::move(sampledObject),
+            std::move(sampledReference));
         result.channels.push_back({
             .hogelX = hogelX,
             .hogelY = hogelY,
@@ -825,8 +828,9 @@ ExecutedHogelExposure executeHogelExposure(
             .fringeVisibility = fringeVisibility,
             .totalDoseJoulesPerSquareMetre = totalDose,
             .fringeModulationDoseJoulesPerSquareMetre = modulationDose,
-            .objectFieldDiagnostics = sampledObject.diagnostics,
-            .referenceFieldDiagnostics = std::move(referenceDiagnostics),
+            .objectFieldDiagnostics = std::move(objectFieldDiagnostics),
+            .referenceFieldDiagnostics = std::move(
+                referenceFieldDiagnostics),
             .recording = std::move(recording),
         });
     }
