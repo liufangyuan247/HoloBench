@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "app/ChimeraReconstruction.hpp"
+#include "optics/material/CoatingResponse.hpp"
 #include "optics/ray/LensPrescriptionCatalog.hpp"
 #include "optics/scene/BenchScene.hpp"
 #include "optics/sensor/CameraSpectralResponse.hpp"
@@ -190,7 +191,9 @@ struct CameraImageResult final {
 // into geometric aberration/defocus spots, then the wavelength-specific Airy
 // kernel supplies the unresolved diffraction core. Physical clipping is
 // retained as per-channel evidence; missing or ambiguous optical truth is
-// rejected instead of falling back to the ideal camera above.
+// rejected instead of falling back to the ideal camera above. Coating context
+// is used for fail-closed derived-route validation; intermediate coated optics
+// remain outside the placed-camera model and are not silently accepted.
 [[nodiscard]] CameraImageResult synthesizePlacedCameraImage(
     const ChimeraRecipe& recipe,
     const ReconstructionResult& reconstruction,
@@ -200,6 +203,9 @@ struct CameraImageResult final {
     std::string_view sourcePlateComponentId,
     std::string_view lensComponentId,
     std::string_view observationComponentId,
-    const optics::ray::ILensPrescriptionResolver& lensPrescriptions);
+    const optics::ray::ILensPrescriptionResolver& lensPrescriptions,
+    const optics::material::ICoatingResponseResolver* coatingResponses
+        = nullptr,
+    double environmentTemperatureKelvin = 293.15);
 
 } // namespace holobench::app::chimera

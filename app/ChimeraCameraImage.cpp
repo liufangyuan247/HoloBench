@@ -683,7 +683,9 @@ bool cameraBenchRouteReachesSensor(
     math::Vec3d origin,
     math::Vec3d direction,
     double wavelengthMetres,
-    const optics::ray::ILensPrescriptionResolver& lensPrescriptions) {
+    const optics::ray::ILensPrescriptionResolver& lensPrescriptions,
+    const optics::material::ICoatingResponseResolver* coatingResponses,
+    double environmentTemperatureKelvin) {
     const optics::scene::BeamState seed {
         .wavelengthMetres = wavelengthMetres,
         .powerWatts = 1.0,
@@ -700,7 +702,14 @@ bool cameraBenchRouteReachesSensor(
         },
     };
     const auto trace = optics::ray::traceDerivedBenchBeam(
-        bench, seed, {}, &lensPrescriptions);
+        bench,
+        seed,
+        {},
+        &lensPrescriptions,
+        {
+            .coatingResponses = coatingResponses,
+            .temperatureKelvin = environmentTemperatureKelvin,
+        });
     const optics::scene::OpticalInteraction* terminal = nullptr;
     for (const auto& interaction : trace.interactions) {
         if (interaction.componentId != observation.id
@@ -944,7 +953,9 @@ CameraImageResult synthesizePlacedCameraImage(
     std::string_view sourcePlateComponentId,
     std::string_view lensComponentId,
     std::string_view observationComponentId,
-    const optics::ray::ILensPrescriptionResolver& lensPrescriptions) {
+    const optics::ray::ILensPrescriptionResolver& lensPrescriptions,
+    const optics::material::ICoatingResponseResolver* coatingResponses,
+    double environmentTemperatureKelvin) {
     validateChimeraRecipe(recipe);
     validateSensorRequest(request);
     if (reconstruction.sourceRecipeId != recipe.recipeId
@@ -1219,7 +1230,9 @@ CameraImageResult synthesizePlacedCameraImage(
                     origin,
                     direction,
                     channels[index].wavelengthMetres,
-                    lensPrescriptions)) {
+                    lensPrescriptions,
+                    coatingResponses,
+                    environmentTemperatureKelvin)) {
                 evidence.prescriptionTraceStatus = "bench_path_blocked";
                 ++result.metrics.prescriptionTraceRejectedCount;
                 contribution.spectralRays.push_back(std::move(evidence));

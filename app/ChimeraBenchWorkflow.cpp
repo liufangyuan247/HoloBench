@@ -123,7 +123,9 @@ void captureChimeraCameraImage(
     const optics::ray::ILensPrescriptionResolver &lensPrescriptions,
     std::string lensComponentId,
     std::string observationComponentId,
-    std::string sourcePlateComponentId) {
+    std::string sourcePlateComponentId,
+    const optics::material::ICoatingResponseResolver *coatingResponses,
+    double environmentTemperatureKelvin) {
   requireCurrent(workflow, bench);
   if (!workflow.reconstruction) {
     throw std::invalid_argument(
@@ -134,7 +136,8 @@ void captureChimeraCameraImage(
   auto image = synthesizePlacedCameraImage(
       workflow.recipe, *workflow.reconstruction, request, cameraResponse,
       bench.scene, sourcePlateComponentId, lensComponentId,
-      observationComponentId, lensPrescriptions);
+      observationComponentId, lensPrescriptions, coatingResponses,
+      environmentTemperatureKelvin);
   workflow.cameraImage = std::move(image);
   workflow.observationComponentId = std::move(observationComponentId);
 }
@@ -146,7 +149,9 @@ void captureChimeraCameraImage(
     const optics::ray::ILensPrescriptionResolver &lensPrescriptions,
     std::string lensComponentId,
     std::string observationComponentId,
-    std::string sourcePlateComponentId) {
+    std::string sourcePlateComponentId,
+    const optics::material::ICoatingResponseResolver *coatingResponses,
+    double environmentTemperatureKelvin) {
   validatePlacedDetectorResponseSelection(detectorResponse);
   requireCurrent(workflow, bench);
   if (!workflow.reconstruction) {
@@ -158,7 +163,8 @@ void captureChimeraCameraImage(
   auto image = synthesizePlacedCameraImage(
       workflow.recipe, *workflow.reconstruction, request,
       *detectorResponse.response, bench.scene, sourcePlateComponentId,
-      lensComponentId, observationComponentId, lensPrescriptions);
+      lensComponentId, observationComponentId, lensPrescriptions,
+      coatingResponses, environmentTemperatureKelvin);
   applyPlacedDetectorResponseEvidence(image, detectorResponse);
   workflow.cameraImage = std::move(image);
   workflow.observationComponentId = std::move(observationComponentId);

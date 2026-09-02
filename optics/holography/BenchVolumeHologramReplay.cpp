@@ -202,7 +202,9 @@ DerivedObservationPath traceDerivedObservationPath(
     math::Vec3d reconstructedDirectionWorld,
     double reconstructedPowerWatts,
     std::string_view observationComponentId,
-    const ray::ILensPrescriptionResolver* lensPrescriptions) {
+    const ray::ILensPrescriptionResolver* lensPrescriptions,
+    const material::ICoatingResponseResolver* coatingResponses,
+    double environmentTemperatureKelvin) {
     const auto sourceFrame = makeBeamNormalFrame(
         plate.transform, sourcePoint, reconstructedDirectionWorld);
     const scene::BeamState seed {
@@ -221,7 +223,14 @@ DerivedObservationPath traceDerivedObservationPath(
         },
     };
     const auto trace = ray::traceDerivedBenchBeam(
-        bench, seed, {}, lensPrescriptions);
+        bench,
+        seed,
+        {},
+        lensPrescriptions,
+        {
+            .coatingResponses = coatingResponses,
+            .temperatureKelvin = environmentTemperatureKelvin,
+        });
     const scene::OpticalInteraction* terminal = nullptr;
     for (const auto& interaction : trace.interactions) {
         if (interaction.componentId != observationComponentId
@@ -284,6 +293,7 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
     compute::fft::IFftBackend& fftBackend,
     const ray::ILensPrescriptionResolver* lensPrescriptions,
     const slm::ISlmResponseResolver* slmResponses,
+    const material::ICoatingResponseResolver* coatingResponses,
     double environmentTemperatureKelvin) {
     if (sampling.refractiveIndex != 1.0) {
         throw std::invalid_argument(
@@ -497,7 +507,9 @@ VolumePlateObservationReplayResult replayVolumeReflectionToObservation(
             reconstructedDirectionWorld,
             targetPower,
             observationComponentId,
-            lensPrescriptions);
+            lensPrescriptions,
+            coatingResponses,
+            environmentTemperatureKelvin);
         routed = std::any_of(
             derivedPath.interactions.begin(),
             std::prev(derivedPath.interactions.end()),

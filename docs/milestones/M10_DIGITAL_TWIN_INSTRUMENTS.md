@@ -127,6 +127,17 @@ therefore inherit the measured amplitude scale. This is not a polarization,
 complex-phase, multilayer, or ghost model. See
 [ADR 0041](../adr/0041-hashed-scalar-coating-response.md).
 
+The verified coating resolver and temperature context now also enter every
+reflection-hologram derived centre-ray route, including each independent RGB
+Denisyuk channel. Before the local complex field follows the traced path it is
+scaled exactly once by `sqrt(terminal branch power / source branch power)`;
+spatial aperture, lens, SLM, fold, and propagation effects remain in the wave
+service. Diagnostics retain the source/terminal power, amplitude scale,
+affected placed components, and coating calibration IDs. CHIMERA placed-camera
+route validation receives the same context while retaining its narrower
+supported path. See
+[ADR 0042](../adr/0042-coating-power-on-derived-fields.md).
+
 ### M10.4 — Measurement and general experiment closure
 
 - Field Probe amplitude, intensity, phase, dB, spectral-channel, cursor, and
@@ -209,7 +220,8 @@ plus [ADR 0030](../adr/0030-shared-beam-following-field-paths.md) and
 [ADR 0038](../adr/0038-hashed-placed-slm-response.md), and
 [ADR 0039](../adr/0039-hashed-optical-pose-calibration.md), plus
 [ADR 0040](../adr/0040-bounded-coherent-prescription-pupil-psf.md) and
-[ADR 0041](../adr/0041-hashed-scalar-coating-response.md).
+[ADR 0041](../adr/0041-hashed-scalar-coating-response.md), plus
+[ADR 0042](../adr/0042-coating-power-on-derived-fields.md).
 
 ## Platform extensibility acceptance
 

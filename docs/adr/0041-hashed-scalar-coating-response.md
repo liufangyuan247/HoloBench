@@ -50,9 +50,9 @@ power, save the Bench, and restore the same verified bytes. The model is useful
 for power budgets and scalar interference amplitude without pretending to
 model polarization or reflection phase.
 
-Current hologram-derived replay adapters must explicitly receive the same
-coating resolver before they can traverse a calibrated coated element; until
-that plumbing is added they fail instead of substituting nominal power. Real
-lens surface coatings, Fresnel interface coefficients, complex s/p phase,
+Hologram-derived replay adapters now receive the same coating resolver and
+apply traced branch power to their retained complex field as specified by
+[ADR 0042](0042-coating-power-on-derived-fields.md). Real lens surface
+coatings, Fresnel interface coefficients, complex s/p phase,
 multilayer design, spatial nonuniformity, scatter, uncertainty, thermal
 interpolation, and non-sequential ghosts remain separate models.

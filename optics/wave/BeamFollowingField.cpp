@@ -1189,9 +1189,37 @@ BeamFollowingFieldResult sampleDerivedBeamFollowingField(
         throw std::invalid_argument(
             "derived beam-following source field has no finite non-zero signal");
     }
-    return propagatePreparedField(
+    const double sourceBranchPowerWatts
+        = pathInteractions.front().incidentBeam.powerWatts;
+    const double terminalBranchPowerWatts = terminalBeam.powerWatts;
+    if (!std::isfinite(sourceBranchPowerWatts)
+        || sourceBranchPowerWatts <= 0.0
+        || !std::isfinite(terminalBranchPowerWatts)
+        || terminalBranchPowerWatts <= 0.0
+        || terminalBranchPowerWatts > sourceBranchPowerWatts) {
+        throw std::invalid_argument(
+            "derived beam-following branch power scale is invalid");
+    }
+    const double powerScale
+        = terminalBranchPowerWatts / sourceBranchPowerWatts;
+    const double amplitudeScale = std::sqrt(powerScale);
+    const double scaledPeakIntensity = peakIntensity * powerScale;
+    if (!std::isfinite(powerScale) || powerScale <= 0.0
+        || !std::isfinite(amplitudeScale) || amplitudeScale <= 0.0
+        || !std::isfinite(scaledPeakIntensity)
+        || scaledPeakIntensity <= 0.0) {
+        throw std::overflow_error(
+            "derived beam-following branch power scale is not representable");
+    }
+    auto scaledSource = padCentered(fieldAtSource);
+    if (amplitudeScale != 1.0) {
+        for (auto& sample : scaledSource.samples()) {
+            sample *= amplitudeScale;
+        }
+    }
+    auto result = propagatePreparedField(
         bench,
-        padCentered(fieldAtSource),
+        std::move(scaledSource),
         sourceFrame.translationMetres,
         sourceFrame.localZAxisInWorld,
         sourceFrame,
@@ -1201,7 +1229,30 @@ BeamFollowingFieldResult sampleDerivedBeamFollowingField(
         fftBackend,
         slmCommands,
         lensPrescriptions,
-        peakIntensity);
+        scaledPeakIntensity);
+    result.diagnostics.sourceBranchPowerWatts = sourceBranchPowerWatts;
+    result.diagnostics.terminalBranchPowerWatts = terminalBranchPowerWatts;
+    result.diagnostics.scalarBranchAmplitudeScale = amplitudeScale;
+    for (const auto& interaction : pathInteractions) {
+        if (!interaction.hasOutgoingBeam
+            || interaction.outgoingBeam.powerWatts
+                == interaction.incidentBeam.powerWatts) {
+            continue;
+        }
+        result.diagnostics.appliedScalarPowerComponentIds.push_back(
+            interaction.componentId);
+        const auto* component = bench.find(interaction.componentId);
+        if (component == nullptr) continue;
+        for (const auto& reference
+             : component->instrument.calibrationAssets) {
+            if (reference.kind
+                == scene::CalibrationAssetKind::CoatingResponse) {
+                result.diagnostics.appliedCoatingCalibrationIds.push_back(
+                    reference.calibrationId);
+            }
+        }
+    }
+    return result;
 }
 
 } // namespace holobench::optics::wave

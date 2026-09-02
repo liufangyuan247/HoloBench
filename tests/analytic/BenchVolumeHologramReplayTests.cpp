@@ -15,6 +15,7 @@
 #include "optics/ray/LensPrescriptionCatalog.hpp"
 
 namespace holography = holobench::optics::holography;
+namespace material = holobench::optics::material;
 namespace ray = holobench::optics::ray;
 namespace scene = holobench::optics::scene;
 
@@ -74,6 +75,29 @@ holobench::math::RigidTransform3d aimedTransform(
         .localZAxisInWorld = zAxis,
     };
 }
+
+class ReplayCoatingResolver final
+    : public material::ICoatingResponseResolver {
+public:
+    explicit ReplayCoatingResolver(double powerTransmissivity = 0.25)
+        : response_(
+            "replay-splitter-coating",
+            {450e-9, 650e-9},
+            {0.0, 0.25},
+            std::vector<material::CoatingPowerResponse>(
+                4U,
+                {.powerReflectivity = 0.20,
+                    .powerTransmissivity = powerTransmissivity})) {}
+
+    const material::CalibratedCoatingResponse* resolveCoatingResponse(
+        std::string_view calibrationId) const noexcept override {
+        return calibrationId == response_.calibrationId()
+            ? &response_ : nullptr;
+    }
+
+private:
+    material::CalibratedCoatingResponse response_;
+};
 
 } // namespace
 
@@ -334,6 +358,133 @@ TEST_CASE("placed real prescription shapes the routed volume reconstruction path
         centreX, centreY))
         > 3.0 * std::norm(replay.reconstructedAtObservation.at(
             centreX + 100U, centreY)));
+}
+
+TEST_CASE("verified coating power scales a routed volume reconstruction field") {
+    auto project = holobench::app::makeReflectionHolographyPreset();
+    auto splitter = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::BeamSplitterCombiner,
+        "replay-coated-splitter");
+    splitter.transform.translationMetres = {0.0, 0.0, -0.015};
+    splitter.instrument.calibrationMode
+        = scene::InstrumentCalibrationMode::Calibrated;
+    splitter.instrument.calibrationAssets.push_back({
+        .kind = scene::CalibrationAssetKind::CoatingResponse,
+        .calibrationId = "replay-splitter-coating",
+        .formatVersion = material::kCoatingResponseFormatVersion,
+        .source = "replay-splitter-coating.json",
+        .contentSha256 = std::string(64U, 'a'),
+        .specificationId = splitter.instrument.specificationId,
+        .specificationVersion = splitter.instrument.specificationVersion,
+        .validity = {
+            .minimumVacuumWavelengthMetres = 450e-9,
+            .maximumVacuumWavelengthMetres = 650e-9,
+            .minimumTemperatureKelvin = 290.0,
+            .maximumTemperatureKelvin = 300.0,
+        },
+    });
+    project.scene.add(std::move(splitter));
+
+    const ReplayCoatingResolver resolver;
+    const ray::DynamicBenchCalibrationContext calibration {
+        .coatingResponses = &resolver,
+        .temperatureKelvin = 293.15,
+    };
+    const auto trace = ray::traceDynamicBench(
+        project.scene, {}, nullptr, calibration);
+    const auto fields = holography::collectPlateIncidentFields(
+        project.scene, trace, "plate-h1");
+    std::uint64_t objectBranchId = 0U;
+    std::uint64_t referenceBranchId = 0U;
+    for (const auto& branch : fields.branches) {
+        if (branch.role == holography::RecordingBranchRole::Object) {
+            objectBranchId = branch.beam.provenance.branchId;
+        } else if (branch.beam.coherenceId == "green-recording") {
+            referenceBranchId = branch.beam.provenance.branchId;
+        }
+    }
+    REQUIRE(objectBranchId != 0U);
+    REQUIRE(referenceBranchId != 0U);
+    const auto recording = holography::recordVolumePlate(
+        project.scene,
+        fields,
+        objectBranchId,
+        referenceBranchId);
+    holobench::compute::fft::CpuFftBackend fft;
+    auto sampling = replaySampling();
+    sampling.sampleWidth = 128U;
+    sampling.sampleHeight = 128U;
+
+    CHECK_THROWS_WITH_AS(
+        static_cast<void>(holography::replayVolumeReflectionToObservation(
+            project.scene,
+            fields,
+            recording,
+            referenceBranchId,
+            "reflection-reconstruction-probe",
+            sampling,
+            fft)),
+        doctest::Contains("unresolved, stale, or inapplicable"),
+        std::invalid_argument);
+    const auto replay = holography::replayVolumeReflectionToObservation(
+        project.scene,
+        fields,
+        recording,
+        referenceBranchId,
+        "reflection-reconstruction-probe",
+        sampling,
+        fft,
+        nullptr,
+        nullptr,
+        &resolver,
+        293.15);
+    REQUIRE(replay.usedRoutedWavePath);
+    const auto& routed = replay.routedWavePath;
+    CHECK(routed.appliedScalarPowerComponentIds
+        == std::vector<std::string> {"replay-coated-splitter"});
+    CHECK(routed.appliedCoatingCalibrationIds
+        == std::vector<std::string> {"replay-splitter-coating"});
+    CHECK(routed.terminalBranchPowerWatts
+        == doctest::Approx(0.25 * routed.sourceBranchPowerWatts));
+    CHECK(routed.scalarBranchAmplitudeScale == doctest::Approx(0.5));
+    const double observationPower
+        = holobench::field::computeIntegratedIntensity(
+            replay.reconstructedAtObservation);
+    const ReplayCoatingResolver comparisonResolver(0.50);
+    const auto comparisonReplay
+        = holography::replayVolumeReflectionToObservation(
+            project.scene,
+            fields,
+            recording,
+            referenceBranchId,
+            "reflection-reconstruction-probe",
+            sampling,
+            fft,
+            nullptr,
+            nullptr,
+            &comparisonResolver,
+            293.15);
+    const double comparisonObservationPower
+        = holobench::field::computeIntegratedIntensity(
+            comparisonReplay.reconstructedAtObservation);
+    CHECK(observationPower
+        == doctest::Approx(0.50 * comparisonObservationPower)
+            .epsilon(2e-12));
+    CHECK_THROWS_WITH_AS(
+        static_cast<void>(holography::replayVolumeReflectionToObservation(
+            project.scene,
+            fields,
+            recording,
+            referenceBranchId,
+            "reflection-reconstruction-probe",
+            sampling,
+            fft,
+            nullptr,
+            nullptr,
+            &resolver,
+            305.0)),
+        doctest::Contains("unresolved, stale, or inapplicable"),
+        std::invalid_argument);
 }
 
 TEST_CASE("volume observation replay rejects the wrong side and stale evidence") {

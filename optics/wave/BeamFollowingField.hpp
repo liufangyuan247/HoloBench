@@ -68,7 +68,12 @@ struct BeamFollowingFieldDiagnostics final {
     bool usedFoldedPath = false;
     bool usedTargetTangentProjection = false;
     bool supportTouchesBoundary = false;
+    double sourceBranchPowerWatts = 0.0;
+    double terminalBranchPowerWatts = 0.0;
+    double scalarBranchAmplitudeScale = 1.0;
     std::vector<std::string> appliedWaveComponentIds;
+    std::vector<std::string> appliedScalarPowerComponentIds;
+    std::vector<std::string> appliedCoatingCalibrationIds;
     std::vector<std::string> foldedWaveComponentIds;
     std::vector<std::string> appliedSlmCommandIds;
     std::vector<std::string> appliedSlmCalibrationIds;

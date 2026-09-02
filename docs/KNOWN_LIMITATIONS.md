@@ -168,8 +168,9 @@
   flatness, or hardware electronics. Format v5 persists per-component
   calibration references. Verified real-lens, detector-response, SLM response,
   rigid optical-pose, and scalar mirror/splitter coating assets now resolve into
-  placed-instrument behavior; stage and other general calibration asset
-  adapters remain open. The coating grid interpolates passive power R/T over
+  placed-instrument behavior, including routed single/RGB reflection-hologram
+  derived fields; stage and other general calibration asset adapters remain
+  open. The coating grid interpolates passive power R/T over
   wavelength and acute incidence angle only: it has no s/p polarization,
   complex reflection phase, multilayer design, surface map, or ghost paths.
   Optical-pose format v1 is one static local rigid correction bounded to

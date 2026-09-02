@@ -9,6 +9,7 @@
 
 namespace app = holobench::app;
 namespace chimera = holobench::app::chimera;
+namespace material = holobench::optics::material;
 namespace ray = holobench::optics::ray;
 namespace scene = holobench::optics::scene;
 namespace sensor = holobench::optics::sensor;
@@ -22,6 +23,29 @@ sensor::CalibratedCameraSpectralResponse makeRgbCameraResponse() {
         {638e-9, {0.8, 0.1, 0.05}},
     }};
 }
+
+class CameraCoatingResolver final
+    : public material::ICoatingResponseResolver {
+public:
+    CameraCoatingResolver()
+        : response_(
+            "camera-route-coating",
+            {450e-9, 650e-9},
+            {0.0, 0.25},
+            std::vector<material::CoatingPowerResponse>(
+                4U,
+                {.powerReflectivity = 0.10,
+                    .powerTransmissivity = 0.80})) {}
+
+    const material::CalibratedCoatingResponse* resolveCoatingResponse(
+        std::string_view calibrationId) const noexcept override {
+        return calibrationId == response_.calibrationId()
+            ? &response_ : nullptr;
+    }
+
+private:
+    material::CalibratedCoatingResponse response_;
+};
 
 chimera::ReconstructionResult makeDirectionalEvidence(
     const chimera::ChimeraRecipe& recipe) {
@@ -466,16 +490,28 @@ TEST_CASE("placed CHIMERA camera rejects an unmodelled intervening Bench optic")
     auto reconstruction = makeDirectionalEvidence(recipe);
     reconstruction.samples.resize(1U);
     auto bench = chimera::compileChimeraRecipe(recipe).project;
-    auto aperture = scene::makeDefaultBenchComponent(
-        scene::BenchComponentKind::Aperture,
-        "camera-intervening-aperture");
-    aperture.transform.translationMetres = {0.0, 0.0, -0.025};
-    auto apertureParameters
-        = std::get<scene::ApertureParameters>(aperture.parameters);
-    apertureParameters.widthMetres = 0.02;
-    apertureParameters.heightMetres = 0.02;
-    aperture.parameters = apertureParameters;
-    bench.scene.add(std::move(aperture));
+    auto splitter = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::BeamSplitterCombiner,
+        "camera-intervening-splitter");
+    splitter.transform.translationMetres = {0.0, 0.0, -0.025};
+    splitter.instrument.calibrationMode
+        = scene::InstrumentCalibrationMode::Calibrated;
+    splitter.instrument.calibrationAssets.push_back({
+        .kind = scene::CalibrationAssetKind::CoatingResponse,
+        .calibrationId = "camera-route-coating",
+        .formatVersion = material::kCoatingResponseFormatVersion,
+        .source = "camera-route-coating.json",
+        .contentSha256 = std::string(64U, 'a'),
+        .specificationId = splitter.instrument.specificationId,
+        .specificationVersion = splitter.instrument.specificationVersion,
+        .validity = {
+            .minimumVacuumWavelengthMetres = 450e-9,
+            .maximumVacuumWavelengthMetres = 650e-9,
+            .minimumTemperatureKelvin = 290.0,
+            .maximumTemperatureKelvin = 300.0,
+        },
+    });
+    bench.scene.add(std::move(splitter));
     const ray::LensPrescriptionCatalog prescriptions({
         ray::makeDefaultNBk7BiconvexPrescription(),
     });
@@ -495,6 +531,22 @@ TEST_CASE("placed CHIMERA camera rejects an unmodelled intervening Bench optic")
             "chimera-camera-lens",
             "chimera-reconstruction-probe",
             prescriptions)),
+        doctest::Contains("unresolved, stale, or inapplicable"),
+        std::invalid_argument);
+    const CameraCoatingResolver coatingResolver;
+    CHECK_THROWS_WITH_AS(
+        static_cast<void>(chimera::synthesizePlacedCameraImage(
+            recipe,
+            reconstruction,
+            request,
+            makeRgbCameraResponse(),
+            bench.scene,
+            "chimera-plate",
+            "chimera-camera-lens",
+            "chimera-reconstruction-probe",
+            prescriptions,
+            &coatingResolver,
+            293.15)),
         doctest::Contains("additional placed optics"),
         std::invalid_argument);
 }

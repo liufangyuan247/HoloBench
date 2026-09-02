@@ -71,7 +71,10 @@ void captureChimeraCameraImage(
     const optics::ray::ILensPrescriptionResolver &lensPrescriptions,
     std::string lensComponentId,
     std::string observationComponentId,
-    std::string sourcePlateComponentId = "chimera-plate");
+    std::string sourcePlateComponentId = "chimera-plate",
+    const optics::material::ICoatingResponseResolver* coatingResponses
+        = nullptr,
+    double environmentTemperatureKelvin = 293.15);
 
 // Product path: carries the placed detector's verified-vs-nominal selection
 // into the immutable camera result instead of accepting an unlabelled LUT.
@@ -82,7 +85,10 @@ void captureChimeraCameraImage(
     const optics::ray::ILensPrescriptionResolver &lensPrescriptions,
     std::string lensComponentId,
     std::string observationComponentId,
-    std::string sourcePlateComponentId = "chimera-plate");
+    std::string sourcePlateComponentId = "chimera-plate",
+    const optics::material::ICoatingResponseResolver* coatingResponses
+        = nullptr,
+    double environmentTemperatureKelvin = 293.15);
 
 // Display encoding only. CameraImageResult retains the original relative
 // linear sensor signal and calibration provenance.

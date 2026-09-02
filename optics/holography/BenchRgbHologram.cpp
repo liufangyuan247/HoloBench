@@ -365,6 +365,7 @@ RgbVolumePlateReplayResult replayRgbReflectionVolumeToObservation(
     compute::fft::IFftBackend& fftBackend,
     const ray::ILensPrescriptionResolver* lensPrescriptions,
     const slm::ISlmResponseResolver* slmResponses,
+    const material::ICoatingResponseResolver* coatingResponses,
     double environmentTemperatureKelvin) {
     if (recording.isStaleFor(bench)) {
         throw std::invalid_argument(
@@ -382,6 +383,7 @@ RgbVolumePlateReplayResult replayRgbReflectionVolumeToObservation(
                 sharedObservationId, sampling, fftBackend,
                 lensPrescriptions,
                 slmResponses,
+                coatingResponses,
                 environmentTemperatureKelvin),
             replayVolumeReflectionToObservation(
                 bench, fields, recording.channels[1],
@@ -389,6 +391,7 @@ RgbVolumePlateReplayResult replayRgbReflectionVolumeToObservation(
                 sharedObservationId, sampling, fftBackend,
                 lensPrescriptions,
                 slmResponses,
+                coatingResponses,
                 environmentTemperatureKelvin),
             replayVolumeReflectionToObservation(
                 bench, fields, recording.channels[2],
@@ -396,6 +399,7 @@ RgbVolumePlateReplayResult replayRgbReflectionVolumeToObservation(
                 sharedObservationId, sampling, fftBackend,
                 lensPrescriptions,
                 slmResponses,
+                coatingResponses,
                 environmentTemperatureKelvin),
         }},
     };

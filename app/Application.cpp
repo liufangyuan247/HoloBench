@@ -1331,7 +1331,10 @@ void Application::reconstructSelectedChimeraHogel() {
         detectorSelection,
         realLensPrescriptionCatalog_,
         chimeraCameraLensComponentId_,
-        sandboxObservationComponentId_);
+        sandboxObservationComponentId_,
+        "chimera-plate",
+        &coatingResponseCatalog_,
+        293.15);
     const auto display = chimera::renderChimeraCameraImage(
         *chimeraWorkflow_->cameraImage,
         {1.0, 1.0, 1.0},
@@ -1503,7 +1506,10 @@ void Application::reconstructChimeraBatchRegion() {
         detectorSelection,
         realLensPrescriptionCatalog_,
         chimeraCameraLensComponentId_,
-        sandboxObservationComponentId_);
+        sandboxObservationComponentId_,
+        "chimera-plate",
+        &coatingResponseCatalog_,
+        293.15);
     const auto display = chimera::renderChimeraCameraImage(
         *chimeraWorkflow_->cameraImage,
         {1.0, 1.0, 1.0},
@@ -2184,6 +2190,7 @@ void Application::reconstructSelectedPlateExperiment() {
                 *detectorFftBackend_,
                 &realLensPrescriptionCatalog_,
                 &slmResponseCatalog_,
+                &coatingResponseCatalog_,
                 293.15);
         const field::RgbIntensityVisualizationOptions displayOptions {
             .channelIntensityGains = {
@@ -2244,6 +2251,7 @@ void Application::reconstructSelectedPlateExperiment() {
             *detectorFftBackend_,
             &realLensPrescriptionCatalog_,
             &slmResponseCatalog_,
+            &coatingResponseCatalog_,
             293.15);
         field::FieldVisualizationOptions viewOptions;
         viewOptions.colormap = field::ColormapKind::Inferno;
@@ -10191,6 +10199,29 @@ void Application::drawSandboxInspector() {
                                             "Applied placed elements: %s",
                                             components.c_str());
                                     }
+                                    if (!routed.appliedScalarPowerComponentIds
+                                             .empty()) {
+                                        const std::string powerComponents
+                                            = joinedBenchIdentifiers(
+                                                routed
+                                                    .appliedScalarPowerComponentIds);
+                                        ImGui::TextWrapped(
+                                            "Scalar branch power %.6g W -> %.6g W | field amplitude x%.6g | elements: %s",
+                                            routed.sourceBranchPowerWatts,
+                                            routed.terminalBranchPowerWatts,
+                                            routed.scalarBranchAmplitudeScale,
+                                            powerComponents.c_str());
+                                    }
+                                    if (!routed.appliedCoatingCalibrationIds
+                                             .empty()) {
+                                        const std::string coatings
+                                            = joinedBenchIdentifiers(
+                                                routed
+                                                    .appliedCoatingCalibrationIds);
+                                        ImGui::TextWrapped(
+                                            "Applied coating calibrations: %s",
+                                            coatings.c_str());
+                                    }
                                     if (!routed
                                              .appliedRealLensPrescriptionIds
                                              .empty()) {
@@ -10462,6 +10493,7 @@ void Application::drawSandboxInspector() {
                                                     *detectorFftBackend_,
                                                     &realLensPrescriptionCatalog_,
                                                     &slmResponseCatalog_,
+                                                    &coatingResponseCatalog_,
                                                     293.15);
                                         field::FieldVisualizationOptions viewOptions;
                                         viewOptions.colormap
@@ -10562,6 +10594,20 @@ void Application::drawSandboxInspector() {
                                         ImGui::BulletText(
                                             "Applied placed wave element: %s",
                                             componentId.c_str());
+                                    }
+                                    if (!routed.appliedScalarPowerComponentIds
+                                             .empty()) {
+                                        ImGui::TextWrapped(
+                                            "Scalar branch power %.6g W -> %.6g W | field amplitude x%.6g",
+                                            routed.sourceBranchPowerWatts,
+                                            routed.terminalBranchPowerWatts,
+                                            routed.scalarBranchAmplitudeScale);
+                                    }
+                                    for (const auto& calibrationId
+                                         : routed.appliedCoatingCalibrationIds) {
+                                        ImGui::BulletText(
+                                            "Applied coating calibration: %s",
+                                            calibrationId.c_str());
                                     }
                                     for (const auto& prescriptionId
                                          : routed.appliedRealLensPrescriptionIds) {

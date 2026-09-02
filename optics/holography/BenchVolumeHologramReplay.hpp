@@ -7,6 +7,7 @@
 #include "compute/propagation/TiltedPlanePropagator.hpp"
 #include "optics/holography/BenchVolumeHologram.hpp"
 #include "optics/holography/PlateFieldSampling.hpp"
+#include "optics/material/CoatingResponse.hpp"
 #include "optics/wave/BeamFollowingField.hpp"
 
 namespace holobench::compute::fft {
@@ -53,6 +54,8 @@ struct VolumePlateObservationReplayResult final {
 // Kogelnik diffraction efficiency. When the exact derived centre ray reaches
 // supported placed elements before the observation, the shared beam-following
 // service applies that routed path (including a verified real prescription).
+// A verified coating resolver supplies wavelength/angle branch power; the
+// retained complex field receives the resulting amplitude scale exactly once.
 // A direct parallel decenter uses shifted ASM; a direct non-grazing rotated
 // observation uses 2x-padded rotated-spectrum interpolation.
 [[nodiscard]] VolumePlateObservationReplayResult
@@ -66,6 +69,7 @@ replayVolumeReflectionToObservation(
     compute::fft::IFftBackend& fftBackend,
     const ray::ILensPrescriptionResolver* lensPrescriptions = nullptr,
     const slm::ISlmResponseResolver* slmResponses = nullptr,
+    const material::ICoatingResponseResolver* coatingResponses = nullptr,
     double environmentTemperatureKelvin = 293.15);
 
 } // namespace holobench::optics::holography
