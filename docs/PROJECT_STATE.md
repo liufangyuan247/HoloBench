@@ -49,8 +49,8 @@ animated or silently approximated.
   limits a dynamic scene to 5,000,000 solid vertices. Tests cover every component
   kind, finite normalized geometry, non-degenerate triangles, parameter scaling,
   exact rigid-pose following, determinism, and tessellation bounds.
-- **Acceptance evidence**: `dev` passes 595/595 tests and `core-ci` passes
-  593/593. Clang and MSVC core/application builds pass with warnings as errors;
+- **Acceptance evidence**: `dev` passes 599/599 tests and `core-ci` passes
+  597/597. Clang and MSVC core/application builds pass with warnings as errors;
   the packaged CJK font validates. The AMD Radeon Pro 5300M OpenGL 4.6 hardware
   smoke passes real shelf placement, constrained whole-instrument edits,
   post/XYZ and yaw/pitch mechanical drags, optical-frame updates, all M7/M8
@@ -81,8 +81,21 @@ animated or silently approximated.
   state. Stored references remain evidence only until an applicable model
   explicitly resolves and validates their content. See
   [ADR 0027](adr/0027-instrument-identity-and-calibration-references.md).
-- **Calibration next slice**: connect supported asset kinds to their existing
-  model adapters with explicit applied-calibration diagnostics.
+- **M10.3 hashed real-lens asset lifecycle implemented and locally validated**:
+  Imported JSON/CSV prescriptions are identified by exact bounded-file SHA-256,
+  immutable prescription ID/content/provenance, and a specification-bound
+  `lens_prescription` calibration reference. Binding a verified import is one
+  ordinary Real Lens Assembly edit that selects calibrated mode and advances
+  revision. Project load rebuilds a fresh catalog, resolves relative sources
+  against the Bench file, verifies hash before parsing plus format/content ID,
+  and swaps catalogs transactionally. Every candidate edit rejects missing,
+  stale, or mismatched references, so cached runtime content cannot mask a
+  changed/deleted asset. Editing an imported workbench prescription removes its
+  bindable status until it is saved under a new ID and reloaded. See
+  [ADR 0032](adr/0032-hashed-lens-prescription-assets.md).
+- **Calibration next slice**: connect coating, detector, SLM, pose, and other
+  supported asset kinds through the same verified lifecycle with explicit
+  applied-calibration diagnostics.
 - **M10.4 placed measurement foundation implemented**: The current ordinary
   Screen / Detector or nonblocking Field Probe retains its exact revision-bound
   complex field, wavelength and coherence identity, peak intensity, integrated
@@ -142,9 +155,9 @@ animated or silently approximated.
   prescription is applied to the physical plate field and retained in its
   diagnostics; a missing resolver rejects the recording. See
   [ADR 0031](adr/0031-placed-real-lens-prescription-adapter.md).
-- **M10.4 next slice**: bind imported prescriptions through hashed calibration
-  asset references and restore them with verified provenance; general
-  reflection-volume and camera paths remain separate validated extensions.
+- **M10.4 next slice**: general reflection-volume prescription wavefronts and
+  camera paths remain separate validated extensions; broader instruments and
+  physical model families continue under the shared Bench contract.
 
 ## Product rebaseline (2026-09-01)
 

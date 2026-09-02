@@ -89,8 +89,13 @@
   components without an assembly to `null` and without identity to the matching
   generic nominal specification.
   Real-lens prescriptions use separate versioned JSON/CSV exchange and are not
-  embedded in that scene document; the separate holography document is format
-  v3 with narrowly scoped v1/v2 migrations.
+  embedded in that scene document. A placed external prescription is restored
+  through a project-relative or absolute source plus exact-byte SHA-256,
+  format, semantic ID, and instrument-specification checks. Moving the project
+  without that asset or modifying the file in place deliberately makes the
+  Bench fail to load; SHA-256 is content identity, not author authentication.
+  The separate holography document is format v3 with narrowly scoped v1/v2
+  migrations.
 - Wave Detector and Sampling Debugger drafts share a strict format-v1
   `wave_sampling_workbench` document. Loading is deliberately draft-only;
   propagation and sampling refresh remain explicit operations, and numerical
@@ -154,8 +159,10 @@
   uniform, wrapped linear-ramp, or checkerboard recipes with bit-depth
   quantization and manual/automation provenance. M9 transient hogel rasters can
   attach the existing measured complex-response LUT without altering the saved
-  bench. Format v5 persists per-component calibration references, but general
-  asset resolution into placed-instrument solver behavior remains open.
+  bench. Format v5 persists per-component calibration references. Verified
+  real-lens prescription assets now resolve into placed-instrument behavior;
+  coating, detector, SLM, pose, stage, and other general calibration asset
+  adapters remain open.
 - Plate candidates currently infer object branches from an Object/Wavefront
   Source and reference branches from a Laser Source. They classify same-side
   transmission versus opposite-side reflection geometry and reject

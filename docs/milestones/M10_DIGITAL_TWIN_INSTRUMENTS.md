@@ -78,6 +78,15 @@ Inspector/viewport distinguish nominal, calibrated, and stale state. Stored
 evidence does not claim to affect physics until the corresponding model adapter
 resolves and validates the asset. See [ADR 0027](../adr/0027-instrument-identity-and-calibration-references.md).
 
+The first applied calibration kind is complete: imported real-lens JSON/CSV
+assets carry an exact bounded-file SHA-256 and immutable ID/content/provenance.
+A placed assembly binds the verified asset through one calibrated component
+edit. Project load resolves relative sources, verifies the hash before parsing,
+checks format/content/specification identity, builds a fresh catalog, and fails
+transactionally on drift. Every later Bench edit revalidates the binding, and
+editing imported optical truth requires a new ID plus reload before rebinding.
+See [ADR 0032](../adr/0032-hashed-lens-prescription-assets.md).
+
 ### M10.4 — Measurement and general experiment closure
 
 - Field Probe amplitude, intensity, phase, dB, spectral-channel, cursor, and
@@ -114,14 +123,16 @@ apertures, intermediate refractive indices, and thickness to Screen/Probe
 fields. Unsupported prescription geometry rejects rather than becoming an
 ideal thin lens. The same resolver now drives FFT-refined single/RGB
 thin-transmission plate recording and retains applied prescription IDs.
-Imported prescription binding remains an ordinary component edit; general
-hashed project-asset restoration and reflection-volume wavefront extensions are
-subsequent slices.
+Imported prescription binding is an ordinary revision-advancing component edit,
+and hashed project-asset restoration now fails closed on missing or changed
+bytes. Reflection-volume prescription wavefront extensions remain a subsequent
+slice.
 See
 [ADR 0028](../adr/0028-revision-bound-placed-field-measurements.md) and
 [ADR 0029](../adr/0029-coherent-merge-and-independent-measurement-channels.md),
 plus [ADR 0030](../adr/0030-shared-beam-following-field-paths.md) and
-[ADR 0031](../adr/0031-placed-real-lens-prescription-adapter.md).
+[ADR 0031](../adr/0031-placed-real-lens-prescription-adapter.md), and
+[ADR 0032](../adr/0032-hashed-lens-prescription-assets.md).
 
 ## Platform extensibility acceptance
 

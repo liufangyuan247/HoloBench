@@ -1,10 +1,32 @@
 #include "optics/ray/LensPrescriptionCatalog.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <stdexcept>
 #include <utility>
 
 namespace holobench::optics::ray {
+namespace {
+
+void validateProvenance(const LensPrescriptionAssetProvenance& provenance) {
+    if (provenance.formatVersion <= 0 || provenance.source.empty()) {
+        throw std::invalid_argument(
+            "lens prescription asset provenance is incomplete");
+    }
+    if (provenance.contentSha256.size() != 64U
+        || !std::all_of(
+            provenance.contentSha256.begin(),
+            provenance.contentSha256.end(),
+            [](char value) {
+                return (value >= '0' && value <= '9')
+                    || (value >= 'a' && value <= 'f');
+            })) {
+        throw std::invalid_argument(
+            "lens prescription asset SHA-256 must be lowercase hexadecimal");
+    }
+}
+
+} // namespace
 
 LensPrescriptionCatalog::LensPrescriptionCatalog(
     std::vector<SequentialLensPrescription> prescriptions) {
@@ -14,8 +36,10 @@ LensPrescriptionCatalog::LensPrescriptionCatalog(
 }
 
 void LensPrescriptionCatalog::registerPrescription(
-    SequentialLensPrescription prescription) {
+    SequentialLensPrescription prescription,
+    std::optional<LensPrescriptionAssetProvenance> provenance) {
     validateSequentialLensPrescription(prescription);
+    if (provenance.has_value()) validateProvenance(*provenance);
     const auto found = std::lower_bound(
         prescriptions_.begin(), prescriptions_.end(), prescription.id,
         [](const SequentialLensPrescription& candidate,
@@ -23,13 +47,20 @@ void LensPrescriptionCatalog::registerPrescription(
             return candidate.id < id;
         });
     if (found != prescriptions_.end() && found->id == prescription.id) {
-        if (*found != prescription) {
+        const auto index = static_cast<std::size_t>(
+            std::distance(prescriptions_.begin(), found));
+        if (*found != prescription || provenances_[index] != provenance) {
             throw std::invalid_argument(
-                "lens prescription ID already names different immutable content: "
+                "lens prescription ID already names different immutable content or provenance: "
                 + prescription.id);
         }
     } else {
+        const auto index = static_cast<std::size_t>(
+            std::distance(prescriptions_.begin(), found));
         prescriptions_.insert(found, std::move(prescription));
+        provenances_.insert(
+            provenances_.begin() + static_cast<std::ptrdiff_t>(index),
+            std::move(provenance));
     }
 }
 
@@ -43,6 +74,25 @@ const SequentialLensPrescription* LensPrescriptionCatalog::resolve(
         });
     return found != prescriptions_.end() && found->id == prescriptionId
         ? &*found
+        : nullptr;
+}
+
+const LensPrescriptionAssetProvenance*
+LensPrescriptionCatalog::provenance(
+    std::string_view prescriptionId) const noexcept {
+    const auto found = std::lower_bound(
+        prescriptions_.begin(), prescriptions_.end(), prescriptionId,
+        [](const SequentialLensPrescription& candidate,
+           std::string_view id) {
+            return candidate.id < id;
+        });
+    if (found == prescriptions_.end() || found->id != prescriptionId) {
+        return nullptr;
+    }
+    const auto index = static_cast<std::size_t>(
+        std::distance(prescriptions_.begin(), found));
+    return provenances_[index].has_value()
+        ? &*provenances_[index]
         : nullptr;
 }
 

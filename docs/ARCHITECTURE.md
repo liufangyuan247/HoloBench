@@ -82,7 +82,7 @@ Following ADR 0003:
 
 ## Project format
 
-Project JSON carries an explicit integer `format_version`. Loading an unknown version fails rather than silently misinterpreting physical data. Canonical persisted length values use keys suffixed with `_m` and SI metres. Unified optical-bench format v5 requires generic instrument identity and calibration references; v4 added optional persisted mechanical assemblies and a resolved optical-frame integrity check; v3 added placed SLM command recipes and provenance, while v1/v2 migrate to explicit manual zero-phase defaults and preserve v2 recording recipes. The format-v1 Reflection & Refraction Workbench stores the incidence angle and both refractive indices, while the separate format-v1 Wave & Sampling Workbench persists the complete Wave Detector and Sampling Debugger drafts together. The independent SLM & Interference Experiment schema is format v2; its format-v1 files migrate strictly to v2 user provenance. All workbenches share the provenance contract, and packaged lesson templates are ordinary project documents that use the same Lab load/save surface (ADR 0011, ADR 0014, ADR 0026, ADR 0027).
+Project JSON carries an explicit integer `format_version`. Loading an unknown version fails rather than silently misinterpreting physical data. Canonical persisted length values use keys suffixed with `_m` and SI metres. Unified optical-bench format v5 requires generic instrument identity and calibration references; v4 added optional persisted mechanical assemblies and a resolved optical-frame integrity check; v3 added placed SLM command recipes and provenance, while v1/v2 migrate to explicit manual zero-phase defaults and preserve v2 recording recipes. External real-lens JSON/CSV truth is not embedded: a `lens_prescription` reference binds its immutable ID, source, format, specification, and exact-byte SHA-256. Project load rebuilds a fresh catalog, resolves relative sources from the Bench file, verifies hash before parsing, and swaps the catalog only after complete candidate validation. The format-v1 Reflection & Refraction Workbench stores the incidence angle and both refractive indices, while the separate format-v1 Wave & Sampling Workbench persists the complete Wave Detector and Sampling Debugger drafts together. The independent SLM & Interference Experiment schema is format v2; its format-v1 files migrate strictly to v2 user provenance. All workbenches share the provenance contract, and packaged lesson templates are ordinary project documents that use the same Lab load/save surface (ADR 0011, ADR 0014, ADR 0026, ADR 0027, ADR 0032).
 
 Those schemas remain compatibility inputs. M7 introduces one unified dynamic
 bench document for typed components, rigid transforms, physical parameters,
@@ -102,6 +102,9 @@ The following wave and Fourier-optics architecture decisions are locked:
 - Runtime prescription-ID resolution, first-surface Bench anchoring, exact
   placed sequential routing, and the bounded scalar low-NA surface-phase model
   (ADR 0031).
+- Exact-byte hashed external prescription identity, immutable catalog
+  provenance, atomic calibrated component binding, project-relative restoration,
+  and fail-closed candidate-edit validation (ADR 0032).
 - Beam-following placed local fields, ideal fold-frame transport, projected
   zero-thickness elements, and explicit powered/vector fallback boundaries
   (ADR 0012).

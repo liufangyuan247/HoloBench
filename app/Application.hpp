@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <memory>
 #include <numbers>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -23,6 +24,7 @@
 #include "app/ChimeraParameterSweep.hpp"
 #include "app/ChimeraRecipe.hpp"
 #include "app/LessonEditHistory.hpp"
+#include "app/LensPrescriptionAssets.hpp"
 #include "app/HolographyLabPipeline.hpp"
 #include "app/HolographyUiState.hpp"
 #include "app/RealLensWorkbenchPipeline.hpp"
@@ -760,6 +762,8 @@ private:
     std::string waveProjectName_ = "Wave & Sampling Workbench";
     reallens::RealLensWorkbenchConfig realLensConfig_;
     optics::ray::LensPrescriptionCatalog realLensPrescriptionCatalog_;
+    std::optional<LoadedLensPrescriptionAsset>
+        activeLensPrescriptionAsset_;
     slmui::SlmInterferenceUiState slmInterferenceUiState_;
     project::ProjectProvenance slmProjectProvenance_;
     std::string slmProjectName_ = "SLM & Interference Experiment";

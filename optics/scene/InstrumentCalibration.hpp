@@ -28,6 +28,7 @@ enum class CalibrationAssetKind {
     ClearAperture,
     CoatingResponse,
     MaterialResponse,
+    LensPrescription,
     SlmResponse,
     DetectorResponse,
     StageResponse,

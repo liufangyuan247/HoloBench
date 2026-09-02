@@ -871,6 +871,8 @@ bool Application::applyDynamicBenchProject(
     bool recordHistory) {
     try {
         validateBenchProject(candidateProject);
+        validateLensPrescriptionAssetBindings(
+            candidateProject.scene, realLensPrescriptionCatalog_);
         if (benchEditHistoryReady_
             && candidateProject.scene.revision() <= benchProject_.scene.revision()
             && !sameBenchEditState(candidateProject, benchProject_)) {
@@ -945,13 +947,23 @@ bool Application::showLegacyViewport() {
 void Application::loadBenchProjectFromPath() {
     try {
         auto recovered = loadBenchProjectWithRecovery(benchProjectPathBuffer_);
+        optics::ray::LensPrescriptionCatalog recoveredCatalog({
+            optics::ray::makeDefaultNBk7BiconvexPrescription()});
+        restoreLensPrescriptionAssets(
+            recovered.project.scene,
+            std::filesystem::path(benchProjectPathBuffer_),
+            recoveredCatalog);
         const std::string loadedName = recovered.project.name;
         const auto source = recovered.source;
         const bool ignoredInvalidAutosave = recovered.ignoredInvalidAutosave;
+        const std::string previousSelection = selectedBenchComponentId_;
+        auto previousCatalog = std::move(realLensPrescriptionCatalog_);
+        realLensPrescriptionCatalog_ = std::move(recoveredCatalog);
         selectedBenchComponentId_.clear();
         if (applyDynamicBenchProject(
                 std::move(recovered.project),
                 "Loaded optical bench: " + loadedName)) {
+            activeLensPrescriptionAsset_.reset();
             if (source == BenchProjectRecoverySource::Primary) {
                 discardBenchProjectAutosave(benchProjectPathBuffer_);
                 statusMessage_ = ignoredInvalidAutosave
@@ -962,6 +974,9 @@ void Application::loadBenchProjectFromPath() {
                 statusMessage_ = "Recovered unsaved optical bench edits: "
                     + loadedName;
             }
+        } else {
+            realLensPrescriptionCatalog_ = std::move(previousCatalog);
+            selectedBenchComponentId_ = previousSelection;
         }
     } catch (const std::exception& error) {
         errorMessage_ = error.what();
@@ -3258,11 +3273,23 @@ void Application::loadRealLensPrescription(bool csv) {
         if (path.empty()) {
             throw std::invalid_argument("prescription path cannot be empty");
         }
-        auto loaded = csv
-            ? optics::io::loadLensPrescriptionCsv(path)
-            : optics::io::loadLensPrescriptionJson(path);
-        realLensPrescriptionCatalog_.registerPrescription(loaded);
-        realLensConfig_.prescription = std::move(loaded);
+        const std::string expectedExtension = csv ? ".csv" : ".json";
+        std::string extension = path.extension().string();
+        std::transform(
+            extension.begin(), extension.end(), extension.begin(),
+            [](unsigned char character) {
+                return static_cast<char>(std::tolower(character));
+            });
+        if (extension != expectedExtension) {
+            throw std::invalid_argument(
+                "selected loader requires a " + expectedExtension
+                + " prescription asset");
+        }
+        auto loaded = loadLensPrescriptionAsset(path);
+        realLensPrescriptionCatalog_.registerPrescription(
+            loaded.prescription, loaded.provenance);
+        realLensConfig_.prescription = loaded.prescription;
+        activeLensPrescriptionAsset_ = std::move(loaded);
         selectedRealLensSurface_ = 0;
         realLensDirty_ = true;
         refreshRealLensWorkbench();
@@ -3891,6 +3918,7 @@ void Application::drawRealLensPanel() {
     ImGui::SameLine();
     if (ImGui::Button("Reset N-BK7 Biconvex Example")) {
         realLensConfig_ = reallens::makeDefaultRealLensWorkbenchConfig();
+        activeLensPrescriptionAsset_.reset();
         selectedRealLensSurface_ = 0;
         realLensDirty_ = true;
         refreshRealLensWorkbench();
@@ -3914,9 +3942,36 @@ void Application::drawRealLensPanel() {
     if (ImGui::Button("Save CSV")) {
         saveRealLensPrescription(true);
     }
+    if (activeLensPrescriptionAsset_.has_value()) {
+        ImGui::TextDisabled(
+            "Verified imported asset: %s | SHA-256 %.12s...",
+            activeLensPrescriptionAsset_->provenance.source.c_str(),
+            activeLensPrescriptionAsset_->provenance.contentSha256.c_str());
+    } else {
+        ImGui::TextDisabled(
+            "No verified imported asset is active; edited prescriptions must be saved with a new ID and reloaded before Bench binding.");
+    }
 
     if (ImGui::BeginTabBar("real_lens_tabs")) {
         if (ImGui::BeginTabItem("Prescription Editor")) {
+            std::array<char, 129> prescriptionIdBuffer {};
+            const std::size_t prescriptionIdLength = std::min(
+                realLensConfig_.prescription.id.size(),
+                prescriptionIdBuffer.size() - 1U);
+            std::copy_n(
+                realLensConfig_.prescription.id.data(),
+                prescriptionIdLength,
+                prescriptionIdBuffer.data());
+            if (ImGui::InputText(
+                    "Prescription immutable ID",
+                    prescriptionIdBuffer.data(),
+                    prescriptionIdBuffer.size())) {
+                realLensConfig_.prescription.id
+                    = prescriptionIdBuffer.data();
+                realLensDirty_ = true;
+            }
+            ImGui::TextDisabled(
+                "After changing optical content, choose a new ID, save, and reload before Bench binding.");
             if (ImGui::CollapsingHeader("Analysis setup", ImGuiTreeNodeFlags_DefaultOpen)) {
                 double pupilMm = realLensConfig_.entrancePupilSemiDiameterMetres * 1e3;
                 if (ImGui::InputDouble("Entrance pupil semi-diameter (mm)", &pupilMm, 0.1, 1.0, "%.6f")) {
@@ -4309,6 +4364,14 @@ void Application::drawRealLensPanel() {
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
+    }
+
+    if (activeLensPrescriptionAsset_.has_value()
+        && activeLensPrescriptionAsset_->prescription
+            != realLensConfig_.prescription) {
+        activeLensPrescriptionAsset_.reset();
+        realLensStatusMessage_
+            = "Prescription edited: save it under a new immutable ID and reload it before binding it to the Bench";
     }
 
     if (!realLensErrorMessage_.empty()) {
@@ -7873,6 +7936,7 @@ void Application::drawSandboxInspector() {
                     bench::CalibrationAssetKind::ClearAperture,
                     bench::CalibrationAssetKind::CoatingResponse,
                     bench::CalibrationAssetKind::MaterialResponse,
+                    bench::CalibrationAssetKind::LensPrescription,
                     bench::CalibrationAssetKind::SlmResponse,
                     bench::CalibrationAssetKind::DetectorResponse,
                     bench::CalibrationAssetKind::StageResponse,
@@ -8184,11 +8248,16 @@ void Application::drawSandboxInspector() {
                     changed |= ImGui::DragFloat("Assembly clear diameter (mm)", &apertureMm, 0.1F, 0.001F, 5000.0F);
                     value.clearApertureDiameterMetres = static_cast<double>(apertureMm) * 1e-3;
                     ImGui::TextDisabled("Prescription ID: %s", value.prescriptionId.c_str());
-                    if (ImGui::Button("Use active imported prescription")) {
-                        value.prescriptionId
-                            = realLensConfig_.prescription.id;
+                    ImGui::BeginDisabled(
+                        !activeLensPrescriptionAsset_.has_value());
+                    if (ImGui::Button("Use verified imported prescription")) {
+                        bindLensPrescriptionAsset(
+                            edited, *activeLensPrescriptionAsset_);
+                        value = std::get<bench::RealLensAssemblyParameters>(
+                            edited.parameters);
                         changed = true;
                     }
+                    ImGui::EndDisabled();
                     const auto* resolved
                         = realLensPrescriptionCatalog_.resolve(
                             value.prescriptionId);

@@ -48,11 +48,12 @@ namespace {
            });
 }
 
-constexpr std::array<CalibrationAssetKind, 7> kAssetKinds {{
+constexpr std::array<CalibrationAssetKind, 8> kAssetKinds {{
     CalibrationAssetKind::OpticalPose,
     CalibrationAssetKind::ClearAperture,
     CalibrationAssetKind::CoatingResponse,
     CalibrationAssetKind::MaterialResponse,
+    CalibrationAssetKind::LensPrescription,
     CalibrationAssetKind::SlmResponse,
     CalibrationAssetKind::DetectorResponse,
     CalibrationAssetKind::StageResponse,
@@ -93,6 +94,7 @@ std::string_view calibrationAssetKindName(CalibrationAssetKind kind) noexcept {
     case CalibrationAssetKind::ClearAperture: return "clear_aperture";
     case CalibrationAssetKind::CoatingResponse: return "coating_response";
     case CalibrationAssetKind::MaterialResponse: return "material_response";
+    case CalibrationAssetKind::LensPrescription: return "lens_prescription";
     case CalibrationAssetKind::SlmResponse: return "slm_response";
     case CalibrationAssetKind::DetectorResponse: return "detector_response";
     case CalibrationAssetKind::StageResponse: return "stage_response";

@@ -45,6 +45,7 @@ add_library(holobench_core STATIC
     core/math/RigidTransform.cpp
     core/project/ProjectDocument.cpp
     core/project/ProjectProvenance.cpp
+    core/project/Sha256.cpp
 )
 add_library(HoloBench::Core ALIAS holobench_core)
 target_include_directories(holobench_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -145,6 +146,7 @@ add_library(holobench_app_logic STATIC
     app/ChimeraReconstruction.cpp
     app/ChimeraRecipe.cpp
     app/LessonEditHistory.cpp
+    app/LensPrescriptionAssets.cpp
     app/HolographyLabPipeline.cpp
     app/HolographyProject.cpp
     app/HolographyReconstructionPipeline.cpp
@@ -472,6 +474,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/WaveSourceTests.cpp
         tests/project/ProjectDocumentTests.cpp
         tests/project/SceneProjectAdapterTests.cpp
+        tests/project/Sha256Tests.cpp
         tests/validation/OptilandCrossValidationTests.cpp
         tests/validation/WavepropCrossValidationTests.cpp
         tests/app/WaveDetectorUiStateTests.cpp
@@ -497,6 +500,7 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/app/HolographyUiStateTests.cpp
         tests/app/HolographyProjectTests.cpp
         tests/app/LessonEditHistoryTests.cpp
+        tests/app/LensPrescriptionAssetsTests.cpp
         tests/app/LearnSessionTests.cpp
         tests/app/LessonCatalogTests.cpp
         tests/app/LessonProgressTests.cpp

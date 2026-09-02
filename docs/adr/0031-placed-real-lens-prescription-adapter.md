@@ -91,9 +91,9 @@ measurement.
   thin-transmission plate recording within the declared scalar domain. The same
   resolver remains reusable by later camera and calibration-asset adapters.
 - JSON/CSV prescription bytes remain external assets and are not embedded in
-  Bench format v5. General hashed asset binding and catalog restoration on
-  project load remain a follow-up; the built-in prescription is immediately
-  reproducible.
+  Bench format v5. The subsequent hashed binding and project-load lifecycle is
+  specified by [ADR 0032](0032-hashed-lens-prescription-assets.md); the built-in
+  prescription remains immediately reproducible.
 - Product thin-transmission recording passes the runtime resolver into both
   object and reference branch sampling and retains the applied prescription ID.
   Missing resolution rejects the full recording. Reflection-volume recording
