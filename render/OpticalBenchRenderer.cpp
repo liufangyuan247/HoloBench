@@ -1217,6 +1217,7 @@ bool OpticalBenchRenderer::updateDynamicScene(
         case bench::BenchComponentKind::ObjectWavefrontSource: return glm::vec4(0.82F, 0.38F, 0.94F, 0.95F);
         case bench::BenchComponentKind::PlanarMirror: return glm::vec4(0.72F, 0.82F, 0.94F, 0.95F);
         case bench::BenchComponentKind::BeamSplitterCombiner: return glm::vec4(0.30F, 0.82F, 0.96F, 0.90F);
+        case bench::BenchComponentKind::XCubeCombiner: return glm::vec4(0.40F, 0.88F, 0.85F, 0.90F);
         case bench::BenchComponentKind::IdealThinLens: return glm::vec4(0.24F, 0.92F, 0.98F, 0.95F);
         case bench::BenchComponentKind::RealLensAssembly: return glm::vec4(0.20F, 0.68F, 0.92F, 0.95F);
         case bench::BenchComponentKind::Aperture: return glm::vec4(0.96F, 0.58F, 0.16F, 0.95F);
@@ -1310,6 +1311,12 @@ bool OpticalBenchRenderer::updateDynamicScene(
             const auto& value = std::get<bench::BeamSplitterParameters>(component.parameters);
             width = value.widthMetres;
             height = value.heightMetres;
+            break;
+        }
+        case bench::BenchComponentKind::XCubeCombiner: {
+            const auto& value = std::get<bench::XCubeCombinerParameters>(component.parameters);
+            width = value.sizeMetres;
+            height = value.sizeMetres;
             break;
         }
         case bench::BenchComponentKind::IdealThinLens: {

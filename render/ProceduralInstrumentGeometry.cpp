@@ -87,6 +87,11 @@ struct VisualExtent final {
         height = value.heightMetres;
         break;
     }
+    case bench::BenchComponentKind::XCubeCombiner: {
+        const auto& value = std::get<bench::XCubeCombinerParameters>(component.parameters);
+        width = height = value.sizeMetres;
+        break;
+    }
     case bench::BenchComponentKind::IdealThinLens:
         width = height = std::get<bench::IdealThinLensParameters>(component.parameters)
             .clearApertureDiameterMetres;
@@ -565,6 +570,20 @@ ProceduralInstrumentMesh generateProceduralInstrumentMesh(
             selectedTint({0.20F, 0.62F, 0.76F, 0.82F}, options.selected));
         addPostAndBase(mesh, component, extent, metal);
         break;
+    case bench::BenchComponentKind::XCubeCombiner: {
+        const auto& value = std::get<bench::XCubeCombinerParameters>(component.parameters);
+        const float s = static_cast<float>(value.sizeMetres);
+        const float hs = 0.5F * s;
+        addBox(mesh, component, {0.0F, 0.0F, 0.0F},
+            {hs, hs, hs},
+            selectedTint({0.25F, 0.72F, 0.82F, 0.78F}, options.selected));
+        addBox(mesh, component, {0.0F, hs + 0.002F, 0.0F},
+            {hs + 0.003F, 0.002F, hs + 0.003F}, dark);
+        addBox(mesh, component, {0.0F, -(hs + 0.002F), 0.0F},
+            {hs + 0.003F, 0.002F, hs + 0.003F}, dark);
+        addPostAndBase(mesh, component, extent, metal);
+        break;
+    }
     case bench::BenchComponentKind::IdealThinLens:
         addEllipticalRingZ(mesh, component, {},
             {halfWidth + 0.003F, halfHeight + 0.003F},

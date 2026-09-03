@@ -73,6 +73,13 @@ void requirePositive(double value, std::string_view field) {
     }
 }
 
+void requireNonNegative(double value, std::string_view field) {
+    if (!std::isfinite(value) || value < 0.0) {
+        throw std::invalid_argument(
+            std::string(field) + " must be finite and non-negative");
+    }
+}
+
 math::RigidTransform3d frameWithZAxis(
     math::Vec3d position,
     math::Vec3d zAxis) {
@@ -156,6 +163,30 @@ SpectralArm armFromJson(const Json& value) {
 }
 
 } // namespace
+
+std::string_view beamCombinationMethodName(
+    BeamCombinationMethod method) noexcept {
+    switch (method) {
+    case BeamCombinationMethod::XCube: return "x_cube";
+    case BeamCombinationMethod::CascadedDichroic: return "cascaded_dichroic";
+    case BeamCombinationMethod::IntegratedMultiLine: return "integrated_multiline";
+    }
+    return "x_cube";
+}
+
+BeamCombinationMethod beamCombinationMethodFromName(
+    std::string_view name) {
+    if (name == "x_cube" || name == "xcube") {
+        return BeamCombinationMethod::XCube;
+    }
+    if (name == "cascaded_dichroic" || name == "dichroic") {
+        return BeamCombinationMethod::CascadedDichroic;
+    }
+    if (name == "integrated_multiline" || name == "multiline") {
+        return BeamCombinationMethod::IntegratedMultiLine;
+    }
+    throw std::invalid_argument("unknown beam combination method: " + std::string(name));
+}
 
 bool CompileResult::feasible() const noexcept {
     return std::none_of(
@@ -248,7 +279,7 @@ void validateChimeraRecipe(const ChimeraRecipe& recipe) {
     requirePositive(
         recipe.reference.splitterDistanceAfterMirrorMetres,
         "reference splitter distance_m");
-    requirePositive(
+    requireNonNegative(
         recipe.reference.armSeparationMetres,
         "reference arm separation_m");
     if (!std::isfinite(recipe.reference.mirrorXMetres)
@@ -297,7 +328,6 @@ CompileResult compileChimeraRecipe(const ChimeraRecipe& recipe) {
     CompileResult result;
     result.project.projectId = "chimera-" + recipe.recipeId;
     result.project.name = recipe.name + " (editable generated bench)";
-    constexpr std::array<double, 3> armMultipliers {-1.0, 0.0, 1.0};
 
     const double achievedHorizontalFov = 2.0 * std::atan(
         recipe.slm.widthMetres / (2.0 * recipe.relay.focalLengthMetres));
@@ -361,7 +391,7 @@ CompileResult compileChimeraRecipe(const ChimeraRecipe& recipe) {
     for (std::size_t index = 0; index < recipe.rgb.size(); ++index) {
         const math::Vec3d source {
             -0.03,
-            armMultipliers[index] * recipe.reference.armSeparationMetres,
+            0.0,
             0.30,
         };
         const math::Vec3d direction = math::normalized(math::Vec3d {} - source);
@@ -413,8 +443,8 @@ CompileResult compileChimeraRecipe(const ChimeraRecipe& recipe) {
         componentId("reconstruction-probe"),
         frameWithZAxis({0.0, 0.0, -0.098}, {0.0, 0.0, -1.0}));
     auto probeParameters = std::get<scene::FieldProbeParameters>(probe.parameters);
-    probeParameters.widthMetres = std::max(0.05, 2.0 * plateWidth);
-    probeParameters.heightMetres = std::max(0.05, 2.0 * plateHeight);
+    probeParameters.widthMetres = std::max(0.02, 2.0 * plateWidth);
+    probeParameters.heightMetres = std::max(0.02, 2.0 * plateHeight);
     probeParameters.sampleWidth = recipe.exposure.sampleWidth;
     probeParameters.sampleHeight = recipe.exposure.sampleHeight;
     probe.parameters = probeParameters;
@@ -434,134 +464,330 @@ CompileResult compileChimeraRecipe(const ChimeraRecipe& recipe) {
     cameraLens.parameters = cameraLensParameters;
     addGenerated(result, std::move(cameraLens), "camera_lens", "", recipe);
 
+    const math::Vec3d objectPosition {-0.03, 0.0, 0.30};
+    const math::Vec3d objectAxis = math::normalized(math::Vec3d {} - objectPosition);
+    const math::Vec3d splitterPosition = objectPosition;
+    const math::Vec3d combinerPosition = objectPosition - objectAxis * 0.12;
+    const math::Vec3d slmPosition = objectPosition * 0.80;
+    const math::Vec3d lensPosition = slmPosition
+        - math::normalized(slmPosition) * recipe.relay.focalLengthMetres;
+    const math::Vec3d stopPosition = objectPosition * 0.40;
+
+    const math::RigidTransform3d combinerFrame = frameWithZAxis(combinerPosition, objectAxis);
+    const math::Vec3d localX = combinerFrame.localXAxisInWorld;
+    const math::Vec3d localZ = combinerFrame.localZAxisInWorld;
+
+    if (recipe.beamCombinationMethod == BeamCombinationMethod::XCube) {
+        auto xcube = component(
+            scene::BenchComponentKind::XCubeCombiner,
+            componentId("xcube-combiner"),
+            combinerFrame);
+        auto xcubeParams = std::get<scene::XCubeCombinerParameters>(xcube.parameters);
+        xcubeParams.sizeMetres = 0.025;
+        xcubeParams.redWavelengthMetres = recipe.rgb[0].wavelengthMetres;
+        xcubeParams.greenWavelengthMetres = recipe.rgb[1].wavelengthMetres;
+        xcubeParams.blueWavelengthMetres = recipe.rgb[2].wavelengthMetres;
+        xcubeParams.wavelengthToleranceMetres = 35e-9;
+        xcube.parameters = xcubeParams;
+        addGenerated(result, std::move(xcube), "xcube_combiner", "", recipe);
+
+        // Red laser (enters left port along +localX)
+        {
+            const auto& arm = recipe.rgb[0];
+            const double totalPower = arm.objectPowerWatts + arm.referencePowerWatts;
+            const math::Vec3d laserPos = combinerPosition - localX * 0.08;
+            auto laser = component(
+                scene::BenchComponentKind::LaserSource,
+                componentId("laser-source", arm.channelId),
+                aimedTransform(laserPos, combinerPosition));
+            auto p = std::get<scene::LaserSourceParameters>(laser.parameters);
+            p.beamRadiusMetres = std::max(0.002, 0.5 * recipe.hogels.pitchMetres);
+            p.channels = {{
+                .wavelengthMetres = arm.wavelengthMetres,
+                .powerWatts = totalPower,
+                .coherenceId = "chimera-" + arm.channelId + "-recording",
+            }};
+            laser.parameters = p;
+            addGenerated(result, std::move(laser), "laser_source", arm.channelId, recipe);
+        }
+        // Green laser (enters rear port along +localZ)
+        {
+            const auto& arm = recipe.rgb[1];
+            const double totalPower = arm.objectPowerWatts + arm.referencePowerWatts;
+            const math::Vec3d laserPos = combinerPosition - localZ * 0.08;
+            auto laser = component(
+                scene::BenchComponentKind::LaserSource,
+                componentId("laser-source", arm.channelId),
+                aimedTransform(laserPos, combinerPosition));
+            auto p = std::get<scene::LaserSourceParameters>(laser.parameters);
+            p.beamRadiusMetres = std::max(0.002, 0.5 * recipe.hogels.pitchMetres);
+            p.channels = {{
+                .wavelengthMetres = arm.wavelengthMetres,
+                .powerWatts = totalPower,
+                .coherenceId = "chimera-" + arm.channelId + "-recording",
+            }};
+            laser.parameters = p;
+            addGenerated(result, std::move(laser), "laser_source", arm.channelId, recipe);
+        }
+        // Blue laser (enters right port along -localX)
+        {
+            const auto& arm = recipe.rgb[2];
+            const double totalPower = arm.objectPowerWatts + arm.referencePowerWatts;
+            const math::Vec3d laserPos = combinerPosition + localX * 0.08;
+            auto laser = component(
+                scene::BenchComponentKind::LaserSource,
+                componentId("laser-source", arm.channelId),
+                aimedTransform(laserPos, combinerPosition));
+            auto p = std::get<scene::LaserSourceParameters>(laser.parameters);
+            p.beamRadiusMetres = std::max(0.002, 0.5 * recipe.hogels.pitchMetres);
+            p.channels = {{
+                .wavelengthMetres = arm.wavelengthMetres,
+                .powerWatts = totalPower,
+                .coherenceId = "chimera-" + arm.channelId + "-recording",
+            }};
+            laser.parameters = p;
+            addGenerated(result, std::move(laser), "laser_source", arm.channelId, recipe);
+        }
+    } else if (recipe.beamCombinationMethod == BeamCombinationMethod::CascadedDichroic) {
+        const math::Vec3d d1Pos = combinerPosition - localZ * 0.06;
+        const math::Vec3d d2Pos = combinerPosition;
+
+        const math::Vec3d d1Normal = math::normalized(localX - localZ);
+        auto dichroic1 = component(
+            scene::BenchComponentKind::BeamSplitterCombiner,
+            componentId("dichroic-combiner-red"),
+            frameWithZAxis(d1Pos, d1Normal));
+        auto d1Params = std::get<scene::BeamSplitterParameters>(dichroic1.parameters);
+        d1Params.widthMetres = 0.025;
+        d1Params.heightMetres = 0.025;
+        d1Params.powerReflectivity = 0.50;
+        d1Params.powerTransmissivity = 0.50;
+        dichroic1.parameters = d1Params;
+        addGenerated(result, std::move(dichroic1), "dichroic_combiner", "red", recipe);
+
+        const math::Vec3d d2Normal = math::normalized(-localX - localZ);
+        auto dichroic2 = component(
+            scene::BenchComponentKind::BeamSplitterCombiner,
+            componentId("dichroic-combiner-blue"),
+            frameWithZAxis(d2Pos, d2Normal));
+        auto d2Params = std::get<scene::BeamSplitterParameters>(dichroic2.parameters);
+        d2Params.widthMetres = 0.025;
+        d2Params.heightMetres = 0.025;
+        d2Params.powerReflectivity = 0.50;
+        d2Params.powerTransmissivity = 0.50;
+        dichroic2.parameters = d2Params;
+        addGenerated(result, std::move(dichroic2), "dichroic_combiner", "blue", recipe);
+
+        // Green laser: through d1 and d2 along +localZ
+        {
+            const auto& arm = recipe.rgb[1];
+            const double totalPower = arm.objectPowerWatts + arm.referencePowerWatts;
+            const math::Vec3d laserPos = d1Pos - localZ * 0.08;
+            auto laser = component(
+                scene::BenchComponentKind::LaserSource,
+                componentId("laser-source", arm.channelId),
+                aimedTransform(laserPos, d1Pos));
+            auto p = std::get<scene::LaserSourceParameters>(laser.parameters);
+            p.beamRadiusMetres = std::max(0.002, 0.5 * recipe.hogels.pitchMetres);
+            p.channels = {{
+                .wavelengthMetres = arm.wavelengthMetres,
+                .powerWatts = totalPower,
+                .coherenceId = "chimera-" + arm.channelId + "-recording",
+            }};
+            laser.parameters = p;
+            addGenerated(result, std::move(laser), "laser_source", arm.channelId, recipe);
+        }
+        // Red laser: into d1 from -localX
+        {
+            const auto& arm = recipe.rgb[0];
+            const double totalPower = arm.objectPowerWatts + arm.referencePowerWatts;
+            const math::Vec3d laserPos = d1Pos - localX * 0.08;
+            auto laser = component(
+                scene::BenchComponentKind::LaserSource,
+                componentId("laser-source", arm.channelId),
+                aimedTransform(laserPos, d1Pos));
+            auto p = std::get<scene::LaserSourceParameters>(laser.parameters);
+            p.beamRadiusMetres = std::max(0.002, 0.5 * recipe.hogels.pitchMetres);
+            p.channels = {{
+                .wavelengthMetres = arm.wavelengthMetres,
+                .powerWatts = totalPower,
+                .coherenceId = "chimera-" + arm.channelId + "-recording",
+            }};
+            laser.parameters = p;
+            addGenerated(result, std::move(laser), "laser_source", arm.channelId, recipe);
+        }
+        // Blue laser: into d2 from +localX
+        {
+            const auto& arm = recipe.rgb[2];
+            const double totalPower = arm.objectPowerWatts + arm.referencePowerWatts;
+            const math::Vec3d laserPos = d2Pos + localX * 0.08;
+            auto laser = component(
+                scene::BenchComponentKind::LaserSource,
+                componentId("laser-source", arm.channelId),
+                aimedTransform(laserPos, d2Pos));
+            auto p = std::get<scene::LaserSourceParameters>(laser.parameters);
+            p.beamRadiusMetres = std::max(0.002, 0.5 * recipe.hogels.pitchMetres);
+            p.channels = {{
+                .wavelengthMetres = arm.wavelengthMetres,
+                .powerWatts = totalPower,
+                .coherenceId = "chimera-" + arm.channelId + "-recording",
+            }};
+            laser.parameters = p;
+            addGenerated(result, std::move(laser), "laser_source", arm.channelId, recipe);
+        }
+    } else { // IntegratedMultiLine
+        const math::Vec3d laserPos = combinerPosition - localZ * 0.08;
+        auto laser = component(
+            scene::BenchComponentKind::LaserSource,
+            componentId("laser-source"),
+            aimedTransform(laserPos, splitterPosition));
+        auto p = std::get<scene::LaserSourceParameters>(laser.parameters);
+        p.beamRadiusMetres = std::max(0.002, 0.5 * recipe.hogels.pitchMetres);
+        p.channels.clear();
+        for (const auto& arm : recipe.rgb) {
+            p.channels.push_back({
+                .wavelengthMetres = arm.wavelengthMetres,
+                .powerWatts = arm.objectPowerWatts + arm.referencePowerWatts,
+                .coherenceId = "chimera-" + arm.channelId + "-recording",
+            });
+        }
+        laser.parameters = p;
+        addGenerated(result, std::move(laser), "laser_source", "rgb", recipe);
+    }
+
+    // Shared collinear optical train
+    const math::Vec3d outSplitterReflected {1.0, 0.0, 0.0};
+    const math::Vec3d splitterNormal = math::normalized(objectAxis - outSplitterReflected);
+    auto splitter = component(
+        scene::BenchComponentKind::BeamSplitterCombiner,
+        componentId("reference-splitter"),
+        frameWithZAxis(splitterPosition, splitterNormal));
+    auto splitterParameters = std::get<scene::BeamSplitterParameters>(splitter.parameters);
+    splitterParameters.widthMetres = 0.025;
+    splitterParameters.heightMetres = 0.025;
+    splitterParameters.powerTransmissivity = recipe.reference.splitterPowerTransmission;
+    splitterParameters.powerReflectivity = 1.0 - recipe.reference.splitterPowerTransmission;
+    splitter.parameters = splitterParameters;
+    addGenerated(result, std::move(splitter), "reference_splitter", "", recipe);
+
+    auto slm = component(
+        scene::BenchComponentKind::SpatialLightModulator,
+        componentId("slm"),
+        aimedTransform(slmPosition, {0.0, 0.0, 0.0}));
+    auto slmParameters = std::get<scene::SpatialLightModulatorParameters>(slm.parameters);
+    slmParameters.widthMetres = recipe.slm.widthMetres;
+    slmParameters.heightMetres = recipe.slm.heightMetres;
+    slmParameters.pixelWidth = recipe.slm.pixelWidth;
+    slmParameters.pixelHeight = recipe.slm.pixelHeight;
+    slmParameters.fillFactor = recipe.slm.fillFactor;
+    slmParameters.bitDepth = recipe.slm.bitDepth;
+    slmParameters.phaseRangeRadians = recipe.slm.phaseRangeRadians;
+    slmParameters.commandOrigin = scene::SlmCommandOrigin::Automation;
+    slmParameters.commandId = "chimera-" + recipe.recipeId + "-hogel-pending";
+    slm.parameters = slmParameters;
+    addGenerated(result, std::move(slm), "object_slm", "", recipe);
+
+    auto lens = component(
+        scene::BenchComponentKind::IdealThinLens,
+        componentId("relay-lens"),
+        aimedTransform(lensPosition, {0.0, 0.0, 0.0}));
+    auto lensParameters = std::get<scene::IdealThinLensParameters>(lens.parameters);
+    lensParameters.focalLengthMetres = recipe.relay.focalLengthMetres;
+    lensParameters.clearApertureDiameterMetres = recipe.relay.clearApertureDiameterMetres;
+    lens.parameters = lensParameters;
+    addGenerated(result, std::move(lens), "relay_lens", "", recipe);
+
+    auto aperture = component(
+        scene::BenchComponentKind::Aperture,
+        componentId("relay-stop"),
+        aimedTransform(stopPosition, {0.0, 0.0, 0.0}));
+    auto apertureParameters = std::get<scene::ApertureParameters>(aperture.parameters);
+    apertureParameters.widthMetres = recipe.relay.stopDiameterMetres;
+    apertureParameters.heightMetres = recipe.relay.stopDiameterMetres;
+    aperture.parameters = apertureParameters;
+    addGenerated(result, std::move(aperture), "relay_stop", "", recipe);
+
+    const math::Vec3d foldMirrorPosition {
+        recipe.reference.sourceXMetres,
+        0.0,
+        splitterPosition.z,
+    };
+    const math::Vec3d inFold {1.0, 0.0, 0.0};
+    const math::Vec3d outFold {0.0, 0.0, -1.0};
+    const math::Vec3d foldNormal = math::normalized(inFold - outFold);
+
+    auto foldMirror = component(
+        scene::BenchComponentKind::PlanarMirror,
+        componentId("reference-fold-mirror"),
+        frameWithZAxis(foldMirrorPosition, foldNormal));
+    auto foldMirrorParameters = std::get<scene::PlanarMirrorParameters>(foldMirror.parameters);
+    foldMirrorParameters.widthMetres = 0.03;
+    foldMirrorParameters.heightMetres = 0.03;
+    foldMirror.parameters = foldMirrorParameters;
+    addGenerated(result, std::move(foldMirror), "reference_fold_mirror", "", recipe);
+
+    const math::Vec3d refMirrorPosition {
+        recipe.reference.mirrorXMetres,
+        0.0,
+        recipe.reference.mirrorZMetres,
+    };
+    const math::Vec3d inRef {0.0, 0.0, -1.0};
+    const math::Vec3d outRef = math::normalized(math::Vec3d {} - refMirrorPosition);
+    const math::Vec3d refNormal = math::normalized(inRef - outRef);
+
+    auto refMirror = component(
+        scene::BenchComponentKind::PlanarMirror,
+        componentId("reference-mirror"),
+        frameWithZAxis(refMirrorPosition, refNormal));
+    auto refMirrorParameters = std::get<scene::PlanarMirrorParameters>(refMirror.parameters);
+    refMirrorParameters.widthMetres = 0.03;
+    refMirrorParameters.heightMetres = 0.03;
+    refMirror.parameters = refMirrorParameters;
+    addGenerated(result, std::move(refMirror), "reference_mirror", "", recipe);
+
     for (std::size_t index = 0; index < recipe.rgb.size(); ++index) {
         const auto& arm = recipe.rgb[index];
-        const double armY = armMultipliers[index]
-            * recipe.reference.armSeparationMetres;
         const std::string coherence = "chimera-" + arm.channelId + "-recording";
+        const std::string laserId = (recipe.beamCombinationMethod == BeamCombinationMethod::IntegratedMultiLine)
+            ? componentId("laser-source")
+            : componentId("laser-source", arm.channelId);
 
-        const math::Vec3d objectPosition {-0.03, armY, 0.30};
-        const math::Vec3d slmPosition = objectPosition * 0.80;
-        const math::Vec3d lensPosition = slmPosition
-            - math::normalized(slmPosition)
-                * recipe.relay.focalLengthMetres;
-        auto object = component(
-            scene::BenchComponentKind::ObjectWavefrontSource,
-            componentId("object-source", arm.channelId),
-            aimedTransform(objectPosition, {0.0, 0.0, 0.0}));
-        auto objectParameters
-            = std::get<scene::ObjectWavefrontSourceParameters>(object.parameters);
-        objectParameters.geometry = scene::ObjectSourceGeometry::UniformPlane;
-        objectParameters.channel = {
-            .wavelengthMetres = arm.wavelengthMetres,
-            .powerWatts = arm.objectPowerWatts,
-            .coherenceId = coherence,
-        };
-        objectParameters.widthMetres = recipe.hogels.pitchMetres;
-        objectParameters.heightMetres = recipe.hogels.pitchMetres;
-        object.parameters = objectParameters;
-        addGenerated(result, std::move(object), "object_source", arm.channelId, recipe);
+        std::vector<std::string> objectPath;
+        std::vector<std::string> referencePath;
 
-        auto slm = component(
-            scene::BenchComponentKind::SpatialLightModulator,
-            componentId("slm", arm.channelId),
-            aimedTransform(slmPosition, {0.0, 0.0, 0.0}));
-        auto slmParameters
-            = std::get<scene::SpatialLightModulatorParameters>(slm.parameters);
-        slmParameters.widthMetres = recipe.slm.widthMetres;
-        slmParameters.heightMetres = recipe.slm.heightMetres;
-        slmParameters.pixelWidth = recipe.slm.pixelWidth;
-        slmParameters.pixelHeight = recipe.slm.pixelHeight;
-        slmParameters.fillFactor = recipe.slm.fillFactor;
-        slmParameters.bitDepth = recipe.slm.bitDepth;
-        slmParameters.phaseRangeRadians = recipe.slm.phaseRangeRadians;
-        slmParameters.commandOrigin = scene::SlmCommandOrigin::Automation;
-        slmParameters.commandId = "chimera-" + recipe.recipeId + "-"
-            + arm.channelId + "-hogel-pending";
-        slm.parameters = slmParameters;
-        addGenerated(result, std::move(slm), "object_slm", arm.channelId, recipe);
+        objectPath.push_back(laserId);
+        referencePath.push_back(laserId);
 
-        auto lens = component(
-            scene::BenchComponentKind::IdealThinLens,
-            componentId("relay-lens", arm.channelId),
-            aimedTransform(lensPosition, {0.0, 0.0, 0.0}));
-        auto lensParameters
-            = std::get<scene::IdealThinLensParameters>(lens.parameters);
-        lensParameters.focalLengthMetres = recipe.relay.focalLengthMetres;
-        lensParameters.clearApertureDiameterMetres
-            = recipe.relay.clearApertureDiameterMetres;
-        lens.parameters = lensParameters;
-        addGenerated(result, std::move(lens), "relay_lens", arm.channelId, recipe);
+        if (recipe.beamCombinationMethod == BeamCombinationMethod::XCube) {
+            objectPath.push_back(componentId("xcube-combiner"));
+            referencePath.push_back(componentId("xcube-combiner"));
+        } else if (recipe.beamCombinationMethod == BeamCombinationMethod::CascadedDichroic) {
+            if (arm.channelId == "red") {
+                objectPath.push_back(componentId("dichroic-combiner-red"));
+                objectPath.push_back(componentId("dichroic-combiner-blue"));
+                referencePath.push_back(componentId("dichroic-combiner-red"));
+                referencePath.push_back(componentId("dichroic-combiner-blue"));
+            } else if (arm.channelId == "green") {
+                objectPath.push_back(componentId("dichroic-combiner-red"));
+                objectPath.push_back(componentId("dichroic-combiner-blue"));
+                referencePath.push_back(componentId("dichroic-combiner-red"));
+                referencePath.push_back(componentId("dichroic-combiner-blue"));
+            } else {
+                objectPath.push_back(componentId("dichroic-combiner-blue"));
+                referencePath.push_back(componentId("dichroic-combiner-blue"));
+            }
+        }
 
-        auto aperture = component(
-            scene::BenchComponentKind::Aperture,
-            componentId("relay-stop", arm.channelId),
-            aimedTransform(objectPosition * 0.40, {0.0, 0.0, 0.0}));
-        auto apertureParameters
-            = std::get<scene::ApertureParameters>(aperture.parameters);
-        apertureParameters.widthMetres = recipe.relay.stopDiameterMetres;
-        apertureParameters.heightMetres = recipe.relay.stopDiameterMetres;
-        aperture.parameters = apertureParameters;
-        addGenerated(result, std::move(aperture), "relay_stop", arm.channelId, recipe);
+        objectPath.push_back(componentId("reference-splitter"));
+        objectPath.push_back(componentId("slm"));
+        objectPath.push_back(componentId("relay-lens"));
+        objectPath.push_back(componentId("relay-stop"));
+        objectPath.push_back(componentId("plate"));
 
-        const math::Vec3d mirrorPosition {
-            recipe.reference.mirrorXMetres,
-            armY,
-            recipe.reference.mirrorZMetres,
-        };
-        const math::Vec3d referencePosition {
-            recipe.reference.sourceXMetres,
-            armY,
-            recipe.reference.mirrorZMetres,
-        };
-        const math::Vec3d incoming = math::normalized(
-            mirrorPosition - referencePosition);
-        const math::Vec3d outgoing
-            = math::normalized(math::Vec3d {} - mirrorPosition);
-        const math::Vec3d mirrorNormal = math::normalized(incoming - outgoing);
-
-        auto reference = component(
-            scene::BenchComponentKind::LaserSource,
-            componentId("reference-source", arm.channelId),
-            aimedTransform(referencePosition, mirrorPosition));
-        auto referenceParameters
-            = std::get<scene::LaserSourceParameters>(reference.parameters);
-        referenceParameters.beamRadiusMetres
-            = std::max(0.002, 0.5 * recipe.hogels.pitchMetres);
-        referenceParameters.channels = {{
-            .wavelengthMetres = arm.wavelengthMetres,
-            .powerWatts = arm.referencePowerWatts,
-            .coherenceId = coherence,
-        }};
-        reference.parameters = referenceParameters;
-        addGenerated(result, std::move(reference), "reference_source", arm.channelId, recipe);
-
-        auto mirror = component(
-            scene::BenchComponentKind::PlanarMirror,
-            componentId("reference-mirror", arm.channelId),
-            frameWithZAxis(mirrorPosition, mirrorNormal));
-        auto mirrorParameters
-            = std::get<scene::PlanarMirrorParameters>(mirror.parameters);
-        mirrorParameters.widthMetres = 0.03;
-        mirrorParameters.heightMetres = 0.03;
-        mirror.parameters = mirrorParameters;
-        addGenerated(result, std::move(mirror), "reference_fold_mirror", arm.channelId, recipe);
-
-        const math::Vec3d splitterPosition = mirrorPosition + outgoing
-            * recipe.reference.splitterDistanceAfterMirrorMetres;
-        auto splitter = component(
-            scene::BenchComponentKind::BeamSplitterCombiner,
-            componentId("reference-splitter", arm.channelId),
-            frameWithZAxis(splitterPosition, outgoing));
-        auto splitterParameters
-            = std::get<scene::BeamSplitterParameters>(splitter.parameters);
-        splitterParameters.widthMetres = 0.025;
-        splitterParameters.heightMetres = 0.025;
-        splitterParameters.powerReflectivity = 0.0;
-        splitterParameters.powerTransmissivity
-            = recipe.reference.splitterPowerTransmission;
-        splitter.parameters = splitterParameters;
-        addGenerated(result, std::move(splitter), "reference_splitter", arm.channelId, recipe);
+        referencePath.push_back(componentId("reference-splitter"));
+        referencePath.push_back(componentId("reference-fold-mirror"));
+        referencePath.push_back(componentId("reference-mirror"));
+        referencePath.push_back(componentId("plate"));
 
         HologramRecordingRecipe recordingRecipe;
         recordingRecipe.recipeId = "chimera-" + arm.channelId + "-volume";
@@ -569,24 +795,12 @@ CompileResult compileChimeraRecipe(const ChimeraRecipe& recipe) {
         recordingRecipe.model = HologramRecordingModel::VolumeGrating;
         recordingRecipe.channels = {{
             .objectBranch = {
-                .componentPath = {
-                    componentId("object-source", arm.channelId),
-                    componentId("slm", arm.channelId),
-                    componentId("relay-lens", arm.channelId),
-                    componentId("relay-stop", arm.channelId),
-                    componentId("plate"),
-                },
+                .componentPath = std::move(objectPath),
                 .wavelengthMetres = arm.wavelengthMetres,
                 .coherenceId = coherence,
             },
             .referenceBranch = {
-                .componentPath = {
-                    componentId("reference-source", arm.channelId),
-                    componentId("reference-mirror", arm.channelId),
-                    componentId("reference-splitter", arm.channelId),
-                    componentId("reconstruction-probe"),
-                    componentId("plate"),
-                },
+                .componentPath = std::move(referencePath),
                 .wavelengthMetres = arm.wavelengthMetres,
                 .coherenceId = coherence,
             },
@@ -618,6 +832,8 @@ std::string serializeChimeraRecipe(const ChimeraRecipe& recipe) {
         rgb.push_back(armToJson(arm));
     }
     const Json root {
+        {"beam_combination_method",
+            std::string(beamCombinationMethodName(recipe.beamCombinationMethod))},
         {"document_type", "chimera_recipe"},
         {"exposure", {
             {"exposure_s_per_channel", recipe.exposure.exposureSecondsPerChannel},
@@ -677,11 +893,23 @@ std::string serializeChimeraRecipe(const ChimeraRecipe& recipe) {
 ChimeraRecipe parseChimeraRecipe(std::string_view jsonText) {
     try {
         const Json root = Json::parse(jsonText);
-        requireKeys(root,
-            {"document_type", "exposure", "format_version", "hogel_geometry",
-             "name", "plate", "recipe_id", "reference", "relay", "rgb",
-             "slm", "target_fov"},
-            "CHIMERA recipe");
+        ChimeraRecipe result;
+        if (root.contains("beam_combination_method")) {
+            requireKeys(root,
+                {"beam_combination_method", "document_type", "exposure",
+                 "format_version", "hogel_geometry", "name", "plate",
+                 "recipe_id", "reference", "relay", "rgb", "slm", "target_fov"},
+                "CHIMERA recipe");
+            result.beamCombinationMethod = beamCombinationMethodFromName(
+                requiredString(root.at("beam_combination_method"), "beam_combination_method"));
+        } else {
+            requireKeys(root,
+                {"document_type", "exposure", "format_version", "hogel_geometry",
+                 "name", "plate", "recipe_id", "reference", "relay", "rgb",
+                 "slm", "target_fov"},
+                "CHIMERA recipe");
+            result.beamCombinationMethod = BeamCombinationMethod::XCube;
+        }
         if (requiredString(root.at("document_type"), "document_type")
             != "chimera_recipe") {
             throw std::runtime_error("project is not a chimera_recipe document");
@@ -689,7 +917,6 @@ ChimeraRecipe parseChimeraRecipe(std::string_view jsonText) {
         if (!root.at("format_version").is_number_integer()) {
             throw std::runtime_error("format_version must be an integer");
         }
-        ChimeraRecipe result;
         result.formatVersion = root.at("format_version").get<int>();
         result.recipeId = requiredString(root.at("recipe_id"), "recipe_id");
         result.name = requiredString(root.at("name"), "name");

@@ -52,11 +52,11 @@ struct RelaySpecification final {
 };
 
 struct ReferenceSpecification final {
-    double sourceXMetres = 0.18;
-    double mirrorXMetres = 0.03;
+    double sourceXMetres = 0.04;
+    double mirrorXMetres = 0.04;
     double mirrorZMetres = -0.30;
     double splitterDistanceAfterMirrorMetres = 0.08;
-    double armSeparationMetres = 0.03;
+    double armSeparationMetres = 0.0;
     double splitterPowerTransmission = 0.90;
 
     bool operator==(const ReferenceSpecification&) const = default;
@@ -79,10 +79,22 @@ struct ExposurePolicy final {
     bool operator==(const ExposurePolicy&) const = default;
 };
 
+enum class BeamCombinationMethod {
+    XCube,
+    CascadedDichroic,
+    IntegratedMultiLine,
+};
+
+[[nodiscard]] std::string_view beamCombinationMethodName(
+    BeamCombinationMethod method) noexcept;
+[[nodiscard]] BeamCombinationMethod beamCombinationMethodFromName(
+    std::string_view name);
+
 struct ChimeraRecipe final {
     int formatVersion = kChimeraRecipeFormatVersion;
     std::string recipeId = "canonical-chimera";
     std::string name = "Canonical CHIMERA-like Virtual Printer";
+    BeamCombinationMethod beamCombinationMethod = BeamCombinationMethod::XCube;
     HogelGeometry hogels;
     double targetHorizontalFieldOfViewRadians = 0.2617993877991494;
     double targetVerticalFieldOfViewRadians = 0.1396263401595464;

@@ -242,19 +242,34 @@ ExposurePlan generateExposurePlan(
             "cannot plan exposures for an unsupported CHIMERA recipe");
     }
     for (const auto& arm : recipe.rgb) {
+        const std::string slmId = bench.scene.find("chimera-slm") != nullptr
+            ? "chimera-slm"
+            : "chimera-slm-" + arm.channelId;
+        const std::string laserId = bench.scene.find("chimera-laser-source-" + arm.channelId) != nullptr
+            ? "chimera-laser-source-" + arm.channelId
+            : (bench.scene.find("chimera-laser-source") != nullptr ? "chimera-laser-source" : "");
+        const std::string splitterId = bench.scene.find("chimera-reference-splitter") != nullptr
+            ? "chimera-reference-splitter"
+            : "chimera-reference-splitter-" + arm.channelId;
+        const std::string foldMirrorId = bench.scene.find("chimera-reference-fold-mirror") != nullptr
+            ? "chimera-reference-fold-mirror"
+            : "chimera-reference-fold-mirror-" + arm.channelId;
+        const std::string refMirrorId = bench.scene.find("chimera-reference-mirror") != nullptr
+            ? "chimera-reference-mirror"
+            : "chimera-reference-mirror-" + arm.channelId;
+
         const std::array requiredComponents {
-            std::pair {"chimera-slm-" + arm.channelId,
-                optics::scene::BenchComponentKind::SpatialLightModulator},
-            std::pair {"chimera-object-source-" + arm.channelId,
-                optics::scene::BenchComponentKind::ObjectWavefrontSource},
-            std::pair {"chimera-reference-source-" + arm.channelId,
-                optics::scene::BenchComponentKind::LaserSource},
+            std::pair {slmId, optics::scene::BenchComponentKind::SpatialLightModulator},
+            std::pair {laserId, optics::scene::BenchComponentKind::LaserSource},
+            std::pair {splitterId, optics::scene::BenchComponentKind::BeamSplitterCombiner},
+            std::pair {foldMirrorId, optics::scene::BenchComponentKind::PlanarMirror},
+            std::pair {refMirrorId, optics::scene::BenchComponentKind::PlanarMirror},
         };
         for (const auto& [componentId, kind] : requiredComponents) {
             const auto* component = bench.scene.find(componentId);
             if (component == nullptr || component->kind != kind) {
                 throw std::invalid_argument(
-                    "editable CHIMERA bench is missing a required component");
+                    "editable CHIMERA bench is missing a required component: " + componentId);
             }
         }
         static_cast<void>(recordingRecipeFor(
@@ -304,11 +319,12 @@ ExposurePlan generateExposurePlan(
             for (const auto& arm : recipe.rgb) {
                 const auto& command = commandFor(dataset, x, y, arm.channelId);
                 const std::string channelPrefix = prefix + "-" + arm.channelId;
-                const std::string slmId = "chimera-slm-" + arm.channelId;
-                const std::string objectId
-                    = "chimera-object-source-" + arm.channelId;
-                const std::string referenceId
-                    = "chimera-reference-source-" + arm.channelId;
+                const std::string slmId = bench.scene.find("chimera-slm") != nullptr
+                    ? "chimera-slm"
+                    : "chimera-slm-" + arm.channelId;
+                const std::string laserId = bench.scene.find("chimera-laser-source-" + arm.channelId) != nullptr
+                    ? "chimera-laser-source-" + arm.channelId
+                    : "chimera-laser-source";
                 const std::string recordingId
                     = "chimera-" + arm.channelId + "-volume";
                 const auto common = [&](std::string eventId,
@@ -328,8 +344,8 @@ ExposurePlan generateExposurePlan(
                         .wavelengthMetres = arm.wavelengthMetres,
                         .slmComponentId = slmId,
                         .slmCommandId = command.commandId,
-                        .objectSourceComponentId = objectId,
-                        .referenceSourceComponentId = referenceId,
+                        .objectSourceComponentId = laserId,
+                        .referenceSourceComponentId = laserId,
                         .objectBeamEnabled = beamsEnabled,
                         .referenceBeamEnabled = beamsEnabled,
                         .recordingRecipeId = recordingId,

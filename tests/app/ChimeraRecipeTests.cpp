@@ -36,7 +36,7 @@ TEST_CASE("canonical CHIMERA recipe compiles to a feasible ordinary editable ben
     CHECK(first.feasible());
     CHECK(first.project.projectId == "chimera-canonical-chimera");
     CHECK(first.project.recordingRecipes.size() == 3U);
-    CHECK(first.generatedComponents.size() == 24U);
+    CHECK(first.generatedComponents.size() == 13U);
     CHECK(app::serializeBenchProject(first.project)
         == app::serializeBenchProject(second.project));
     CHECK(first.generatedComponents == second.generatedComponents);
@@ -51,9 +51,10 @@ TEST_CASE("canonical CHIMERA recipe compiles to a feasible ordinary editable ben
         CHECK(componentIds.insert(provenance.componentId).second);
         CHECK(first.project.scene.find(provenance.componentId) != nullptr);
     }
-    CHECK(first.project.scene.find("chimera-slm-red") != nullptr);
-    CHECK(first.project.scene.find("chimera-reference-mirror-green") != nullptr);
-    CHECK(first.project.scene.find("chimera-reference-splitter-blue") != nullptr);
+    CHECK(first.project.scene.find("chimera-slm") != nullptr);
+    CHECK(first.project.scene.find("chimera-reference-mirror") != nullptr);
+    CHECK(first.project.scene.find("chimera-reference-splitter") != nullptr);
+    CHECK(first.project.scene.find("chimera-xcube-combiner") != nullptr);
     CHECK(first.project.scene.find("chimera-plate") != nullptr);
     CHECK(first.project.scene.find("chimera-reconstruction-probe") != nullptr);
     const auto* cameraLens
@@ -64,25 +65,27 @@ TEST_CASE("canonical CHIMERA recipe compiles to a feasible ordinary editable ben
             .prescriptionId
         == "default_n_bk7_biconvex");
 
-    const auto* slm = first.project.scene.find("chimera-slm-red");
+    const auto* slm = first.project.scene.find("chimera-slm");
     REQUIRE(slm != nullptr);
     const auto& slmParameters
         = std::get<scene::SpatialLightModulatorParameters>(slm->parameters);
     CHECK(slmParameters.commandOrigin == scene::SlmCommandOrigin::Automation);
     CHECK(slmParameters.commandId
-        == "chimera-canonical-chimera-red-hogel-pending");
-    const auto* relayLens = first.project.scene.find("chimera-relay-lens-red");
+        == "chimera-canonical-chimera-hogel-pending");
+    const auto* relayLens = first.project.scene.find("chimera-relay-lens");
     REQUIRE(relayLens != nullptr);
     CHECK(holobench::math::length(
         slm->transform.translationMetres
             - relayLens->transform.translationMetres)
         == doctest::Approx(recipe.relay.focalLengthMetres).epsilon(1e-13));
 
-    const auto* objectSource = first.project.scene.find("chimera-object-source-red");
-    REQUIRE(objectSource != nullptr);
-    const auto& objectParams
-        = std::get<scene::ObjectWavefrontSourceParameters>(objectSource->parameters);
-    CHECK(objectParams.geometry == scene::ObjectSourceGeometry::UniformPlane);
+    const auto* laserSource = first.project.scene.find("chimera-laser-source-red");
+    REQUIRE(laserSource != nullptr);
+    CHECK(laserSource->kind == scene::BenchComponentKind::LaserSource);
+    const auto* foldMirror = first.project.scene.find("chimera-reference-fold-mirror");
+    REQUIRE(foldMirror != nullptr);
+    CHECK(foldMirror->kind == scene::BenchComponentKind::PlanarMirror);
+    CHECK(first.project.scene.find("chimera-object-source-red") == nullptr);
 }
 
 TEST_CASE("compiled CHIMERA branches resolve three independent reflection recipes") {
@@ -177,3 +180,66 @@ TEST_CASE("CHIMERA parser rejects unknown schema and invalid RGB identity") {
         static_cast<void>(chimera::parseChimeraRecipe(invalidPixels.dump())),
         std::runtime_error);
 }
+
+TEST_CASE("CHIMERA supports XCube, CascadedDichroic, and IntegratedMultiLine beam combining") {
+    const std::vector<chimera::BeamCombinationMethod> methods = {
+        chimera::BeamCombinationMethod::XCube,
+        chimera::BeamCombinationMethod::CascadedDichroic,
+        chimera::BeamCombinationMethod::IntegratedMultiLine,
+    };
+
+    for (const auto method : methods) {
+        auto recipe = chimera::makeCanonicalChimeraRecipe();
+        recipe.beamCombinationMethod = method;
+
+        // Verify JSON round-trip preserves method
+        const auto serialized = chimera::serializeChimeraRecipe(recipe);
+        const auto parsed = chimera::parseChimeraRecipe(serialized);
+        CHECK(parsed.beamCombinationMethod == method);
+
+        const auto compiled = chimera::compileChimeraRecipe(recipe);
+        CHECK(compiled.feasible());
+        CHECK(compiled.project.recordingRecipes.size() == 3U);
+
+        // Verify specific combiner components exist
+        if (method == chimera::BeamCombinationMethod::XCube) {
+            CHECK(compiled.project.scene.find("chimera-xcube-combiner") != nullptr);
+            CHECK(compiled.project.scene.find("chimera-laser-source-red") != nullptr);
+            CHECK(compiled.project.scene.find("chimera-laser-source-green") != nullptr);
+            CHECK(compiled.project.scene.find("chimera-laser-source-blue") != nullptr);
+        } else if (method == chimera::BeamCombinationMethod::CascadedDichroic) {
+            CHECK(compiled.project.scene.find("chimera-dichroic-combiner-red") != nullptr);
+            CHECK(compiled.project.scene.find("chimera-dichroic-combiner-blue") != nullptr);
+            CHECK(compiled.project.scene.find("chimera-laser-source-red") != nullptr);
+            CHECK(compiled.project.scene.find("chimera-laser-source-green") != nullptr);
+            CHECK(compiled.project.scene.find("chimera-laser-source-blue") != nullptr);
+        } else {
+            CHECK(compiled.project.scene.find("chimera-laser-source") != nullptr);
+        }
+
+        // Trace bench and verify plate fields
+        const auto trace = ray::traceDynamicBench(compiled.project.scene);
+        const auto fields = holography::collectPlateIncidentFields(
+            compiled.project.scene, trace, "chimera-plate");
+        REQUIRE(fields.branches.size() == 6U);
+
+        // Verify that all 3 channels have matching object and reference paths
+        for (const auto& recRecipe : compiled.project.recordingRecipes) {
+            const auto resolved = app::resolveRecordingRecipe(fields, recRecipe);
+            REQUIRE(resolved.channels.size() == 1U);
+            const auto pair = holography::makePlateRecordingPair(
+                fields,
+                resolved.channels.front().objectBranchId,
+                resolved.channels.front().referenceBranchId);
+            CHECK(pair.geometry == holography::PlateRecordingGeometry::Reflection);
+            CHECK(std::isfinite(pair.signedOpticalPathDifferenceMetres));
+        }
+
+        // Verify collinearity: all object branches hitting the plate must share the same horizontal Y plane (Y = 0)
+        for (const auto& branch : fields.branches) {
+            CHECK(branch.beam.originMetres.y == doctest::Approx(0.0).epsilon(1e-12));
+            CHECK(branch.beam.direction.y == doctest::Approx(0.0).epsilon(1e-12));
+        }
+    }
+}
+

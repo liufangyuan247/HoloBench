@@ -1,6 +1,6 @@
 # Project state
 
-Last updated: 2026-09-03
+Last updated: 2026-09-04
 
 ## Current milestone
 
@@ -34,6 +34,19 @@ animated or silently approximated.
 
 ## M10 implementation state (in progress)
 
+- **M10 True Collinear RGB Beam Combining & X-Cube Prism Digital Twin**:
+  Eliminated synthetic vertical offsets and non-collinear approximations in CHIMERA
+  optical paths to prevent white-light replay chromatic dispersion. Supported
+  3 physically realistic beam combining schemes:
+  1. `XCube`: Cross dichroic prism combiner (`XCubeCombiner` component kind) with 4 ports
+     (Left, Rear, Right, Exit) routing orthogonal R/G/B inputs collinearly along +Z with
+     spectrally-selective reflection/transmission and energy conservation.
+  2. `CascadedDichroic`: Pair of discrete dichroic beam combiners merging orthogonal R and B
+     arms with an in-line G beam.
+  3. `IntegratedMultiLine`: Single-chassis multi-wavelength laser source.
+  The combined collinear beam passes through a single shared reference splitter, shared SLM,
+  shared 4f relay lens, and shared stop aperture on a single optical axis ($Y = 0.0$),
+  producing true physical collinear recording and dispersion-free reconstruction.
 - **M10.6 analytic diffuse samples implemented**: A newly placed Object is a
   cube/cuboid, sphere/ellipsoid, or tetrahedron with only an opaque scalar
   Lambertian material. Independent sample yaw/pitch and a persisted roughness
@@ -44,24 +57,26 @@ animated or silently approximated.
   fall back to the old rectangular envelope when an FFT backend is supplied.
   Matching PCG solids never define optical truth. Bench format v6 strictly
   migrates v1-v5 sources to an internal uniform plane. In CHIMERA holoprinting,
-  the synthetic object arm source uses `UniformPlane` backlighting without 3D
-  diffuse artifacts on the bench. `PlateIncidentFields` dynamically detects
-  laser beams modulated by SLMs and classifies them into `RecordingBranchRole::Object`,
-  supporting single-laser holographic splitting. The RGB Denisyuk reflection
-  preset is assembled as a classic Cornell Box arrangement containing red cube,
-  green sphere, and blue tetrahedron primitives recorded via opposite-side RGB
-  laser illumination. The Inspector states that power is already-scattered
-  object-wave power and that independent laser illumination, shadows,
+  the optical layout is fully physical: each channel features a single `LaserSource`
+  split via a `BeamSplitterCombiner` into an object arm (illuminating the SLM through
+  a 4f relay lens and stop) and a reference arm folded via planar mirrors to the
+  rear of the plate, completely eliminating synthetic wavefront sources.
+  `PlateIncidentFields` dynamically detects laser beams modulated by SLMs and
+  classifies them into `RecordingBranchRole::Object`, supporting single-laser holographic
+  splitting. The RGB Denisyuk reflection preset is assembled as a classic Cornell Box
+  arrangement containing red cube, green sphere, and blue tetrahedron primitives
+  recorded via opposite-side RGB laser illumination. The Inspector states that power
+  is already-scattered object-wave power and that independent laser illumination, shadows,
   specular/transmissive materials, polarization, and multiple scattering are
   not yet modeled. See
   [ADR 0043](adr/0043-analytic-diffuse-primitive-object-waves.md).
 
-- **M10.1 PCG foundation implemented**: All 12 current Bench component kinds
+- **M10.1 PCG foundation implemented**: All 13 current Bench component kinds
   generate finite bounded triangle solids from their validated component state.
-  The first library includes parameterized housings, cylinders, lens and aperture
-  rings, slit plates, frames, optical faces, posts, and bases. Pose, physical
-  extent, aperture shape, plate thickness, tessellation, and selection state
-  deterministically affect the generated result.
+  The library includes parameterized housings, cylinders, lens and aperture
+  rings, slit plates, frames, optical faces, posts, bases, and cage mounts for
+  cube prisms. Pose, physical extent, aperture shape, plate thickness, tessellation,
+  and selection state deterministically affect the generated result.
 - **Rendering layers separated**: Depth-tested solid triangles use world-space
   normals and neutral lighting. Rays, optical proxy outlines, axes, and gizmos
   remain an independent diagnostic line layer. Neither triangle positions nor

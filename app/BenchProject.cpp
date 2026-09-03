@@ -633,6 +633,16 @@ Json parametersToJson(const scene::BenchComponent& component) {
         return {{"height_m", value.heightMetres}, {"power_reflectivity", value.powerReflectivity},
             {"power_transmissivity", value.powerTransmissivity}, {"width_m", value.widthMetres}};
     }
+    case scene::BenchComponentKind::XCubeCombiner: {
+        const auto& value = std::get<scene::XCubeCombinerParameters>(component.parameters);
+        return {
+            {"size_m", value.sizeMetres},
+            {"red_wavelength_m", value.redWavelengthMetres},
+            {"green_wavelength_m", value.greenWavelengthMetres},
+            {"blue_wavelength_m", value.blueWavelengthMetres},
+            {"wavelength_tolerance_m", value.wavelengthToleranceMetres},
+        };
+    }
     case scene::BenchComponentKind::IdealThinLens: {
         const auto& value = std::get<scene::IdealThinLensParameters>(component.parameters);
         return {{"clear_aperture_diameter_m", value.clearApertureDiameterMetres},
@@ -780,6 +790,17 @@ scene::BenchComponentParameters parametersFromJson(
             .heightMetres = finiteNumber(value.at("height_m"), "splitter height_m"),
             .powerReflectivity = finiteNumber(value.at("power_reflectivity"), "splitter power_reflectivity"),
             .powerTransmissivity = finiteNumber(value.at("power_transmissivity"), "splitter power_transmissivity"),
+        };
+    case scene::BenchComponentKind::XCubeCombiner:
+        requireKeys(value, {"blue_wavelength_m", "green_wavelength_m", "red_wavelength_m", "size_m"}, "xcube parameters");
+        return scene::XCubeCombinerParameters {
+            .sizeMetres = finiteNumber(value.at("size_m"), "xcube size_m"),
+            .redWavelengthMetres = finiteNumber(value.at("red_wavelength_m"), "xcube red_wavelength_m"),
+            .greenWavelengthMetres = finiteNumber(value.at("green_wavelength_m"), "xcube green_wavelength_m"),
+            .blueWavelengthMetres = finiteNumber(value.at("blue_wavelength_m"), "xcube blue_wavelength_m"),
+            .wavelengthToleranceMetres = value.contains("wavelength_tolerance_m")
+                ? finiteNumber(value.at("wavelength_tolerance_m"), "xcube wavelength_tolerance_m")
+                : 35e-9,
         };
     case scene::BenchComponentKind::IdealThinLens:
         requireKeys(value, {"clear_aperture_diameter_m", "focal_length_m"}, "thin-lens parameters");
@@ -1247,11 +1268,13 @@ bool sourceCarriesSelector(
     return false;
 }
 
+enum class BranchRole { Object, Reference };
+
 void validateBranchSelector(
     const BenchProject& projectValue,
     const HologramRecordingRecipe& recipe,
     const RecordingBranchSelector& selector,
-    scene::BenchComponentKind sourceKind) {
+    BranchRole role) {
     if (!std::isfinite(selector.wavelengthMetres)
         || selector.wavelengthMetres <= 0.0
         || !scene::isStableBenchId(selector.coherenceId)
@@ -1268,8 +1291,12 @@ void validateBranchSelector(
         }
     }
     const auto* source = projectValue.scene.find(selector.componentPath.front());
-    if (source == nullptr || source->kind != sourceKind
-        || !sourceCarriesSelector(*source, selector)) {
+    const bool validSourceKind = (source != nullptr) && (
+        role == BranchRole::Reference
+            ? source->kind == scene::BenchComponentKind::LaserSource
+            : (source->kind == scene::BenchComponentKind::ObjectWavefrontSource
+               || source->kind == scene::BenchComponentKind::LaserSource));
+    if (!validSourceKind || !sourceCarriesSelector(*source, selector)) {
         throw std::invalid_argument(
             "recording branch selector does not match its declared source channel");
     }
@@ -1300,12 +1327,12 @@ void validateRecordingRecipe(
             projectValue,
             recipe,
             channel.objectBranch,
-            scene::BenchComponentKind::ObjectWavefrontSource);
+            BranchRole::Object);
         validateBranchSelector(
             projectValue,
             recipe,
             channel.referenceBranch,
-            scene::BenchComponentKind::LaserSource);
+            BranchRole::Reference);
         if (channel.objectBranch.wavelengthMetres
                 != channel.referenceBranch.wavelengthMetres
             || channel.objectBranch.coherenceId

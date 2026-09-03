@@ -20,6 +20,7 @@ enum class BenchComponentKind {
     ObjectWavefrontSource,
     PlanarMirror,
     BeamSplitterCombiner,
+    XCubeCombiner,
     IdealThinLens,
     RealLensAssembly,
     Aperture,
@@ -94,6 +95,16 @@ struct BeamSplitterParameters final {
     double powerTransmissivity = 0.5;
 
     bool operator==(const BeamSplitterParameters&) const = default;
+};
+
+struct XCubeCombinerParameters final {
+    double sizeMetres = 0.025;
+    double redWavelengthMetres = 638e-9;
+    double greenWavelengthMetres = 532e-9;
+    double blueWavelengthMetres = 450e-9;
+    double wavelengthToleranceMetres = 35e-9;
+
+    bool operator==(const XCubeCombinerParameters&) const = default;
 };
 
 struct IdealThinLensParameters final {
@@ -218,6 +229,7 @@ using BenchComponentParameters = std::variant<
     ObjectWavefrontSourceParameters,
     PlanarMirrorParameters,
     BeamSplitterParameters,
+    XCubeCombinerParameters,
     IdealThinLensParameters,
     RealLensAssemblyParameters,
     ApertureParameters,

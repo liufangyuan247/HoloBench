@@ -102,6 +102,14 @@ void validateParameters(const BeamSplitterParameters& value) {
     }
 }
 
+void validateParameters(const XCubeCombinerParameters& value) {
+    requireFinitePositive(value.sizeMetres, "X-Cube size_m");
+    requireFinitePositive(value.redWavelengthMetres, "X-Cube red wavelength_m");
+    requireFinitePositive(value.greenWavelengthMetres, "X-Cube green wavelength_m");
+    requireFinitePositive(value.blueWavelengthMetres, "X-Cube blue wavelength_m");
+    requireFinitePositive(value.wavelengthToleranceMetres, "X-Cube wavelength tolerance_m");
+}
+
 void validateParameters(const IdealThinLensParameters& value) {
     if (!std::isfinite(value.focalLengthMetres) || value.focalLengthMetres == 0.0) {
         throw std::invalid_argument("thin-lens focal length_m must be finite and non-zero");
@@ -245,6 +253,7 @@ std::string_view benchComponentKindName(BenchComponentKind kind) noexcept {
     case BenchComponentKind::ObjectWavefrontSource: return "object_wavefront_source";
     case BenchComponentKind::PlanarMirror: return "planar_mirror";
     case BenchComponentKind::BeamSplitterCombiner: return "beam_splitter_combiner";
+    case BenchComponentKind::XCubeCombiner: return "xcube_combiner";
     case BenchComponentKind::IdealThinLens: return "ideal_thin_lens";
     case BenchComponentKind::RealLensAssembly: return "real_lens_assembly";
     case BenchComponentKind::Aperture: return "aperture";
@@ -263,6 +272,7 @@ std::string_view benchComponentDisplayName(BenchComponentKind kind) noexcept {
     case BenchComponentKind::ObjectWavefrontSource: return "Diffuse Object";
     case BenchComponentKind::PlanarMirror: return "Planar Mirror";
     case BenchComponentKind::BeamSplitterCombiner: return "Beam Splitter / Combiner";
+    case BenchComponentKind::XCubeCombiner: return "X-Cube Combiner";
     case BenchComponentKind::IdealThinLens: return "Ideal Thin Lens";
     case BenchComponentKind::RealLensAssembly: return "Real Lens Assembly";
     case BenchComponentKind::Aperture: return "Aperture";
@@ -290,6 +300,7 @@ const std::vector<BenchComponentKind>& requiredBenchComponentKinds() noexcept {
         BenchComponentKind::ObjectWavefrontSource,
         BenchComponentKind::PlanarMirror,
         BenchComponentKind::BeamSplitterCombiner,
+        BenchComponentKind::XCubeCombiner,
         BenchComponentKind::IdealThinLens,
         BenchComponentKind::RealLensAssembly,
         BenchComponentKind::Aperture,
@@ -520,6 +531,9 @@ void validateBenchComponent(const BenchComponent& component) {
     case BenchComponentKind::BeamSplitterCombiner:
         requireParameterType<BeamSplitterParameters>(component);
         break;
+    case BenchComponentKind::XCubeCombiner:
+        requireParameterType<XCubeCombinerParameters>(component);
+        break;
     case BenchComponentKind::IdealThinLens:
         requireParameterType<IdealThinLensParameters>(component);
         break;
@@ -562,6 +576,7 @@ BenchComponent makeDefaultBenchComponent(BenchComponentKind kind, std::string id
     case BenchComponentKind::ObjectWavefrontSource: result.parameters = ObjectWavefrontSourceParameters {}; break;
     case BenchComponentKind::PlanarMirror: result.parameters = PlanarMirrorParameters {}; break;
     case BenchComponentKind::BeamSplitterCombiner: result.parameters = BeamSplitterParameters {}; break;
+    case BenchComponentKind::XCubeCombiner: result.parameters = XCubeCombinerParameters {}; break;
     case BenchComponentKind::IdealThinLens: result.parameters = IdealThinLensParameters {}; break;
     case BenchComponentKind::RealLensAssembly: result.parameters = RealLensAssemblyParameters {}; break;
     case BenchComponentKind::Aperture: result.parameters = ApertureParameters {}; break;

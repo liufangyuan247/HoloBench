@@ -140,6 +140,7 @@ bool isTraceablePlaneKind(scene::BenchComponentKind kind) noexcept {
     switch (kind) {
     case scene::BenchComponentKind::PlanarMirror:
     case scene::BenchComponentKind::BeamSplitterCombiner:
+    case scene::BenchComponentKind::XCubeCombiner:
     case scene::BenchComponentKind::IdealThinLens:
     case scene::BenchComponentKind::Aperture:
     case scene::BenchComponentKind::RealLensAssembly:
@@ -167,6 +168,13 @@ bool isWithinFootprint(const scene::BenchComponent& component, math::Vec3d local
         const auto& value = std::get<scene::BeamSplitterParameters>(component.parameters);
         return std::abs(localPoint.x) <= value.widthMetres * 0.5
             && std::abs(localPoint.y) <= value.heightMetres * 0.5;
+    }
+    case scene::BenchComponentKind::XCubeCombiner: {
+        const auto& value = std::get<scene::XCubeCombinerParameters>(component.parameters);
+        const double halfSize = value.sizeMetres * 0.5;
+        return std::abs(localPoint.x) <= halfSize
+            && std::abs(localPoint.y) <= halfSize
+            && std::abs(localPoint.z) <= halfSize;
     }
     case scene::BenchComponentKind::IdealThinLens: {
         const auto radius = std::get<scene::IdealThinLensParameters>(component.parameters)
@@ -226,10 +234,25 @@ std::optional<CandidateHit> findNextHit(
         if (!isTraceablePlaneKind(component.kind)) {
             continue;
         }
+        math::Vec3d planeNormal = component.transform.localZAxisInWorld;
+        if (component.kind == scene::BenchComponentKind::XCubeCombiner) {
+            const math::Vec3d localDir = math::transformDirectionWorldToLocal(
+                component.transform, ray.direction);
+            math::Vec3d localNormal {0.0, 0.0, 1.0};
+            if (localDir.x > 0.5) {
+                localNormal = math::normalized(math::Vec3d {-1.0, 0.0, 1.0});
+            } else if (localDir.x < -0.5) {
+                localNormal = math::normalized(math::Vec3d {1.0, 0.0, 1.0});
+            } else {
+                localNormal = {0.0, 0.0, 1.0};
+            }
+            planeNormal = math::transformDirectionLocalToWorld(
+                component.transform, localNormal);
+        }
         const auto intersection = intersectPlaneForward(
             ray,
             component.transform.translationMetres,
-            component.transform.localZAxisInWorld,
+            planeNormal,
             kGeometricIntersectionEpsilon);
         if (!intersection.hit) {
             continue;
@@ -768,6 +791,33 @@ scene::BenchTraceGraph traceDynamicBenchImpl(
             }
             createdBranchCount += interaction.outgoing.size();
             nextBranchId += 2;
+            graph.interactions.push_back(std::move(interaction));
+            break;
+        }
+        case scene::BenchComponentKind::XCubeCombiner: {
+            auto interaction = scene::interactIdealXCubeCombiner(
+                current.beam,
+                *hit->component,
+                hit->pointMetres,
+                nextBranchId);
+            if (interaction.outgoing.empty()) {
+                const std::string reason = interaction.diagnostics.empty()
+                    ? "X-cube rejected beam"
+                    : interaction.diagnostics.front();
+                graph.interactions.push_back(std::move(interaction));
+                appendTermination(graph, current.beam,
+                    scene::TraceTerminationReason::Absorbed,
+                    reason);
+                break;
+            }
+            for (auto& outgoing : interaction.outgoing) {
+                pending.push_back({
+                    .beam = outgoing.beam,
+                    .hopCount = current.hopCount + 1,
+                });
+            }
+            ++createdBranchCount;
+            ++nextBranchId;
             graph.interactions.push_back(std::move(interaction));
             break;
         }

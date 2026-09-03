@@ -108,6 +108,12 @@ void validateTraceBudget(const TraceBudget& budget);
     std::uint64_t reflectedBranchId,
     std::uint64_t transmittedBranchId);
 
+[[nodiscard]] OpticalInteraction interactIdealXCubeCombiner(
+    const BeamState& incoming,
+    const BenchComponent& combiner,
+    math::Vec3d hitPointMetres,
+    std::uint64_t outputBranchId);
+
 [[nodiscard]] bool canInterfere(const BeamState& first, const BeamState& second) noexcept;
 
 } // namespace holobench::optics::scene

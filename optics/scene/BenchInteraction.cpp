@@ -178,6 +178,93 @@ OpticalInteraction interactIdealBeamSplitter(
     return result;
 }
 
+OpticalInteraction interactIdealXCubeCombiner(
+    const BeamState& incoming,
+    const BenchComponent& combiner,
+    math::Vec3d hitPointMetres,
+    std::uint64_t outputBranchId) {
+    validateBeamState(incoming);
+    validateBenchComponent(combiner);
+    if (combiner.kind != BenchComponentKind::XCubeCombiner) {
+        throw std::invalid_argument("ideal X-cube interaction requires an X-cube combiner component");
+    }
+    if (!math::isFinite(hitPointMetres)) {
+        throw std::invalid_argument("X-cube hit point_m must be finite");
+    }
+    if (outputBranchId == incoming.provenance.branchId) {
+        throw std::invalid_argument("X-cube output branch ID must differ from parent");
+    }
+
+    const auto& parameters = std::get<XCubeCombinerParameters>(combiner.parameters);
+    const math::Vec3d incomingDirection = math::normalized(incoming.direction);
+    const math::Vec3d hitDisplacement = hitPointMetres - incoming.originMetres;
+    const double hitDistance = math::dot(hitDisplacement, incomingDirection);
+
+    const math::Vec3d localDir = math::transformDirectionWorldToLocal(
+        combiner.transform, incomingDirection);
+    const math::Vec3d outgoingDirection = combiner.transform.localZAxisInWorld;
+
+    BranchInteractionKind interactionKind = BranchInteractionKind::Transmitted;
+    bool wavelengthMatches = false;
+    std::string portName;
+
+    if (localDir.x > 0.5) {
+        portName = "red port (-X)";
+        interactionKind = BranchInteractionKind::Reflected;
+        wavelengthMatches = std::abs(incoming.wavelengthMetres - parameters.redWavelengthMetres)
+            <= parameters.wavelengthToleranceMetres;
+    } else if (localDir.x < -0.5) {
+        portName = "blue port (+X)";
+        interactionKind = BranchInteractionKind::Reflected;
+        wavelengthMatches = std::abs(incoming.wavelengthMetres - parameters.blueWavelengthMetres)
+            <= parameters.wavelengthToleranceMetres;
+    } else if (localDir.z > 0.5) {
+        portName = "green port (-Z)";
+        interactionKind = BranchInteractionKind::Transmitted;
+        wavelengthMatches = std::abs(incoming.wavelengthMetres - parameters.greenWavelengthMetres)
+            <= parameters.wavelengthToleranceMetres;
+    }
+
+    BeamState incidentAtHit = incoming;
+    incidentAtHit.originMetres = hitPointMetres;
+    incidentAtHit.accumulatedOpticalPathMetres += std::max(0.0, hitDistance);
+    incidentAtHit.localFrame = beamFrame(hitPointMetres, incomingDirection);
+    incidentAtHit.provenance.componentPath.push_back(combiner.id);
+    validateBeamState(incidentAtHit);
+
+    OpticalInteraction result {
+        .componentId = combiner.id,
+        .hitPointMetres = hitPointMetres,
+        .distanceMetres = std::max(0.0, hitDistance),
+        .incidentBeam = incidentAtHit,
+        .outgoing = {},
+        .diagnostics = {},
+    };
+
+    if (wavelengthMatches) {
+        const double halfSize = parameters.sizeMetres * 0.5;
+        const math::Vec3d exitPoint = combiner.transform.translationMetres
+            + outgoingDirection * halfSize;
+        BeamState outgoingBeam = makeOutgoing(
+            incidentAtHit,
+            outgoingDirection,
+            1.0,
+            outputBranchId);
+        outgoingBeam.originMetres = exitPoint;
+        outgoingBeam.accumulatedOpticalPathMetres += halfSize;
+        outgoingBeam.localFrame = beamFrame(exitPoint, outgoingDirection);
+        result.outgoing.push_back({
+            .interaction = interactionKind,
+            .beam = std::move(outgoingBeam),
+        });
+    } else {
+        result.diagnostics.push_back(
+            "X-cube rejected beam at " + (portName.empty() ? "unknown port" : portName)
+            + ": wavelength does not match dichroic band");
+    }
+    return result;
+}
+
 bool canInterfere(const BeamState& first, const BeamState& second) noexcept {
     return first.wavelengthMetres == second.wavelengthMetres
         && first.coherenceId == second.coherenceId;

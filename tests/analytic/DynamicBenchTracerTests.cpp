@@ -630,3 +630,98 @@ TEST_CASE("placed lens prescription anchors every relative surface frame") {
         doctest::Contains("different immutable content"),
         std::invalid_argument);
 }
+
+TEST_CASE("X-Cube combiner routes RGB beams from 3 orthogonal ports into a single collinear beam") {
+    scene::BenchScene bench;
+    auto combiner = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::XCubeCombiner, "xcube");
+    combiner.transform = math::RigidTransform3d {
+        .translationMetres = {0.0, 0.0, 0.0},
+        .localXAxisInWorld = {1.0, 0.0, 0.0},
+        .localYAxisInWorld = {0.0, 1.0, 0.0},
+        .localZAxisInWorld = {0.0, 0.0, 1.0},
+    };
+    bench.add(combiner);
+
+    // Red laser entering from Left port (-X face, origin at -0.1, 0, 0 heading +X)
+    auto redLaser = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource, "laser-red");
+    redLaser.transform = math::RigidTransform3d {
+        .translationMetres = {-0.1, 0.0, 0.0},
+        .localXAxisInWorld = {0.0, 1.0, 0.0},
+        .localYAxisInWorld = {0.0, 0.0, 1.0},
+        .localZAxisInWorld = {1.0, 0.0, 0.0},
+    };
+    auto& redParams = std::get<scene::LaserSourceParameters>(redLaser.parameters);
+    redParams.channels = {{.wavelengthMetres = 638e-9, .powerWatts = 1.0, .coherenceId = "red"}};
+    bench.add(redLaser);
+
+    // Green laser entering from Rear port (-Z face, origin at 0, 0, -0.1 heading +Z)
+    auto greenLaser = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource, "laser-green");
+    greenLaser.transform = math::RigidTransform3d {
+        .translationMetres = {0.0, 0.0, -0.1},
+        .localXAxisInWorld = {1.0, 0.0, 0.0},
+        .localYAxisInWorld = {0.0, 1.0, 0.0},
+        .localZAxisInWorld = {0.0, 0.0, 1.0},
+    };
+    auto& greenParams = std::get<scene::LaserSourceParameters>(greenLaser.parameters);
+    greenParams.channels = {{.wavelengthMetres = 532e-9, .powerWatts = 1.0, .coherenceId = "green"}};
+    bench.add(greenLaser);
+
+    // Blue laser entering from Right port (+X face, origin at +0.1, 0, 0 heading -X)
+    auto blueLaser = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource, "laser-blue");
+    blueLaser.transform = math::RigidTransform3d {
+        .translationMetres = {0.1, 0.0, 0.0},
+        .localXAxisInWorld = {0.0, 1.0, 0.0},
+        .localYAxisInWorld = {0.0, 0.0, -1.0},
+        .localZAxisInWorld = {-1.0, 0.0, 0.0},
+    };
+    auto& blueParams = std::get<scene::LaserSourceParameters>(blueLaser.parameters);
+    blueParams.channels = {{.wavelengthMetres = 450e-9, .powerWatts = 1.0, .coherenceId = "blue"}};
+    bench.add(blueLaser);
+
+    // Screen detector in front of exit port (+Z face, at 0, 0, 0.2)
+    auto screen = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::ScreenDetector, "screen");
+    screen.transform = math::RigidTransform3d {
+        .translationMetres = {0.0, 0.0, 0.2},
+        .localXAxisInWorld = {-1.0, 0.0, 0.0},
+        .localYAxisInWorld = {0.0, 1.0, 0.0},
+        .localZAxisInWorld = {0.0, 0.0, -1.0},
+    };
+    bench.add(screen);
+
+    const auto graph = ray::traceDynamicBench(bench);
+    REQUIRE(graph.terminations.size() == 3U);
+
+    // Find the 3 interactions on screen
+    std::size_t screenInteractions = 0;
+    for (const auto& inter : graph.interactions) {
+        if (inter.componentId == "screen") {
+            ++screenInteractions;
+            CHECK(inter.hitPointMetres.x == doctest::Approx(0.0).epsilon(1e-12));
+            CHECK(inter.hitPointMetres.y == doctest::Approx(0.0).epsilon(1e-12));
+            CHECK(inter.hitPointMetres.z == doctest::Approx(0.2).epsilon(1e-12));
+        }
+    }
+    CHECK(screenInteractions == 3U);
+
+    // Find the 3 interactions on xcube
+    std::size_t xcubeInteractions = 0;
+    for (const auto& inter : graph.interactions) {
+        if (inter.componentId == "xcube") {
+            ++xcubeInteractions;
+            REQUIRE(inter.outgoing.size() == 1U);
+            const auto& outgoing = inter.outgoing.front().beam;
+            // All outgoing beams must emerge from the exit face and propagate collinearly along +Z
+            CHECK(outgoing.direction.x == doctest::Approx(0.0).epsilon(1e-12));
+            CHECK(outgoing.direction.y == doctest::Approx(0.0).epsilon(1e-12));
+            CHECK(outgoing.direction.z == doctest::Approx(1.0).epsilon(1e-12));
+            CHECK(outgoing.originMetres.z == doctest::Approx(0.0125).epsilon(1e-12));
+        }
+    }
+    CHECK(xcubeInteractions == 3U);
+}
+

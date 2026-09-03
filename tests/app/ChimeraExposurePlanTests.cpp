@@ -230,9 +230,7 @@ TEST_CASE("CHIMERA sparse raster uses the verified response bound to its placed 
     const std::string calibrationId = "placed-slm-response";
     const SingleSlmResponseResolver resolver(calibrationId, response);
     for (const std::string componentId : {
-             "chimera-slm-red",
-             "chimera-slm-green",
-             "chimera-slm-blue"}) {
+             "chimera-slm"}) {
         const auto* placed = automation.bench.scene.find(componentId);
         REQUIRE(placed != nullptr);
         auto device = *placed;

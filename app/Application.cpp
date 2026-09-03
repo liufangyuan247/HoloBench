@@ -207,6 +207,12 @@ gizmo::LocalRotationAxis localRotationAxisForIndex(int index) {
         height = value.heightMetres;
         break;
     }
+    case bench::BenchComponentKind::XCubeCombiner: {
+        const auto& value = std::get<bench::XCubeCombinerParameters>(
+            component.parameters);
+        width = height = value.sizeMetres;
+        break;
+    }
     case bench::BenchComponentKind::IdealThinLens: {
         const auto& value = std::get<bench::IdealThinLensParameters>(
             component.parameters);
@@ -8691,6 +8697,26 @@ void Application::drawSandboxInspector() {
                     edited.parameters = value;
                     ImGui::TextDisabled("Configured loss: %.3f", 1.0 - reflectivity - transmissivity);
                     drawCoatingResponseBinding();
+                    break;
+                }
+                case bench::BenchComponentKind::XCubeCombiner: {
+                    auto value = std::get<bench::XCubeCombinerParameters>(edited.parameters);
+                    float sizeMm = static_cast<float>(value.sizeMetres * 1000.0);
+                    float redNm = static_cast<float>(value.redWavelengthMetres * 1e9);
+                    float greenNm = static_cast<float>(value.greenWavelengthMetres * 1e9);
+                    float blueNm = static_cast<float>(value.blueWavelengthMetres * 1e9);
+                    float tolNm = static_cast<float>(value.wavelengthToleranceMetres * 1e9);
+                    changed |= ImGui::DragFloat("Prism size (mm)", &sizeMm, 0.1F, 1.0F, 5000.0F);
+                    changed |= ImGui::DragFloat("Red wavelength (nm)", &redNm, 0.5F, 380.0F, 800.0F);
+                    changed |= ImGui::DragFloat("Green wavelength (nm)", &greenNm, 0.5F, 380.0F, 800.0F);
+                    changed |= ImGui::DragFloat("Blue wavelength (nm)", &blueNm, 0.5F, 380.0F, 800.0F);
+                    changed |= ImGui::DragFloat("Wavelength tolerance (nm)", &tolNm, 0.5F, 1.0F, 100.0F);
+                    value.sizeMetres = static_cast<double>(sizeMm) * 1e-3;
+                    value.redWavelengthMetres = static_cast<double>(redNm) * 1e-9;
+                    value.greenWavelengthMetres = static_cast<double>(greenNm) * 1e-9;
+                    value.blueWavelengthMetres = static_cast<double>(blueNm) * 1e-9;
+                    value.wavelengthToleranceMetres = static_cast<double>(tolNm) * 1e-9;
+                    edited.parameters = value;
                     break;
                 }
                 case bench::BenchComponentKind::IdealThinLens: {

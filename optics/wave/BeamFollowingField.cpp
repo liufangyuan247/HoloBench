@@ -361,7 +361,9 @@ void validateSupportedPath(
                 && component->kind
                     != scene::BenchComponentKind::PlanarMirror
                 && component->kind
-                    != scene::BenchComponentKind::BeamSplitterCombiner) {
+                    != scene::BenchComponentKind::BeamSplitterCombiner
+                && component->kind
+                    != scene::BenchComponentKind::XCubeCombiner) {
                 throw std::invalid_argument(
                     "a powered or unsupported component changes the centre-ray direction");
             }
@@ -1000,10 +1002,14 @@ BeamFollowingFieldResult propagatePreparedField(
             const math::Vec3d outgoing = math::normalized(
                 interaction.outgoingBeam.direction);
             if (!approximatelyAligned(outgoing, propagationDirection)) {
+                const math::Vec3d foldNormal
+                    = (component->kind == scene::BenchComponentKind::XCubeCombiner)
+                    ? math::normalized(propagationDirection - outgoing)
+                    : component->transform.localZAxisInWorld;
                 reflectFieldFrameAtFold(
                     propagated,
                     fieldFrame,
-                    component->transform.localZAxisInWorld,
+                    foldNormal,
                     outgoing);
                 diagnostics.usedFoldedPath = true;
                 diagnostics.foldedWaveComponentIds.push_back(component->id);
