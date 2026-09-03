@@ -33,15 +33,22 @@ bench::BenchComponent objectSource(
     math::Vec3d position,
     double wavelengthMetres,
     double powerWatts,
-    std::string coherenceId) {
+    std::string coherenceId,
+    bench::ObjectSourceGeometry geometry = bench::ObjectSourceGeometry::Cube,
+    math::Vec3d dimensions = {0.01, 0.01, 0.01},
+    double yawRadians = 0.45,
+    double pitchRadians = -0.28) {
     auto result = bench::makeDefaultBenchComponent(
         bench::BenchComponentKind::ObjectWavefrontSource, std::move(id));
     result.transform = aimedTransform(position, {0.0, 0.0, 0.0});
     auto parameters = std::get<bench::ObjectWavefrontSourceParameters>(
         result.parameters);
-    parameters.widthMetres = 0.01;
-    parameters.heightMetres = 0.01;
-    parameters.depthMetres = 0.01;
+    parameters.geometry = geometry;
+    parameters.widthMetres = dimensions.x;
+    parameters.heightMetres = dimensions.y;
+    parameters.depthMetres = dimensions.z;
+    parameters.primitiveYawRadians = yawRadians;
+    parameters.primitivePitchRadians = pitchRadians;
     parameters.channel = {
         .wavelengthMetres = wavelengthMetres,
         .powerWatts = powerWatts,
@@ -200,48 +207,45 @@ BenchProject makeRgbHolographyPreset() {
 BenchProject makeRgbDenisyukHolographyPreset() {
     auto result = baseProject(
         "preset-rgb-denisyuk-holography",
-        "RGB Reflection / Denisyuk Holography Bench");
-    struct Channel final {
-        const char* name;
-        double wavelengthMetres;
-        double yMetres;
-    };
-    constexpr std::array<Channel, 3> channels {{
-        {"red", 638e-9, -0.004},
-        {"green", 532e-9, 0.0},
-        {"blue", 450e-9, 0.004},
-    }};
-    for (const auto& channel : channels) {
-        const std::string coherence
-            = std::string(channel.name) + "-recording";
-        const math::Vec3d objectPosition {
-            0.003, channel.yMetres, 0.16};
-        result.scene.add(objectSource(
-            std::string("object-") + channel.name,
-            objectPosition,
-            channel.wavelengthMetres,
-            0.16,
-            coherence));
+        "RGB Reflection / Denisyuk Holography Bench (Cornell Box Scene)");
 
-        auto slm = bench::makeDefaultBenchComponent(
-            bench::BenchComponentKind::SpatialLightModulator,
-            std::string("object-pattern-") + channel.name);
-        slm.transform = aimedTransform(
-            objectPosition * 0.55, {0.0, 0.0, 0.0});
-        auto slmParameters
-            = std::get<bench::SpatialLightModulatorParameters>(
-                slm.parameters);
-        slmParameters.widthMetres = 0.012;
-        slmParameters.heightMetres = 0.012;
-        slmParameters.modulationMode = bench::SlmModulationMode::Amplitude;
-        slmParameters.commandPattern = bench::SlmCommandPattern::Checkerboard;
-        slmParameters.primaryCommand = 0.25;
-        slmParameters.secondaryCommand = 1.0;
-        slmParameters.checkerboardCellWidthPixels = 96U;
-        slmParameters.checkerboardCellHeightPixels = 96U;
-        slm.parameters = slmParameters;
-        result.scene.add(std::move(slm));
-    }
+    // Cornell Box geometric scene behind the holographic plate (Z > 0):
+    // 1. Red Cube (left side): 638 nm
+    result.scene.add(objectSource(
+        "object-red",
+        {-0.006, -0.004, 0.16},
+        638e-9,
+        0.16,
+        "red-recording",
+        bench::ObjectSourceGeometry::Cube,
+        {0.010, 0.014, 0.010},
+        0.35,
+        0.0));
+
+    // 2. Green Sphere (center): 532 nm
+    result.scene.add(objectSource(
+        "object-green",
+        {0.000, 0.003, 0.15},
+        532e-9,
+        0.16,
+        "green-recording",
+        bench::ObjectSourceGeometry::Sphere,
+        {0.012, 0.012, 0.012},
+        0.0,
+        0.0));
+
+    // 3. Blue Tetrahedron (right side): 450 nm
+    result.scene.add(objectSource(
+        "object-blue",
+        {0.006, -0.004, 0.16},
+        450e-9,
+        0.16,
+        "blue-recording",
+        bench::ObjectSourceGeometry::Tetrahedron,
+        {0.010, 0.012, 0.010},
+        -0.40,
+        0.15));
+
     result.scene.add(rgbReferenceSource(
         "rgb-replay-reference", {-0.003, 0.0, -0.16}));
     auto rgbPlate = plate();

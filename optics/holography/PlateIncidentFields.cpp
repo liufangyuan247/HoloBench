@@ -37,6 +37,13 @@ RecordingBranchRole sourceRole(
         return RecordingBranchRole::Object;
     }
     if (source->kind == scene::BenchComponentKind::LaserSource) {
+        for (std::size_t i = 1; i < beam.provenance.componentPath.size(); ++i) {
+            const auto* comp = bench.find(beam.provenance.componentPath[i]);
+            if (comp != nullptr
+                && comp->kind == scene::BenchComponentKind::SpatialLightModulator) {
+                return RecordingBranchRole::Object;
+            }
+        }
         return RecordingBranchRole::Reference;
     }
     throw std::invalid_argument(

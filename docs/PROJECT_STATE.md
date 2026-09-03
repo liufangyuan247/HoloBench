@@ -43,10 +43,17 @@ animated or silently approximated.
   thin/volume/RGB/Denisyuk, and CHIMERA-compatible route; it cannot silently
   fall back to the old rectangular envelope when an FFT backend is supplied.
   Matching PCG solids never define optical truth. Bench format v6 strictly
-  migrates v1-v5 sources to an internal uniform plane. The Inspector states
-  that power is already-scattered object-wave power and that independent laser
-  illumination, shadows, specular/transmissive materials, polarization, and
-  multiple scattering are not yet modeled. See
+  migrates v1-v5 sources to an internal uniform plane. In CHIMERA holoprinting,
+  the synthetic object arm source uses `UniformPlane` backlighting without 3D
+  diffuse artifacts on the bench. `PlateIncidentFields` dynamically detects
+  laser beams modulated by SLMs and classifies them into `RecordingBranchRole::Object`,
+  supporting single-laser holographic splitting. The RGB Denisyuk reflection
+  preset is assembled as a classic Cornell Box arrangement containing red cube,
+  green sphere, and blue tetrahedron primitives recorded via opposite-side RGB
+  laser illumination. The Inspector states that power is already-scattered
+  object-wave power and that independent laser illumination, shadows,
+  specular/transmissive materials, polarization, and multiple scattering are
+  not yet modeled. See
   [ADR 0043](adr/0043-analytic-diffuse-primitive-object-waves.md).
 
 - **M10.1 PCG foundation implemented**: All 12 current Bench component kinds

@@ -229,3 +229,64 @@ TEST_CASE("plate-local recording geometry is invariant under a common rigid tran
                    .epsilon(1e-14));
     }
 }
+
+TEST_CASE("laser branch passing through SLM resolves to Object role while unmodulated laser resolves to Reference role") {
+    scene::BenchScene bench;
+    auto laserObj = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource, "laser-obj");
+    laserObj.transform.translationMetres = {0.0, 0.0, -0.5};
+    laserObj.transform.localXAxisInWorld = {1.0, 0.0, 0.0};
+    laserObj.transform.localYAxisInWorld = {0.0, 1.0, 0.0};
+    laserObj.transform.localZAxisInWorld = {0.0, 0.0, 1.0};
+    auto laserObjParams = std::get<scene::LaserSourceParameters>(laserObj.parameters);
+    laserObjParams.channels = {{
+        .wavelengthMetres = 532e-9,
+        .powerWatts = 0.25,
+        .coherenceId = "recording",
+    }};
+    laserObj.parameters = laserObjParams;
+
+    auto slm = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::SpatialLightModulator, "slm");
+    slm.transform.translationMetres = {0.0, 0.0, -0.2};
+    slm.transform.localXAxisInWorld = {1.0, 0.0, 0.0};
+    slm.transform.localYAxisInWorld = {0.0, 1.0, 0.0};
+    slm.transform.localZAxisInWorld = {0.0, 0.0, 1.0};
+
+    auto laserRef = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::LaserSource, "laser-ref");
+    const auto refZ = holobench::math::normalized(holobench::math::Vec3d {-0.02, 0.0, 0.5});
+    const holobench::math::Vec3d refUp {0.0, 1.0, 0.0};
+    const auto refX = holobench::math::normalized(holobench::math::cross(refUp, refZ));
+    const auto refY = holobench::math::cross(refZ, refX);
+    laserRef.transform = {
+        .translationMetres = {0.02, 0.0, -0.5},
+        .localXAxisInWorld = refX,
+        .localYAxisInWorld = refY,
+        .localZAxisInWorld = refZ,
+    };
+    auto laserRefParams = std::get<scene::LaserSourceParameters>(laserRef.parameters);
+    laserRefParams.channels = {{
+        .wavelengthMetres = 532e-9,
+        .powerWatts = 0.25,
+        .coherenceId = "recording",
+    }};
+    laserRef.parameters = laserRefParams;
+
+    bench.add(std::move(laserObj));
+    bench.add(std::move(slm));
+    bench.add(std::move(laserRef));
+    bench.add(scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::HolographicPlate, "plate"));
+
+    const auto fields = holography::collectPlateIncidentFields(
+        bench, ray::traceDynamicBench(bench), "plate");
+    REQUIRE(fields.branches.size() == 2U);
+    const auto& objBranch = branchWithRole(fields, holography::RecordingBranchRole::Object);
+    const auto& refBranch = branchWithRole(fields, holography::RecordingBranchRole::Reference);
+    CHECK(objBranch.beam.provenance.componentPath.front() == "laser-obj");
+    CHECK(refBranch.beam.provenance.componentPath.front() == "laser-ref");
+    CHECK(std::find(objBranch.beam.provenance.componentPath.begin(),
+                    objBranch.beam.provenance.componentPath.end(),
+                    "slm") != objBranch.beam.provenance.componentPath.end());
+}

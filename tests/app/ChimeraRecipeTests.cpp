@@ -77,6 +77,12 @@ TEST_CASE("canonical CHIMERA recipe compiles to a feasible ordinary editable ben
         slm->transform.translationMetres
             - relayLens->transform.translationMetres)
         == doctest::Approx(recipe.relay.focalLengthMetres).epsilon(1e-13));
+
+    const auto* objectSource = first.project.scene.find("chimera-object-source-red");
+    REQUIRE(objectSource != nullptr);
+    const auto& objectParams
+        = std::get<scene::ObjectWavefrontSourceParameters>(objectSource->parameters);
+    CHECK(objectParams.geometry == scene::ObjectSourceGeometry::UniformPlane);
 }
 
 TEST_CASE("compiled CHIMERA branches resolve three independent reflection recipes") {

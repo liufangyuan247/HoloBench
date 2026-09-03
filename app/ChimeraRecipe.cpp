@@ -451,6 +451,7 @@ CompileResult compileChimeraRecipe(const ChimeraRecipe& recipe) {
             aimedTransform(objectPosition, {0.0, 0.0, 0.0}));
         auto objectParameters
             = std::get<scene::ObjectWavefrontSourceParameters>(object.parameters);
+        objectParameters.geometry = scene::ObjectSourceGeometry::UniformPlane;
         objectParameters.channel = {
             .wavelengthMetres = arm.wavelengthMetres,
             .powerWatts = arm.objectPowerWatts,
