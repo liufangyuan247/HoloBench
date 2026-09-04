@@ -961,14 +961,26 @@ BeamFollowingFieldResult propagatePreparedField(
     std::span<const PlacedSlmSparseCommand> slmCommands,
     const ray::ILensPrescriptionResolver* lensPrescriptions,
     double boundaryReferenceIntensity) {
+    if (options.cancellationRequested
+        && options.cancellationRequested->load(std::memory_order_relaxed)) {
+        throw OperationCancelledException();
+    }
     BeamFollowingFieldDiagnostics diagnostics;
     diagnostics.workingSampleWidth = propagated.width();
     diagnostics.workingSampleHeight = propagated.height();
     compute::propagation::AngularSpectrumPropagator propagator(fftBackend);
     for (const auto& interaction : pathInteractions) {
+        if (options.cancellationRequested
+            && options.cancellationRequested->load(std::memory_order_relaxed)) {
+            throw OperationCancelledException();
+        }
         const double distance = math::length(
             interaction.hitPointMetres - previousPoint);
         static_cast<void>(propagator.propagateInPlace(propagated, distance));
+        if (options.cancellationRequested
+            && options.cancellationRequested->load(std::memory_order_relaxed)) {
+            throw OperationCancelledException();
+        }
         ++diagnostics.propagatedSegmentCount;
         const auto* component = bench.find(interaction.componentId);
         if (component == nullptr) {
@@ -1106,6 +1118,10 @@ BeamFollowingFieldResult sampleBeamFollowingField(
     std::span<const PlacedSlmSparseCommand> slmCommands,
     const ray::ILensPrescriptionResolver* lensPrescriptions) {
     validateOptions(options);
+    if (options.cancellationRequested
+        && options.cancellationRequested->load(std::memory_order_relaxed)) {
+        throw OperationCancelledException();
+    }
     validateSparseSlmCommands(bench, slmCommands);
     validateBeamFollowingFieldPath(
         bench, terminalBeam, pathInteractions, lensPrescriptions);
@@ -1188,6 +1204,10 @@ BeamFollowingFieldResult sampleDerivedBeamFollowingField(
     std::span<const PlacedSlmSparseCommand> slmCommands,
     const ray::ILensPrescriptionResolver* lensPrescriptions) {
     validateOptions(options);
+    if (options.cancellationRequested
+        && options.cancellationRequested->load(std::memory_order_relaxed)) {
+        throw OperationCancelledException();
+    }
     validateSparseSlmCommands(bench, slmCommands);
     scene::validateBeamState(terminalBeam);
     math::validateRigidTransform(sourceFrame);

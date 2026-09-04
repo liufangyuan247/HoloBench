@@ -13,9 +13,9 @@
 
 namespace scene = holobench::optics::scene;
 
-TEST_CASE("dynamic bench exposes twelve stable typed component kinds") {
+TEST_CASE("dynamic bench exposes thirteen stable typed component kinds") {
     const auto& kinds = scene::requiredBenchComponentKinds();
-    REQUIRE(kinds.size() == 12);
+    REQUIRE(kinds.size() == 13);
 
     std::set<std::string> stableNames;
     std::set<std::string> displayNames;

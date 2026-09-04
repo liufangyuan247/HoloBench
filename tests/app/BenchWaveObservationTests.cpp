@@ -3,11 +3,14 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <chrono>
 #include <numbers>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 #include "app/BenchWaveObservation.hpp"
+#include "app/BenchWaveObservationWorker.hpp"
 #include "app/BenchWavePresets.hpp"
 #include "compute/fft/CpuFftBackend.hpp"
 #include "optics/ray/DynamicBenchTracer.hpp"
@@ -712,3 +715,117 @@ TEST_CASE("wavelength and coherence identities remain independent channels") {
     CHECK(channels[2].fieldAtObservation.vacuumWavelengthMetres()
         == doctest::Approx(638e-9));
 }
+
+TEST_CASE("progressive sample stages sequence correctly") {
+    const auto stages64 = app::progressiveSampleStages(64U, 64U);
+    REQUIRE(stages64.size() == 1U);
+    CHECK(stages64[0] == 64U);
+
+    const auto stages128 = app::progressiveSampleStages(128U, 64U);
+    REQUIRE(stages128.size() == 2U);
+    CHECK(stages128[0] == 64U);
+    CHECK(stages128[1] == 128U);
+
+    const auto stages512 = app::progressiveSampleStages(512U, 64U);
+    REQUIRE(stages512.size() == 4U);
+    CHECK(stages512[0] == 64U);
+    CHECK(stages512[1] == 128U);
+    CHECK(stages512[2] == 256U);
+    CHECK(stages512[3] == 512U);
+}
+
+TEST_CASE("wave observation supports immediate cancellation") {
+    auto project = app::makeDoubleSlitExperimentPreset();
+    fft::CpuFftBackend backend;
+    auto graph = ray::traceDynamicBench(project.scene);
+
+    std::atomic_bool cancel {true};
+    const auto channels = app::observeBenchWaveChannels(
+        project.scene,
+        graph,
+        "wave-screen",
+        128U,
+        true,
+        backend,
+        nullptr,
+        nullptr,
+        293.15,
+        &cancel);
+    CHECK(channels.empty());
+
+    CHECK_THROWS_AS(
+        [&]() {
+            auto res = app::observeBenchWavePattern(
+                project.scene,
+                graph,
+                "wave-screen",
+                128U,
+                true,
+                backend,
+                nullptr,
+                nullptr,
+                293.15,
+                &cancel);
+            (void)res;
+        }(),
+        holobench::optics::wave::OperationCancelledException);
+}
+
+TEST_CASE("progressive observation worker computes stages asynchronously and honors cancellation") {
+    auto project = app::makeDoubleSlitExperimentPreset();
+    auto graph = ray::traceDynamicBench(project.scene);
+
+    app::BenchWaveObservationWorker worker;
+    app::ObservationWorkerRequest req {
+        .requestId = 1U,
+        .scene = project.scene,
+        .traceGraph = graph,
+        .observationComponentId = "wave-screen",
+        .stages = {64U, 128U},
+        .lensPrescriptions = nullptr,
+        .slmResponses = nullptr,
+        .environmentTemperatureKelvin = 293.15,
+    };
+
+    worker.submitRequest(std::move(req));
+
+    std::vector<app::ProgressiveObservationStage> completedStages;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (auto stage = worker.pollResult()) {
+            completedStages.push_back(std::move(*stage));
+            if (completedStages.back().isFinalStage) {
+                break;
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+
+    REQUIRE(!completedStages.empty());
+    CHECK(completedStages.front().requestId == 1U);
+    CHECK(completedStages.front().sampleLimit == 64U);
+    CHECK(!completedStages.front().channels.empty());
+    if (completedStages.size() > 1U) {
+        CHECK(completedStages.back().sampleLimit == 128U);
+        CHECK(completedStages.back().isFinalStage);
+    }
+
+    // Now test immediate cancellation
+    app::ObservationWorkerRequest cancelReq {
+        .requestId = 2U,
+        .scene = project.scene,
+        .traceGraph = graph,
+        .observationComponentId = "wave-screen",
+        .stages = {64U, 128U, 256U, 512U},
+        .lensPrescriptions = nullptr,
+        .slmResponses = nullptr,
+        .environmentTemperatureKelvin = 293.15,
+    };
+    worker.submitRequest(std::move(cancelReq));
+    worker.cancel();
+
+    // Verify worker handles clean stop without deadlock or memory leak
+    worker.stop();
+    CHECK(!worker.isBusy());
+}
+

@@ -1,7 +1,9 @@
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -22,6 +24,13 @@ class ISlmResponseResolver;
 }
 
 namespace holobench::optics::wave {
+
+struct OperationCancelledException : public std::runtime_error {
+    OperationCancelledException()
+        : std::runtime_error("operation cancelled") {}
+    explicit OperationCancelledException(const std::string& message)
+        : std::runtime_error(message) {}
+};
 
 struct PlacedSlmSparsePixel final {
     std::size_t column = 0;
@@ -56,6 +65,7 @@ struct BeamFollowingFieldOptions final {
     // Temperature selects validity; format v1 does not interpolate it.
     const optics::slm::ISlmResponseResolver* slmResponses = nullptr;
     double environmentTemperatureKelvin = 293.15;
+    const std::atomic_bool* cancellationRequested = nullptr;
 
     bool operator==(const BeamFollowingFieldOptions&) const = default;
 };

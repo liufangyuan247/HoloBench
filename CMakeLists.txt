@@ -136,6 +136,7 @@ add_library(holobench_app_logic STATIC
     app/BenchHolographyPresets.cpp
     app/BenchSourceSpectrum.cpp
     app/BenchWaveObservation.cpp
+    app/BenchWaveObservationWorker.cpp
     app/BenchWavePresets.cpp
     app/BenchProject.cpp
     app/BenchRecordingRecipe.cpp

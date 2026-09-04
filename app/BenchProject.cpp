@@ -792,7 +792,11 @@ scene::BenchComponentParameters parametersFromJson(
             .powerTransmissivity = finiteNumber(value.at("power_transmissivity"), "splitter power_transmissivity"),
         };
     case scene::BenchComponentKind::XCubeCombiner:
-        requireKeys(value, {"blue_wavelength_m", "green_wavelength_m", "red_wavelength_m", "size_m"}, "xcube parameters");
+        if (value.contains("wavelength_tolerance_m")) {
+            requireKeys(value, {"blue_wavelength_m", "green_wavelength_m", "red_wavelength_m", "size_m", "wavelength_tolerance_m"}, "xcube parameters");
+        } else {
+            requireKeys(value, {"blue_wavelength_m", "green_wavelength_m", "red_wavelength_m", "size_m"}, "xcube parameters");
+        }
         return scene::XCubeCombinerParameters {
             .sizeMetres = finiteNumber(value.at("size_m"), "xcube size_m"),
             .redWavelengthMetres = finiteNumber(value.at("red_wavelength_m"), "xcube red_wavelength_m"),

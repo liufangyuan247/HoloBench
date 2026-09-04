@@ -19,6 +19,7 @@
 #include "app/BenchEditHistory.hpp"
 #include "app/BenchProject.hpp"
 #include "app/BenchWaveObservation.hpp"
+#include "app/BenchWaveObservationWorker.hpp"
 #include "app/ChimeraBenchWorkflow.hpp"
 #include "app/ChimeraBatch.hpp"
 #include "app/ChimeraParameterSweep.hpp"
@@ -685,6 +686,18 @@ private:
     int sandboxWaveCursorX_ = 0;
     int sandboxWaveCursorY_ = 0;
     int sandboxWaveCrossSectionAxisIndex_ = 0;
+    BenchWaveObservationWorker sandboxWaveObservationWorker_;
+    std::uint64_t sandboxWaveCurrentRequestId_ = 0;
+    std::uint64_t sandboxWaveSubmittedSceneRevision_ = 0;
+    std::uint64_t sandboxWaveSubmittedTraceRevision_ = 0;
+    std::string sandboxWaveSubmittedComponentId_;
+    bool sandboxWaveSubmittedDragging_ = false;
+    int sandboxWaveSubmittedPreviewLimitIndex_ = -1;
+    int sandboxWaveSubmittedCommittedLimitIndex_ = -1;
+    std::size_t sandboxWaveCurrentStageIndex_ = 0;
+    std::size_t sandboxWaveTotalStages_ = 0;
+    std::size_t sandboxWaveCurrentResolution_ = 0;
+    bool sandboxWaveComputing_ = false;
     bool sandboxReconstructionOverlaySubmitted_ = false;
     std::string sandboxReconstructionOverlayDiagnostic_;
     SandboxUiEvidence sandboxUiEvidence_;

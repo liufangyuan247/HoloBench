@@ -104,8 +104,8 @@ TEST_CASE("unified bench project round trips every kind arbitrary transforms and
     const auto loaded = app::parseBenchProject(firstBytes);
     const std::string secondBytes = app::serializeBenchProject(loaded);
     CHECK(firstBytes == secondBytes);
-    CHECK(loaded.scene.revision() == 12);
-    REQUIRE(loaded.scene.components().size() == 12);
+    CHECK(loaded.scene.revision() == 13);
+    REQUIRE(loaded.scene.components().size() == 13);
 
     const auto* laser = loaded.scene.find("component-20");
     REQUIRE(laser != nullptr);
@@ -114,13 +114,17 @@ TEST_CASE("unified bench project round trips every kind arbitrary transforms and
     CHECK(channels[0].coherenceId == "rgb-red");
     CHECK(laser->transform.localZAxisInWorld.x == doctest::Approx(std::sin(angle)));
 
-    const auto* slm = loaded.scene.find("component-12");
+    const auto* slm = loaded.scene.find("component-11");
     REQUIRE(slm != nullptr);
     const auto& slmParameters
         = std::get<scene::SpatialLightModulatorParameters>(slm->parameters);
     CHECK(slmParameters.commandId == "rgb-hogel-42");
     CHECK(slmParameters.commandOrigin == scene::SlmCommandOrigin::Automation);
     CHECK(slmParameters.horizontalCycles == doctest::Approx(7.0));
+
+    const auto* xcube = loaded.scene.find("component-16");
+    REQUIRE(xcube != nullptr);
+    CHECK(std::holds_alternative<scene::XCubeCombinerParameters>(xcube->parameters));
 
     const auto* object = loaded.scene.find("component-19");
     REQUIRE(object != nullptr);

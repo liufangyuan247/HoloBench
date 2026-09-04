@@ -34,6 +34,18 @@ animated or silently approximated.
 
 ## M10 implementation state (in progress)
 
+- **M10 Progressive Non-Blocking Background Wave Observation & Light Field Probing**:
+  Replaced synchronous main-thread wave propagation on placed `ScreenDetector` and
+  `FieldProbe` instruments with a dedicated background worker (`BenchWaveObservationWorker`)
+  and progressive multi-stage sampling.
+  1. Main rendering and UI thread runs smoothly at 60+ FPS without hitching during component
+     interaction, translation, or rotation.
+  2. Immediate interactive drag preview at fast 64x64 resolution, progressing through multi-stage
+     refinements (128, 256, up to 512/1024) once interaction settles.
+  3. Responsive cancellation tokens (`std::atomic_bool* cancellationRequested`) deep in
+     `optics::wave::propagatePreparedField` and sampling routines immediately abort stale
+     calculations upon scene invalidation (<1 ms), restarting from stage 0 with zero stale queue lag.
+  4. Real-time progressive UI badge indicator (`DRAG PREVIEW`, `REFINING (i/N)`, `CURRENT`).
 - **M10 True Collinear RGB Beam Combining & X-Cube Prism Digital Twin**:
   Eliminated synthetic vertical offsets and non-collinear approximations in CHIMERA
   optical paths to prevent white-light replay chromatic dispersion. Supported

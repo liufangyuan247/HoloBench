@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <complex>
@@ -77,6 +78,12 @@ struct BenchFieldCrossSection final {
     double phaseMinimumIntensityWattsPerSquareMetre = 0.0,
     double decibelFloor = -120.0);
 
+// Returns ordered power-of-two progressive sampling limits starting from
+// minimumSamples (default 64) up to targetSamplesPerAxis (e.g. 64 -> 128 -> 256 -> 512).
+[[nodiscard]] std::vector<std::size_t> progressiveSampleStages(
+    std::size_t targetSamplesPerAxis,
+    std::size_t minimumSamples = 64U) noexcept;
+
 // Extracts a physical X or Y intensity section through one selected sample.
 [[nodiscard]] BenchFieldCrossSection measureBenchWaveCrossSection(
     const BenchWaveObservationResult& observation,
@@ -98,7 +105,8 @@ observeBenchWaveChannels(
     compute::fft::IFftBackend& fftBackend,
     const optics::ray::ILensPrescriptionResolver* lensPrescriptions = nullptr,
     const optics::slm::ISlmResponseResolver* slmResponses = nullptr,
-    double environmentTemperatureKelvin = 293.15);
+    double environmentTemperatureKelvin = 293.15,
+    const std::atomic_bool* cancellationRequested = nullptr);
 
 // Convenience for callers that require exactly one physical channel.
 [[nodiscard]] BenchWaveObservationResult observeBenchWavePattern(
@@ -110,6 +118,7 @@ observeBenchWaveChannels(
     compute::fft::IFftBackend& fftBackend,
     const optics::ray::ILensPrescriptionResolver* lensPrescriptions = nullptr,
     const optics::slm::ISlmResponseResolver* slmResponses = nullptr,
-    double environmentTemperatureKelvin = 293.15);
+    double environmentTemperatureKelvin = 293.15,
+    const std::atomic_bool* cancellationRequested = nullptr);
 
 } // namespace holobench::app

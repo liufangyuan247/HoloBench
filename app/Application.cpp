@@ -712,8 +712,9 @@ BenchProject makeDefaultSandboxProject() {
     reflectedScreen.transform.translationMetres = {0.25, 0.0, 0.75};
     project.scene.add(std::move(reflectedScreen));
 
-    const std::array<bench::BenchComponentKind, 7> shelfKinds {
+    const std::array<bench::BenchComponentKind, 8> shelfKinds {
         bench::BenchComponentKind::ObjectWavefrontSource,
+        bench::BenchComponentKind::XCubeCombiner,
         bench::BenchComponentKind::RealLensAssembly,
         bench::BenchComponentKind::Aperture,
         bench::BenchComponentKind::SpatialFilter,
@@ -2697,6 +2698,7 @@ void Application::shutdown() noexcept {
     if (sandboxRgbReplayTexture_) {
         sandboxRgbReplayTexture_->destroy();
     }
+    sandboxWaveObservationWorker_.stop();
     if (sandboxWaveTexture_) {
         sandboxWaveTexture_->destroy();
     }
@@ -2799,117 +2801,155 @@ void Application::updateSandboxWaveObservation() {
     if (!sandboxLiveWavePlane_ || observation == nullptr
         || (observation->kind != bench::BenchComponentKind::ScreenDetector
             && observation->kind != bench::BenchComponentKind::FieldProbe)) {
+        sandboxWaveObservationWorker_.cancel();
         sandboxWaveObservations_.clear();
         sandboxWaveChannelIndex_ = 0;
         sandboxWaveObservationDiagnostic_.clear();
         sandboxWaveTextureDirty_ = true;
+        sandboxWaveComputing_ = false;
+        sandboxWaveSubmittedComponentId_.clear();
         if (sandboxWaveTexture_) {
             sandboxWaveTexture_->destroy();
         }
         return;
     }
 
-    const auto* activeObservation = activeSandboxWaveObservation();
-    const bool current = activeObservation
-        && !activeObservation->isStaleFor(benchProject_.scene)
-        && activeObservation->observationComponentId
-            == observation->id;
-    const bool needsFullResolution = current
-        && activeObservation->interactivePreview
-        && !sandboxGizmoDragging_;
+    const auto renderObservation = [this](
+                                       const BenchWaveObservationResult& result) {
+        field::FieldVisualizationOptions options;
+        field::FieldViewMode viewMode = field::FieldViewMode::Intensity;
+        if (sandboxWaveViewModeIndex_ == 1) {
+            viewMode = field::FieldViewMode::DecibelIntensity;
+            options.colormap = field::ColormapKind::Inferno;
+            options.floorDecibels = sandboxWaveDecibelFloor_;
+            options.maxDecibels = 0.0;
+            options.decibelReferenceIntensity
+                = result.peakIntensityWattsPerSquareMetre > 0.0
+                ? result.peakIntensityWattsPerSquareMetre
+                : 1.0;
+        } else if (sandboxWaveViewModeIndex_ == 2) {
+            viewMode = field::FieldViewMode::WrappedPhase;
+            options.colormap = field::ColormapKind::CyclicPhase;
+            options.phaseMinimumIntensity
+                = result.peakIntensityWattsPerSquareMetre
+                * static_cast<double>(
+                    sandboxWavePhaseMinimumPeakFraction_);
+        } else {
+            options.colormap = field::ColormapKind::Grayscale;
+        }
+        const auto image = field::renderFieldView(
+            result.fieldAtObservation, viewMode, options);
+        if (!sandboxWaveTexture_
+            || !sandboxWaveTexture_->uploadImage(image)) {
+            throw std::runtime_error(
+                "OpenGL rejected the live wave-screen texture");
+        }
+    };
 
-    try {
-        const auto renderObservation = [this](
-                                           const BenchWaveObservationResult& result) {
-            field::FieldVisualizationOptions options;
-            field::FieldViewMode viewMode = field::FieldViewMode::Intensity;
-            if (sandboxWaveViewModeIndex_ == 1) {
-                viewMode = field::FieldViewMode::DecibelIntensity;
-                options.colormap = field::ColormapKind::Inferno;
-                options.floorDecibels = sandboxWaveDecibelFloor_;
-                options.maxDecibels = 0.0;
-                options.decibelReferenceIntensity
-                    = result.peakIntensityWattsPerSquareMetre > 0.0
-                    ? result.peakIntensityWattsPerSquareMetre
-                    : 1.0;
-            } else if (sandboxWaveViewModeIndex_ == 2) {
-                viewMode = field::FieldViewMode::WrappedPhase;
-                options.colormap = field::ColormapKind::CyclicPhase;
-                options.phaseMinimumIntensity
-                    = result.peakIntensityWattsPerSquareMetre
-                    * static_cast<double>(
-                        sandboxWavePhaseMinimumPeakFraction_);
-            } else {
-                options.colormap = field::ColormapKind::Grayscale;
-            }
-            const auto image = field::renderFieldView(
-                result.fieldAtObservation, viewMode, options);
-            if (!sandboxWaveTexture_
-                || !sandboxWaveTexture_->uploadImage(image)) {
-                throw std::runtime_error(
-                    "OpenGL rejected the live wave-screen texture");
-            }
-        };
-        if (current && !needsFullResolution) {
-            if (sandboxWaveTextureDirty_) {
-                renderObservation(*activeObservation);
-                sandboxWaveTextureDirty_ = false;
-            }
+    const auto applyStage = [&](ProgressiveObservationStage stage) {
+        if (stage.requestId != sandboxWaveCurrentRequestId_) {
             return;
         }
-        if (!detectorFftBackend_) {
-            throw std::runtime_error("CPU FFT backend is unavailable");
+        sandboxWaveCurrentStageIndex_ = stage.stageIndex + 1U;
+        sandboxWaveTotalStages_ = stage.totalStages;
+        sandboxWaveCurrentResolution_ = stage.sampleLimit;
+        if (!stage.diagnosticError.empty()) {
+            sandboxWaveObservationDiagnostic_ = std::move(stage.diagnosticError);
+            sandboxWaveComputing_ = false;
+        } else if (!stage.channels.empty()) {
+            const auto* previousChannel = activeSandboxWaveObservation();
+            const double previousWavelength = previousChannel
+                ? previousChannel->fieldAtObservation.vacuumWavelengthMetres()
+                : 0.0;
+            const std::string previousCoherence = previousChannel
+                ? previousChannel->coherenceId
+                : std::string {};
+            const auto previous = std::find_if(
+                stage.channels.begin(), stage.channels.end(),
+                [&](const BenchWaveObservationResult& candidate) {
+                    return candidate.fieldAtObservation.vacuumWavelengthMetres()
+                            == previousWavelength
+                        && candidate.coherenceId == previousCoherence;
+                });
+            sandboxWaveChannelIndex_ = previous == stage.channels.end()
+                ? 0
+                : static_cast<int>(std::distance(stage.channels.begin(), previous));
+            sandboxWaveObservations_ = std::move(stage.channels);
+            sandboxWaveObservationDiagnostic_.clear();
+            sandboxWaveTextureDirty_ = true;
+            if (stage.isFinalStage) {
+                sandboxWaveComputing_ = false;
+            }
         }
-        const bool preview = sandboxGizmoDragging_;
-        const auto* previousChannel = activeSandboxWaveObservation();
-        const double previousWavelength = previousChannel
-            ? previousChannel->fieldAtObservation.vacuumWavelengthMetres()
-            : 0.0;
-        const std::string previousCoherence = previousChannel
-            ? previousChannel->coherenceId
-            : std::string {};
-        auto results = observeBenchWaveChannels(
-            opticalBenchScene_,
-            benchTraceGraph_,
-            observation->id,
-            preview
-                ? waveSampleLimit(
-                    kWavePreviewSampleLimits,
-                    sandboxWavePreviewSampleLimitIndex_)
-                : waveSampleLimit(
-                    kWaveCommittedSampleLimits,
-                    sandboxWaveCommittedSampleLimitIndex_),
-            preview,
-            *detectorFftBackend_,
-            &realLensPrescriptionCatalog_,
-            &slmResponseCatalog_,
-            293.15);
-        const auto previous = std::find_if(
-            results.begin(), results.end(),
-            [&](const BenchWaveObservationResult& candidate) {
-                return candidate.fieldAtObservation.vacuumWavelengthMetres()
-                        == previousWavelength
-                    && candidate.coherenceId == previousCoherence;
-            });
-        sandboxWaveChannelIndex_ = previous == results.end()
-            ? 0
-            : static_cast<int>(std::distance(results.begin(), previous));
-        sandboxWaveObservations_ = std::move(results);
-        activeObservation = activeSandboxWaveObservation();
-        if (activeObservation == nullptr) {
-            throw std::logic_error(
-                "live wave observation produced no selectable channel");
+    };
+
+    // 1. Poll completed progressive stages from worker
+    while (auto stage = sandboxWaveObservationWorker_.pollResult()) {
+        applyStage(std::move(*stage));
+    }
+
+    // 2. Check if a new calculation request is needed
+    const bool preview = sandboxGizmoDragging_;
+    const bool invalid = sandboxWaveSubmittedComponentId_ != observation->id
+        || sandboxWaveSubmittedSceneRevision_ != opticalBenchScene_.revision()
+        || sandboxWaveSubmittedTraceRevision_ != benchTraceGraph_.sourceRevision
+        || sandboxWaveSubmittedDragging_ != preview
+        || sandboxWaveSubmittedPreviewLimitIndex_ != sandboxWavePreviewSampleLimitIndex_
+        || sandboxWaveSubmittedCommittedLimitIndex_ != sandboxWaveCommittedSampleLimitIndex_;
+
+    if (invalid) {
+        sandboxWaveObservationWorker_.cancel();
+        const std::size_t targetLimit = preview
+            ? waveSampleLimit(
+                kWavePreviewSampleLimits,
+                sandboxWavePreviewSampleLimitIndex_)
+            : waveSampleLimit(
+                kWaveCommittedSampleLimits,
+                sandboxWaveCommittedSampleLimitIndex_);
+        auto stages = progressiveSampleStages(targetLimit, 64U);
+
+        ++sandboxWaveCurrentRequestId_;
+        sandboxWaveSubmittedComponentId_ = observation->id;
+        sandboxWaveSubmittedSceneRevision_ = opticalBenchScene_.revision();
+        sandboxWaveSubmittedTraceRevision_ = benchTraceGraph_.sourceRevision;
+        sandboxWaveSubmittedDragging_ = preview;
+        sandboxWaveSubmittedPreviewLimitIndex_ = sandboxWavePreviewSampleLimitIndex_;
+        sandboxWaveSubmittedCommittedLimitIndex_ = sandboxWaveCommittedSampleLimitIndex_;
+        sandboxWaveCurrentStageIndex_ = 0;
+        sandboxWaveTotalStages_ = stages.size();
+        sandboxWaveCurrentResolution_ = stages.empty() ? 0 : stages.front();
+        sandboxWaveComputing_ = true;
+
+        ObservationWorkerRequest request {
+            .requestId = sandboxWaveCurrentRequestId_,
+            .scene = opticalBenchScene_,
+            .traceGraph = benchTraceGraph_,
+            .observationComponentId = observation->id,
+            .stages = std::move(stages),
+            .lensPrescriptions = &realLensPrescriptionCatalog_,
+            .slmResponses = &slmResponseCatalog_,
+            .environmentTemperatureKelvin = 293.15,
+        };
+        sandboxWaveObservationWorker_.submitRequest(std::move(request));
+
+        if (glSmokeMode_) {
+            sandboxWaveObservationWorker_.waitForCompletion();
+            while (auto stage = sandboxWaveObservationWorker_.pollResult()) {
+                applyStage(std::move(*stage));
+            }
         }
-        renderObservation(*activeObservation);
-        sandboxWaveTextureDirty_ = false;
-        sandboxWaveObservationDiagnostic_.clear();
-    } catch (const std::exception& error) {
-        sandboxWaveObservations_.clear();
-        sandboxWaveChannelIndex_ = 0;
-        sandboxWaveObservationDiagnostic_ = error.what();
-        sandboxWaveTextureDirty_ = true;
-        if (sandboxWaveTexture_) {
-            sandboxWaveTexture_->destroy();
+    }
+
+    // 3. Re-render texture if dirty
+    if (sandboxWaveTextureDirty_) {
+        const auto* activeObservation = activeSandboxWaveObservation();
+        if (activeObservation != nullptr) {
+            try {
+                renderObservation(*activeObservation);
+                sandboxWaveTextureDirty_ = false;
+            } catch (const std::exception& error) {
+                sandboxWaveObservationDiagnostic_ = error.what();
+            }
         }
     }
 }
@@ -6557,7 +6597,7 @@ void Application::drawSandboxComponentShelf() {
         "Move a white Screen or non-blocking Field Probe; the field follows its real 3D plane");
 
     const auto& kinds = bench::requiredBenchComponentKinds();
-    constexpr int kShelfColumns = 4;
+    constexpr int kShelfColumns = 5;
     if (ImGui::BeginTable(
             "##sandbox_component_shelf_table",
             kShelfColumns,
@@ -6878,15 +6918,24 @@ void Application::drawSandboxWaveBar() {
     }
     if (current) {
         const auto& result = *waveObservation;
+        const bool busy = sandboxWaveComputing_ || sandboxWaveObservationWorker_.isBusy();
         const ImVec4 statusColor = result.interactivePreview
-                ? ImVec4(1.0F, 0.72F, 0.24F, 1.0F)
-                : ImVec4(0.35F, 0.9F, 0.45F, 1.0F);
+            ? ImVec4(1.0F, 0.72F, 0.24F, 1.0F)
+            : (busy ? ImVec4(0.35F, 0.75F, 1.0F, 1.0F) : ImVec4(0.35F, 0.9F, 0.45F, 1.0F));
+        std::string modeTag;
+        if (result.interactivePreview) {
+            modeTag = "DRAG PREVIEW";
+        } else if (busy && sandboxWaveTotalStages_ > 1U) {
+            modeTag = "REFINING (" + std::to_string(sandboxWaveCurrentStageIndex_) + "/" + std::to_string(sandboxWaveTotalStages_) + ")";
+        } else {
+            modeTag = "CURRENT";
+        }
         if (result.contributions.size() == 1U) {
             const auto& contribution = result.contributions.front();
             ImGui::TextColored(
                 statusColor,
                 "%s %zux%zu | OPL %.4f m | %zu path interactions%s",
-                result.interactivePreview ? "DRAG PREVIEW" : "CURRENT",
+                modeTag.c_str(),
                 result.fieldAtObservation.width(),
                 result.fieldAtObservation.height(),
                 contribution.accumulatedOpticalPathMetres,
@@ -6897,7 +6946,7 @@ void Application::drawSandboxWaveBar() {
             ImGui::TextColored(
                 statusColor,
                 "%s %zux%zu | %zu coherent branch contributions",
-                result.interactivePreview ? "DRAG PREVIEW" : "CURRENT",
+                modeTag.c_str(),
                 result.fieldAtObservation.width(),
                 result.fieldAtObservation.height(),
                 result.contributions.size());
@@ -13581,10 +13630,10 @@ void Application::runSandboxInteractionSmoke() {
     click(sandboxUiEvidence_.chimeraPreset, "CHIMERA Bench action");
     drawInputFrame({-1000.0F, -1000.0F}, 0);
     if (benchProject_.projectId != "chimera-canonical-chimera"
-        || benchProject_.scene.components().size() != 24U
+        || benchProject_.scene.components().size() != 13U
         || selectedBenchComponentId_ != "chimera-plate") {
         throw std::runtime_error(
-            "CHIMERA action did not build the ordinary editable 24-component Bench");
+            "CHIMERA action did not build the ordinary editable 13-component Bench");
     }
     click(
         sandboxUiEvidence_.chimeraPrepare,
@@ -14099,7 +14148,7 @@ int Application::run(const RunOptions& options) {
                 compiled.project.scene, trace, "chimera-plate");
             const std::string bytes = serializeBenchProject(compiled.project);
             if (!compiled.feasible()
-                || compiled.generatedComponents.size() != 24U
+                || compiled.generatedComponents.size() != 13U
                 || fields.branches.size() != 6U
                 || !renderer_
                 || !renderer_->updateDynamicScene(

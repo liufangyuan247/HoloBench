@@ -164,7 +164,8 @@ struct SampledObservationContribution final {
     compute::fft::IFftBackend& fftBackend,
     const optics::ray::ILensPrescriptionResolver* lensPrescriptions,
     const optics::slm::ISlmResponseResolver* slmResponses,
-    double environmentTemperatureKelvin) {
+    double environmentTemperatureKelvin,
+    const std::atomic_bool* cancellationRequested) {
     const auto& observationBeam
         = route.observationInteraction->incidentBeam;
     auto sampled = optics::wave::sampleBeamFollowingField(
@@ -182,6 +183,7 @@ struct SampledObservationContribution final {
             .slmResponses = slmResponses,
             .environmentTemperatureKelvin
                 = environmentTemperatureKelvin,
+            .cancellationRequested = cancellationRequested,
         },
         fftBackend,
         {},
@@ -378,6 +380,26 @@ BenchFieldCrossSection measureBenchWaveCrossSection(
     return result;
 }
 
+std::vector<std::size_t> progressiveSampleStages(
+    std::size_t targetSamplesPerAxis,
+    std::size_t minimumSamples) noexcept {
+    const std::size_t target = std::max<std::size_t>(32U, targetSamplesPerAxis);
+    const std::size_t start = std::max<std::size_t>(32U, minimumSamples);
+    if (target <= start) {
+        return {target};
+    }
+    std::vector<std::size_t> stages;
+    std::size_t current = start;
+    while (current < target) {
+        stages.push_back(current);
+        current *= 2U;
+    }
+    if (stages.empty() || stages.back() != target) {
+        stages.push_back(target);
+    }
+    return stages;
+}
+
 std::vector<BenchWaveObservationResult> observeBenchWaveChannels(
     const scene::BenchScene& bench,
     const scene::BenchTraceGraph& traceGraph,
@@ -387,7 +409,12 @@ std::vector<BenchWaveObservationResult> observeBenchWaveChannels(
     compute::fft::IFftBackend& fftBackend,
     const optics::ray::ILensPrescriptionResolver* lensPrescriptions,
     const optics::slm::ISlmResponseResolver* slmResponses,
-    double environmentTemperatureKelvin) {
+    double environmentTemperatureKelvin,
+    const std::atomic_bool* cancellationRequested) {
+    if (cancellationRequested
+        && cancellationRequested->load(std::memory_order_relaxed)) {
+        return {};
+    }
     if (traceGraph.sourceRevision != bench.revision()) {
         throw std::invalid_argument(
             "live wave screen requires a current Bench trace graph");
@@ -410,41 +437,54 @@ std::vector<BenchWaveObservationResult> observeBenchWaveChannels(
         bench, traceGraph, observationComponentId);
     std::vector<BenchWaveObservationResult> results;
     results.reserve(routes.size());
-    for (const auto& route : routes) {
-        const auto& beam = route.observationInteraction->incidentBeam;
-        auto sampled = sampleObservationRoute(
-            bench,
-            route,
-            observerSampling,
-            width,
-            height,
-            fftBackend,
-            lensPrescriptions,
-            slmResponses,
-            environmentTemperatureKelvin);
-        const bool startsNewChannel = results.empty()
-            || results.back().fieldAtObservation.vacuumWavelengthMetres()
-                != beam.wavelengthMetres
-            || results.back().coherenceId != beam.coherenceId;
-        if (startsNewChannel) {
-            std::vector<BenchWaveContribution> contributions;
-            contributions.push_back(std::move(sampled.diagnostics));
-            results.push_back({
-                .observationComponentId = observationComponentId,
-                .sourceRevision = bench.revision(),
-                .interactivePreview = interactivePreview,
-                .coherenceId = beam.coherenceId,
-                .peakIntensityWattsPerSquareMetre = 0.0,
-                .integratedPowerWatts = 0.0,
-                .fieldAtObservation = std::move(sampled.field),
-                .contributions = std::move(contributions),
-            });
-        } else {
-            addCoherentField(
-                results.back().fieldAtObservation, sampled.field);
-            results.back().contributions.push_back(
-                std::move(sampled.diagnostics));
+    try {
+        for (const auto& route : routes) {
+            if (cancellationRequested
+                && cancellationRequested->load(std::memory_order_relaxed)) {
+                return {};
+            }
+            const auto& beam = route.observationInteraction->incidentBeam;
+            auto sampled = sampleObservationRoute(
+                bench,
+                route,
+                observerSampling,
+                width,
+                height,
+                fftBackend,
+                lensPrescriptions,
+                slmResponses,
+                environmentTemperatureKelvin,
+                cancellationRequested);
+            if (cancellationRequested
+                && cancellationRequested->load(std::memory_order_relaxed)) {
+                return {};
+            }
+            const bool startsNewChannel = results.empty()
+                || results.back().fieldAtObservation.vacuumWavelengthMetres()
+                    != beam.wavelengthMetres
+                || results.back().coherenceId != beam.coherenceId;
+            if (startsNewChannel) {
+                std::vector<BenchWaveContribution> contributions;
+                contributions.push_back(std::move(sampled.diagnostics));
+                results.push_back({
+                    .observationComponentId = observationComponentId,
+                    .sourceRevision = bench.revision(),
+                    .interactivePreview = interactivePreview,
+                    .coherenceId = beam.coherenceId,
+                    .peakIntensityWattsPerSquareMetre = 0.0,
+                    .integratedPowerWatts = 0.0,
+                    .fieldAtObservation = std::move(sampled.field),
+                    .contributions = std::move(contributions),
+                });
+            } else {
+                addCoherentField(
+                    results.back().fieldAtObservation, sampled.field);
+                results.back().contributions.push_back(
+                    std::move(sampled.diagnostics));
+            }
         }
+    } catch (const optics::wave::OperationCancelledException&) {
+        return {};
     }
     for (auto& result : results) {
         finishObservationMetrics(result);
@@ -461,7 +501,8 @@ BenchWaveObservationResult observeBenchWavePattern(
     compute::fft::IFftBackend& fftBackend,
     const optics::ray::ILensPrescriptionResolver* lensPrescriptions,
     const optics::slm::ISlmResponseResolver* slmResponses,
-    double environmentTemperatureKelvin) {
+    double environmentTemperatureKelvin,
+    const std::atomic_bool* cancellationRequested) {
     auto channels = observeBenchWaveChannels(
         bench,
         traceGraph,
@@ -471,7 +512,11 @@ BenchWaveObservationResult observeBenchWavePattern(
         fftBackend,
         lensPrescriptions,
         slmResponses,
-        environmentTemperatureKelvin);
+        environmentTemperatureKelvin,
+        cancellationRequested);
+    if (channels.empty()) {
+        throw optics::wave::OperationCancelledException();
+    }
     if (channels.size() != 1U) {
         throw std::invalid_argument(
             "single-channel observation requires exactly one wavelength and coherence identity");
