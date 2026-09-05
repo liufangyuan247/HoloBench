@@ -184,6 +184,18 @@ VolumePlateRecordingResult recordVolumePlate(
             = material.isotropicLinearShrinkageFraction,
     };
     const auto nominalReplay = evaluateVolumeHologram(parameters);
+    double objectDepth = 0.0;
+    const auto* source = bench.find(object.beam.provenance.componentPath.front());
+    if (source && source->kind == scene::BenchComponentKind::ObjectWavefrontSource
+        && std::all_of(object.pathInteractions.begin(), object.pathInteractions.end(),
+            [&](const auto& step) {
+                const auto* component = bench.find(step.componentId);
+                return component && (component->kind == scene::BenchComponentKind::HolographicPlate
+                    || component->kind == scene::BenchComponentKind::FieldProbe);
+            })) {
+        objectDepth = std::max(0.0, math::dot(plate->transform.translationMetres
+            - source->transform.translationMetres, object.beam.direction));
+    }
     return {
         .plateComponentId = fields.plateComponentId,
         .sourceRevision = fields.sourceRevision,
@@ -200,6 +212,7 @@ VolumePlateRecordingResult recordVolumePlate(
         .nominalReplay = nominalReplay,
         .objectIncident = std::nullopt,
         .referenceIncident = std::nullopt,
+        .nominalObjectDepthMetres = objectDepth,
     };
 }
 

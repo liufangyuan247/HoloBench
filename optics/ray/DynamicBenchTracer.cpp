@@ -149,9 +149,9 @@ bool isTraceablePlaneKind(scene::BenchComponentKind kind) noexcept {
     case scene::BenchComponentKind::ScreenDetector:
     case scene::BenchComponentKind::FieldProbe:
     case scene::BenchComponentKind::HolographicPlate:
+    case scene::BenchComponentKind::ObjectWavefrontSource:
         return true;
     case scene::BenchComponentKind::LaserSource:
-    case scene::BenchComponentKind::ObjectWavefrontSource:
         return false;
     }
     return false;
@@ -216,8 +216,13 @@ bool isWithinFootprint(const scene::BenchComponent& component, math::Vec3d local
         return std::abs(localPoint.x) <= value.widthMetres * 0.5
             && std::abs(localPoint.y) <= value.heightMetres * 0.5;
     }
+    case scene::BenchComponentKind::ObjectWavefrontSource: {
+        const auto& value = std::get<scene::ObjectWavefrontSourceParameters>(component.parameters);
+        return value.requiresIllumination
+            && std::abs(localPoint.x) <= value.widthMetres * 0.5
+            && std::abs(localPoint.y) <= value.heightMetres * 0.5;
+    }
     case scene::BenchComponentKind::LaserSource:
-    case scene::BenchComponentKind::ObjectWavefrontSource:
         return false;
     }
     return false;
@@ -645,6 +650,8 @@ scene::BenchTraceGraph traceDynamicBenchImpl(
         if (source->kind == scene::BenchComponentKind::LaserSource) {
             channels = std::get<scene::LaserSourceParameters>(source->parameters).channels;
         } else {
+            if (std::get<scene::ObjectWavefrontSourceParameters>(source->parameters).requiresIllumination)
+                continue;
             channels.push_back(
                 std::get<scene::ObjectWavefrontSourceParameters>(source->parameters).channel);
         }
@@ -933,7 +940,17 @@ scene::BenchTraceGraph traceDynamicBenchImpl(
                 scene::TraceTerminationReason::Absorbed,
                 "screen detector intercepted the branch");
             break;
-        case scene::BenchComponentKind::HolographicPlate:
+        case scene::BenchComponentKind::HolographicPlate: {
+            const double transmission = std::get<scene::HolographicPlateParameters>(
+                hit->component->parameters).recordingPowerTransmission;
+            if (transmission > 0.0) {
+                auto interaction = singleOutputInteraction(current.beam, *hit,
+                    current.beam.direction, transmission, scene::BranchInteractionKind::Transmitted,
+                    "recording plate samples incident light and transmits it to the object; thin scalar substrate");
+                pending.push_back({.beam = interaction.outgoing.front().beam, .hopCount = current.hopCount + 1});
+                graph.interactions.push_back(std::move(interaction));
+                break;
+            }
             graph.interactions.push_back({
                 .componentId = hit->component->id,
                 .hitPointMetres = hit->pointMetres,
@@ -947,6 +964,7 @@ scene::BenchTraceGraph traceDynamicBenchImpl(
                 scene::TraceTerminationReason::Absorbed,
                 "holographic plate intercepted the branch for recording input");
             break;
+        }
         case scene::BenchComponentKind::RealLensAssembly: {
             auto resolved = interactRealLens(
                 current.beam, *hit, lensPrescriptions);
@@ -984,8 +1002,36 @@ scene::BenchTraceGraph traceDynamicBenchImpl(
                 std::move(resolved.interaction));
             break;
         }
+        case scene::BenchComponentKind::ObjectWavefrontSource: {
+            const auto& p = std::get<scene::ObjectWavefrontSourceParameters>(hit->component->parameters);
+            const auto incident = incidentAtHit(current.beam, *hit);
+            scene::OpticalInteraction interaction{
+                .componentId = hit->component->id, .hitPointMetres = hit->pointMetres,
+                .distanceMetres = hit->distanceMetres, .incidentBeam = incident,
+                .outgoing = {}, .diagnostics = {"single-scattering diffuse object: centre-ray illumination gate, nominal reflected power; no spatial illumination/shadow map"}};
+            const auto* emittingSource = bench.find(incident.provenance.componentPath.front());
+            const bool alreadyScattered = emittingSource
+                && emittingSource->kind == scene::BenchComponentKind::ObjectWavefrontSource;
+            if (!alreadyScattered && math::dot(incident.direction, hit->component->transform.localZAxisInWorld) < 0.0
+                && p.diffuseReflectance > 0.0 && createdBranchCount < budget.maximumBranches) {
+                auto scattered = incident;
+                scattered.originMetres = hit->component->transform.translationMetres;
+                scattered.direction = hit->component->transform.localZAxisInWorld;
+                scattered.localFrame = hit->component->transform;
+                scattered.powerWatts *= p.diffuseReflectance;
+                scattered.provenance = {.branchId = nextBranchId++,
+                    .parentBranchId = incident.provenance.branchId,
+                    .componentPath = {hit->component->id}};
+                interaction.outgoing.push_back({.interaction = scene::BranchInteractionKind::Reflected, .beam = scattered});
+                pending.push_back({.beam = std::move(scattered), .hopCount = current.hopCount + 1});
+                ++createdBranchCount;
+            }
+            graph.interactions.push_back(std::move(interaction));
+            appendTermination(graph, current.beam, scene::TraceTerminationReason::Absorbed,
+                "incident ray absorbed at diffuse object; reflected child carries illumination wavelength and coherence");
+            break;
+        }
         case scene::BenchComponentKind::LaserSource:
-        case scene::BenchComponentKind::ObjectWavefrontSource:
             throw std::logic_error("unsupported component escaped traceable-plane filtering");
         }
     }

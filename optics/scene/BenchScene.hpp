@@ -76,6 +76,9 @@ struct ObjectWavefrontSourceParameters final {
     double primitiveYawRadians = 0.45;
     double primitivePitchRadians = -0.28;
     std::uint64_t roughnessSeed = 1U;
+    // Opt-in single-scattering source, activated only by a routed incident ray.
+    bool requiresIllumination = false;
+    double diffuseReflectance = 0.5;
 
     bool operator==(const ObjectWavefrontSourceParameters&) const = default;
 };
@@ -220,6 +223,9 @@ struct HolographicPlateParameters final {
     double heightMetres = 0.1;
     double thicknessMetres = 10e-6;
     HolographicPlateRole role = HolographicPlateRole::H1;
+    // Zero preserves legacy collection/termination. A transmitting recording
+    // plate collects the incident field and passes this fraction onward.
+    double recordingPowerTransmission = 0.0;
 
     bool operator==(const HolographicPlateParameters&) const = default;
 };

@@ -1,6 +1,140 @@
 # Project state
 
-Last updated: 2026-09-04
+Last updated: 2026-09-05
+
+## Current user follow-up: component deletion and mount clearance
+
+- A selected Bench component can be removed with the Inspector action or the
+  `Delete`/`Backspace` key while no text field is active. Both routes use one
+  transactional project operation. If a saved hologram recording recipe names
+  the removed plate or contains the component in an object/reference path, that
+  dependent recipe is removed in the same edit; unrelated recipes remain.
+  Selection and active manipulation state clear only after the update succeeds,
+  and ordinary Bench undo restores the complete component/recipe state.
+- Mounted instrument geometry now derives a protected body/frame envelope,
+  support height, stage placement and control positions from component optical
+  parameters plus the persisted mechanical assembly. The support top includes
+  frame thickness projected through mount pitch and keeps a 1.5 mm nominal
+  clearance. XYZ controls remain at or below the stage top; yaw/pitch controls
+  sit outside the protected frame instead of crossing the lens or clear opening.
+  The shared layout check and CHIMERA compiler report impossible low-post
+  configurations explicitly without inferring mechanical truth from triangles.
+- Deterministic tests cover dependency-aware deletion, missing/unrelated
+  components, all mounted component kinds over the full persisted stage-Y
+  travel, pitched real-lens clearance, impossible low posts, PCG following and
+  the default editable CHIMERA construction. The development suite passes
+  **658/658**, including the 1 mm RGB hogel freeze/showroom test. The optimized
+  `--gl-smoke` exits 0 on AMD Radeon Pro 5300M, OpenGL 4.6 Core, driver
+  `23.9.3.230915`; its real ImGui sequence selects a placed plate, presses
+  Delete, verifies removal/deselection, and restores the component through
+  Bench undo before continuing the complete M7/M8 interaction path.
+
+This increment validates support/frame separation at the current mechanical
+settings. It does not yet certify every housing-to-housing collision, routed
+beam clearance, cable envelope, or a continuous swept envelope over all
+simultaneous stage and mount motions.
+
+## Current user follow-up: Denisyuk and selected hogel replay
+
+The requested operational paths are implemented under
+[ADR 0045](adr/0045-single-beam-denisyuk-and-hogel-replay.md):
+
+- **Single-beam Denisyuk**: an opt-in transmitting recording plate and passive
+  diffuse object route one laser through the plate to the object and back.
+  Blocking the incident chief ray removes the return field. Wavelength,
+  coherence, parent branch, power and round-trip optical path are explicit.
+  This is a centre-ray illumination gate with nominal aggregate reflection,
+  not spatially resolved surface illumination or multiple scattering.
+- **Detached plate replay**: recorded object depth supplies an initial focus
+  hint, while reconstruction uses the immutable complex field. Multi-channel
+  files retain up to three independent recordings; the showroom selects a
+  wavelength and displays monochromatic intensity. Legacy files remain readable.
+- **Selected CHIMERA hogel to showroom**: reconstruction-grade exposure
+  preserves the physical window, increases sampling for both incident carriers
+  and their product (25% headroom, at most 2048 per axis), and freezes each
+  channel inside its staged, command-bound scene. Product exposure uses a
+  background CPU job with owned inputs; stale results are discarded.
+  Preview/checkpoint exposures require re-exposure.
+- **Hogel size/grid UI and persistence**: edits change physical plate dimensions,
+  exposure pitch and recording windows without resetting instrument alignment.
+  The complete Bench embeds its CHIMERA recipe and includes it in edit history.
+
+Limits remain explicit: a single hogel is a local angular recording, not the
+complete multi-hogel image; the local sampled SLM/Fourier-lens model has not
+been validated as a full high-NA CHIMERA printer. Monochromatic per-channel
+showroom replay does not provide continuous white light or RGB compositing.
+Pitch/window size is not a calibrated focused spot diameter. No new GPU or
+interactive-latency performance claim is made.
+
+Validation: Debug and optimized application builds pass. The core regression
+suite passed 650/650 and the separate default 1 mm RGB detached-hogel test passed;
+the final optimized physics/showroom selection passed 10/10. Incoming single-beam
+phase is checked against an independent prescribed source plus the analytic
+180 mm illumination optical path. Cancellation/geometry tests pass 2/2.
+The development regression suite passed 652/652 (including GPU and fonts),
+excluding that same expensive default-hogel case tested in the optimized CPU
+build. The final `--showroom-smoke` and full `--gl-smoke` both exit 0 on AMD
+Radeon Pro 5300M, OpenGL 4.6 Core, driver 23.9.3.230915. The showroom check
+executes a single-beam Denisyuk recording, real mouse plate rotation and
+wavelength switching, and a 0.25 mm CHIMERA RGB hogel exposure through the
+Application showroom entry. Readback images were inspected: they show bounded
+diffraction/speckle patterns, not evidence of recognizable full-object fidelity.
+No NVIDIA validation or new performance claim is made.
+See [the updated usage guide](SHOWROOM_AND_LENS_DESIGN_GUIDE.md).
+
+## Earlier user follow-up (first implementation increment)
+
+
+The 2026-09-05 user review prioritizes practical CHIMERA reproduction and an
+interactive recorded-hologram showroom: black background, white or monochromatic
+replay illumination, mouse-driven plate rotation, observer-dependent reconstructed
+imagery, and progressive rendering when needed. The showroom must consume an
+immutable recorded artifact; changing plate pose or observer conditions must not
+invalidate the recording or substitute source-view textures for physical replay.
+See [the CHIMERA review](CHIMERA_REPRODUCTION_REVIEW.md) and
+[the showroom design and acceptance specification](HOLOGRAM_SHOWROOM_DESIGN.md).
+The first increment is implemented under [ADR 0044](adr/0044-detached-reflection-observer-and-profile-design.md):
+
+- **Detached monochromatic showroom**: a current sampled reflection recording
+  freezes into a hashed `.holo.json` artifact, independent of its original Bench
+  and source images. Black-background mouse plate rotation, eye translation,
+  observation distance, finite pupil, focus, lamp on/off, replay wavelength and
+  locked display exposure drive the scalar observer. Rotation does not rewrite
+  recording revisions. Background work is cancelled on edits, preserving the
+  recording grid while refining the bounded pupil window. Rendering is grayscale
+  intensity; The initial RGB entry selected green; the current follow-up above retains all recorded channels.
+- **CHIMERA assembly/UI corrections**: compiler v2 raises all optical frames
+  together to 100 mm, attaches nominal bases/posts/stages, checks oriented base
+  overlap and stages the plate through its mechanical DOFs. PCG supports end
+  below the optical aperture; the transmissive SLM has an open frame. The Bench
+  offers compact tool toggles, a layout check and a direct showroom entry.
+  Its single generated Fourier lens is explicitly labelled as such, and the
+  paraxial warning now uses 0.1 rather than 0.5 NA. This does not yet supply a
+  two-lens relay or certify complete casing/beam clearance and motion envelopes.
+- **2D lens/group design**: meridional curves use the actual rotational-surface
+  sag model. Edge-sag drag changes curvature; spacing edits translate downstream
+  surfaces; diameter editing and append/remove N-BK7 elements build lens groups.
+  Coaxial edits reject sampled surface intersections transactionally and round
+  trip through the existing JSON prescription/binding workflow. Conics, asphere
+  terms and glass materials remain in the shared prescription editor. Arbitrary
+  spline/freeform surfaces and manufacturing tolerance analysis are not claimed.
+- **Validation**: Debug and optimized application builds pass with warnings as
+  errors. Deterministic tests cover focus/conjugates, finite-depth parallax,
+  pupil/sensor power, Bragg detuning, freeze/file lifecycle, cancellation, circle
+  sag, traced/exported lens groups, table height and oriented base contact.
+  The dedicated `--showroom-smoke` passes real ImGui rotation/return events and
+  GL texture submission on AMD Radeon Pro 5300M, OpenGL 4.6, driver
+  `23.9.3.230915`; readback images are visually inspected. The final development
+  suite passes **649/649**, including GPU and font cases. The optimized
+  application also passes the existing full `--gl-smoke` interaction sequence
+  with exit code 0. No interactive latency or new solver performance claim is
+  made; NVIDIA remains an unmeasured external validation target.
+
+The wider spectral/white-light, independent full CHIMERA multi-hogel replay,
+polarization and calibrated-material goals remain open. Existing Bench JSON
+loads without reinterpreting or moving saved instruments. These increments do
+not change the historical M7–M9 acceptance scope. See
+[the usage guide](SHOWROOM_AND_LENS_DESIGN_GUIDE.md).
 
 ## Current milestone
 

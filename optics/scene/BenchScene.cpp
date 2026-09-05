@@ -63,6 +63,9 @@ void validateParameters(const LaserSourceParameters& value) {
 }
 
 void validateParameters(const ObjectWavefrontSourceParameters& value) {
+    requireFiniteNonNegative(value.diffuseReflectance, "object diffuse reflectance");
+    if (value.diffuseReflectance > 1.0)
+        throw std::invalid_argument("Object diffuse reflectance exceeds one");
     validateSpectralChannel(value.channel);
     requireFinitePositive(value.widthMetres, "object source width_m");
     requireFinitePositive(value.heightMetres, "object source height_m");
@@ -209,6 +212,9 @@ void validateParameters(const FieldProbeParameters& value) {
 }
 
 void validateParameters(const HolographicPlateParameters& value) {
+    requireFiniteNonNegative(value.recordingPowerTransmission, "recording plate transmission");
+    if (value.recordingPowerTransmission > 1.0)
+        throw std::invalid_argument("Recording plate transmission exceeds one");
     requireFinitePositive(value.widthMetres, "plate width_m");
     requireFinitePositive(value.heightMetres, "plate height_m");
     requireFinitePositive(value.thicknessMetres, "plate thickness_m");

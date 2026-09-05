@@ -33,6 +33,7 @@ struct VolumePlateRecordingResult final {
     VolumeHologramResult nominalReplay;
     std::optional<SampledPlateIncidentField> objectIncident;
     std::optional<SampledPlateIncidentField> referenceIncident;
+    double nominalObjectDepthMetres = 0.0;
 
     [[nodiscard]] bool isStaleFor(const scene::BenchScene& bench) const noexcept;
 };

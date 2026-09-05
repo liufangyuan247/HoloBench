@@ -455,6 +455,7 @@ TEST_CASE("moving the placed camera lens clips the same directional evidence") {
     auto bench = chimera::compileChimeraRecipe(recipe).project;
     auto lens = *bench.scene.find("chimera-camera-lens");
     lens.transform.translationMetres.x += 0.02;
+    scene::rebaseMechanicalAssembly(lens, lens.transform);
     auto edited = bench.scene;
     edited.replace("chimera-camera-lens", std::move(lens));
     bench.scene = std::move(edited);
@@ -493,7 +494,7 @@ TEST_CASE("placed CHIMERA camera rejects an unmodelled intervening Bench optic")
     auto splitter = scene::makeDefaultBenchComponent(
         scene::BenchComponentKind::BeamSplitterCombiner,
         "camera-intervening-splitter");
-    splitter.transform.translationMetres = {0.0, 0.0, -0.025};
+    splitter.transform.translationMetres = {0.0, 0.1, -0.025};
     splitter.instrument.calibrationMode
         = scene::InstrumentCalibrationMode::Calibrated;
     splitter.instrument.calibrationAssets.push_back({

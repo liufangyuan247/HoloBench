@@ -8,10 +8,13 @@
   pyramid (tetrahedron). Their only material is opaque scalar Lambertian
   diffuse; there is no texture, specular lobe, transparency, refraction,
   polarization, subsurface transport, or multiple scattering.
-- A sample is currently an already-illuminated coherent object-wave source.
-  Its power is total scattered power. A separate placed laser does not yet
-  illuminate, shadow, or exchange power with the sample, and no other Bench
-  object casts a shadow onto it.
+- By default a sample is an already-illuminated coherent object-wave source.
+  The opt-in single-beam Denisyuk mode now gates emission on actual centre-ray
+  illumination and inherits its channel, path and nominal reflected power;
+  spatial surface illumination/shadow maps remain unsupported. See ADR 0045.
+  For default independent samples, configured power is total scattered power.
+  A separate placed laser does not illuminate or exchange power with such a
+  sample, and no other Bench object casts a spatial shadow onto it.
 - Only the nearest analytic surface along the emitted local +Z view is sampled.
   A deterministic 25 um rough-phase correlation cell produces coherent speckle,
   and at most six axial layers approximate visible depth before normal Bench
@@ -89,6 +92,12 @@
 - **Representable-domain exceptions and strong safety**: Multi-factor phase computations (carrier phase, quadratic spectral phase, and adjacent phase steps) use mantissa-exponent decomposition. Exact zero factors ($z = 0$ or $f_x = 0$) evaluate to exact 0.0. When all factors are non-zero but the exact product underflows below the double-precision representable range (below subnormal `denorm_min`), `std::underflow_error` is thrown to prevent silent numerical phase zeroing; arithmetic overflow throws `std::overflow_error`. The input field is guaranteed bitwise unchanged upon error.
 
 ## Platform & runtime
+
+- The Bench layout check covers oriented mounting-base overlap and the derived
+  support/control clearance from each protected optical frame at the current
+  persisted mechanical settings. It does not yet perform general solid-body
+  collision detection, routed-beam/housing obstruction, cable clearance, or a
+  continuous swept-volume proof over combined stage and tip/tilt travel.
 
 - Requires an OpenGL 4.6 Core context; macOS is unsupported.
 - Local verification has been executed on Windows Clang/Ninja and MSVC/Ninja with warnings as errors.

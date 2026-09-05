@@ -208,4 +208,43 @@ void upsertRecordingRecipe(
     validateBenchProject(project);
 }
 
+BenchComponentRemovalResult
+removeBenchComponentAndDependentRecordingRecipes(
+    BenchProject& project,
+    std::string_view componentId) {
+    BenchProject candidate = project;
+    if (!candidate.scene.remove(componentId)) return {};
+
+    const auto selectorUsesComponent = [componentId](
+                                           const RecordingBranchSelector& selector) {
+        return std::find(
+                   selector.componentPath.begin(),
+                   selector.componentPath.end(),
+                   componentId)
+            != selector.componentPath.end();
+    };
+    const auto recipeUsesComponent = [&](
+                                         const HologramRecordingRecipe& recipe) {
+        if (recipe.plateComponentId == componentId) return true;
+        return std::any_of(
+            recipe.channels.begin(),
+            recipe.channels.end(),
+            [&](const RecordingChannelRecipe& channel) {
+                return selectorUsesComponent(channel.objectBranch)
+                    || selectorUsesComponent(channel.referenceBranch);
+            });
+    };
+
+    const std::size_t previousRecipeCount
+        = candidate.recordingRecipes.size();
+    std::erase_if(candidate.recordingRecipes, recipeUsesComponent);
+    validateBenchProject(candidate);
+    project = std::move(candidate);
+    return {
+        .componentRemoved = true,
+        .dependentRecordingRecipesRemoved = previousRecipeCount
+            - project.recordingRecipes.size(),
+    };
+}
+
 } // namespace holobench::app

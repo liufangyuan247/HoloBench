@@ -1,4 +1,5 @@
 #pragma once
+#include <future>
 
 #include <algorithm>
 #include <array>
@@ -70,6 +71,7 @@ struct WaveDetectorResult;
 namespace holobench::app {
 
 class UiFontAsset;
+class HologramShowroom;
 
 namespace gizmo {
 
@@ -446,6 +448,7 @@ struct RunOptions {
     int benchmarkFrames = 0;
     int initialRayCount = 64;
     bool glSmoke = false;
+    bool showroomSmoke = false;
     bool chimeraBenchmark = false;
 };
 
@@ -506,10 +509,14 @@ private:
     bool initialize(const RunOptions& options);
     void shutdown() noexcept;
     void drawWorkspace();
+    void openRecordedPlateShowroom();
+    void pollChimeraExposure();
+    void runShowroomSmoke();
     void drawReflectionRefractionPanel();
     void drawWaveDetectorPanel();
     void drawSamplingDebuggerPanel();
     void drawRealLensPanel();
+    std::string lensProfileDiagnostic_;
     void drawSlmInterferencePanel();
     void drawHolographyPanel();
     void drawLearnPanel();
@@ -570,6 +577,7 @@ private:
         optics::scene::BenchComponentKind kind,
         const math::Vec3d& positionMetres,
         std::string statusMessage);
+    bool deleteSelectedBenchComponent();
     void drawSandboxComponentShelf();
     void drawSandboxSourceBar();
     void drawSandboxAlignmentBar();
@@ -714,6 +722,12 @@ private:
     chimera::ChimeraRecipe chimeraRecipe_ = chimera::makeCanonicalChimeraRecipe();
     std::unique_ptr<chimera::ChimeraBenchWorkflow> chimeraWorkflow_;
     int chimeraHogelX_ = 3;
+    bool chimeraRetainShowroom_ = true;
+    std::future<chimera::ExecutedHogelExposure> chimeraExposureFuture_;
+    std::shared_ptr<std::atomic_bool> chimeraExposureCancelled_;
+    std::uint64_t chimeraExposureRevision_ = 0;
+    double chimeraPitchMillimetres_ = 1.0;
+    int chimeraGridDraft_[2] = {8, 6};
     int chimeraHogelY_ = 2;
     int chimeraViewIndex_ = 7;
     std::string chimeraCameraLensComponentId_ = "chimera-camera-lens";
@@ -736,6 +750,11 @@ private:
 
     render::OrbitCamera camera_;
     std::unique_ptr<render::OpticalBenchRenderer> renderer_;
+    std::unique_ptr<HologramShowroom> showroom_;
+    bool showBenchComponents_ = false;
+    bool showChimeraControls_ = false;
+    bool showReferenceTools_ = false;
+    bool showLensDesigner_ = false;
     std::unique_ptr<UiFontAsset> uiFont_;
     std::unique_ptr<compute::fft::CpuFftBackend> detectorFftBackend_;
     std::unique_ptr<render::gl::Texture2D> detectorTexture_;

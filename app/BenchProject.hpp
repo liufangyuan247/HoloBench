@@ -68,6 +68,9 @@ struct BenchProject final {
     project::ProjectProvenance provenance {};
     optics::scene::BenchScene scene {};
     std::vector<HologramRecordingRecipe> recordingRecipes;
+    // Optional automation recipe, embedded so edited hogel geometry survives a
+    // complete Bench save/reload. Older documents omit it.
+    std::string chimeraRecipeJson = {};
 };
 
 enum class BenchProjectRecoverySource {

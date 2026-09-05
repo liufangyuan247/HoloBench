@@ -6,12 +6,69 @@
 #include "app/ChimeraBenchWorkflow.hpp"
 #include "app/DetectorResponseAssets.hpp"
 #include "compute/fft/CpuFftBackend.hpp"
+#include "core/field/FieldObservables.hpp"
 
 namespace chimera = holobench::app::chimera;
 namespace app = holobench::app;
 namespace scene = holobench::optics::scene;
 namespace sensor = holobench::optics::sensor;
 namespace ray = holobench::optics::ray;
+
+TEST_CASE("CHIMERA selected hogel freezes actual RGB fields for independent showroom replay") {
+  auto recipe = chimera::makeCanonicalChimeraRecipe();
+  const auto bench = chimera::compileChimeraRecipe(recipe).project;
+  auto workflow = chimera::prepareChimeraBenchWorkflow(recipe, bench);
+  holobench::compute::fft::CpuFftBackend fft;
+  chimera::HogelExposureExecutionOptions options;
+  options.retainShowroomRecording = true;
+  chimera::executeChimeraHogel(workflow, bench, fft, 3, 2, options);
+  const auto assets = chimera::selectedHogelRecordings(workflow, 3, 2);
+  REQUIRE(assets.size() == 3);
+  CHECK_THROWS(static_cast<void>(chimera::selectedHogelRecordings(workflow, 0, 0)));
+  for (const auto& asset : assets) {
+    CAPTURE(asset.material.recordingVacuumWavelengthMetres);
+    CHECK(static_cast<double>(asset.coupling.width()) * asset.coupling.pitchXMetres() == doctest::Approx(0.001));
+    const auto image = holobench::optics::holography::observeRecordedHologram(asset,
+        holobench::optics::holography::defaultHologramView(asset), fft);
+    CHECK(image.pupilPowerWatts > 0);
+    CHECK(holobench::field::computeIntegratedIntensity(image.sensorField) > 0);
+  }
+  workflow.dataset.sourceViews.clear();
+  workflow.exposures.clear();
+  CHECK(holobench::optics::holography::observeRecordedHologram(assets[1],
+      holobench::optics::holography::defaultHologramView(assets[1]), fft).pupilPowerWatts > 0);
+}
+
+TEST_CASE("CHIMERA hogel geometry edits preserve alignment and round trip") {
+  auto recipe = chimera::makeCanonicalChimeraRecipe();
+  auto bench = chimera::compileChimeraRecipe(recipe).project;
+  const auto lens = *bench.scene.find("chimera-relay-lens");
+  chimera::resizeChimeraHogels(recipe, bench, {.pitchMetres = 0.0005, .countX = 4, .countY = 3});
+  CHECK(*bench.scene.find(lens.id) == lens);
+  const auto p = std::get<scene::HolographicPlateParameters>(bench.scene.find("chimera-plate")->parameters);
+  CHECK(p.widthMetres == doctest::Approx(0.002));
+  CHECK(p.heightMetres == doctest::Approx(0.0015));
+  CHECK(chimera::parseChimeraRecipe(chimera::serializeChimeraRecipe(recipe)) == recipe);
+  const auto restored = app::parseBenchProject(app::serializeBenchProject(bench));
+  CHECK(chimera::parseChimeraRecipe(restored.chimeraRecipeJson).hogels == recipe.hogels);
+  CHECK(restored.recordingRecipes.front().sampling.extentWidthMetres == doctest::Approx(0.0005));
+  const auto previous = app::serializeBenchProject(bench);
+  CHECK_THROWS(chimera::resizeChimeraHogels(recipe, bench, {.pitchMetres = -1, .countX = 1, .countY = 1}));
+  CHECK(app::serializeBenchProject(bench) == previous);
+}
+
+TEST_CASE("CHIMERA cancelled exposure never publishes a partial hogel") {
+  const auto recipe = chimera::makeCanonicalChimeraRecipe();
+  const auto bench = chimera::compileChimeraRecipe(recipe).project;
+  auto workflow = chimera::prepareChimeraBenchWorkflow(recipe, bench);
+  holobench::compute::fft::CpuFftBackend fft;
+  std::atomic_bool cancelled{true};
+  chimera::HogelExposureExecutionOptions options;
+  options.retainShowroomRecording = true;
+  options.cancellationRequested = &cancelled;
+  CHECK_THROWS_WITH(chimera::executeChimeraHogel(workflow, bench, fft, 3, 2, options), "Hogel exposure cancelled");
+  CHECK(workflow.exposures.empty());
+}
 
 namespace {
 
@@ -122,6 +179,7 @@ TEST_CASE("CHIMERA Bench workflow invalidates every derived action after an "
   auto editedScene = bench.scene;
   auto plate = *editedScene.find("chimera-plate");
   plate.transform.translationMetres.x += 1e-3;
+  holobench::optics::scene::rebaseMechanicalAssembly(plate, plate.transform);
   editedScene.replace("chimera-plate", std::move(plate));
   bench.scene = std::move(editedScene);
 

@@ -1,4 +1,7 @@
 #include "app/Application.hpp"
+#include "app/HologramShowroom.hpp"
+#include "app/LensProfileEditor.hpp"
+#include "optics/scene/InstrumentDimensions.hpp"
 
 #include <glad/gl.h>
 #include <SDL3/SDL.h>
@@ -865,6 +868,37 @@ bool Application::placeSandboxComponent(
     return true;
 }
 
+bool Application::deleteSelectedBenchComponent() {
+    if (selectedBenchComponentId_.empty()) return false;
+
+    const std::string componentId = selectedBenchComponentId_;
+    BenchProject candidate = benchProject_;
+    const auto removal = removeBenchComponentAndDependentRecordingRecipes(
+        candidate, componentId);
+    if (!removal.componentRemoved) {
+        errorMessage_ = "Selected component no longer exists";
+        statusMessage_.clear();
+        return false;
+    }
+
+    std::string message = "Deleted " + componentId;
+    if (removal.dependentRecordingRecipesRemoved > 0U) {
+        message += " and "
+            + std::to_string(removal.dependentRecordingRecipesRemoved)
+            + " dependent recording recipe";
+        if (removal.dependentRecordingRecipesRemoved != 1U) message += "s";
+    }
+    if (!applyDynamicBenchProject(std::move(candidate), std::move(message))) {
+        return false;
+    }
+    sandboxGizmoDragging_ = false;
+    sandboxGizmoChanged_ = false;
+    sandboxMechanicalDragging_ = false;
+    sandboxMechanicalChanged_ = false;
+    sandboxMechanicalControl_ = SandboxMechanicalControl::None;
+    return true;
+}
+
 bool Application::applyDynamicBenchProject(
     BenchProject candidateProject,
     std::string newStatusMessage,
@@ -913,6 +947,12 @@ bool Application::applyDynamicBenchProject(
             throw std::runtime_error("renderer rejected dynamic bench geometry");
         }
         benchProject_ = std::move(candidateProject);
+        if (!benchProject_.chimeraRecipeJson.empty()) {
+            chimeraRecipe_ = chimera::parseChimeraRecipe(benchProject_.chimeraRecipeJson);
+            chimeraPitchMillimetres_ = chimeraRecipe_.hogels.pitchMetres * 1e3;
+            chimeraGridDraft_[0] = static_cast<int>(chimeraRecipe_.hogels.countX);
+            chimeraGridDraft_[1] = static_cast<int>(chimeraRecipe_.hogels.countY);
+        }
         opticalBenchScene_ = std::move(calibratedScene.scene);
         appliedOpticalPoses_ = std::move(calibratedScene.appliedPoses);
         benchTraceGraph_ = traceGraph;
@@ -1153,6 +1193,9 @@ void Application::buildChimeraBench(
             + (feasible ? "" : " with unsupported constraints");
         if (applyDynamicBenchProject(std::move(compiled.project), status)) {
             chimeraRecipe_ = recipe;
+            chimeraPitchMillimetres_ = recipe.hogels.pitchMetres * 1e3;
+            chimeraGridDraft_[0] = static_cast<int>(recipe.hogels.countX);
+            chimeraGridDraft_[1] = static_cast<int>(recipe.hogels.countY);
             chimeraWorkflow_.reset();
             chimeraBatch_.reset();
             chimeraSweepResult_.reset();
@@ -1247,9 +1290,30 @@ void Application::executeSelectedChimeraHogel() {
         chimeraHogelY_, 0,
         static_cast<int>(chimeraRecipe_.hogels.countY - 1U)));
     chimera::HogelExposureExecutionOptions executionOptions;
+    executionOptions.retainShowroomRecording = chimeraRetainShowroom_;
     executionOptions.slmResponses = &slmResponseCatalog_;
     executionOptions.environmentTemperatureKelvin = 293.15;
     const auto physicsProject = calibratedBenchProject();
+    if (!glSmokeMode_) {
+        if (chimeraExposureFuture_.valid()) throw std::runtime_error("A hogel exposure is already running");
+        if (!chimera::isChimeraBenchWorkflowCurrent(*chimeraWorkflow_, physicsProject))
+            throw std::runtime_error("Regenerate the dataset after editing the Bench");
+        chimeraExposureRevision_ = physicsProject.scene.revision();
+        chimeraExposureCancelled_ = std::make_shared<std::atomic_bool>(false);
+        chimeraExposureFuture_ = std::async(std::launch::async,
+            [recipe = chimeraWorkflow_->recipe, dataset = chimeraWorkflow_->dataset,
+             plan = chimeraWorkflow_->plan, physicsProject, catalog = slmResponseCatalog_,
+             executionOptions, x, y, cancelled = chimeraExposureCancelled_]() mutable {
+                compute::fft::CpuFftBackend fft;
+                executionOptions.slmResponses = &catalog;
+                executionOptions.cancellationRequested = cancelled.get();
+                return chimera::executeHogelExposure(recipe, dataset, plan, physicsProject,
+                    fft, x, y, executionOptions);
+            });
+        statusMessage_ = "Recording RGB hogel in background; retaining physical sampling for independent replay";
+        errorMessage_.clear();
+        return;
+    }
     chimera::executeChimeraHogel(
         *chimeraWorkflow_,
         physicsProject,
@@ -1257,7 +1321,8 @@ void Application::executeSelectedChimeraHogel() {
         x,
         y,
         executionOptions);
-    const auto& channels = chimeraWorkflow_->exposures.back().channels;
+    const auto& channels = std::find_if(chimeraWorkflow_->exposures.begin(), chimeraWorkflow_->exposures.end(),
+        [=](const auto& e) { return e.hogelX == x && e.hogelY == y; })->channels;
     const bool m8Evidence = channels.size() == 3U
         && std::all_of(channels.begin(), channels.end(), [](const auto& channel) {
             return channel.m8VolumeRecordingInvoked
@@ -1271,6 +1336,29 @@ void Application::executeSelectedChimeraHogel() {
     statusMessage_ = "Exposed hogel (" + std::to_string(x) + ", "
         + std::to_string(y)
         + ") through three independent RGB M8 volume recordings";
+}
+
+void Application::pollChimeraExposure() {
+    if (!chimeraExposureFuture_.valid()
+        || chimeraExposureFuture_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
+    try {
+        auto exposure = chimeraExposureFuture_.get();
+        if (!chimeraWorkflow_ || chimeraWorkflow_->plan.contentHash != exposure.planHash
+            || chimeraExposureRevision_ != calibratedBenchProject().scene.revision())
+            throw std::runtime_error("Bench or exposure plan changed during recording; old result discarded, expose the current Bench again");
+        auto& exposures = chimeraWorkflow_->exposures;
+        const auto existing = std::find_if(exposures.begin(), exposures.end(), [&](const auto& e) {
+            return e.hogelX == exposure.hogelX && e.hogelY == exposure.hogelY;
+        });
+        const auto x = exposure.hogelX, y = exposure.hogelY;
+        if (existing == exposures.end()) exposures.push_back(std::move(exposure));
+        else *existing = std::move(exposure);
+        chimeraWorkflow_->reconstruction.reset(); chimeraWorkflow_->cameraImage.reset();
+        chimeraWorkflow_->observationComponentId.clear();
+        statusMessage_ = "RGB hogel (" + std::to_string(x) + ", " + std::to_string(y)
+            + ") recorded; open the selected hogel in the showroom";
+        errorMessage_.clear();
+    } catch (const std::exception& error) { errorMessage_ = error.what(); statusMessage_.clear(); }
 }
 
 void Application::reconstructSelectedChimeraHogel() {
@@ -1962,6 +2050,12 @@ void Application::recordSelectedPlateExperiment(bool recordHistory) {
     }
 
     const std::string recipeId = recipe.recipeId;
+    if (recipe.model == HologramRecordingModel::VolumeGrating) {
+        const auto resolved = resolveRecordingRecipe(fields, recipe);
+        for (const auto& channel : resolved.channels)
+            recipe.sampling = holography::reconstructionSampling(opticalBenchScene_, fields,
+                channel.objectBranchId, channel.referenceBranchId, recipe.sampling);
+    }
     recomputeRecordingRecipe(fields, recipe);
     bool responseReferenceAutoScaled = false;
     if (recipe.model == HologramRecordingModel::ThinTransmission) {
@@ -2514,7 +2608,7 @@ bool Application::initialize(const RunOptions& options) {
     glSmokeMode_ = options.glSmoke;
     localizedSmokeTextSubmitted_ = false;
     auto windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-    if (glSmokeMode_) {
+    if (glSmokeMode_ || options.showroomSmoke) {
         windowFlags |= SDL_WINDOW_HIDDEN;
     }
     isBenchmark_ = options.benchmarkFrames > 0;
@@ -2575,7 +2669,7 @@ bool Application::initialize(const RunOptions& options) {
     ImGui::CreateContext();
     imguiContextCreated_ = true;
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    if (glSmokeMode_) {
+    if (glSmokeMode_ || options.showroomSmoke) {
         // Automated UI input needs the deterministic first-run layout and must
         // neither consume nor rewrite a developer's local docking preferences.
         ImGui::GetIO().IniFilename = nullptr;
@@ -2656,6 +2750,8 @@ bool Application::initialize(const RunOptions& options) {
 }
 
 void Application::shutdown() noexcept {
+    if (chimeraExposureCancelled_) chimeraExposureCancelled_->store(true);
+    showroom_.reset();
     if (glContext_ != nullptr && window_ != nullptr) {
         SDL_GL_MakeCurrent(window_, glContext_);
     }
@@ -4232,6 +4328,14 @@ void Application::drawRealLensPanel() {
     }
 
     if (ImGui::BeginTabBar("real_lens_tabs")) {
+        if (ImGui::BeginTabItem("2D Lens Design")) {
+            if (drawLensProfileEditor(realLensConfig_.prescription,
+                    selectedRealLensSurface_, lensProfileDiagnostic_)) {
+                realLensDirty_ = true;
+                activeLensPrescriptionAsset_.reset();
+            }
+            ImGui::EndTabItem();
+        }
         if (ImGui::BeginTabItem("Prescription Editor")) {
             std::array<char, 129> prescriptionIdBuffer {};
             const std::size_t prescriptionIdLength = std::min(
@@ -6525,6 +6629,16 @@ void Application::drawSandboxComponentShelf() {
     }
     captureLastItemBounds(sandboxUiEvidence_.transmissionPreset);
     ImGui::SameLine();
+    if (ImGui::Button("Single-beam Denisyuk")) {
+        sandboxExperimentMode_ = SandboxExperimentMode::ReflectionDenisyuk;
+        selectedBenchComponentId_ = "plate-h1";
+        sandboxPlateSampleSize_ = 512;
+        sandboxPlateWindowMillimetres_ = 2.0F;
+        sandboxObservationComponentId_ = "reflection-reconstruction-probe";
+        static_cast<void>(applyDynamicBenchProject(makeSingleBeamDenisyukPreset(),
+            "Single-beam Denisyuk: align laser through plate onto the passive object, then Record"));
+    }
+    ImGui::SameLine();
     if (ImGui::Button("Reflection / Denisyuk")) {
         sandboxExperimentMode_ = SandboxExperimentMode::ReflectionDenisyuk;
         selectedBenchComponentId_ = "plate-h1";
@@ -7305,7 +7419,7 @@ void Application::drawChimeraAutomationBar() {
             *chimeraWorkflow_, calibratedBenchProject());
     ImGui::BeginChild(
         "##chimera_automation_bar",
-        ImVec2(0.0F, 218.0F),
+        ImVec2(0.0F, 270.0F),
         ImGuiChildFlags_Borders);
     ImGui::TextUnformatted("CHIMERA Automation on this editable Bench");
     ImGui::SameLine();
@@ -7354,7 +7468,7 @@ void Application::drawChimeraAutomationBar() {
     ImGui::SetNextItemWidth(72.0F);
     ImGui::InputInt("Hogel Y", &chimeraHogelY_);
     ImGui::SameLine();
-    ImGui::BeginDisabled(!current);
+    ImGui::BeginDisabled(!current || chimeraExposureFuture_.valid());
     if (ImGui::Button("Expose selected RGB hogel")) {
         try {
             executeSelectedChimeraHogel();
@@ -7367,6 +7481,59 @@ void Application::drawChimeraAutomationBar() {
     captureLastItemBounds(sandboxUiEvidence_.chimeraExpose);
     ImGui::EndDisabled();
 
+    ImGui::SameLine();
+    ImGui::Checkbox("Retain showroom fields", &chimeraRetainShowroom_);
+    if (chimeraExposureFuture_.valid()) {
+        ImGui::TextDisabled("Recording in background...");
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel exposure") && chimeraExposureCancelled_)
+            chimeraExposureCancelled_->store(true);
+    }
+    if (ImGui::Button("Open selected hogel in showroom")) {
+        try {
+            if (!chimeraWorkflow_) throw std::invalid_argument("Expose a hogel first");
+            if (!showroom_) showroom_ = std::make_unique<HologramShowroom>();
+            showroom_->open(chimera::selectedHogelRecordings(*chimeraWorkflow_,
+                static_cast<std::size_t>(std::max(0, chimeraHogelX_)),
+                static_cast<std::size_t>(std::max(0, chimeraHogelY_))));
+        } catch (const std::exception& error) { errorMessage_ = error.what(); }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Hogel size / grid")) {
+        chimeraPitchMillimetres_ = chimeraRecipe_.hogels.pitchMetres * 1e3;
+        chimeraGridDraft_[0] = static_cast<int>(chimeraRecipe_.hogels.countX);
+        chimeraGridDraft_[1] = static_cast<int>(chimeraRecipe_.hogels.countY);
+        ImGui::OpenPopup("Hogel geometry");
+    }
+    if (ImGui::BeginPopup("Hogel geometry")) {
+        ImGui::InputDouble("Pitch / recording window (mm)", &chimeraPitchMillimetres_, 0.1, 0.5, "%.3f");
+        ImGui::InputInt2("Hogel grid X / Y", chimeraGridDraft_);
+        ImGui::Text("Plate: %.3f x %.3f mm", chimeraPitchMillimetres_ * chimeraGridDraft_[0],
+            chimeraPitchMillimetres_ * chimeraGridDraft_[1]);
+        ImGui::TextWrapped("Changes the physical plate and exposure spacing. Optical spot size also depends on your lenses and apertures. Regenerate the dataset after applying.");
+        if (ImGui::Button("Apply hogel geometry")) {
+            try {
+                if (chimeraGridDraft_[0] <= 0 || chimeraGridDraft_[1] <= 0)
+                    throw std::invalid_argument("Hogel counts must be positive");
+                auto recipe = chimeraRecipe_;
+                auto project = benchProject_;
+                chimera::resizeChimeraHogels(recipe, project, {
+                    .pitchMetres = chimeraPitchMillimetres_ * 1e-3,
+                    .countX = static_cast<std::size_t>(chimeraGridDraft_[0]),
+                    .countY = static_cast<std::size_t>(chimeraGridDraft_[1])});
+                if (applyDynamicBenchProject(std::move(project), "Hogel geometry updated; regenerate dataset and exposure plan")) {
+                    chimeraRecipe_ = std::move(recipe);
+                    chimeraBatch_.reset(); chimeraSweepResult_.reset();
+                    ImGui::CloseCurrentPopup();
+                }
+            } catch (const std::exception& error) { errorMessage_ = error.what(); }
+        }
+        if (ImGui::Button("Save current Recipe JSON")) {
+            try { chimera::saveChimeraRecipe(chimeraRecipe_, chimeraRecipePathBuffer_); }
+            catch (const std::exception& error) { errorMessage_ = error.what(); }
+        }
+        ImGui::EndPopup();
+    }
     const char* viewPreview = "Prepare data first";
     if (prepared && !chimeraWorkflow_->dataset.sourceViews.empty()) {
         chimeraViewIndex_ = std::clamp(
@@ -7657,6 +7824,16 @@ void Application::drawSandboxInspector() {
             "Loaded editable transmission holography bench"));
     }
     ImGui::SameLine();
+    if (ImGui::Button("Single-beam Denisyuk")) {
+        sandboxExperimentMode_ = SandboxExperimentMode::ReflectionDenisyuk;
+        selectedBenchComponentId_ = "plate-h1";
+        sandboxPlateSampleSize_ = 512;
+        sandboxPlateWindowMillimetres_ = 2.0F;
+        sandboxObservationComponentId_ = "reflection-reconstruction-probe";
+        static_cast<void>(applyDynamicBenchProject(makeSingleBeamDenisyukPreset(),
+            "Single-beam Denisyuk: align laser through plate onto the passive object, then Record"));
+    }
+    ImGui::SameLine();
     if (ImGui::Button("Reflection / Denisyuk")) {
         sandboxExperimentMode_ = SandboxExperimentMode::ReflectionDenisyuk;
         selectedBenchComponentId_ = "plate-h1";
@@ -7855,11 +8032,8 @@ void Application::drawSandboxInspector() {
             focusSandboxSelection();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Delete")) {
-            auto candidate = benchProject_.scene;
-            static_cast<void>(candidate.remove(selected->id));
-            selectedBenchComponentId_.clear();
-            static_cast<void>(applyBenchScene(std::move(candidate), "Deleted component"));
+        if (ImGui::Button("Delete (Del)")) {
+            static_cast<void>(deleteSelectedBenchComponent());
         }
 
         selected = benchProject_.scene.find(selectedBenchComponentId_);
@@ -8640,6 +8814,11 @@ void Application::drawSandboxInspector() {
                 }
                 case bench::BenchComponentKind::ObjectWavefrontSource: {
                     auto value = std::get<bench::ObjectWavefrontSourceParameters>(edited.parameters);
+                    changed |= ImGui::Checkbox("Requires placed illumination", &value.requiresIllumination);
+                    if (value.requiresIllumination) {
+                        changed |= ImGui::InputDouble("Diffuse reflectance", &value.diffuseReflectance, 0.05, 0.1, "%.3f");
+                        ImGui::TextWrapped("Single scattering: incident centre ray activates this object and supplies its power, wavelength and coherence.");
+                    }
                     const auto geometryLabel = [](bench::ObjectSourceGeometry geometry) {
                         switch (geometry) {
                         case bench::ObjectSourceGeometry::UniformPlane:
@@ -8694,8 +8873,10 @@ void Application::drawSandboxInspector() {
                     changed |= ImGui::DragFloat2(
                         "Sample yaw / pitch (deg)", orientationDegrees,
                         0.25F, -180.0F, 180.0F);
+                    ImGui::BeginDisabled(value.requiresIllumination);
                     changed |= ImGui::DragFloat("Object wavelength (nm)", &wavelengthNm, 1.0F, 200.0F, 2000.0F);
                     changed |= ImGui::DragFloat("Scattered object-wave power (W)", &powerWatts, 0.01F, 0.0F, 1000.0F);
+                    ImGui::EndDisabled();
                     changed |= ImGui::InputScalar(
                         "Coherent roughness seed",
                         ImGuiDataType_U64,
@@ -8714,7 +8895,9 @@ void Application::drawSandboxInspector() {
                     ImGui::TextDisabled(
                         "Material: opaque diffuse (scalar Lambertian)");
                     ImGui::TextWrapped(
-                        "Power is total scattered object-wave power. The deterministic rough phase produces coherent speckle; independent illumination, object shadowing, polarization, transparency, and specular reflection are not yet modeled.");
+                        value.requiresIllumination
+                        ? "Wavelength, coherence and nominal reflected power come from incident light. Centre-ray illumination gate; partial illumination and surface shadow maps are not modeled. Coherent rough phase produces speckle."
+                        : "Power is total scattered object-wave power. Coherent rough phase produces speckle. This independent source has no placed illumination or shadow map.");
                     edited.parameters = value;
                     break;
                 }
@@ -9081,6 +9264,7 @@ void Application::drawSandboxInspector() {
                 }
                 case bench::BenchComponentKind::HolographicPlate: {
                     auto value = std::get<bench::HolographicPlateParameters>(edited.parameters);
+                    changed |= ImGui::InputDouble("Recording transmission", &value.recordingPowerTransmission, 0.05, 0.1, "%.3f");
                     float sizeMm[2] {static_cast<float>(value.widthMetres * 1000.0), static_cast<float>(value.heightMetres * 1000.0)};
                     float thicknessUm = static_cast<float>(value.thicknessMetres * 1e6);
                     int role = value.role == bench::HolographicPlateRole::H1 ? 0 : 1;
@@ -11095,7 +11279,35 @@ void Application::drawSandboxInspector() {
     }
 }
 
+void Application::openRecordedPlateShowroom() {
+    try {
+        if (!showroom_) showroom_ = std::make_unique<HologramShowroom>();
+        const auto* selected = benchProject_.scene.find(selectedBenchComponentId_);
+        if (sandboxVolumeRecording_ && selected
+            && sandboxVolumeRecording_->plateComponentId == selected->id) {
+            showroom_->open(optics::holography::freezeReflectionRecording(
+                opticalBenchScene_, *sandboxVolumeRecording_));
+        } else if (sandboxRgbVolumeRecording_ && selected
+            && sandboxRgbVolumeRecording_->plateComponentId == selected->id) {
+            std::vector<optics::holography::RecordedHologram> channels;
+            for (const auto& channel : sandboxRgbVolumeRecording_->channels)
+                channels.push_back(optics::holography::freezeReflectionRecording(opticalBenchScene_, channel));
+            showroom_->open(std::move(channels));
+        } else if (chimeraWorkflow_ && selected && selected->id == "chimera-plate") {
+            showroom_->open(chimera::selectedHogelRecordings(*chimeraWorkflow_,
+                static_cast<std::size_t>(std::max(0, chimeraHogelX_)),
+                static_cast<std::size_t>(std::max(0, chimeraHogelY_))));
+        } else {
+            showroom_->showEmpty();
+        }
+    } catch (const std::exception& e) {
+        errorMessage_ = std::string("Showroom: ") + e.what();
+    }
+}
+
 void Application::drawWorkspace() {
+    pollChimeraExposure();
+    if (showroom_ && showroom_->draw()) return;
     sandboxUiEvidence_ = {};
     sandboxReconstructionOverlaySubmitted_ = false;
     sandboxReconstructionOverlayDiagnostic_ = "overlay viewport was not drawn";
@@ -11137,12 +11349,13 @@ void Application::drawWorkspace() {
                 &dockMainId);
 
             // Split bottom area (~20%) beneath optical bench for Validation
-            ImGui::DockBuilderSplitNode(
+            if (viewportMode_ != ViewportMode::Sandbox || glSmokeMode_) ImGui::DockBuilderSplitNode(
                 dockMainId,
                 ImGuiDir_Down,
                 docking::DockLayoutConfig::kBottomValidationRatio,
                 &dockBottomId,
                 &dockMainId);
+            else dockBottomId = dockRightId;
 
             // Dock windows into their designated regions:
             // - Center main: Optical Bench (largest region)
@@ -11187,15 +11400,49 @@ void Application::drawWorkspace() {
             }
         }
     }
+    if (viewportMode_ == ViewportMode::Sandbox
+        && !io.WantTextInput
+        && !io.KeyCtrl
+        && !io.KeyAlt
+        && !selectedBenchComponentId_.empty()
+        && !ImGui::IsAnyItemActive()
+        && (ImGui::IsKeyPressed(ImGuiKey_Delete, false)
+            || ImGui::IsKeyPressed(ImGuiKey_Backspace, false))) {
+        static_cast<void>(deleteSelectedBenchComponent());
+    }
 
     ImGui::Begin(docking::DockLayoutConfig::kOpticalBenchWindowName);
     if (viewportMode_ == ViewportMode::Sandbox && !isBenchmark_) {
-        drawSandboxComponentShelf();
+        ImGui::Checkbox("Add components", &showBenchComponents_);
+        ImGui::SameLine();
+        ImGui::Checkbox("CHIMERA controls", &showChimeraControls_);
+        ImGui::SameLine();
+        ImGui::Checkbox("Analysis tools", &showReferenceTools_);
+        ImGui::SameLine();
+        ImGui::Checkbox("2D lens design", &showLensDesigner_);
+        ImGui::SameLine();
+        if (ImGui::Button("Hologram showroom")) openRecordedPlateShowroom();
+        ImGui::SameLine();
+        if (ImGui::Button("Check layout")) {
+            const auto overlaps = optics::scene::findBaseInterferences(benchProject_.scene);
+            const auto mountFailures = optics::scene::findMountClearanceFailures(
+                benchProject_.scene);
+            errorMessage_.clear();
+            for (const auto& pair : overlaps) errorMessage_ += pair.first + " / " + pair.second + ": base overlap. ";
+            for (const auto& id : mountFailures) {
+                errorMessage_ += id
+                    + ": support cannot clear the protected optical frame at this post height. ";
+            }
+            statusMessage_ = overlaps.empty() && mountFailures.empty()
+                ? "No mounted-base overlaps or support/frame intrusions at the current mechanical settings."
+                : "Adjust the indicated bases or post heights, then check the layout again.";
+        }
+        if (showBenchComponents_ || glSmokeMode_) drawSandboxComponentShelf();
         drawSandboxSourceBar();
         drawSandboxAlignmentBar();
         drawSandboxWaveBar();
         drawSandboxExperimentBar();
-        drawChimeraAutomationBar();
+        if (showChimeraControls_ || glSmokeMode_) drawChimeraAutomationBar();
     }
     const ImVec2 contentSize = ImGui::GetContentRegionAvail();
 
@@ -12338,6 +12585,18 @@ void Application::drawWorkspace() {
     ImGui::Begin(docking::DockLayoutConfig::kInspectorWindowName);
 
     drawSandboxInspector();
+    if (viewportMode_ == ViewportMode::Sandbox && !showReferenceTools_ && !glSmokeMode_) {
+        if (!errorMessage_.empty()) ImGui::TextWrapped("%s", errorMessage_.c_str());
+        else if (!statusMessage_.empty()) ImGui::TextWrapped("%s", statusMessage_.c_str());
+        ImGui::End();
+        if (showLensDesigner_) {
+            ImGui::SetNextWindowDockID(0, ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2(1000, 740), ImGuiCond_Appearing);
+            ImGui::SetNextWindowBgAlpha(1.0F);
+            drawRealLensPanel();
+        }
+        return;
+    }
     ImGui::SeparatorText("Legacy Reference Workbenches");
 
     ImGui::SeparatorText("Legacy Edit History");
@@ -12962,6 +13221,33 @@ void Application::runSandboxInteractionSmoke() {
             })) {
         throw std::runtime_error(
             "shelf-to-table plate drag did not add an ordinary plate");
+    }
+
+    const std::string deleteShortcutComponentId
+        = selectedBenchComponentId_;
+    const std::size_t componentCountBeforeDelete
+        = benchProject_.scene.components().size();
+    const glm::vec2 deleteKeyPoint = sandboxUiEvidence_.viewport.centre();
+    drawInputFrame(deleteKeyPoint, 0, ImGuiKey_Delete, 1);
+    drawInputFrame(deleteKeyPoint, 0, ImGuiKey_Delete, 0);
+    if (benchProject_.scene.find(deleteShortcutComponentId) != nullptr
+        || benchProject_.scene.components().size() + 1U
+            != componentCountBeforeDelete
+        || !selectedBenchComponentId_.empty()) {
+        throw std::runtime_error(
+            "Delete key did not remove and deselect the selected Bench component");
+    }
+    undoBenchEdit();
+    if (benchProject_.scene.find(deleteShortcutComponentId) == nullptr
+        || benchProject_.scene.components().size()
+            != componentCountBeforeDelete) {
+        throw std::runtime_error(
+            "undo did not restore the component removed with Delete");
+    }
+    selectedBenchComponentId_ = deleteShortcutComponentId;
+    if (!showSandboxViewport()) {
+        throw std::runtime_error(
+            "restored component could not be selected after Delete undo");
     }
 
     const auto* navigationSelection = benchProject_.scene.find(
@@ -13707,9 +13993,133 @@ void Application::runSandboxInteractionSmoke() {
     }
 }
 
+void Application::runShowroomSmoke() {
+    // Smoke-generated benches must never replace a user's recovery file.
+    benchEditHistoryReady_ = false;
+    namespace h = optics::holography;
+    auto project = makeSingleBeamDenisyukPreset();
+    const auto trace = optics::ray::traceDynamicBench(project.scene);
+    const auto fields = h::collectPlateIncidentFields(project.scene, trace, "plate-h1");
+    std::uint64_t object = 0, reference = 0;
+    for (const auto& branch : fields.branches) {
+        if (branch.role == h::RecordingBranchRole::Object) object = branch.beam.provenance.branchId;
+        else reference = branch.beam.provenance.branchId;
+    }
+    compute::fft::CpuFftBackend fft;
+    h::PlateFieldSamplingOptions sampling;
+    sampling.sampleWidth = sampling.sampleHeight = 256;
+    sampling.extentWidthMetres = sampling.extentHeightMetres = 0.002;
+    const auto recording = h::recordVolumePlate(project.scene, fields, object, reference, {}, sampling, fft);
+    const auto originalRevision = project.scene.revision();
+    showroom_ = std::make_unique<HologramShowroom>();
+    showroom_->open(h::freezeReflectionRecording(project.scene, recording));
+    const auto frame = [&](float x, float y, bool down) {
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplSDL3_NewFrame();
+        auto& io = ImGui::GetIO();
+        io.AddMousePosEvent(x, y);
+        io.AddMouseButtonEvent(ImGuiMouseButton_Left, down);
+        ImGui::NewFrame();
+        drawWorkspace();
+        ImGui::Render();
+        int width = 0, height = 0;
+        SDL_GetWindowSizeInPixels(window_, &width, &height);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, width, height);
+        glClearColor(0, 0, 0, 1);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        glFinish();
+    };
+    showroom_->waitForObservation();
+    frame(-100, -100, false);
+    frame(-100, -100, false);
+    if (!showroom_->hasCurrentImage()) throw std::runtime_error(showroom_->diagnostic());
+    const auto serial = showroom_->requestSerial();
+    const auto centre = showroom_->canvasCentre;
+    frame(centre[0], centre[1], false);
+    frame(centre[0], centre[1], true);
+    frame(centre[0] + 2, centre[1] + 1, true);
+    frame(centre[0] + 2, centre[1] + 1, false);
+    if (showroom_->requestSerial() <= serial) throw std::runtime_error("Plate mouse drag did not submit an observation");
+    showroom_->waitForObservation();
+    frame(-100, -100, false);
+    if (!showroom_->hasCurrentImage()) throw std::runtime_error(showroom_->diagnostic());
+    if (project.scene.revision() != originalRevision || recording.isStaleFor(project.scene))
+        throw std::runtime_error("Showroom drag mutated the recorded bench");
+    const auto saveFrame = [&](const char* path) {
+        int width = 0, height = 0;
+        SDL_GetWindowSizeInPixels(window_, &width, &height);
+        const auto stride = static_cast<std::size_t>(width) * 4U;
+        std::vector<std::uint8_t> pixels(stride * static_cast<std::size_t>(height));
+        glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+        for (int y = 0; y < height / 2; ++y)
+            for (std::size_t x = 0; x < stride; ++x)
+                std::swap(pixels[static_cast<std::size_t>(y)*stride+x],
+                    pixels[static_cast<std::size_t>(height-1-y)*stride+x]);
+        auto* surface = SDL_CreateSurfaceFrom(width, height, SDL_PIXELFORMAT_RGBA32, pixels.data(), width*4);
+        if (!surface) throw std::runtime_error("Smoke readback surface failed");
+        const bool saved = SDL_SaveBMP(surface, path);
+        SDL_DestroySurface(surface);
+        if (!saved) throw std::runtime_error("Smoke image save failed");
+    };
+    std::filesystem::create_directories("out");
+    saveFrame("out/showroom-recorded-smoke.bmp");
+    const auto referenceButton = showroom_->referenceButtonCentre;
+    frame(referenceButton[0], referenceButton[1], false);
+    frame(referenceButton[0], referenceButton[1], true);
+    frame(referenceButton[0], referenceButton[1], false);
+    showroom_->waitForObservation();
+    frame(-100, -100, false);
+    if (!showroom_->hasCurrentImage()) throw std::runtime_error(showroom_->diagnostic());
+    saveFrame("out/showroom-smoke.bmp");
+    const auto back = showroom_->backButtonCentre;
+    frame(back[0], back[1], false);
+    frame(back[0], back[1], true);
+    frame(back[0], back[1], false);
+    if (showroom_->active()) throw std::runtime_error("Back to Bench mouse click failed");
+    showLensDesigner_ = true;
+    frame(-100, -100, false);
+    frame(-100, -100, false);
+    saveFrame("out/lens-profile-smoke.bmp");
+    auto recipe = chimera::makeCanonicalChimeraRecipe();
+    recipe.hogels = {.pitchMetres = 0.00025, .countX = 1, .countY = 1};
+    recipe.exposure.sampleWidth = recipe.exposure.sampleHeight = 512;
+    buildChimeraBench(recipe, "showroom smoke, 0.25 mm hogel");
+    prepareChimeraAutomation();
+    chimeraHogelX_ = chimeraHogelY_ = 0;
+    chimeraRetainShowroom_ = true;
+    executeSelectedChimeraHogel();
+    if (chimeraExposureFuture_.valid()) { chimeraExposureFuture_.wait(); pollChimeraExposure(); }
+    if (!errorMessage_.empty()) throw std::runtime_error(errorMessage_);
+    openRecordedPlateShowroom();
+    showroom_->waitForObservation();
+    frame(-100, -100, false);
+    if (!showroom_->hasCurrentImage()) throw std::runtime_error(showroom_->diagnostic());
+    saveFrame("out/showroom-chimera-smoke.bmp");
+    const auto channelButton = showroom_->channelButtonCentres[1];
+    const auto previousChannelRequest = showroom_->requestSerial();
+    frame(channelButton[0], channelButton[1], false);
+    frame(channelButton[0], channelButton[1], true);
+    frame(channelButton[0], channelButton[1], false);
+    showroom_->waitForObservation();
+    frame(-100, -100, false);
+    if (!showroom_->hasCurrentImage() || showroom_->requestSerial() <= previousChannelRequest)
+        throw std::runtime_error("Recorded wavelength mouse selection did not reconstruct a new view");
+    if (glGetError() != GL_NO_ERROR) throw std::runtime_error("Showroom produced an OpenGL error");
+    SDL_Log("Showroom smoke passed: single-beam Denisyuk, observer texture, mouse plate rotation, immutable recording, return to Bench, 2D lens profile, CHIMERA RGB hogel exposure to showroom");
+}
+
 int Application::run(const RunOptions& options) {
     if (!initialize(options)) {
         return 1;
+    }
+    if (options.showroomSmoke) {
+        int result = 0;
+        try { runShowroomSmoke(); }
+        catch (const std::exception& e) { SDL_Log("Showroom smoke failed: %s", e.what()); result = 1; }
+        shutdown();
+        return result;
     }
 
     const bool isBenchmark = options.benchmarkFrames > 0;

@@ -56,6 +56,9 @@ void executeChimeraHogel(ChimeraBenchWorkflow &workflow,
                          std::size_t hogelX, std::size_t hogelY,
                          const HogelExposureExecutionOptions &options = {});
 
+[[nodiscard]] std::vector<optics::holography::RecordedHologram> selectedHogelRecordings(
+    const ChimeraBenchWorkflow& workflow, std::size_t x, std::size_t y);
+
 void reconstructChimeraViews(
     ChimeraBenchWorkflow &workflow, const BenchProject &bench,
     std::span<const HogelSelection> hogels,

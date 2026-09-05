@@ -1135,7 +1135,17 @@ BeamFollowingFieldResult sampleBeamFollowingField(
         options.extentHeightMetres / static_cast<double>(options.sampleHeight),
         terminalBeam.wavelengthMetres,
         options.refractiveIndex);
-    const auto sourcePhase = finitePhasor(terminalBeam.phaseRadians);
+    double sourcePhaseRadians = terminalBeam.phaseRadians;
+    if (source.kind == scene::BenchComponentKind::ObjectWavefrontSource
+        && std::get<scene::ObjectWavefrontSourceParameters>(source.parameters).requiresIllumination) {
+        // The child begins at the object; its parent trace retains illumination
+        // provenance. Transport the incoming optical path into source phase.
+        const auto& first = pathInteractions.front();
+        const double incomingPath = first.incidentBeam.accumulatedOpticalPathMetres
+            - math::length(first.hitPointMetres - source.transform.translationMetres);
+        sourcePhaseRadians += 2.0 * std::numbers::pi * incomingPath / terminalBeam.wavelengthMetres;
+    }
+    const auto sourcePhase = finitePhasor(sourcePhaseRadians);
     double boundaryReferenceIntensity = 0.0;
     const bool isPrimitiveObject
         = source.kind == scene::BenchComponentKind::ObjectWavefrontSource

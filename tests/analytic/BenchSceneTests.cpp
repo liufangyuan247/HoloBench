@@ -10,6 +10,7 @@
 #include <variant>
 
 #include "optics/scene/BenchScene.hpp"
+#include "optics/scene/InstrumentDimensions.hpp"
 
 namespace scene = holobench::optics::scene;
 
@@ -353,4 +354,66 @@ TEST_CASE("scene commands preserve stable IDs advance revision and invalidate ob
     CHECK(bench.revision() == 4);
     CHECK_FALSE(bench.remove("missing"));
     CHECK(bench.revision() == 4);
+}
+
+TEST_CASE("derived instrument mounts keep supports and controls outside protected optical frames") {
+    for (const auto kind : scene::requiredBenchComponentKinds()) {
+        if (kind == scene::BenchComponentKind::FieldProbe) continue;
+        auto component = scene::makeDefaultBenchComponent(
+            kind,
+            "mount-clearance-" + std::string(
+                scene::benchComponentKindName(kind)));
+        component.transform.translationMetres.y = 0.08;
+        auto assembly = scene::makeDefaultMechanicalAssembly(component);
+
+        for (const double stageY : {
+                 assembly.minimumStageTranslationMetres.y,
+                 0.0,
+                 assembly.maximumStageTranslationMetres.y}) {
+            assembly.stageTranslationMetres.y = stageY;
+            scene::applyMechanicalAssembly(component, assembly);
+            const auto layout = scene::instrumentMountLayout(component);
+            CAPTURE(std::string(scene::benchComponentDisplayName(kind)));
+            CAPTURE(stageY);
+            CHECK(layout.protectedFrameDimensions.x
+                >= layout.opticalFaceDimensions.x);
+            CHECK(layout.protectedFrameDimensions.y
+                >= layout.opticalFaceDimensions.y);
+            CHECK(scene::instrumentMountClearsProtectedFrame(layout));
+            CHECK(layout.supportTopHeightMetres
+                    + layout.clearanceMetres
+                <= layout.opticalCentreHeightMetres
+                    - layout.protectedVerticalHalfSpanMetres
+                    + 1e-12);
+        }
+    }
+}
+
+TEST_CASE("mount support clearance accounts for frame thickness under pitch") {
+    auto lens = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::RealLensAssembly,
+        "pitched-real-lens");
+    lens.transform.translationMetres.y = 0.08;
+    auto assembly = scene::makeDefaultMechanicalAssembly(lens);
+    assembly.mountPitchRadians = assembly.maximumMountPitchRadians;
+    scene::applyMechanicalAssembly(lens, assembly);
+    const auto layout = scene::instrumentMountLayout(lens);
+    const auto frame = scene::instrumentProtectedFrameDimensions(lens);
+    CHECK(layout.protectedVerticalHalfSpanMetres
+        == doctest::Approx(0.5 * (
+            frame.y * std::cos(assembly.mountPitchRadians)
+            + frame.z * std::sin(assembly.mountPitchRadians))));
+    CHECK(scene::instrumentMountClearsProtectedFrame(layout));
+}
+
+TEST_CASE("mount clearance reports an impossible low post without using render meshes") {
+    auto plate = scene::makeDefaultBenchComponent(
+        scene::BenchComponentKind::HolographicPlate,
+        "low-mounted-plate");
+    plate.transform.translationMetres.y = 0.08;
+    auto assembly = scene::makeDefaultMechanicalAssembly(plate);
+    assembly.postHeightMetres = assembly.minimumPostHeightMetres;
+    scene::applyMechanicalAssembly(plate, assembly);
+    CHECK_FALSE(scene::instrumentMountClearsProtectedFrame(
+        scene::instrumentMountLayout(plate)));
 }

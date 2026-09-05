@@ -13,6 +13,7 @@
 namespace app = holobench::app;
 namespace holography = holobench::optics::holography;
 namespace ray = holobench::optics::ray;
+namespace scene = holobench::optics::scene;
 
 namespace {
 
@@ -291,4 +292,63 @@ TEST_CASE("routing edits leave a saved recipe explicit and unresolved") {
             editedFields, project.recordingRecipes.front())),
         std::invalid_argument);
     CHECK(project.recordingRecipes.front().recipeId == "thin-green");
+}
+
+TEST_CASE("component deletion removes only recording recipes that depend on it") {
+    auto recordedProject = app::makeTransmissionHolographyPreset();
+    const auto fields = fieldsFor(recordedProject);
+    const std::array channels {singlePair(fields)};
+    app::upsertRecordingRecipe(
+        recordedProject,
+        app::makeThinRecordingRecipe(
+            "thin-green", fields, channels, thinOptions()));
+    REQUIRE(recordedProject.recordingRecipes.size() == 1U);
+    const std::string routedObjectId = recordedProject.recordingRecipes.front()
+        .channels.front().objectBranch.componentPath.front();
+
+    SUBCASE("removing a routed component also removes its recipe") {
+        const auto result
+            = app::removeBenchComponentAndDependentRecordingRecipes(
+                recordedProject, routedObjectId);
+        CHECK(result.componentRemoved);
+        CHECK(result.dependentRecordingRecipesRemoved == 1U);
+        CHECK(recordedProject.scene.find(routedObjectId) == nullptr);
+        CHECK(recordedProject.recordingRecipes.empty());
+        CHECK_NOTHROW(app::validateBenchProject(recordedProject));
+    }
+
+    SUBCASE("removing the recording plate also removes its recipe") {
+        const auto result
+            = app::removeBenchComponentAndDependentRecordingRecipes(
+                recordedProject, "plate-h1");
+        CHECK(result.componentRemoved);
+        CHECK(result.dependentRecordingRecipesRemoved == 1U);
+        CHECK(recordedProject.recordingRecipes.empty());
+        CHECK_NOTHROW(app::validateBenchProject(recordedProject));
+    }
+
+    SUBCASE("removing an unrelated component preserves the recipe") {
+        recordedProject.scene.add(scene::makeDefaultBenchComponent(
+            scene::BenchComponentKind::PlanarMirror,
+            "unrelated-mirror"));
+        const auto result
+            = app::removeBenchComponentAndDependentRecordingRecipes(
+                recordedProject, "unrelated-mirror");
+        CHECK(result.componentRemoved);
+        CHECK(result.dependentRecordingRecipesRemoved == 0U);
+        REQUIRE(recordedProject.recordingRecipes.size() == 1U);
+        CHECK(recordedProject.recordingRecipes.front().recipeId
+            == "thin-green");
+        CHECK_NOTHROW(app::validateBenchProject(recordedProject));
+    }
+
+    SUBCASE("a missing component leaves the project byte-identical") {
+        const std::string before = app::serializeBenchProject(recordedProject);
+        const auto result
+            = app::removeBenchComponentAndDependentRecordingRecipes(
+                recordedProject, "missing-component");
+        CHECK_FALSE(result.componentRemoved);
+        CHECK(result.dependentRecordingRecipesRemoved == 0U);
+        CHECK(app::serializeBenchProject(recordedProject) == before);
+    }
 }

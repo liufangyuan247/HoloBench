@@ -1,4 +1,5 @@
 #include "app/BenchProject.hpp"
+#include "app/ChimeraRecipe.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -612,7 +613,7 @@ Json parametersToJson(const scene::BenchComponent& component) {
     }
     case scene::BenchComponentKind::ObjectWavefrontSource: {
         const auto& value = std::get<scene::ObjectWavefrontSourceParameters>(component.parameters);
-        return {
+        Json result = {
             {"channel", spectralChannelToJson(value.channel)},
             {"depth_m", value.depthMetres},
             {"geometry", objectGeometryName(value.geometry)},
@@ -622,6 +623,11 @@ Json parametersToJson(const scene::BenchComponent& component) {
             {"roughness_seed", value.roughnessSeed},
             {"width_m", value.widthMetres},
         };
+        if (value.requiresIllumination || value.diffuseReflectance != 0.5) {
+            result["requires_illumination"] = value.requiresIllumination;
+            result["diffuse_reflectance"] = value.diffuseReflectance;
+        }
+        return result;
     }
     case scene::BenchComponentKind::PlanarMirror: {
         const auto& value = std::get<scene::PlanarMirrorParameters>(component.parameters);
@@ -709,8 +715,11 @@ Json parametersToJson(const scene::BenchComponent& component) {
     }
     case scene::BenchComponentKind::HolographicPlate: {
         const auto& value = std::get<scene::HolographicPlateParameters>(component.parameters);
-        return {{"height_m", value.heightMetres}, {"role", plateRoleName(value.role)},
+        Json result = {{"height_m", value.heightMetres}, {"role", plateRoleName(value.role)},
             {"thickness_m", value.thicknessMetres}, {"width_m", value.widthMetres}};
+        if (value.recordingPowerTransmission != 0.0)
+            result["recording_power_transmission"] = value.recordingPowerTransmission;
+        return result;
     }
     }
     throw std::runtime_error("unsupported bench component kind");
@@ -750,7 +759,10 @@ scene::BenchComponentParameters parametersFromJson(
             migrated.roughnessSeed = 1U;
             return migrated;
         }
-        requireKeys(value,
+        auto legacyKeys = value;
+        legacyKeys.erase("requires_illumination");
+        legacyKeys.erase("diffuse_reflectance");
+        requireKeys(legacyKeys,
             {"channel", "depth_m", "geometry", "height_m",
                 "primitive_pitch_rad", "primitive_yaw_rad",
                 "roughness_seed", "width_m"},
@@ -774,6 +786,9 @@ scene::BenchComponentParameters parametersFromJson(
                 value.at("primitive_pitch_rad"),
                 "object source primitive_pitch_rad"),
             .roughnessSeed = roughnessSeed,
+            .requiresIllumination = value.value("requires_illumination", false),
+            .diffuseReflectance = value.contains("diffuse_reflectance")
+                ? finiteNumber(value.at("diffuse_reflectance"), "diffuse reflectance") : 0.5,
         };
     }
     case scene::BenchComponentKind::PlanarMirror:
@@ -931,14 +946,19 @@ scene::BenchComponentParameters parametersFromJson(
             .sampleWidth = rasterSize(value.at("sample_width"), "probe sample_width"),
             .sampleHeight = rasterSize(value.at("sample_height"), "probe sample_height"),
         };
-    case scene::BenchComponentKind::HolographicPlate:
-        requireKeys(value, {"height_m", "role", "thickness_m", "width_m"}, "plate parameters");
+    case scene::BenchComponentKind::HolographicPlate: {
+        auto legacyKeys = value;
+        legacyKeys.erase("recording_power_transmission");
+        requireKeys(legacyKeys, {"height_m", "role", "thickness_m", "width_m"}, "plate parameters");
         return scene::HolographicPlateParameters {
             .widthMetres = finiteNumber(value.at("width_m"), "plate width_m"),
             .heightMetres = finiteNumber(value.at("height_m"), "plate height_m"),
             .thicknessMetres = finiteNumber(value.at("thickness_m"), "plate thickness_m"),
             .role = plateRoleFromName(requiredString(value.at("role"), "plate role")),
+            .recordingPowerTransmission = value.contains("recording_power_transmission")
+                ? finiteNumber(value.at("recording_power_transmission"), "recording transmission") : 0.0,
         };
+    }
     }
     throw std::runtime_error("unsupported bench component kind");
 }
@@ -1266,8 +1286,10 @@ bool sourceCarriesSelector(
         return std::any_of(channels.begin(), channels.end(), matches);
     }
     if (source.kind == scene::BenchComponentKind::ObjectWavefrontSource) {
-        return matches(std::get<scene::ObjectWavefrontSourceParameters>(
-            source.parameters).channel);
+        const auto& object = std::get<scene::ObjectWavefrontSourceParameters>(source.parameters);
+        // Passive objects inherit their incident channel. Actual wavelength,
+        // coherence and geometric reach are checked when resolving the trace.
+        return object.requiresIllumination || matches(object.channel);
     }
     return false;
 }
@@ -1427,6 +1449,11 @@ void validateRecordingRecipes(const BenchProject& projectValue) {
 } // namespace
 
 void validateBenchProject(const BenchProject& value) {
+    if (!value.chimeraRecipeJson.empty()) {
+        if (value.chimeraRecipeJson.size() > 256U * 1024U)
+            throw std::invalid_argument("Embedded CHIMERA recipe exceeds 256 KiB");
+        static_cast<void>(chimera::parseChimeraRecipe(value.chimeraRecipeJson));
+    }
     if (value.formatVersion != kBenchProjectFormatVersion) {
         throw std::invalid_argument("unsupported bench project format version");
     }
@@ -1457,7 +1484,7 @@ std::string serializeBenchProject(const BenchProject& value) {
     for (const auto& recipe : recipes) {
         recipeArray.push_back(recordingRecipeToJson(recipe));
     }
-    const Json root {
+    Json root {
         {"components", std::move(componentArray)},
         {"format_version", value.formatVersion},
         {"kind", "optical_bench"},
@@ -1467,12 +1494,16 @@ std::string serializeBenchProject(const BenchProject& value) {
         {"recording_recipes", std::move(recipeArray)},
         {"scene_revision", value.scene.revision()},
     };
+    if (!value.chimeraRecipeJson.empty())
+        root["chimera_recipe"] = Json::parse(value.chimeraRecipeJson);
     return root.dump(2) + '\n';
 }
 
 BenchProject parseBenchProject(std::string_view jsonText) {
     try {
         const Json root = Json::parse(jsonText);
+        auto schemaRoot = root;
+        schemaRoot.erase("chimera_recipe");
         if (!root.at("format_version").is_number_integer()) {
             throw std::runtime_error("bench project format_version must be an integer");
         }
@@ -1487,11 +1518,11 @@ BenchProject parseBenchProject(std::string_view jsonText) {
             throw std::runtime_error("unsupported bench project format version: " + std::to_string(formatVersion));
         }
         if (formatVersion == kLegacyBenchProjectFormatVersion) {
-            requireKeys(root,
+            requireKeys(schemaRoot,
                 {"components", "format_version", "kind", "name", "project_id", "provenance", "scene_revision"},
                 "legacy bench project");
         } else {
-            requireKeys(root,
+            requireKeys(schemaRoot,
                 {"components", "format_version", "kind", "name", "project_id", "provenance", "recording_recipes", "scene_revision"},
                 "bench project");
             if (!root.at("recording_recipes").is_array()) {
@@ -1530,6 +1561,8 @@ BenchProject parseBenchProject(std::string_view jsonText) {
             .provenance = provenanceFromJson(root.at("provenance")),
             .scene = scene::BenchScene(std::move(components), static_cast<scene::SceneRevision>(revisionValue)),
             .recordingRecipes = std::move(recipes),
+            .chimeraRecipeJson = root.contains("chimera_recipe")
+                ? chimera::serializeChimeraRecipe(chimera::parseChimeraRecipe(root.at("chimera_recipe").dump())) : std::string{},
         };
         validateBenchProject(result);
         return result;

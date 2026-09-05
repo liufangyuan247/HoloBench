@@ -1,4 +1,5 @@
 #include "app/ChimeraRecipe.hpp"
+#include "optics/scene/InstrumentDimensions.hpp"
 
 #include <algorithm>
 #include <array>
@@ -16,6 +17,31 @@
 #include <nlohmann/json.hpp>
 
 namespace holobench::app::chimera {
+void resizeChimeraHogels(ChimeraRecipe& recipe, BenchProject& bench, HogelGeometry geometry) {
+    auto nextRecipe = recipe;
+    auto nextBench = bench;
+    nextRecipe.hogels = geometry;
+    validateChimeraRecipe(nextRecipe);
+    const auto* plate = nextBench.scene.find("chimera-plate");
+    if (!plate || plate->kind != optics::scene::BenchComponentKind::HolographicPlate)
+        throw std::invalid_argument("Place the CHIMERA bench before resizing hogels");
+    auto resized = *plate;
+    auto p = std::get<optics::scene::HolographicPlateParameters>(resized.parameters);
+    p.widthMetres = geometry.pitchMetres * static_cast<double>(geometry.countX);
+    p.heightMetres = geometry.pitchMetres * static_cast<double>(geometry.countY);
+    resized.parameters = p;
+    nextBench.scene.replace("chimera-plate", std::move(resized));
+    for (auto& recording : nextBench.recordingRecipes) {
+        if (recording.plateComponentId != "chimera-plate") continue;
+        recording.sampling.extentWidthMetres = geometry.pitchMetres;
+        recording.sampling.extentHeightMetres = geometry.pitchMetres;
+        recording.sampling.centreXMetres = recording.sampling.centreYMetres = 0.0;
+    }
+    nextBench.chimeraRecipeJson = serializeChimeraRecipe(nextRecipe);
+    validateBenchProject(nextBench);
+    recipe = std::move(nextRecipe);
+    bench = std::move(nextBench);
+}
 namespace {
 
 using Json = nlohmann::json;
@@ -129,6 +155,16 @@ void addGenerated(
     std::string role,
     std::string channel,
     const ChimeraRecipe& recipe) {
+    // Shared rigid translation preserves every optical distance and direction.
+    // The nominal base top is 5 mm above the table; the optical axis is 100 mm.
+    value.transform.translationMetres.y += 0.100;
+    if (value.kind != scene::BenchComponentKind::FieldProbe) {
+        auto assembly = scene::makeDefaultMechanicalAssembly(value);
+        assembly.postHeightMetres = 0.095;
+        assembly.benchFrame.translationMetres = value.transform.translationMetres
+            - value.transform.localYAxisInWorld * assembly.postHeightMetres;
+        scene::applyMechanicalAssembly(value, assembly);
+    }
     result.generatedComponents.push_back({
         .componentId = value.id,
         .generatedRole = std::move(role),
@@ -372,7 +408,7 @@ CompileResult compileChimeraRecipe(const ChimeraRecipe& recipe) {
         recipe.targetHorizontalFieldOfViewRadians,
         recipe.targetVerticalFieldOfViewRadians));
     result.constraints.push_back({
-        .severity = requestedNa <= 0.5
+        .severity = requestedNa <= 0.1
             ? ConstraintSeverity::Feasible
             : ConstraintSeverity::Warning,
         .code = "scalar_paraxial_na",
@@ -821,7 +857,26 @@ CompileResult compileChimeraRecipe(const ChimeraRecipe& recipe) {
         result.project.recordingRecipes.push_back(std::move(recordingRecipe));
     }
 
+    result.project.chimeraRecipeJson = serializeChimeraRecipe(recipe);
     validateBenchProject(result.project);
+    result.constraints.push_back({
+        .severity = ConstraintSeverity::Warning,
+        .code = "fourier_mapping_model",
+        .message = "One ideal Fourier lens is generated; this is not a two-lens 4f relay. SLM illumination, polarization and high-NA printing require further validation",
+    });
+    for (const auto& collision : scene::findBaseInterferences(result.project.scene)) {
+        result.constraints.push_back({.severity = ConstraintSeverity::Unsupported,
+            .code = "mechanical_base_overlap", .message = collision.first + " overlaps " + collision.second});
+    }
+    for (const auto& componentId
+         : scene::findMountClearanceFailures(result.project.scene)) {
+        result.constraints.push_back({
+            .severity = ConstraintSeverity::Unsupported,
+            .code = "mechanical_mount_intrusion",
+            .message = componentId
+                + " support cannot clear its protected optical frame",
+        });
+    }
     return result;
 }
 

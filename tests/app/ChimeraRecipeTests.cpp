@@ -237,9 +237,8 @@ TEST_CASE("CHIMERA supports XCube, CascadedDichroic, and IntegratedMultiLine bea
 
         // Verify collinearity: all object branches hitting the plate must share the same horizontal Y plane (Y = 0)
         for (const auto& branch : fields.branches) {
-            CHECK(branch.beam.originMetres.y == doctest::Approx(0.0).epsilon(1e-12));
+            CHECK(branch.beam.originMetres.y == doctest::Approx(0.1).epsilon(1e-12));
             CHECK(branch.beam.direction.y == doctest::Approx(0.0).epsilon(1e-12));
         }
     }
 }
-

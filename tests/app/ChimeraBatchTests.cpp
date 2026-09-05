@@ -137,6 +137,7 @@ TEST_CASE(
   auto scene = editedBench.scene;
   auto plate = *scene.find("chimera-plate");
   plate.transform.translationMetres.x += 1e-3;
+  holobench::optics::scene::rebaseMechanicalAssembly(plate, plate.transform);
   scene.replace("chimera-plate", std::move(plate));
   editedBench.scene = std::move(scene);
   holobench::compute::fft::CpuFftBackend fft;

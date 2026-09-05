@@ -14,7 +14,8 @@ bool sameBenchEditState(
         && lhs.name == rhs.name
         && lhs.provenance == rhs.provenance
         && lhs.scene.components() == rhs.scene.components()
-        && lhs.recordingRecipes == rhs.recordingRecipes;
+        && lhs.recordingRecipes == rhs.recordingRecipes
+        && lhs.chimeraRecipeJson == rhs.chimeraRecipeJson;
 }
 
 BenchProject rebaseBenchEditStateRevision(

@@ -3,6 +3,7 @@
 #include "app/BenchProject.hpp"
 
 namespace holobench::app {
+[[nodiscard]] BenchProject makeSingleBeamDenisyukPreset();
 
 // Ordinary editable unified-bench documents. These functions do not create a
 // hidden workflow graph; callers may move, delete, duplicate, save, and reload

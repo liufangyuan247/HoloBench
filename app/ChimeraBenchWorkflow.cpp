@@ -116,6 +116,24 @@ void reconstructChimeraViews(ChimeraBenchWorkflow &workflow,
   workflow.observationComponentId.clear();
 }
 
+std::vector<optics::holography::RecordedHologram> selectedHogelRecordings(
+    const ChimeraBenchWorkflow& workflow, std::size_t x, std::size_t y) {
+    const auto exposure = std::find_if(workflow.exposures.begin(), workflow.exposures.end(),
+        [=](const auto& e) { return e.hogelX == x && e.hogelY == y; });
+    if (exposure == workflow.exposures.end())
+        throw std::invalid_argument("Expose the selected hogel for the showroom first");
+    std::vector<optics::holography::RecordedHologram> result;
+    for (const auto& channel : exposure->channels) {
+        if (!channel.showroomRecording)
+            throw std::invalid_argument("This is a preview/checkpoint exposure; expose for showroom to retain resolved complex fields");
+        optics::holography::validateRecordedHologram(*channel.showroomRecording);
+        result.push_back(*channel.showroomRecording);
+    }
+    if (result.size() != 3U)
+        throw std::invalid_argument("Selected hogel has incomplete independent RGB recordings");
+    return result;
+}
+
 void captureChimeraCameraImage(
     ChimeraBenchWorkflow &workflow, const BenchProject &bench,
     const CameraSensorRequest &request,

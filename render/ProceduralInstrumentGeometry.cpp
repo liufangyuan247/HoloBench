@@ -1,4 +1,5 @@
 #include "render/ProceduralInstrumentGeometry.hpp"
+#include "optics/scene/InstrumentDimensions.hpp"
 
 #include <algorithm>
 #include <array>
@@ -317,61 +318,74 @@ void addPostAndBase(
     const glm::vec4& color) {
     if (component.mechanicalAssembly.has_value()) {
         const auto& assembly = *component.mechanicalAssembly;
+        const auto layout = bench::instrumentMountLayout(component);
         bench::BenchComponent baseComponent = component;
         baseComponent.transform = assembly.benchFrame;
         baseComponent.mechanicalAssembly.reset();
 
-        const float postHeight = static_cast<float>(assembly.postHeightMetres);
-        const float postHalfWidth = std::clamp(
-            0.08F * extent.width, 0.0015F, 0.004F);
-        const float baseWidth = std::max(0.024F, 0.75F * extent.width);
-        const float baseDepth = std::max(0.020F, 0.55F * baseWidth);
-        const float stageWidth = std::max(0.018F, 0.62F * extent.width);
-        const float stageDepth = std::max(0.016F, 0.55F * extent.width);
-        const glm::vec3 stageTranslation {
+        const float supportTop = static_cast<float>(
+            layout.supportTopHeightMetres);
+        const float postHalfWidth = static_cast<float>(
+            layout.postHalfWidthMetres);
+        const auto baseDimensions = bench::instrumentBaseDimensions(component);
+        const float baseWidth = static_cast<float>(baseDimensions.x);
+        const float baseDepth = static_cast<float>(baseDimensions.z);
+        const float stageWidth = static_cast<float>(layout.stageWidthMetres);
+        const float stageDepth = static_cast<float>(layout.stageDepthMetres);
+        const glm::vec3 stagePlanarTranslation {
             static_cast<float>(assembly.stageTranslationMetres.x),
-            static_cast<float>(assembly.stageTranslationMetres.y),
+            0.0F,
             static_cast<float>(assembly.stageTranslationMetres.z),
         };
         addBox(mesh, baseComponent,
             {0.0F, -0.0025F, 0.0F},
             {0.5F * baseWidth, 0.0025F, 0.5F * baseDepth}, color);
-        if (postHeight > kMinimumVisualThickness) {
+        if (supportTop > kMinimumVisualThickness) {
             addBox(mesh, baseComponent,
-                {0.0F, 0.5F * postHeight, 0.0F},
-                {postHalfWidth, 0.5F * postHeight, postHalfWidth}, color);
+                {0.0F, 0.5F * supportTop, 0.0F},
+                {postHalfWidth, 0.5F * supportTop, postHalfWidth}, color);
         }
         addBox(mesh, baseComponent,
-            stageTranslation + glm::vec3 {0.0F, postHeight, 0.0F},
-            {0.5F * stageWidth, 0.0025F, 0.5F * stageDepth}, color);
-        const float knobHalf = std::clamp(
-            0.10F * extent.width, 0.0018F, 0.0035F);
+            stagePlanarTranslation + glm::vec3 {
+                0.0F,
+                static_cast<float>(layout.stageCentreHeightMetres),
+                0.0F},
+            {0.5F * stageWidth,
+             0.5F * static_cast<float>(layout.stageThicknessMetres),
+             0.5F * stageDepth}, color);
+        const float knobHalf = static_cast<float>(layout.knobHalfSizeMetres);
         addBox(mesh, baseComponent,
-            {0.014F, 0.55F * postHeight, 0.0F},
+            {postHalfWidth + 2.0F * knobHalf,
+             0.55F * supportTop,
+             0.0F},
             {knobHalf, knobHalf, knobHalf}, color);
         addBox(mesh, baseComponent,
-            stageTranslation + glm::vec3 {
+            stagePlanarTranslation + glm::vec3 {
                 0.5F * stageWidth + 1.5F * knobHalf,
-                postHeight,
+                static_cast<float>(layout.stageControlCentreHeightMetres),
                 0.0F},
             {1.5F * knobHalf, knobHalf, knobHalf}, color);
         addBox(mesh, baseComponent,
-            stageTranslation + glm::vec3 {
-                0.0F,
-                postHeight + 1.5F * knobHalf,
+            stagePlanarTranslation + glm::vec3 {
+                -0.5F * stageWidth - 1.5F * knobHalf,
+                static_cast<float>(layout.stageControlCentreHeightMetres),
                 0.5F * stageDepth},
             {knobHalf, 1.5F * knobHalf, knobHalf}, color);
         addBox(mesh, baseComponent,
-            stageTranslation + glm::vec3 {
+            stagePlanarTranslation + glm::vec3 {
                 0.0F,
-                postHeight,
+                static_cast<float>(layout.stageControlCentreHeightMetres),
                 0.5F * stageDepth + 1.5F * knobHalf},
             {knobHalf, knobHalf, 1.5F * knobHalf}, color);
         addBox(mesh, component,
-            {-0.55F * extent.width, 0.0F, -0.006F},
+            {static_cast<float>(layout.horizontalMountKnobCentreXMetres),
+             0.0F,
+             -0.006F},
             {1.5F * knobHalf, knobHalf, knobHalf}, color);
         addBox(mesh, component,
-            {0.0F, -0.55F * extent.height, -0.006F},
+            {0.0F,
+             static_cast<float>(layout.verticalMountKnobCentreYMetres),
+             -0.006F},
             {knobHalf, 1.5F * knobHalf, knobHalf}, color);
         return;
     }
@@ -532,6 +546,7 @@ ProceduralInstrumentMesh generateProceduralInstrumentMesh(
         addCylinderZ(mesh, component, {0.0F, 0.0F, 0.019F},
             std::max(0.002F, 0.28F * bodyRadius), 0.001F, radialSegments,
             {0.75F, 0.10F, 0.06F, 1.0F});
+        if (component.mechanicalAssembly) addPostAndBase(mesh, component, extent, metal);
         break;
     }
     case bench::BenchComponentKind::ObjectWavefrontSource: {
@@ -652,8 +667,10 @@ ProceduralInstrumentMesh generateProceduralInstrumentMesh(
         addPostAndBase(mesh, component, extent, metal);
         break;
     case bench::BenchComponentKind::SpatialLightModulator:
-        addBox(mesh, component, {0.0F, 0.0F, -0.005F},
-            {halfWidth + 0.004F, halfHeight + 0.004F, 0.006F}, dark);
+        // The current optical model is a transmissive thin modulator. Give it
+        // an open frame, not an opaque LCOS-style back housing across the beam.
+        addRectangularFrame(mesh, component, extent.width + 0.008F,
+            extent.height + 0.008F, 0.004F, 0.003F, dark);
         addBox(mesh, component, {0.0F, 0.0F, 0.0015F},
             {halfWidth, halfHeight, 0.0005F},
             selectedTint({0.46F, 0.18F, 0.76F, 1.0F}, options.selected));

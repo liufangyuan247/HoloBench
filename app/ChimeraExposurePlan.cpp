@@ -599,6 +599,11 @@ ExecutedHogelExposure executeHogelExposure(
     std::size_t hogelX,
     std::size_t hogelY,
     const HogelExposureExecutionOptions& options) {
+    const auto checkCancellation = [&] {
+        if (options.cancellationRequested && options.cancellationRequested->load())
+            throw std::runtime_error("Hogel exposure cancelled");
+    };
+    checkCancellation();
     validateChimeraRecipe(recipe);
     validateHogelDataset(dataset);
     validateExposurePlan(plan);
@@ -650,12 +655,23 @@ ExecutedHogelExposure executeHogelExposure(
             "editable CHIMERA bench is missing its holographic plate");
     }
     auto stagedPlate = *currentPlate;
-    stagedPlate.transform.translationMetres
+    auto stagedTransform = stagedPlate.transform;
+    stagedTransform.translationMetres
         = stagedPlate.transform.translationMetres
         - stageEvent->stageXMetres
             * stagedPlate.transform.localXAxisInWorld
         - stageEvent->stageYMetres
             * stagedPlate.transform.localYAxisInWorld;
+    if (stagedPlate.mechanicalAssembly) {
+        auto assembly = *stagedPlate.mechanicalAssembly;
+        const auto movement = stagedTransform.translationMetres - stagedPlate.transform.translationMetres;
+        assembly.stageTranslationMetres.x += math::dot(movement, assembly.benchFrame.localXAxisInWorld);
+        assembly.stageTranslationMetres.y += math::dot(movement, assembly.benchFrame.localYAxisInWorld);
+        assembly.stageTranslationMetres.z += math::dot(movement, assembly.benchFrame.localZAxisInWorld);
+        optics::scene::applyMechanicalAssembly(stagedPlate, assembly);
+    } else {
+        stagedPlate.transform = stagedTransform;
+    }
     workingProject.scene.replace("chimera-plate", std::move(stagedPlate));
     const BenchProject stagedProject = workingProject;
     ExecutedHogelExposure result {
@@ -671,6 +687,7 @@ ExecutedHogelExposure executeHogelExposure(
             || event.hogelX != hogelX || event.hogelY != hogelY) {
             continue;
         }
+        checkCancellation();
         if (event.stageXMetres != stageEvent->stageXMetres
             || event.stageYMetres != stageEvent->stageYMetres) {
             throw std::invalid_argument(
@@ -730,6 +747,12 @@ ExecutedHogelExposure executeHogelExposure(
             sampling.sampleHeight, options.maximumPreviewSampleHeight);
         sampling.centreXMetres = stageEvent->stageXMetres;
         sampling.centreYMetres = stageEvent->stageYMetres;
+        if (options.retainShowroomRecording) {
+            sampling.sampleWidth = recordingRecipe.sampling.sampleWidth;
+            sampling.sampleHeight = recordingRecipe.sampling.sampleHeight;
+            sampling = optics::holography::reconstructionSampling(
+                channelProject.scene, fields, pair.objectBranchId, pair.referenceBranchId, sampling);
+        }
         auto sampledObject = optics::holography::samplePlateIncidentField(
             channelProject.scene,
             fields,
@@ -745,6 +768,7 @@ ExecutedHogelExposure executeHogelExposure(
             sampledObject.diagnostics.appliedSlmCommandIds.end(),
             event.slmCommandId)
             != sampledObject.diagnostics.appliedSlmCommandIds.end();
+        checkCancellation();
         if (!sparseRasterApplied
             || sampledObject.diagnostics.integratedPowerWatts <= 0.0) {
             throw std::invalid_argument(
@@ -762,6 +786,7 @@ ExecutedHogelExposure executeHogelExposure(
                 options.slmResponses,
                 options.environmentTemperatureKelvin);
         double objectIrradiance = 0.0;
+        checkCancellation();
         double referenceIrradiance = 0.0;
         double fringeVisibility = 0.0;
         double totalDose = 0.0;
@@ -868,12 +893,18 @@ ExecutedHogelExposure executeHogelExposure(
             .referenceFieldDiagnostics = std::move(
                 referenceFieldDiagnostics),
             .recording = std::move(recording),
+            .showroomRecording = std::nullopt,
         });
+        if (options.retainShowroomRecording) {
+            result.channels.back().showroomRecording = optics::holography::freezeReflectionRecording(
+                channelProject.scene, result.channels.back().recording);
+        }
     }
     if (result.channels.size() != recipe.rgb.size()) {
         throw std::invalid_argument(
             "selected hogel does not contain three RGB exposure events");
     }
+    checkCancellation();
     return result;
 }
 

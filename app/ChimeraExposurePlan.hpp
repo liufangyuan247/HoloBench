@@ -9,6 +9,7 @@
 #include "optics/holography/BenchVolumeHologram.hpp"
 #include "optics/holography/MaterialDoseResponse.hpp"
 #include "optics/holography/PlateFieldSampling.hpp"
+#include "optics/holography/RecordedHologram.hpp"
 #include "optics/slm/SlmResponse.hpp"
 
 namespace holobench::app::chimera {
@@ -88,10 +89,13 @@ struct ExecutedHogelChannelExposure final {
     optics::holography::PlateFieldSamplingDiagnostics objectFieldDiagnostics;
     optics::holography::PlateFieldSamplingDiagnostics referenceFieldDiagnostics;
     optics::holography::VolumePlateRecordingResult recording;
+    std::optional<optics::holography::RecordedHologram> showroomRecording = std::nullopt;
 
 };
 
 struct HogelExposureExecutionOptions final {
+    bool retainShowroomRecording = false;
+    const std::atomic_bool* cancellationRequested = nullptr;
     std::size_t maximumPreviewSampleWidth = 256;
     std::size_t maximumPreviewSampleHeight = 256;
     std::string slmCalibrationId;

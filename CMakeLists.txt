@@ -86,6 +86,7 @@ add_library(holobench_optics STATIC
     optics/holography/PlateIncidentFields.cpp
     optics/holography/ThinHologram.cpp
     optics/holography/VolumeHologram.cpp
+    optics/holography/RecordedHologram.cpp
     optics/io/LensPrescriptionIO.cpp
     optics/material/CoatingResponse.cpp
     optics/material/OpticalMaterial.cpp
@@ -137,6 +138,8 @@ add_library(holobench_app_logic STATIC
     app/BenchSourceSpectrum.cpp
     app/BenchWaveObservation.cpp
     app/BenchWaveObservationWorker.cpp
+    app/HologramObservationWorker.cpp
+    app/LensProfileDesign.cpp
     app/BenchWavePresets.cpp
     app/BenchProject.cpp
     app/BenchRecordingRecipe.cpp
@@ -349,6 +352,8 @@ if(HOLOBENCH_BUILD_APP)
     add_executable(holobench_app
         app/main.cpp
         app/Application.cpp
+        app/HologramShowroom.cpp
+        app/LensProfileEditor.cpp
         render/Camera.cpp
         render/ProceduralInstrumentGeometry.cpp
         render/gl/Shader.cpp
@@ -449,6 +454,8 @@ if(BUILD_TESTING AND HOLOBENCH_BUILD_TESTS)
         tests/analytic/BenchHologramRecordingTests.cpp
         tests/analytic/BenchRgbHologramTests.cpp
         tests/analytic/BenchVolumeHologramTests.cpp
+        tests/analytic/RecordedHologramTests.cpp
+        tests/app/LensProfileDesignTests.cpp
         tests/analytic/BenchVolumeHologramReplayTests.cpp
         tests/analytic/MaterialDoseResponseTests.cpp
         tests/analytic/CameraSpectralResponseTests.cpp

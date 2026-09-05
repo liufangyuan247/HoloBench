@@ -50,6 +50,16 @@ shows colour-coded X/Y/Z handles: Move constrains to world axes, Rotate uses
 the component's local axes, and configurable translation/rotation snapping
 supports repeatable optical alignment.
 
+Press `Delete` or `Backspace`, or use `Delete (Del)` in the Inspector, to
+remove the selection. The edit is undoable; recording recipes that route
+through the removed component are removed with it so the Bench cannot retain
+a dangling plate or beam path.
+
+`Check layout` verifies oriented base overlap and the current support/frame
+clearance. Supports, XYZ controls, and tip/tilt controls are derived from the
+component's protected optical-frame envelope and persisted mechanical pose;
+impossible low-post configurations are reported explicitly.
+
 A compact alignment bar beside the Bench, mirrored by precision controls in the
 Inspector, operates on those same ordinary transforms: aim local +Z at another
 component, project onto and copy a target optical axis, match height, place at a

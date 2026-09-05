@@ -170,6 +170,34 @@ BenchProject makeReflectionHolographyPreset() {
     return result;
 }
 
+BenchProject makeSingleBeamDenisyukPreset() {
+    auto result = baseProject("preset-single-beam-denisyuk", "Single-beam Denisyuk (scalar single scattering)");
+    auto object = objectSource("object-green", {0, 0, 0.03}, 532e-9, 0.1,
+        "green-recording", bench::ObjectSourceGeometry::Cube, {0.0005, 0.0005, 0.00025});
+    auto op = std::get<bench::ObjectWavefrontSourceParameters>(object.parameters);
+    op.requiresIllumination = true;
+    object.parameters = op;
+    result.scene.add(std::move(object));
+    auto laser = referenceSource("reference-green", {0, 0, -0.15}, 532e-9, 0.3, "green-recording");
+    auto lp = std::get<bench::LaserSourceParameters>(laser.parameters);
+    lp.profile = bench::LaserBeamProfile::Collimated;
+    lp.beamRadiusMetres = 0.0002;
+    laser.parameters = lp;
+    result.scene.add(std::move(laser));
+    auto recordingPlate = plate();
+    auto pp = std::get<bench::HolographicPlateParameters>(recordingPlate.parameters);
+    pp.widthMetres = pp.heightMetres = 0.002;
+    pp.thicknessMetres = 30e-6;
+    pp.recordingPowerTransmission = 0.9;
+    recordingPlate.parameters = pp;
+    result.scene.add(std::move(recordingPlate));
+    auto probe = bench::makeDefaultBenchComponent(bench::BenchComponentKind::FieldProbe,
+        "reflection-reconstruction-probe");
+    probe.transform.translationMetres = {0, 0, -0.03};
+    result.scene.add(std::move(probe));
+    return result;
+}
+
 BenchProject makeRgbHolographyPreset() {
     auto result = baseProject(
         "preset-rgb-full-colour-holography",

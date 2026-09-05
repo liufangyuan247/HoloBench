@@ -12,7 +12,7 @@
 namespace holobench::app::chimera {
 
 inline constexpr int kChimeraRecipeFormatVersion = 1;
-inline constexpr int kChimeraRecipeCompilerVersion = 1;
+inline constexpr int kChimeraRecipeCompilerVersion = 2;
 
 struct HogelGeometry final {
     double pitchMetres = 1e-3;
@@ -148,6 +148,9 @@ struct CompileResult final {
 void validateChimeraRecipe(const ChimeraRecipe& recipe);
 [[nodiscard]] ChimeraRecipe makeCanonicalChimeraRecipe();
 [[nodiscard]] CompileResult compileChimeraRecipe(const ChimeraRecipe& recipe);
+// Changes only plate dimensions and recording windows on the editable Bench.
+// Optical alignment, instrument poses and unrelated user components survive.
+void resizeChimeraHogels(ChimeraRecipe& recipe, BenchProject& bench, HogelGeometry geometry);
 
 [[nodiscard]] std::string serializeChimeraRecipe(const ChimeraRecipe& recipe);
 [[nodiscard]] ChimeraRecipe parseChimeraRecipe(std::string_view jsonText);

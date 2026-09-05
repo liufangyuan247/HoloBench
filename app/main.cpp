@@ -42,6 +42,10 @@ int main(int argc, char** argv) {
             if (!parsePositiveInt(argv[index], 1'000'000, options.smokeFrameLimit)) {
                 return 64;
             }
+        } else if (arg == "--showroom-smoke") {
+            if (seenGlSmoke) return 64;
+            seenGlSmoke = true;
+            options.showroomSmoke = true;
         } else if (arg == "--gl-smoke") {
             if (seenGlSmoke) {
                 return 64;
