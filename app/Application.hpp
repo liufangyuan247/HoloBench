@@ -469,6 +469,7 @@ struct SandboxUiEvidence final {
     UiItemBounds rgbPreset;
     UiItemBounds rgbDenisyukPreset;
     UiItemBounds doubleSlitPreset;
+    UiItemBounds beamExpanderPreset;
     UiItemBounds chimeraPreset;
     UiItemBounds laserShelf;
     UiItemBounds objectSourceShelf;

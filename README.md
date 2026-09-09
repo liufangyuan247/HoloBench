@@ -141,6 +141,15 @@ placed Screen. It is a composition shortcut only: every instrument can be moved,
 removed, replaced, or adjusted, and the observed interference still comes from
 the same routed-field service used by user-built benches.
 
+For a sampled-field laser expansion example, click `3x Beam Expander` on the
+Bench shelf. It loads a 0.50 mm-radius Gaussian source, -100 mm and +300 mm
+ideal thin lenses separated by 200 mm, and an 8 mm / 512-sample Field Probe.
+The Probe Inspector reports an approximately 1.53 mm equivalent output radius.
+It also reports a red sampling error if the phase of any illuminated thin lens
+changes by more than pi between adjacent field samples. In particular, the
+short-focus -25 mm/+75 mm setup with a 2 mm beam on a 25 mm/512 grid is aliased
+and its displayed spot size is not a credible 3x result.
+
 For supported ray-routed paths, placed ideal lenses, mirror/splitter clear
 areas, apertures, pinholes, and SLM finite pixels/dead space now act on a
 beam-following local complex field before plate recording. Ideal mirror and

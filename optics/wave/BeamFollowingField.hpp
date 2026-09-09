@@ -78,6 +78,8 @@ struct BeamFollowingFieldDiagnostics final {
     bool usedFoldedPath = false;
     bool usedTargetTangentProjection = false;
     bool supportTouchesBoundary = false;
+    bool thinLensPhaseUndersampled = false;
+    double maximumThinLensAdjacentPhaseStepRadians = 0.0;
     double sourceBranchPowerWatts = 0.0;
     double terminalBranchPowerWatts = 0.0;
     double scalarBranchAmplitudeScale = 1.0;

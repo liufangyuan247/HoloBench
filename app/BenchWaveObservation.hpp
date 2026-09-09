@@ -36,6 +36,11 @@ struct BenchWaveObservationResult final {
     std::string coherenceId;
     double peakIntensityWattsPerSquareMetre = 0.0;
     double integratedPowerWatts = 0.0;
+    double intensityCentroidXMetres = 0.0;
+    double intensityCentroidYMetres = 0.0;
+    // sqrt(2 * <r^2>) about the intensity centroid: equals the radius of an
+    // ideal top-hat and the 1/e field radius of a fundamental Gaussian.
+    double equivalentBeamRadiusMetres = 0.0;
     field::ComplexField2D fieldAtObservation;
     std::vector<BenchWaveContribution> contributions;
 

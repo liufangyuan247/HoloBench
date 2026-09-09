@@ -119,6 +119,64 @@ BenchProject makeCircularDiffractionPreset() {
     return result;
 }
 
+BenchProject makeGalileanBeamExpanderPreset() {
+    BenchProject result;
+    result.projectId = "preset-galilean-beam-expander";
+    result.name = "Validated 3x Galilean Beam Expander";
+
+    auto laser = makeMountedComponent(
+        scene::BenchComponentKind::LaserSource,
+        "expander-laser",
+        {.translationMetres = {0.0, 0.0, -0.40}});
+    auto laserParameters = std::get<scene::LaserSourceParameters>(
+        laser.parameters);
+    laserParameters.profile = scene::LaserBeamProfile::Gaussian;
+    laserParameters.beamRadiusMetres = 0.50e-3;
+    laserParameters.channels = {{
+        .wavelengthMetres = 532e-9,
+        .powerWatts = 0.050,
+        .coherenceId = "expander-green",
+    }};
+    laser.parameters = laserParameters;
+    result.scene.add(std::move(laser));
+
+    auto negativeLens = makeMountedComponent(
+        scene::BenchComponentKind::IdealThinLens,
+        "expander-negative-lens",
+        {.translationMetres = {0.0, 0.0, -0.20}});
+    auto negativeParameters = std::get<scene::IdealThinLensParameters>(
+        negativeLens.parameters);
+    negativeParameters.focalLengthMetres = -100.0e-3;
+    negativeParameters.clearApertureDiameterMetres = 4.0e-3;
+    negativeLens.parameters = negativeParameters;
+    result.scene.add(std::move(negativeLens));
+
+    auto positiveLens = makeMountedComponent(
+        scene::BenchComponentKind::IdealThinLens,
+        "expander-positive-lens",
+        {.translationMetres = {0.0, 0.0, 0.0}});
+    auto positiveParameters = std::get<scene::IdealThinLensParameters>(
+        positiveLens.parameters);
+    positiveParameters.focalLengthMetres = 300.0e-3;
+    positiveParameters.clearApertureDiameterMetres = 6.0e-3;
+    positiveLens.parameters = positiveParameters;
+    result.scene.add(std::move(positiveLens));
+
+    auto probe = makeMountedComponent(
+        scene::BenchComponentKind::FieldProbe,
+        "expander-probe",
+        {.translationMetres = {0.0, 0.0, 0.30}});
+    probe.parameters = scene::FieldProbeParameters {
+        .widthMetres = 8.0e-3,
+        .heightMetres = 8.0e-3,
+        .sampleWidth = 512U,
+        .sampleHeight = 512U,
+    };
+    result.scene.add(std::move(probe));
+    validateBenchProject(result);
+    return result;
+}
+
 BenchProject makeMachZehnderInterferometerPreset() {
     constexpr double inverseSqrtTwo = 0.7071067811865475244;
     const math::RigidTransform3d splitTransform {

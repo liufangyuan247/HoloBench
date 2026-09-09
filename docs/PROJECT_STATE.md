@@ -2,6 +2,38 @@
 
 Last updated: 2026-09-05
 
+## Current user follow-up: visibly validated laser beam expansion
+
+- The Bench shelf now includes a `3x Beam Expander` starter assembled from
+  ordinary editable components: a 532 nm Gaussian laser with 0.50 mm radius,
+  a -100 mm lens, a +300 mm lens at the afocal 200 mm separation, and an
+  8 mm square 512-sample Field Probe. The probe reports a 1.528 mm equivalent
+  output radius, within 1.9% of the 1.500 mm paraxial target, and 2.76 times
+  the no-lens radius at the same plane.
+- The Inspector reports intensity centroid and the second-moment equivalent
+  beam radius, defined as `sqrt(2 <r^2>)` about that centroid. This equals the
+  geometric radius of an ideal circular top-hat and the 1/e field-amplitude
+  radius of a fundamental Gaussian, so expansion can be checked numerically
+  instead of inferred only from the rendered beam tube.
+- Ideal thin-lens field application now measures the maximum adjacent phase
+  step over the illuminated aperture. A step above pi is identified as invalid
+  sampling with a visible Inspector error and path warning. The earlier
+  2 mm-radius, -25 mm/+75 mm, 25 mm/512-sample example triggers this diagnostic:
+  it produced only 1.098 times apparent expansion because its lens phase was
+  aliased, and must not be treated as a physical result.
+
+This remains a scalar, paraxial, coherent sampled-field validation. The preset
+does not model thick-lens aberrations, surface reflections, polarization, or
+manufacturing tolerances.
+
+Validation: development and optimized application builds pass. The complete
+development suite passes **660/660**, including the reconstruction-grade 1 mm
+RGB hogel, GPU, and font checks. The optimized `--gl-smoke` exits 0 on AMD
+Radeon Pro 5300M, OpenGL 4.6 Core, driver `23.9.3.230915`; its real ImGui path
+clicks the beam-expander preset, waits for the 512-sample result, and checks a
+1.45-1.60 mm equivalent radius, current overlay submission, and valid lens
+phase sampling. No NVIDIA result or new performance claim is made.
+
 ## Current user follow-up: component deletion and mount clearance
 
 - A selected Bench component can be removed with the Inspector action or the

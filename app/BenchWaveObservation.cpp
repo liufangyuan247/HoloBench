@@ -241,6 +241,38 @@ void finishObservationMetrics(BenchWaveObservationResult& result) {
     }
     result.peakIntensityWattsPerSquareMetre = peakIntensity;
     result.integratedPowerWatts = field::computeIntegratedIntensity(intensity);
+    long double total = 0.0L;
+    long double firstX = 0.0L;
+    long double firstY = 0.0L;
+    for (std::size_t y = 0U; y < intensity.height(); ++y) {
+        const long double yMetres = intensity.yCoordinateMetres(y);
+        for (std::size_t x = 0U; x < intensity.width(); ++x) {
+            const long double sample = intensity.at(x, y);
+            total += sample;
+            firstX += sample * intensity.xCoordinateMetres(x);
+            firstY += sample * yMetres;
+        }
+    }
+    if (!(total > 0.0L)) return;
+    const long double centroidX = firstX / total;
+    const long double centroidY = firstY / total;
+    long double secondMoment = 0.0L;
+    for (std::size_t y = 0U; y < intensity.height(); ++y) {
+        const long double dy = intensity.yCoordinateMetres(y) - centroidY;
+        for (std::size_t x = 0U; x < intensity.width(); ++x) {
+            const long double dx = intensity.xCoordinateMetres(x) - centroidX;
+            secondMoment += intensity.at(x, y) * (dx * dx + dy * dy);
+        }
+    }
+    const long double radiusSquared = 2.0L * secondMoment / total;
+    if (!std::isfinite(radiusSquared) || radiusSquared < 0.0L) {
+        throw std::overflow_error(
+            "Bench equivalent beam radius is not representable");
+    }
+    result.intensityCentroidXMetres = static_cast<double>(centroidX);
+    result.intensityCentroidYMetres = static_cast<double>(centroidY);
+    result.equivalentBeamRadiusMetres = std::sqrt(
+        static_cast<double>(radiusSquared));
 }
 
 } // namespace

@@ -6683,6 +6683,16 @@ void Application::drawSandboxComponentShelf() {
     }
     captureLastItemBounds(sandboxUiEvidence_.doubleSlitPreset);
     ImGui::SameLine();
+    if (ImGui::Button("3x Beam Expander")) {
+        selectedBenchComponentId_ = "expander-probe";
+        sandboxWaveObservationComponentId_ = "expander-probe";
+        sandboxWaveCommittedSampleLimitIndex_ = 2;
+        static_cast<void>(applyDynamicBenchProject(
+            makeGalileanBeamExpanderPreset(),
+            "Loaded validated 3x Galilean beam expander; select each lens to edit focal length or spacing"));
+    }
+    captureLastItemBounds(sandboxUiEvidence_.beamExpanderPreset);
+    ImGui::SameLine();
     if (ImGui::Button("Mach-Zehnder")) {
         selectedBenchComponentId_ = "mz-screen";
         sandboxWaveObservationComponentId_ = "mz-screen";
@@ -9364,6 +9374,25 @@ void Application::drawSandboxInspector() {
                         observationResult
                             .peakIntensityWattsPerSquareMetre,
                         observationResult.integratedPowerWatts);
+                    ImGui::Text(
+                        "Equivalent beam radius %.4f mm | centroid (%.4f, %.4f) mm",
+                        observationResult.equivalentBeamRadiusMetres * 1e3,
+                        observationResult.intensityCentroidXMetres * 1e3,
+                        observationResult.intensityCentroidYMetres * 1e3);
+                    const bool lensSamplingInvalid = std::any_of(
+                        observationResult.contributions.begin(),
+                        observationResult.contributions.end(),
+                        [](const BenchWaveContribution& contribution) {
+                            return contribution.pathSampling
+                                .thinLensPhaseUndersampled;
+                        });
+                    if (lensSamplingInvalid) {
+                        ImGui::TextColored(
+                            ImVec4(1.0F, 0.35F, 0.25F, 1.0F),
+                            "SAMPLING INVALID: a thin-lens phase changes by more than pi per grid sample.");
+                        ImGui::TextWrapped(
+                            "Use a smaller plane size per sample, select more settled samples, reduce beam radius, or use longer focal lengths.");
+                    }
                     for (const auto& contribution
                          : observationResult.contributions) {
                         ImGui::PushID(&contribution);
@@ -9403,6 +9432,16 @@ void Application::drawSandboxInspector() {
                                     ? "yes" : "no",
                                 diagnostics.supportTouchesBoundary
                                     ? "touched" : "clear");
+                            if (diagnostics
+                                    .maximumThinLensAdjacentPhaseStepRadians
+                                > 0.0) {
+                                ImGui::Text(
+                                    "Maximum thin-lens adjacent phase step: %.4f rad (%s)",
+                                    diagnostics
+                                        .maximumThinLensAdjacentPhaseStepRadians,
+                                    diagnostics.thinLensPhaseUndersampled
+                                        ? "invalid > pi" : "sampled");
+                            }
                             if (!diagnostics.appliedWaveComponentIds.empty()) {
                                 const std::string applied
                                     = joinedBenchIdentifiers(
@@ -13892,6 +13931,38 @@ void Application::runSandboxInteractionSmoke() {
     }
     sandboxWaveViewModeIndex_ = 0;
     sandboxWaveTextureDirty_ = true;
+
+    click(
+        sandboxUiEvidence_.beamExpanderPreset,
+        "3x Beam Expander Bench action");
+    drawInputFrame({-1000.0F, -1000.0F}, 0);
+    waveObservation = activeSandboxWaveObservation();
+    const bool expanderSamplingInvalid = waveObservation != nullptr
+        && std::any_of(
+            waveObservation->contributions.begin(),
+            waveObservation->contributions.end(),
+            [](const BenchWaveContribution& contribution) {
+                return contribution.pathSampling.thinLensPhaseUndersampled;
+            });
+    if (benchProject_.projectId != "preset-galilean-beam-expander"
+        || waveObservation == nullptr
+        || waveObservation->isStaleFor(benchProject_.scene)
+        || waveObservation->interactivePreview
+        || waveObservation->fieldAtObservation.width() != 512U
+        || waveObservation->equivalentBeamRadiusMetres < 1.45e-3
+        || waveObservation->equivalentBeamRadiusMetres > 1.60e-3
+        || expanderSamplingInvalid
+        || !sandboxWaveTexture_
+        || !sandboxWaveTexture_->isValid()
+        || !sandboxReconstructionOverlaySubmitted_) {
+        throw std::runtime_error(
+            "3x Beam Expander action did not display its validated 1.5 mm-radius field (radius="
+            + (waveObservation
+                ? std::to_string(
+                    waveObservation->equivalentBeamRadiusMetres * 1e3)
+                : "missing")
+            + " mm, wave=" + sandboxWaveObservationDiagnostic_ + ")");
+    }
 
     click(
         sandboxUiEvidence_.rgbDenisyukPreset,

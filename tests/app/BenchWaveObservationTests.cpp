@@ -32,6 +32,28 @@ double peakIntensity(const field::ComplexField2D& value) {
     return result;
 }
 
+double independentEquivalentBeamRadius(const field::ComplexField2D& value) {
+    long double weightedRadiusSquared = 0.0L;
+    long double totalIntensity = 0.0L;
+    for (std::size_t y = 0U; y < value.height(); ++y) {
+        const long double yMetres = value.yCoordinateMetres(y);
+        for (std::size_t x = 0U; x < value.width(); ++x) {
+            const long double xMetres = value.xCoordinateMetres(x);
+            const long double intensity = std::norm(value.at(x, y));
+            weightedRadiusSquared += intensity
+                * (xMetres * xMetres + yMetres * yMetres);
+            totalIntensity += intensity;
+        }
+    }
+    if (!(totalIntensity > 0.0L)) {
+        throw std::runtime_error("beam-radius measurement has no power");
+    }
+    // For a uniform circular beam, <r^2> = R^2 / 2; for a fundamental
+    // Gaussian it returns the 1/e field-amplitude radius.
+    return std::sqrt(static_cast<double>(
+        2.0L * weightedRadiusSquared / totalIntensity));
+}
+
 scene::BenchComponent placedComponent(
     scene::BenchComponentKind kind,
     const char* id,
@@ -425,6 +447,124 @@ TEST_CASE("placed observation follows lenses SLMs mirrors and splitter folds") {
             == std::vector<std::string> {id});
         CHECK(peakIntensity(foldedResult.fieldAtObservation) > 0.0);
     }
+}
+
+TEST_CASE("placed Galilean telescope expands a sampled Gaussian beam by its independent ABCD ratio") {
+    fft::CpuFftBackend backend;
+    const auto project = app::makeGalileanBeamExpanderPreset();
+    const auto* laser = project.scene.find("expander-laser");
+    const auto* probe = project.scene.find("expander-probe");
+    REQUIRE(laser != nullptr);
+    REQUIRE(probe != nullptr);
+
+    const auto expandedGraph = ray::traceDynamicBench(project.scene);
+    const auto expanded = app::observeBenchWavePattern(
+        project.scene,
+        expandedGraph,
+        probe->id,
+        512U,
+        false,
+        backend);
+    REQUIRE(expanded.contributions.size() == 1U);
+    CHECK(expanded.contributions.front().pathComponentIds
+        == std::vector<std::string> {
+            "expander-negative-lens",
+            "expander-positive-lens",
+            "expander-probe"});
+
+    scene::BenchScene baselineBench;
+    baselineBench.add(*laser);
+    baselineBench.add(*probe);
+    const auto baselineGraph = ray::traceDynamicBench(baselineBench);
+    const auto baseline = app::observeBenchWavePattern(
+        baselineBench,
+        baselineGraph,
+        probe->id,
+        512U,
+        false,
+        backend);
+    const double expandedRadius = independentEquivalentBeamRadius(
+        expanded.fieldAtObservation);
+    const double baselineRadius = independentEquivalentBeamRadius(
+        baseline.fieldAtObservation);
+    const double measuredExpansion = expandedRadius / baselineRadius;
+    CAPTURE(expandedRadius);
+    CAPTURE(baselineRadius);
+    CAPTURE(measuredExpansion);
+    // L2 * P(f2 + f1) * L1 gives A = -f2/f1 = 3 and C = 0.
+    // The tolerance includes Gaussian diffraction and finite-grid sampling.
+    CHECK(expandedRadius == doctest::Approx(1.50e-3).epsilon(0.05));
+    CHECK(measuredExpansion > 2.6);
+    CHECK(expanded.equivalentBeamRadiusMetres
+        == doctest::Approx(expandedRadius).epsilon(1e-12));
+    CHECK_FALSE(expanded.contributions.front()
+        .pathSampling.thinLensPhaseUndersampled);
+    CHECK(expanded.contributions.front().pathSampling
+        .maximumThinLensAdjacentPhaseStepRadians < std::numbers::pi);
+}
+
+TEST_CASE("short-focus Galilean setup reports undersampled lens phase instead of credible expansion") {
+    fft::CpuFftBackend backend;
+    scene::BenchScene bench;
+    auto laser = placedComponent(
+        scene::BenchComponentKind::LaserSource,
+        "undersampled-laser",
+        {.translationMetres = {0.0, 0.0, -0.30}});
+    auto source = std::get<scene::LaserSourceParameters>(laser.parameters);
+    source.profile = scene::LaserBeamProfile::Collimated;
+    source.beamRadiusMetres = 2.0e-3;
+    laser.parameters = source;
+    bench.add(laser);
+
+    auto negative = placedComponent(
+        scene::BenchComponentKind::IdealThinLens,
+        "undersampled-negative-lens",
+        {.translationMetres = {0.0, 0.0, -0.15}});
+    auto negativeParameters = std::get<scene::IdealThinLensParameters>(
+        negative.parameters);
+    negativeParameters.focalLengthMetres = -25.0e-3;
+    negativeParameters.clearApertureDiameterMetres = 10.0e-3;
+    negative.parameters = negativeParameters;
+    bench.add(negative);
+
+    auto positive = placedComponent(
+        scene::BenchComponentKind::IdealThinLens,
+        "undersampled-positive-lens",
+        {.translationMetres = {0.0, 0.0, -0.10}});
+    auto positiveParameters = std::get<scene::IdealThinLensParameters>(
+        positive.parameters);
+    positiveParameters.focalLengthMetres = 75.0e-3;
+    positiveParameters.clearApertureDiameterMetres = 20.0e-3;
+    positive.parameters = positiveParameters;
+    bench.add(positive);
+
+    auto probe = placedComponent(
+        scene::BenchComponentKind::FieldProbe,
+        "undersampled-probe",
+        {.translationMetres = {0.0, 0.0, 0.05}});
+    probe.parameters = scene::FieldProbeParameters {
+        .widthMetres = 25.0e-3,
+        .heightMetres = 25.0e-3,
+        .sampleWidth = 512U,
+        .sampleHeight = 512U,
+    };
+    bench.add(probe);
+
+    const auto graph = ray::traceDynamicBench(bench);
+    const auto result = app::observeBenchWavePattern(
+        bench, graph, probe.id, 512U, false, backend);
+    REQUIRE(result.contributions.size() == 1U);
+    const auto& diagnostics = result.contributions.front().pathSampling;
+    CHECK(diagnostics.thinLensPhaseUndersampled);
+    CHECK(diagnostics.maximumThinLensAdjacentPhaseStepRadians
+        > std::numbers::pi);
+    CHECK(std::any_of(
+        diagnostics.warnings.begin(),
+        diagnostics.warnings.end(),
+        [](const std::string& warning) {
+            return warning.find("thin-lens phase sampling is invalid")
+                != std::string::npos;
+        }));
 }
 
 TEST_CASE("placed real prescription focuses a bounded coaxial scalar field") {
@@ -828,4 +968,3 @@ TEST_CASE("progressive observation worker computes stages asynchronously and hon
     worker.stop();
     CHECK(!worker.isBusy());
 }
-

@@ -659,6 +659,15 @@ void applyProjectedElement(
             == scene::BenchComponentKind::SpatialLightModulator
         ? sparseCommandFor(slmCommands, component.id)
         : nullptr;
+    double peakInputIntensity = 0.0;
+    if (component.kind == scene::BenchComponentKind::IdealThinLens) {
+        for (const auto& sample : value.samples()) {
+            peakInputIntensity = std::max(
+                peakInputIntensity, std::norm(sample));
+        }
+    }
+    double maximumIlluminatedLensRadius = 0.0;
+    constexpr double kLensPhaseSupportIntensityFraction = 1e-8;
     std::string placedCalibrationId;
     const auto* placedResponse = component.kind
             == scene::BenchComponentKind::SpatialLightModulator
@@ -707,6 +716,14 @@ void applyProjectedElement(
                     <= 0.5 * p.clearApertureDiameterMetres;
                 phase = phaseCoefficient
                     * (local.x * local.x + local.y * local.y);
+                if (transmitted && peakInputIntensity > 0.0
+                    && std::norm(value.at(x, y))
+                        >= peakInputIntensity
+                            * kLensPhaseSupportIntensityFraction) {
+                    maximumIlluminatedLensRadius = std::max(
+                        maximumIlluminatedLensRadius,
+                        std::hypot(local.x, local.y));
+                }
                 break;
             }
             case scene::BenchComponentKind::Aperture: {
@@ -785,6 +802,25 @@ void applyProjectedElement(
         }
     }
     value = std::move(transformed);
+    if (component.kind == scene::BenchComponentKind::IdealThinLens
+        && maximumIlluminatedLensRadius > 0.0) {
+        const double maximumPitch = std::max(
+            value.pitchXMetres(), value.pitchYMetres());
+        const double maximumAdjacentPhaseStep = std::abs(phaseCoefficient)
+            * (2.0 * maximumIlluminatedLensRadius * maximumPitch
+                + maximumPitch * maximumPitch);
+        diagnostics.maximumThinLensAdjacentPhaseStepRadians = std::max(
+            diagnostics.maximumThinLensAdjacentPhaseStepRadians,
+            maximumAdjacentPhaseStep);
+        if (maximumAdjacentPhaseStep > std::numbers::pi) {
+            diagnostics.thinLensPhaseUndersampled = true;
+            diagnostics.warnings.push_back(
+                component.id
+                + ": thin-lens phase sampling is invalid (maximum adjacent step "
+                + std::to_string(maximumAdjacentPhaseStep)
+                + " rad exceeds pi); reduce plane size per sample, increase settled samples, reduce beam radius, or use longer focal lengths");
+        }
+    }
     if (component.kind == scene::BenchComponentKind::SpatialFilter) {
         diagnostics.warnings.push_back(
             component.id

@@ -8,5 +8,6 @@ namespace holobench::app {
 [[nodiscard]] BenchProject makeSingleSlitDiffractionPreset();
 [[nodiscard]] BenchProject makeCircularDiffractionPreset();
 [[nodiscard]] BenchProject makeMachZehnderInterferometerPreset();
+[[nodiscard]] BenchProject makeGalileanBeamExpanderPreset();
 
 } // namespace holobench::app
