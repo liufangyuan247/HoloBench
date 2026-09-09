@@ -64,10 +64,13 @@ struct ErrorMetrics final {
 }
 
 [[nodiscard]] double parseDouble(std::string_view text) {
-    double value = 0.0;
-    const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
-    if (result.ec != std::errc{} || result.ptr != text.data() + text.size()
-        || !std::isfinite(value)) {
+    if (text.empty()) {
+        throw std::runtime_error("invalid finite floating-point value in waveprop CSV");
+    }
+    const std::string s(text);
+    char* end = nullptr;
+    const double value = std::strtod(s.c_str(), &end);
+    if (end != s.c_str() + s.size() || !std::isfinite(value)) {
         throw std::runtime_error("invalid finite floating-point value in waveprop CSV");
     }
     return value;

@@ -4,6 +4,7 @@ project(HoloBench VERSION 0.1.0 LANGUAGES C CXX)
 
 include(CTest)
 include(FetchContent)
+find_package(Threads REQUIRED)
 
 option(HOLOBENCH_BUILD_APP "Build the interactive HoloBench application" ON)
 option(HOLOBENCH_BUILD_TESTS "Build deterministic core tests" ON)
@@ -185,6 +186,7 @@ target_link_libraries(holobench_app_logic PUBLIC
     HoloBench::Core
     HoloBench::Compute
     HoloBench::Optics
+    Threads::Threads
 )
 target_compile_features(holobench_app_logic PUBLIC cxx_std_20)
 holobench_set_warnings(holobench_app_logic)

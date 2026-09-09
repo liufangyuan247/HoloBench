@@ -1,3 +1,5 @@
+#include <iomanip>
+#include <sstream>
 #include "optics/io/LensPrescriptionIO.hpp"
 
 #include <array>
@@ -318,14 +320,10 @@ void requireExactFields(const Json &value,
     throw std::invalid_argument(
         "CSV serialization requires finite numeric values");
   }
-  std::array<char, 64> buffer{};
-  const auto conversion = std::to_chars(
-      buffer.data(), buffer.data() + buffer.size(), value,
-      std::chars_format::general, std::numeric_limits<double>::max_digits10);
-  if (conversion.ec != std::errc{}) {
-    throw std::runtime_error("failed to format a CSV floating-point value");
-  }
-  return std::string(buffer.data(), conversion.ptr);
+  std::ostringstream oss;
+  oss.imbue(std::locale::classic());
+  oss << std::setprecision(std::numeric_limits<double>::max_digits10) << value;
+  return oss.str();
 }
 
 [[nodiscard]] std::string formatUnsigned(std::size_t value) {
@@ -434,13 +432,14 @@ parseCsvRows(std::string_view encoded) {
 
 [[nodiscard]] double parseCsvDouble(std::string_view encoded,
                                     std::string_view context) {
-  double value = 0.0;
-  const auto conversion =
-      std::from_chars(encoded.data(), encoded.data() + encoded.size(), value,
-                      std::chars_format::general);
-  if (conversion.ec != std::errc{} ||
-      conversion.ptr != encoded.data() + encoded.size() ||
-      !std::isfinite(value)) {
+  if (encoded.empty()) {
+    throw std::runtime_error(std::string(context) +
+                             " must be a finite floating-point value");
+  }
+  const std::string text(encoded);
+  char* end = nullptr;
+  const double value = std::strtod(text.c_str(), &end);
+  if (end != text.c_str() + text.size() || !std::isfinite(value)) {
     throw std::runtime_error(std::string(context) +
                              " must be a finite floating-point value");
   }
