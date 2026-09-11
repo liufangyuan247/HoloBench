@@ -181,15 +181,15 @@ TEST_CASE("RGB Denisyuk preset uses one RGB replay laser and three reflection pa
     const auto* objRed = project.scene.find("object-red");
     REQUIRE(objRed != nullptr);
     CHECK(std::get<scene::ObjectWavefrontSourceParameters>(objRed->parameters).geometry
-        == scene::ObjectSourceGeometry::Cube);
+        == scene::ObjectSourceGeometry::CornellBox);
 
     const auto* objGreen = project.scene.find("object-green");
     REQUIRE(objGreen != nullptr);
     CHECK(std::get<scene::ObjectWavefrontSourceParameters>(objGreen->parameters).geometry
-        == scene::ObjectSourceGeometry::Sphere);
+        == scene::ObjectSourceGeometry::CornellBox);
 
     const auto* objBlue = project.scene.find("object-blue");
     REQUIRE(objBlue != nullptr);
     CHECK(std::get<scene::ObjectWavefrontSourceParameters>(objBlue->parameters).geometry
-        == scene::ObjectSourceGeometry::Tetrahedron);
+        == scene::ObjectSourceGeometry::CornellBox);
 }

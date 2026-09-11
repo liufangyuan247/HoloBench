@@ -21,6 +21,7 @@
 #include "app/BenchProject.hpp"
 #include "app/BenchWaveObservation.hpp"
 #include "app/BenchWaveObservationWorker.hpp"
+#include "app/HologramExperimentWorker.hpp"
 #include "app/ChimeraBenchWorkflow.hpp"
 #include "app/ChimeraBatch.hpp"
 #include "app/ChimeraParameterSweep.hpp"
@@ -611,6 +612,9 @@ private:
         const HologramRecordingRecipe& recipe);
     void recordSelectedPlateExperiment(bool recordHistory = true);
     void reconstructSelectedPlateExperiment();
+    void pollHologramExperimentWorker();
+    void applyHologramExperimentResult(HologramExperimentJobResult result);
+    void cancelHologramExperimentWorker();
     void loadSceneFromPath(const char* pathStr);
     void saveSceneToPath(const char* pathStr);
     void updateSandboxWaveObservation();
@@ -697,6 +701,8 @@ private:
     int sandboxWaveCrossSectionAxisIndex_ = 0;
     BenchWaveObservationWorker sandboxWaveObservationWorker_;
     std::uint64_t sandboxWaveCurrentRequestId_ = 0;
+    HologramExperimentWorker hologramExperimentWorker_;
+    std::uint64_t hologramExperimentCurrentRequestId_ = 0;
     std::uint64_t sandboxWaveSubmittedSceneRevision_ = 0;
     std::uint64_t sandboxWaveSubmittedTraceRevision_ = 0;
     std::string sandboxWaveSubmittedComponentId_;

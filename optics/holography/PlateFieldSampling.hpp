@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -40,6 +41,10 @@ struct PlateFieldSamplingOptions final {
     double extentHeightMetres = 0.0;
     double centreXMetres = 0.0;
     double centreYMetres = 0.0;
+    // When enabled, the analytical carrier plane-wave modulation is separated into the
+    // analytical volume grating vector, sampling the complex baseband envelope on the plate.
+    bool demodulateCarrier = false;
+    const std::atomic_bool* cancellationRequested = nullptr;
 
     bool operator==(const PlateFieldSamplingOptions&) const = default;
 };

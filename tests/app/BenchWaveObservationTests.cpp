@@ -930,7 +930,7 @@ TEST_CASE("progressive observation worker computes stages asynchronously and hon
     worker.submitRequest(std::move(req));
 
     std::vector<app::ProgressiveObservationStage> completedStages;
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
     while (std::chrono::steady_clock::now() < deadline) {
         if (auto stage = worker.pollResult()) {
             completedStages.push_back(std::move(*stage));

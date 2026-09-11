@@ -20,7 +20,7 @@ namespace {
 // Six bounded slices retain visible axial structure while keeping RGB plate
 // recording interactive on the deterministic CPU reference path.
 constexpr std::size_t kMaximumDepthLayers = 6U;
-constexpr double kRoughnessCorrelationMetres = 25e-6;
+constexpr double kRoughnessCorrelationMetres = 2.5e-6;
 
 void validatePrimitiveParameters(
     const scene::ObjectWavefrontSourceParameters& parameters) {
@@ -40,6 +40,7 @@ void validatePrimitiveParameters(
     case scene::ObjectSourceGeometry::Cube:
     case scene::ObjectSourceGeometry::Sphere:
     case scene::ObjectSourceGeometry::Tetrahedron:
+    case scene::ObjectSourceGeometry::CornellBox:
         return;
     }
     throw std::invalid_argument("diffuse object geometry is invalid");
@@ -127,6 +128,9 @@ DiffuseObjectPrimitiveFrame makePrimitiveFrame(
                 frontExtent,
                 primitiveToSourceDirection(result, vertex).z);
         }
+        break;
+    case scene::ObjectSourceGeometry::CornellBox:
+        frontExtent = std::max(hx, std::max(hy, hz));
         break;
     }
     result.centreInSourceMetres.z = -frontExtent;
@@ -333,6 +337,121 @@ sampleDiffuseObjectSurfaceUnchecked(
         };
     }
 
+    if (parameters.geometry == scene::ObjectSourceGeometry::CornellBox) {
+        // Cornell Box scene composed of Cube (left), Sphere (center), Tetrahedron (right).
+        const double subW = 0.22 * parameters.widthMetres;
+        const double subH = 0.60 * parameters.heightMetres;
+        const double subD = 0.60 * parameters.depthMetres;
+
+        // Sub-primitive 0: Cube on the left
+        scene::ObjectWavefrontSourceParameters cubeParams = parameters;
+        cubeParams.geometry = scene::ObjectSourceGeometry::Cube;
+        cubeParams.widthMetres = subW;
+        cubeParams.heightMetres = subH;
+        cubeParams.depthMetres = subD;
+        cubeParams.primitiveYawRadians = 0.35;
+        cubeParams.primitivePitchRadians = -0.20;
+        auto cubeFrame = makePrimitiveFrame(cubeParams);
+        cubeFrame.centreInSourceMetres.x -= 0.35 * parameters.widthMetres;
+        cubeFrame.centreInSourceMetres.z -= 0.15 * parameters.depthMetres;
+
+        // Sub-primitive 1: Sphere in the center
+        scene::ObjectWavefrontSourceParameters sphereParams = parameters;
+        sphereParams.geometry = scene::ObjectSourceGeometry::Sphere;
+        sphereParams.widthMetres = subW;
+        sphereParams.heightMetres = subH;
+        sphereParams.depthMetres = subD;
+        sphereParams.primitiveYawRadians = 0.0;
+        sphereParams.primitivePitchRadians = 0.0;
+        auto sphereFrame = makePrimitiveFrame(sphereParams);
+        sphereFrame.centreInSourceMetres.z -= 0.08 * parameters.depthMetres;
+
+        // Sub-primitive 2: Tetrahedron on the right
+        scene::ObjectWavefrontSourceParameters tetraParams = parameters;
+        tetraParams.geometry = scene::ObjectSourceGeometry::Tetrahedron;
+        tetraParams.widthMetres = subW;
+        tetraParams.heightMetres = subH;
+        tetraParams.depthMetres = subD;
+        tetraParams.primitiveYawRadians = -0.30;
+        tetraParams.primitivePitchRadians = 0.15;
+        auto tetraFrame = makePrimitiveFrame(tetraParams);
+        tetraFrame.centreInSourceMetres.x += 0.35 * parameters.widthMetres;
+        tetraFrame.centreInSourceMetres.z -= 0.05 * parameters.depthMetres;
+
+        const double rayOriginZ = 2.0 * (
+            parameters.widthMetres + parameters.heightMetres
+            + parameters.depthMetres);
+        const math::Vec3d sourceOrigin {sourceXMetres, sourceYMetres, rayOriginZ};
+        const math::Vec3d sourceDirection {0.0, 0.0, -1.0};
+
+        struct CandidateHit {
+            int hitKind = 0; // 0=Cube, 1=Sphere, 2=Tetra
+            math::Vec3d posInSource {};
+            math::Vec3d normInSource {};
+            math::Vec3d posInPrimitive {};
+        };
+        std::optional<CandidateHit> bestCandidate;
+
+        auto testPrimitive = [&](
+            const DiffuseObjectPrimitiveFrame& pFrame,
+            const scene::ObjectWavefrontSourceParameters& pParams,
+            int kind) {
+            const math::Vec3d pOrigin = sourceToPrimitivePoint(pFrame, sourceOrigin);
+            const math::Vec3d pDir = sourceToPrimitiveDirection(pFrame, sourceDirection);
+            std::optional<PrimitiveRayHit> pHit;
+            if (pParams.geometry == scene::ObjectSourceGeometry::Cube) {
+                pHit = intersectBox(pOrigin, pDir, {0.5 * subW, 0.5 * subH, 0.5 * subD});
+            } else if (pParams.geometry == scene::ObjectSourceGeometry::Sphere) {
+                pHit = intersectEllipsoid(pOrigin, pDir, {0.5 * subW, 0.5 * subH, 0.5 * subD});
+            } else if (pParams.geometry == scene::ObjectSourceGeometry::Tetrahedron) {
+                pHit = intersectTetrahedron(pParams, pOrigin, pDir);
+            }
+            if (!pHit.has_value()) return;
+            const math::Vec3d posSource = primitiveToSourcePoint(pFrame, pHit->position);
+            const math::Vec3d normSource = math::normalized(
+                primitiveToSourceDirection(pFrame, pHit->outwardNormal));
+            if (normSource.z <= 0.0 || posSource.z > 1e-10) return;
+
+            if (!bestCandidate.has_value() || posSource.z > bestCandidate->posInSource.z) {
+                bestCandidate = CandidateHit {
+                    .hitKind = kind,
+                    .posInSource = posSource,
+                    .normInSource = normSource,
+                    .posInPrimitive = pHit->position,
+                };
+            }
+        };
+
+        testPrimitive(cubeFrame, cubeParams, 0);
+        testPrimitive(sphereFrame, sphereParams, 1);
+        testPrimitive(tetraFrame, tetraParams, 2);
+
+        if (!bestCandidate.has_value()) return std::nullopt;
+
+        // Spectral reflectance:
+        // Realistic multi-spectral reflection across all channels:
+        // Each object has a dominant primary color and secondary reflections for other wavelengths.
+        const double wl = parameters.channel.wavelengthMetres;
+        double reflectance = 0.35; // Secondary reflection for non-dominant wavelengths
+        if (wl >= 600e-9) {
+            // Red channel (Cube is primary)
+            if (bestCandidate->hitKind == 0) reflectance = 1.0;
+        } else if (wl >= 500e-9) {
+            // Green channel (Sphere is primary)
+            if (bestCandidate->hitKind == 1) reflectance = 1.0;
+        } else {
+            // Blue channel (Tetrahedron is primary)
+            if (bestCandidate->hitKind == 2) reflectance = 1.0;
+        }
+
+        return DiffuseObjectSurfaceSample {
+            .positionInSourceMetres = bestCandidate->posInSource,
+            .outwardNormalInSource = bestCandidate->normInSource,
+            .positionInPrimitiveMetres = bestCandidate->posInPrimitive,
+            .lambertianAmplitude = std::sqrt(bestCandidate->normInSource.z) * reflectance,
+        };
+    }
+
     const DiffuseObjectPrimitiveFrame frame = makePrimitiveFrame(parameters);
     const double rayOriginZ = 2.0 * (
         parameters.widthMetres + parameters.heightMetres
@@ -367,6 +486,8 @@ sampleDiffuseObjectSurfaceUnchecked(
     case scene::ObjectSourceGeometry::Tetrahedron:
         hit = intersectTetrahedron(
             parameters, primitiveOrigin, primitiveDirection);
+        break;
+    case scene::ObjectSourceGeometry::CornellBox:
         break;
     }
     if (!hit.has_value()) return std::nullopt;

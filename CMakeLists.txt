@@ -140,6 +140,7 @@ add_library(holobench_app_logic STATIC
     app/BenchWaveObservation.cpp
     app/BenchWaveObservationWorker.cpp
     app/HologramObservationWorker.cpp
+    app/HologramExperimentWorker.cpp
     app/LensProfileDesign.cpp
     app/BenchWavePresets.cpp
     app/BenchProject.cpp

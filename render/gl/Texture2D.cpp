@@ -96,6 +96,72 @@ bool Texture2D::uploadRgba8(int width, int height, std::span<const std::uint8_t>
             rgbaBytes.data());
     }
 
+    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousTexture));
+    return true;
+}
+
+bool Texture2D::uploadRgbaF32(int width, int height, std::span<const float> rgbaFloats) {
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+    const auto widthValue = static_cast<std::size_t>(width);
+    const auto heightValue = static_cast<std::size_t>(height);
+    if (widthValue > std::numeric_limits<std::size_t>::max() / heightValue) {
+        return false;
+    }
+    const std::size_t pixelCount = widthValue * heightValue;
+    if (pixelCount > std::numeric_limits<std::size_t>::max() / 4U) {
+        return false;
+    }
+    const std::size_t expectedFloats = pixelCount * 4U;
+    if (rgbaFloats.size() != expectedFloats) {
+        return false;
+    }
+
+    if (textureId_ == 0) {
+        glGenTextures(1, &textureId_);
+        if (textureId_ == 0) {
+            return false;
+        }
+    }
+
+    GLint previousTexture = 0;
+    GLint previousUnpackAlignment = 0;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previousTexture);
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousUnpackAlignment);
+    glBindTexture(GL_TEXTURE_2D, textureId_);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    if (width != width_ || height != height_) {
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGBA32F,
+            width,
+            height,
+            0,
+            GL_RGBA,
+            GL_FLOAT,
+            rgbaFloats.data());
+        width_ = width;
+        height_ = height;
+    } else {
+        glTexSubImage2D(
+            GL_TEXTURE_2D,
+            0,
+            0,
+            0,
+            width,
+            height,
+            GL_RGBA,
+            GL_FLOAT,
+            rgbaFloats.data());
+    }
+
     glPixelStorei(GL_UNPACK_ALIGNMENT, previousUnpackAlignment);
     glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousTexture));
     return true;

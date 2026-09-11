@@ -80,6 +80,7 @@ void validateParameters(const ObjectWavefrontSourceParameters& value) {
     case ObjectSourceGeometry::Cube:
     case ObjectSourceGeometry::Sphere:
     case ObjectSourceGeometry::Tetrahedron:
+    case ObjectSourceGeometry::CornellBox:
         break;
     default:
         throw std::invalid_argument("object source geometry is invalid");

@@ -267,6 +267,7 @@ SampledPlateIncidentField sampleLocalWavePath(
             .slmResponses = slmResponses,
             .environmentTemperatureKelvin
                 = environmentTemperatureKelvin,
+            .cancellationRequested = options.cancellationRequested,
         },
         fftBackend,
         slmCommands,
@@ -402,12 +403,17 @@ SampledPlateIncidentField samplePlateIncidentField(
         || extentHeight != plateParameters.heightMetres
         || options.centreXMetres != 0.0
         || options.centreYMetres != 0.0;
-    diagnostics.transverseFrequencyXCyclesPerMetre
-        = options.refractiveIndex * branch.localDirection.x
-        / branch.beam.wavelengthMetres;
-    diagnostics.transverseFrequencyYCyclesPerMetre
-        = options.refractiveIndex * branch.localDirection.y
-        / branch.beam.wavelengthMetres;
+    if (options.demodulateCarrier) {
+        diagnostics.transverseFrequencyXCyclesPerMetre = 0.0;
+        diagnostics.transverseFrequencyYCyclesPerMetre = 0.0;
+    } else {
+        diagnostics.transverseFrequencyXCyclesPerMetre
+            = options.refractiveIndex * branch.localDirection.x
+            / branch.beam.wavelengthMetres;
+        diagnostics.transverseFrequencyYCyclesPerMetre
+            = options.refractiveIndex * branch.localDirection.y
+            / branch.beam.wavelengthMetres;
+    }
     diagnostics.nyquistXCyclesPerMetre = 0.5 / pitchX;
     diagnostics.nyquistYCyclesPerMetre = 0.5 / pitchY;
     diagnostics.carrierSampled
@@ -446,6 +452,10 @@ SampledPlateIncidentField samplePlateIncidentField(
     }
 
     for (std::size_t y = 0; y < sampled.height(); ++y) {
+        if (options.cancellationRequested
+            && options.cancellationRequested->load(std::memory_order_relaxed)) {
+            throw wave::OperationCancelledException("Plate field sampling cancelled");
+        }
         for (std::size_t x = 0; x < sampled.width(); ++x) {
             const math::Vec3d localPoint {
                 sampled.xCoordinateMetres(x) + options.centreXMetres,
@@ -462,10 +472,12 @@ SampledPlateIncidentField samplePlateIncidentField(
                 continue;
             }
             const math::Vec3d relativeLocal = localPoint - branch.localHitPointMetres;
-            const double transverseDistance = std::fma(
-                branch.localDirection.x,
-                relativeLocal.x,
-                branch.localDirection.y * relativeLocal.y);
+            const double transverseDistance = options.demodulateCarrier
+                ? 0.0
+                : std::fma(
+                    branch.localDirection.x,
+                    relativeLocal.x,
+                    branch.localDirection.y * relativeLocal.y);
             const double phase = std::fma(
                 mediumWavenumber, transverseDistance, phaseAtHit);
             sampled.at(x, y) = amplitudeScale

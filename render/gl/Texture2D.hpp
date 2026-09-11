@@ -42,6 +42,16 @@ public:
     [[nodiscard]] bool uploadRgba8(int width, int height, std::span<const std::uint8_t> rgbaBytes);
 
     /**
+     * @brief Uploads 32-bit floating-point RGBA pixel data (GL_RGBA32F).
+     *
+     * @param width Image width in pixels.
+     * @param height Image height in pixels.
+     * @param rgbaFloats Span containing width * height * 4 raw floats.
+     * @return true on success, false if dimensions or data are invalid.
+     */
+    [[nodiscard]] bool uploadRgbaF32(int width, int height, std::span<const float> rgbaFloats);
+
+    /**
      * @brief Uploads pixel buffer from an RgbaImage.
      */
     [[nodiscard]] bool uploadImage(const field::RgbaImage& image);

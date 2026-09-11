@@ -1,8 +1,36 @@
 # Project state
 
-Last updated: 2026-09-05
+Last updated: 2026-09-11
 
-## Current user follow-up: visibly validated laser beam expansion
+## Current user follow-up: asynchronous hologram recording and reconstruction with instant cancellation
+
+- Hologram recording (`recordSelectedPlateExperiment`) and reconstruction/replay (`reconstructSelectedPlateExperiment`) are decoupled from the main UI thread into a dedicated background worker (`HologramExperimentWorker`).
+- Heavy numerical calculations (Fourier optical propagations, complex field sampling, Kogelnik volume diffraction, multi-channel RGB grating synthesis, and CHIMERA exposure generation) execute asynchronously without freezing the user interface.
+- Instant preemption / cancellation: fine-grained task units check atomic cancellation flags (`cancelRequested_`). When scene components are edited, moved, deleted, or recipes change, running computations are preempted immediately to initiate new tasks without queue contention or UI lag.
+- Thread boundary safety: pure CPU/GPU wave calculations happen entirely on worker threads; all OpenGL texture allocations, updates, and UI evidence bindings are strictly polled and applied on the main thread via `pollHologramExperimentWorker()`.
+- Validation: 664/664 tests pass cleanly under `ctest --preset dev`. Both `--gl-smoke` and `--showroom-smoke` pass completely with zero errors on NVIDIA GeForce RTX 2080 Ti (driver 535.171.04, OpenGL 4.6.0).
+
+## Previous user follow-up: directionless volume grating fringes and pure Bragg diffraction reconstruction
+
+- `RecordedHologram` strips all `referenceDirection` and `objectDirection` metadata,
+  enforced by compile-time static assertions (`!HasReferenceDirection` and `!HasObjectDirection`).
+  A recorded holographic plate purely stores internal microscopic volume grating distribution:
+  the carrier grating vector $\mathbf{K}$, the physical material properties ($n_0, d, \Delta n, \lambda$),
+  and the 2D complex coupling field $\Psi(x, y)$ representing fringe amplitude and phase variation.
+- Support is generalized for both reflection (e.g. Denisyuk $K_z \approx 2k_m$) and transmission
+  ($K_z \approx 0$) volume holograms. `computeLocalVolumeGratingField` evaluates the local 3D volume
+  grating vector $\mathbf{K}(x, y) = \mathbf{K}_0 + (\partial\Phi/\partial x, \partial\Phi/\partial y, 0)$
+  and normalized modulation amplitude across the plate.
+- Showroom replay eliminates all 3D mesh proxies, assumed depths, and parallax mapping tricks.
+  Diffracted appearance emerges naturally from view-dependent volume Bragg diffraction: the fragment
+  shader evaluates the local wavevector difference $\Delta\mathbf{k} = \mathbf{k}_{out} - \mathbf{k}_{in}$
+  against the local 3D volume grating vector $\mathbf{K}(x, y)$ using Kogelnik coupled-wave theory
+  and Snell refraction at the medium interface. Reconstructed parallax is a physical optical consequence
+  of angle-dependent diffraction efficiency rather than artificial geometric displacement.
+- Initial observation camera pose and replay illumination in `defaultHologramView` are derived
+  closed-form from the volume grating vector $\mathbf{K}$ and plate medium parameters via
+  `deriveBraggCarrier`, aligning the diffracted beam directly to the observer pupil without metadata.
+
 
 - The Bench shelf now includes a `3x Beam Expander` starter assembled from
   ordinary editable components: a 532 nm Gaussian laser with 0.50 mm radius,

@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cmath>
+#include <numbers>
 #include <string>
 #include <utility>
 #include <variant>
@@ -85,7 +86,7 @@ bench::BenchComponent rgbReferenceSource(
         bench::BenchComponentKind::LaserSource, std::move(id));
     result.transform = aimedTransform(position, {0.0, 0.0, 0.0});
     auto parameters = std::get<bench::LaserSourceParameters>(result.parameters);
-    parameters.beamRadiusMetres = 0.006;
+    parameters.beamRadiusMetres = 0.035;
     parameters.channels = {
         {.wavelengthMetres = 638e-9, .powerWatts = 0.20,
             .coherenceId = "red-recording"},
@@ -103,8 +104,8 @@ bench::BenchComponent plate() {
         bench::BenchComponentKind::HolographicPlate, "plate-h1");
     auto parameters = std::get<bench::HolographicPlateParameters>(
         result.parameters);
-    parameters.widthMetres = 0.05;
-    parameters.heightMetres = 0.05;
+    parameters.widthMetres = 0.04;
+    parameters.heightMetres = 0.04;
     parameters.thicknessMetres = 20e-6;
     result.parameters = parameters;
     return result;
@@ -172,25 +173,48 @@ BenchProject makeReflectionHolographyPreset() {
 
 BenchProject makeSingleBeamDenisyukPreset() {
     auto result = baseProject("preset-single-beam-denisyuk", "Single-beam Denisyuk (scalar single scattering)");
-    auto object = objectSource("object-green", {0, 0, 0.03}, 532e-9, 0.1,
-        "green-recording", bench::ObjectSourceGeometry::Cube, {0.0005, 0.0005, 0.00025});
+    constexpr double angleDeg = 15.0;
+    constexpr double thetaRad = angleDeg * std::numbers::pi / 180.0;
+    const double sinTheta = std::sin(thetaRad);
+    const double cosTheta = std::cos(thetaRad);
+    const double tanTheta = std::tan(thetaRad);
+
+    constexpr double plateExtent = 0.0015; // 1.5 mm
+    constexpr double objZ = 0.002;          // 2 mm behind plate
+    constexpr double laserDist = 0.15;      // 150 mm
+
+    const math::Vec3d plateCenter{0.0, 0.0, 0.0};
+    const math::Vec3d laserDir{0.0, sinTheta, cosTheta};
+    const math::Vec3d laserPos = plateCenter - laserDir * laserDist;
+    const math::Vec3d objPos{0.0, objZ * tanTheta, objZ};
+
+    auto object = objectSource("object-green", objPos, 532e-9, 0.1,
+        "green-recording", bench::ObjectSourceGeometry::Cube,
+        {plateExtent * 0.4, plateExtent * 0.4, plateExtent * 0.2});
+    object.transform.localXAxisInWorld = {1.0, 0.0, 0.0};
+    object.transform.localYAxisInWorld = {0.0, -1.0, 0.0};
+    object.transform.localZAxisInWorld = {0.0, 0.0, -1.0};
     auto op = std::get<bench::ObjectWavefrontSourceParameters>(object.parameters);
     op.requiresIllumination = true;
     object.parameters = op;
     result.scene.add(std::move(object));
-    auto laser = referenceSource("reference-green", {0, 0, -0.15}, 532e-9, 0.3, "green-recording");
+
+    auto laser = referenceSource("reference-green", laserPos, 532e-9, 0.3, "green-recording");
+    laser.transform = aimedTransform(laserPos, plateCenter);
     auto lp = std::get<bench::LaserSourceParameters>(laser.parameters);
     lp.profile = bench::LaserBeamProfile::Collimated;
-    lp.beamRadiusMetres = 0.0002;
+    lp.beamRadiusMetres = plateExtent;
     laser.parameters = lp;
     result.scene.add(std::move(laser));
+
     auto recordingPlate = plate();
     auto pp = std::get<bench::HolographicPlateParameters>(recordingPlate.parameters);
-    pp.widthMetres = pp.heightMetres = 0.002;
+    pp.widthMetres = pp.heightMetres = plateExtent;
     pp.thicknessMetres = 30e-6;
     pp.recordingPowerTransmission = 0.9;
     recordingPlate.parameters = pp;
     result.scene.add(std::move(recordingPlate));
+
     auto probe = bench::makeDefaultBenchComponent(bench::BenchComponentKind::FieldProbe,
         "reflection-reconstruction-probe");
     probe.transform.translationMetres = {0, 0, -0.03};
@@ -237,45 +261,47 @@ BenchProject makeRgbDenisyukHolographyPreset() {
         "preset-rgb-denisyuk-holography",
         "RGB Reflection / Denisyuk Holography Bench (Cornell Box Scene)");
 
-    // Cornell Box geometric scene behind the holographic plate (Z > 0):
-    // 1. Red Cube (left side): 638 nm
+    // Cornell Box geometric scene placed at real Denisyuk close distance (20 mm behind plate):
+    // Comparable in size to the 4 cm x 4 cm plate:
+    // Width 3.2 cm (32 mm), height 2.4 cm (24 mm), depth 1.5 cm (15 mm)
+    // The Cornell Box contains Cube (left), Sphere (center), Tetrahedron (right).
+    // Each object exhibits non-pure multi-spectral reflection:
+    // dominant primary reflection in its signature wavelength, and secondary reflection in other wavelengths.
     result.scene.add(objectSource(
         "object-red",
-        {-0.006, -0.004, 0.16},
+        {0.0, 0.0, 0.020},
         638e-9,
         0.16,
         "red-recording",
-        bench::ObjectSourceGeometry::Cube,
-        {0.010, 0.014, 0.010},
-        0.35,
-        0.0));
-
-    // 2. Green Sphere (center): 532 nm
-    result.scene.add(objectSource(
-        "object-green",
-        {0.000, 0.003, 0.15},
-        532e-9,
-        0.16,
-        "green-recording",
-        bench::ObjectSourceGeometry::Sphere,
-        {0.012, 0.012, 0.012},
+        bench::ObjectSourceGeometry::CornellBox,
+        {0.032, 0.024, 0.015},
         0.0,
         0.0));
 
-    // 3. Blue Tetrahedron (right side): 450 nm
+    result.scene.add(objectSource(
+        "object-green",
+        {0.0, 0.0, 0.020},
+        532e-9,
+        0.16,
+        "green-recording",
+        bench::ObjectSourceGeometry::CornellBox,
+        {0.032, 0.024, 0.015},
+        0.0,
+        0.0));
+
     result.scene.add(objectSource(
         "object-blue",
-        {0.006, -0.004, 0.16},
+        {0.0, 0.0, 0.020},
         450e-9,
         0.16,
         "blue-recording",
-        bench::ObjectSourceGeometry::Tetrahedron,
-        {0.010, 0.012, 0.010},
-        -0.40,
-        0.15));
+        bench::ObjectSourceGeometry::CornellBox,
+        {0.032, 0.024, 0.015},
+        0.0,
+        0.0));
 
     result.scene.add(rgbReferenceSource(
-        "rgb-replay-reference", {-0.003, 0.0, -0.16}));
+        "rgb-replay-reference", {0.0, 0.10, -0.10}));
     auto rgbPlate = plate();
     auto plateParameters = std::get<bench::HolographicPlateParameters>(
         rgbPlate.parameters);

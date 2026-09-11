@@ -193,3 +193,39 @@ TEST_CASE("diffuse primitive APIs reject invalid geometry coordinates and phase"
                 value, parameters, 0.1, {2.0, 0.0}, backend)),
         std::invalid_argument);
 }
+
+TEST_CASE("CornellBox compound geometry exhibits multi-spectral reflectance") {
+    auto redParams = primitiveParameters(scene::ObjectSourceGeometry::CornellBox);
+    redParams.channel.wavelengthMetres = 638e-9;
+
+    auto greenParams = primitiveParameters(scene::ObjectSourceGeometry::CornellBox);
+    greenParams.channel.wavelengthMetres = 532e-9;
+
+    auto blueParams = primitiveParameters(scene::ObjectSourceGeometry::CornellBox);
+    blueParams.channel.wavelengthMetres = 450e-9;
+
+    // Test Cube (left: x = -0.35 * 0.012 = -0.0042)
+    const auto hitCubeRed = wave::sampleDiffuseObjectSurface(redParams, -0.0042, 0.0);
+    REQUIRE(hitCubeRed.has_value());
+    const auto hitCubeGreen = wave::sampleDiffuseObjectSurface(greenParams, -0.0042, 0.0);
+    REQUIRE(hitCubeGreen.has_value());
+    CHECK(hitCubeGreen->lambertianAmplitude / hitCubeRed->lambertianAmplitude
+        == doctest::Approx(0.35).epsilon(1e-4));
+
+    // Test Sphere (center: x = 0.0)
+    const auto hitSphereGreen = wave::sampleDiffuseObjectSurface(greenParams, 0.0, 0.0);
+    REQUIRE(hitSphereGreen.has_value());
+    CHECK(hitSphereGreen->lambertianAmplitude == doctest::Approx(1.0).epsilon(1e-2));
+
+    const auto hitSphereRed = wave::sampleDiffuseObjectSurface(redParams, 0.0, 0.0);
+    REQUIRE(hitSphereRed.has_value());
+    CHECK(hitSphereRed->lambertianAmplitude == doctest::Approx(0.35).epsilon(1e-2));
+
+    // Test Tetrahedron (right: x = +0.35 * 0.012 = +0.0042)
+    const auto hitTetraBlue = wave::sampleDiffuseObjectSurface(blueParams, 0.0042, 0.0);
+    REQUIRE(hitTetraBlue.has_value());
+    const auto hitTetraRed = wave::sampleDiffuseObjectSurface(redParams, 0.0042, 0.0);
+    REQUIRE(hitTetraRed.has_value());
+    CHECK(hitTetraRed->lambertianAmplitude / hitTetraBlue->lambertianAmplitude
+        == doctest::Approx(0.35).epsilon(1e-4));
+}

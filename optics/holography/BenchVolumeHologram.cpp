@@ -185,7 +185,9 @@ VolumePlateRecordingResult recordVolumePlate(
     };
     const auto nominalReplay = evaluateVolumeHologram(parameters);
     double objectDepth = 0.0;
-    const auto* source = bench.find(object.beam.provenance.componentPath.front());
+    const auto* source = !object.beam.provenance.componentPath.empty()
+        ? bench.find(object.beam.provenance.componentPath.front())
+        : nullptr;
     if (source && source->kind == scene::BenchComponentKind::ObjectWavefrontSource
         && std::all_of(object.pathInteractions.begin(), object.pathInteractions.end(),
             [&](const auto& step) {
@@ -238,11 +240,15 @@ VolumePlateRecordingResult recordVolumePlate(
         objectBranchId,
         referenceBranchId,
         material);
+    auto effectiveSampling = sampling;
+    if (recording.pair.geometry == PlateRecordingGeometry::Reflection) {
+        effectiveSampling.demodulateCarrier = true;
+    }
     auto objectIncident = samplePlateIncidentField(
         bench,
         fields,
         objectBranchId,
-        sampling,
+        effectiveSampling,
         fftBackend,
         slmCommands,
         lensPrescriptions,
@@ -252,7 +258,7 @@ VolumePlateRecordingResult recordVolumePlate(
         bench,
         fields,
         referenceBranchId,
-        sampling,
+        effectiveSampling,
         fftBackend,
         slmCommands,
         lensPrescriptions,

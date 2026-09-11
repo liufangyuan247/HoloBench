@@ -14,8 +14,6 @@ struct RecordedHologram final {
     std::string sourcePlateId;
     VolumeHologramParameters material;
     math::Vec3d gratingVector;
-    math::Vec3d referenceDirection;
-    math::Vec3d objectDirection;
     double centreXMetres = 0.0;
     double centreYMetres = 0.0;
     field::ComplexField2D coupling;
@@ -32,9 +30,25 @@ struct RecordedHologram final {
     std::uint64_t objectBranch, std::uint64_t referenceBranch,
     PlateFieldSamplingOptions requested);
 
+struct LocalVolumeGratingSample final {
+    float amplitude = 0.0f; // normalized modulation amplitude in [0, 1]
+    float Kx = 0.0f;        // local 3D volume grating vector X (rad/m)
+    float Ky = 0.0f;        // local 3D volume grating vector Y (rad/m)
+    float Kz = 0.0f;        // local 3D volume grating vector Z (rad/m)
+};
+
+[[nodiscard]] std::vector<LocalVolumeGratingSample>
+computeLocalVolumeGratingField(const RecordedHologram &asset);
+
 [[nodiscard]] RecordedHologram
+freezePlateRecording(const scene::BenchScene &scene,
+                     const VolumePlateRecordingResult &recording);
+
+[[nodiscard]] inline RecordedHologram
 freezeReflectionRecording(const scene::BenchScene &scene,
-                          const VolumePlateRecordingResult &recording);
+                          const VolumePlateRecordingResult &recording) {
+    return freezePlateRecording(scene, recording);
+}
 void validateRecordedHologram(const RecordedHologram &asset);
 // Analytic calibration specimen, explicitly not a measured material or a
 // replacement for the user's recording: two coherent paraxial point waves.

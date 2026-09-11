@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cfloat>
 #include <chrono>
 #include <cctype>
 #include <cmath>
@@ -961,6 +962,18 @@ bool Application::applyDynamicBenchProject(
         if (recordHistory && benchEditHistoryReady_) {
             static_cast<void>(benchEditHistory_.record(benchProject_));
         }
+        if (sandboxPlateRecording_ && sandboxPlateRecording_->isStaleFor(benchProject_.scene)) {
+            sandboxPlateRecording_.reset();
+        }
+        if (sandboxVolumeRecording_ && sandboxVolumeRecording_->isStaleFor(benchProject_.scene)) {
+            sandboxVolumeRecording_.reset();
+        }
+        if (sandboxRgbRecording_ && sandboxRgbRecording_->isStaleFor(benchProject_.scene)) {
+            sandboxRgbRecording_.reset();
+        }
+        if (sandboxRgbVolumeRecording_ && sandboxRgbVolumeRecording_->isStaleFor(benchProject_.scene)) {
+            sandboxRgbVolumeRecording_.reset();
+        }
         errorMessage_.clear();
         statusMessage_ = std::move(newStatusMessage);
         if (recordHistory && benchEditHistoryReady_) {
@@ -1645,12 +1658,139 @@ void Application::applyBestChimeraSweepCandidate() {
         "best transparent relay-sweep candidate");
 }
 
+void Application::cancelHologramExperimentWorker() {
+    hologramExperimentWorker_.cancel();
+}
+
+void Application::pollHologramExperimentWorker() {
+    while (auto opt = hologramExperimentWorker_.pollResult()) {
+        applyHologramExperimentResult(std::move(*opt));
+    }
+}
+
+void Application::applyHologramExperimentResult(HologramExperimentJobResult result) {
+    if (!result.success) {
+        errorMessage_ = result.errorMessage;
+        statusMessage_.clear();
+        return;
+    }
+
+    if (result.kind == HologramJobKind::Record) {
+        if (result.thinRecording.has_value()) {
+            if (result.previewImage.has_value() && sandboxPlateTexture_) {
+                static_cast<void>(sandboxPlateTexture_->uploadImage(*result.previewImage));
+            }
+            sandboxPlateRecording_ = std::make_unique<
+                optics::holography::ThinPlateRecordingResult>(
+                    std::move(*result.thinRecording));
+            sandboxRecordedExperiment_
+                = SandboxRecordedExperiment::ThinTransmission;
+            sandboxActiveRecordingRecipeId_ = result.recipeId;
+            sandboxPlateReplay_.reset();
+            if (sandboxReplayTexture_) {
+                sandboxReplayTexture_->destroy();
+            }
+        } else if (result.rgbThinRecording.has_value()) {
+            if (result.previewImage.has_value() && sandboxPlateTexture_) {
+                static_cast<void>(sandboxPlateTexture_->uploadImage(*result.previewImage));
+            }
+            sandboxRgbRecording_ = std::make_unique<
+                optics::holography::RgbThinPlateRecordingResult>(
+                    std::move(*result.rgbThinRecording));
+            sandboxRecordedExperiment_
+                = SandboxRecordedExperiment::RgbFullColour;
+            sandboxActiveRecordingRecipeId_ = result.recipeId;
+            sandboxRgbReplay_.reset();
+            if (sandboxRgbReplayTexture_) {
+                sandboxRgbReplayTexture_->destroy();
+            }
+        } else if (result.volumeRecording.has_value()) {
+            if (result.previewImage.has_value() && sandboxPlateTexture_) {
+                static_cast<void>(sandboxPlateTexture_->uploadImage(*result.previewImage));
+            }
+            sandboxVolumeReplayWavelengthNanometres_ = static_cast<float>(
+                result.volumeRecording->pair.wavelengthMetres * 1e9);
+            sandboxVolumeReplayAngleDegrees_ = static_cast<float>(
+                result.volumeRecording->equivalentSymmetricBraggAngleInMediumRadians * 180.0
+                / std::numbers::pi_v<double>);
+            sandboxVolumeRecording_ = std::make_unique<
+                optics::holography::VolumePlateRecordingResult>(
+                    std::move(*result.volumeRecording));
+            sandboxRecordedExperiment_
+                = SandboxRecordedExperiment::ReflectionDenisyuk;
+            sandboxActiveRecordingRecipeId_ = result.recipeId;
+            sandboxRgbVolumeRecording_.reset();
+            sandboxPlateRecording_.reset();
+            sandboxRgbRecording_.reset();
+            sandboxVolumeReplay_.reset();
+            sandboxVolumeObservationReplay_.reset();
+            if (sandboxVolumeReplayTexture_) {
+                sandboxVolumeReplayTexture_->destroy();
+            }
+        } else if (result.rgbVolumeRecording.has_value()) {
+            if (result.previewImage.has_value() && sandboxPlateTexture_) {
+                static_cast<void>(sandboxPlateTexture_->uploadImage(*result.previewImage));
+            }
+            sandboxRgbVolumeRecording_ = std::make_unique<
+                optics::holography::RgbVolumePlateRecordingResult>(
+                    std::move(*result.rgbVolumeRecording));
+            sandboxRecordedExperiment_
+                = SandboxRecordedExperiment::RgbReflectionDenisyuk;
+            sandboxActiveRecordingRecipeId_ = result.recipeId;
+            sandboxVolumeRecording_.reset();
+            sandboxPlateRecording_.reset();
+            sandboxRgbRecording_.reset();
+            sandboxRgbVolumeReplay_.reset();
+            if (sandboxRgbReplayTexture_) {
+                sandboxRgbReplayTexture_->destroy();
+            }
+        }
+        errorMessage_.clear();
+        statusMessage_ = result.statusMessage;
+        return;
+    }
+
+    if (result.kind == HologramJobKind::Replay) {
+        if (result.thinReplay.has_value()) {
+            if (result.previewImage.has_value() && sandboxReplayTexture_) {
+                static_cast<void>(sandboxReplayTexture_->uploadImage(*result.previewImage));
+            }
+            sandboxPlateReplay_ = std::make_unique<
+                optics::holography::ThinPlateReplayResult>(
+                    std::move(*result.thinReplay));
+            sandboxPlateReplayViewIndex_ = 0;
+        } else if (result.rgbThinReplay.has_value()) {
+            if (result.previewImage.has_value() && sandboxRgbReplayTexture_) {
+                static_cast<void>(sandboxRgbReplayTexture_->uploadImage(*result.previewImage));
+            }
+            sandboxRgbReplay_ = std::make_unique<
+                optics::holography::RgbThinPlateReplayResult>(
+                    std::move(*result.rgbThinReplay));
+            sandboxRgbReplayViewIndex_ = 0;
+        } else if (result.volumeReplay.has_value()) {
+            if (result.previewImage.has_value() && sandboxVolumeReplayTexture_) {
+                static_cast<void>(sandboxVolumeReplayTexture_->uploadImage(*result.previewImage));
+            }
+            sandboxVolumeObservationReplay_ = std::make_unique<
+                optics::holography::VolumePlateObservationReplayResult>(
+                    std::move(*result.volumeReplay));
+        } else if (result.rgbVolumeReplay.has_value()) {
+            if (result.previewImage.has_value() && sandboxRgbReplayTexture_) {
+                static_cast<void>(sandboxRgbReplayTexture_->uploadImage(*result.previewImage));
+            }
+            sandboxRgbVolumeReplay_ = std::make_unique<
+                optics::holography::RgbVolumePlateReplayResult>(
+                    std::move(*result.rgbVolumeReplay));
+            sandboxRgbReplayViewIndex_ = 0;
+        }
+        errorMessage_.clear();
+        statusMessage_ = result.statusMessage;
+    }
+}
+
 void Application::recomputeRecordingRecipe(
     const optics::holography::PlateIncidentFieldSet& fields,
     const HologramRecordingRecipe& recipe) {
-    if (!detectorFftBackend_) {
-        throw std::runtime_error("CPU FFT backend is unavailable");
-    }
     const auto resolved = resolveRecordingRecipe(fields, recipe);
     sandboxPlateSampleSize_ = static_cast<int>(recipe.sampling.sampleWidth);
     sandboxPlateWindowMillimetres_ = static_cast<float>(
@@ -1659,154 +1799,33 @@ void Application::recomputeRecordingRecipe(
         = static_cast<float>(
             recipe.relativeIntensityReferenceWattsPerSquareMetre * 1e-3);
 
-    if (recipe.model == HologramRecordingModel::ThinTransmission) {
-        optics::holography::ThinPlateRecordingOptions options;
-        options.sampling = recipe.sampling;
-        options.relativeIntensityReferenceWattsPerSquareMetre
-            = recipe.relativeIntensityReferenceWattsPerSquareMetre;
-        options.response = recipe.thinResponse;
-        if (resolved.channels.size() == 1U) {
-            const auto& channel = resolved.channels.front();
-            auto recording = optics::holography::recordThinTransmissionPlate(
-                opticalBenchScene_,
-                fields,
-                channel.objectBranchId,
-                channel.referenceBranchId,
-                options,
-                *detectorFftBackend_,
-                &realLensPrescriptionCatalog_,
-                &slmResponseCatalog_,
-                293.15);
-            field::FieldVisualizationOptions viewOptions;
-            viewOptions.colormap = field::ColormapKind::Inferno;
-            const auto image = field::renderLinearIntensity(
-                recording.hologram.recordedRelativeIntensity, viewOptions);
-            if (!sandboxPlateTexture_
-                || !sandboxPlateTexture_->uploadImage(image)) {
-                throw std::runtime_error(
-                    "OpenGL rejected the sampled plate exposure texture");
-            }
-            sandboxPlateRecording_ = std::make_unique<
-                optics::holography::ThinPlateRecordingResult>(
-                    std::move(recording));
-            sandboxRecordedExperiment_
-                = SandboxRecordedExperiment::ThinTransmission;
-            sandboxActiveRecordingRecipeId_ = recipe.recipeId;
-            sandboxPlateReplay_.reset();
-            if (sandboxReplayTexture_) {
-                sandboxReplayTexture_->destroy();
-            }
-            statusMessage_ = "Recomputed saved thin recording recipe "
-                + recipe.recipeId;
-            return;
-        }
-        if (resolved.channels.size() == 3U) {
-            const std::array selections {
-                resolved.channels[0],
-                resolved.channels[1],
-                resolved.channels[2],
-            };
-            auto recording
-                = optics::holography::recordRgbThinTransmissionPlate(
-                    opticalBenchScene_,
-                    fields,
-                    selections,
-                    options,
-                    *detectorFftBackend_,
-                    &realLensPrescriptionCatalog_,
-                    &slmResponseCatalog_,
-                    293.15);
-            sandboxRgbRecording_ = std::make_unique<
-                optics::holography::RgbThinPlateRecordingResult>(
-                    std::move(recording));
-            sandboxRecordedExperiment_
-                = SandboxRecordedExperiment::RgbFullColour;
-            sandboxActiveRecordingRecipeId_ = recipe.recipeId;
-            sandboxRgbReplay_.reset();
-            if (sandboxRgbReplayTexture_) {
-                sandboxRgbReplayTexture_->destroy();
-            }
-            statusMessage_ = "Recomputed saved RGB recording recipe "
-                + recipe.recipeId;
-            return;
-        }
-        throw std::invalid_argument(
-            "thin recording recipe must contain one or three channels");
+    if (recipe.model == HologramRecordingModel::VolumeGrating) {
+        sandboxVolumeAverageRefractiveIndex_ = static_cast<float>(
+            recipe.volumeMaterial.averageRefractiveIndex);
+        sandboxVolumeIndexModulation_ = static_cast<float>(
+            recipe.volumeMaterial.refractiveIndexModulation);
+        sandboxVolumeShrinkagePercent_ = static_cast<float>(
+            recipe.volumeMaterial.isotropicLinearShrinkageFraction * 100.0);
     }
 
-    if (resolved.channels.size() != 1U
-        && resolved.channels.size() != 3U) {
-        throw std::invalid_argument(
-            "volume recording recipe must contain one or three channels");
+    HologramRecordJobRequest req;
+    req.requestId = ++hologramExperimentCurrentRequestId_;
+    req.scene = opticalBenchScene_;
+    req.fields = fields;
+    req.recipe = recipe;
+    for (const auto& ch : resolved.channels) {
+        req.resolvedSelections.push_back(ch);
     }
-    sandboxVolumeAverageRefractiveIndex_ = static_cast<float>(
-        recipe.volumeMaterial.averageRefractiveIndex);
-    sandboxVolumeIndexModulation_ = static_cast<float>(
-        recipe.volumeMaterial.refractiveIndexModulation);
-    sandboxVolumeShrinkagePercent_ = static_cast<float>(
-        recipe.volumeMaterial.isotropicLinearShrinkageFraction * 100.0);
-    if (resolved.channels.size() == 3U) {
-        const std::array selections {
-            resolved.channels[0],
-            resolved.channels[1],
-            resolved.channels[2],
-        };
-        auto recording
-            = optics::holography::recordRgbReflectionVolumePlate(
-                opticalBenchScene_,
-                fields,
-                selections,
-                recipe.volumeMaterial,
-                recipe.sampling,
-                *detectorFftBackend_,
-                &realLensPrescriptionCatalog_,
-                &slmResponseCatalog_,
-                293.15);
-        sandboxRgbVolumeRecording_ = std::make_unique<
-            optics::holography::RgbVolumePlateRecordingResult>(
-                std::move(recording));
-        sandboxRecordedExperiment_
-            = SandboxRecordedExperiment::RgbReflectionDenisyuk;
-        sandboxActiveRecordingRecipeId_ = recipe.recipeId;
-        sandboxRgbVolumeReplay_.reset();
-        if (sandboxRgbReplayTexture_) {
-            sandboxRgbReplayTexture_->destroy();
-        }
-        statusMessage_ = "Recomputed saved RGB reflection recording recipe "
-            + recipe.recipeId;
-        return;
+    req.lensPrescriptions = &realLensPrescriptionCatalog_;
+    req.slmResponses = &slmResponseCatalog_;
+    req.environmentTemperatureKelvin = 293.15;
+
+    hologramExperimentWorker_.submitRecord(std::move(req));
+
+    if (glSmokeMode_) {
+        hologramExperimentWorker_.waitForCompletion();
+        pollHologramExperimentWorker();
     }
-    const auto& channel = resolved.channels.front();
-    auto recording = optics::holography::recordVolumePlate(
-        opticalBenchScene_,
-        fields,
-        channel.objectBranchId,
-        channel.referenceBranchId,
-        recipe.volumeMaterial,
-        recipe.sampling,
-        *detectorFftBackend_,
-        {},
-        &realLensPrescriptionCatalog_,
-        &slmResponseCatalog_,
-        293.15);
-    sandboxVolumeReplayWavelengthNanometres_ = static_cast<float>(
-        recording.pair.wavelengthMetres * 1e9);
-    sandboxVolumeReplayAngleDegrees_ = static_cast<float>(
-        recording.equivalentSymmetricBraggAngleInMediumRadians * 180.0
-        / std::numbers::pi_v<double>);
-    sandboxVolumeRecording_ = std::make_unique<
-        optics::holography::VolumePlateRecordingResult>(
-            std::move(recording));
-    sandboxRecordedExperiment_
-        = SandboxRecordedExperiment::ReflectionDenisyuk;
-    sandboxActiveRecordingRecipeId_ = recipe.recipeId;
-    sandboxVolumeReplay_.reset();
-    sandboxVolumeObservationReplay_.reset();
-    if (sandboxVolumeReplayTexture_) {
-        sandboxVolumeReplayTexture_->destroy();
-    }
-    statusMessage_ = "Recomputed saved volume recording recipe "
-        + recipe.recipeId;
 }
 
 void Application::recordSelectedPlateExperiment(bool recordHistory) {
@@ -1884,6 +1903,19 @@ void Application::recordSelectedPlateExperiment(bool recordHistory) {
         recomputeRecordingRecipe(fields, recipe);
         errorMessage_.clear();
         return;
+    }
+
+    if (sandboxExperimentMode_ == SandboxExperimentMode::RgbReflectionDenisyuk) {
+        if (sandboxPlateWindowMillimetres_ < 10.0F) {
+            const auto& plateParams = std::get<bench::HolographicPlateParameters>(plate->parameters);
+            sandboxPlateWindowMillimetres_ = static_cast<float>(plateParams.widthMetres * 1e3);
+            if (sandboxPlateWindowMillimetres_ <= 0.0F) {
+                sandboxPlateWindowMillimetres_ = 40.0F;
+            }
+        }
+        if (sandboxPlateSampleSize_ < 512) {
+            sandboxPlateSampleSize_ = 512;
+        }
     }
 
     if (sandboxPlateSampleSize_ < 2 || sandboxPlateSampleSize_ > 4096) {
@@ -2001,11 +2033,13 @@ void Application::recordSelectedPlateExperiment(bool recordHistory) {
             .isotropicLinearShrinkageFraction = static_cast<double>(
                 sandboxVolumeShrinkagePercent_) * 0.01,
         };
+        auto volSampling = thinOptions.sampling;
+        volSampling.demodulateCarrier = true;
         recipe = makeVolumeRecordingRecipe(
             "rgb-volume-" + plate->id,
             fields,
             rgbReflectionSelections,
-            thinOptions.sampling,
+            volSampling,
             material);
     } else {
         const auto requiredGeometry
@@ -2123,10 +2157,11 @@ void Application::recordSelectedPlateExperiment(bool recordHistory) {
     if (recordHistory) {
         recordBenchEdit();
     }
-    errorMessage_.clear();
-    statusMessage_ = "Recorded bench experiment as " + recipeId;
-    if (responseReferenceAutoScaled) {
-        statusMessage_ += " (relative exposure reference auto-scaled to avoid response clipping)";
+    if (errorMessage_.empty()) {
+        statusMessage_ = "Recorded bench experiment as " + recipeId;
+        if (responseReferenceAutoScaled) {
+            statusMessage_ += " (relative exposure reference auto-scaled to avoid response clipping)";
+        }
     }
 }
 
@@ -2152,9 +2187,7 @@ void Application::reconstructSelectedPlateExperiment() {
         throw std::invalid_argument(
             "select a placed Screen / Detector, Field Probe, or the recorded plate");
     }
-    if (!detectorFftBackend_) {
-        throw std::runtime_error("CPU FFT backend is unavailable");
-    }
+
     const auto replayKind = sandboxPlateReplayKindIndex_ == 0
         ? holography::ThinPlateReplayKind::OrdinaryReference
         : holography::ThinPlateReplayKind::ConjugateReference;
@@ -2174,6 +2207,19 @@ void Application::reconstructSelectedPlateExperiment() {
         kind = SandboxRecordedExperiment::RgbReflectionDenisyuk;
     }
 
+    HologramReplayJobRequest req;
+    req.requestId = ++hologramExperimentCurrentRequestId_;
+    req.scene = opticalBenchScene_;
+    req.traceGraph = benchTraceGraph_;
+    req.observationComponentId = observation->id;
+    req.thinReplayKind = replayKind;
+    req.lensPrescriptions = &realLensPrescriptionCatalog_;
+    req.slmResponses = &slmResponseCatalog_;
+    req.coatingResponses = &coatingResponseCatalog_;
+    req.environmentTemperatureKelvin = 293.15;
+    req.rgbDisplayGains = {sandboxRgbDisplayGains_[0], sandboxRgbDisplayGains_[1], sandboxRgbDisplayGains_[2]};
+    req.rgbDisplayGamma = sandboxRgbDisplayGamma_;
+
     if (kind == SandboxRecordedExperiment::ThinTransmission) {
         if (!sandboxPlateRecording_
             || sandboxPlateRecording_->plateComponentId != plate->id
@@ -2181,25 +2227,7 @@ void Application::reconstructSelectedPlateExperiment() {
             throw std::invalid_argument(
                 "record a current thin transmission exposure first");
         }
-        auto replay = holography::replayThinTransmissionToObservation(
-            opticalBenchScene_,
-            *sandboxPlateRecording_,
-            observation->id,
-            replayKind,
-            *detectorFftBackend_);
-        field::FieldVisualizationOptions viewOptions;
-        viewOptions.colormap = field::ColormapKind::Inferno;
-        const auto image = field::renderLinearIntensity(
-            replay.fullReplayAtObservation, viewOptions);
-        if (!sandboxReplayTexture_
-            || !sandboxReplayTexture_->uploadImage(image)) {
-            throw std::runtime_error(
-                "OpenGL rejected the thin reconstruction texture");
-        }
-        sandboxPlateReplay_ = std::make_unique<
-            holography::ThinPlateReplayResult>(std::move(replay));
-        sandboxPlateReplayViewIndex_ = 0;
-        statusMessage_ = "Reconstructed thin hologram on " + observation->id;
+        req.thinRecording = *sandboxPlateRecording_;
     } else if (kind == SandboxRecordedExperiment::RgbFullColour) {
         if (!sandboxRgbRecording_
             || sandboxRgbRecording_->plateComponentId != plate->id
@@ -2207,38 +2235,8 @@ void Application::reconstructSelectedPlateExperiment() {
             throw std::invalid_argument(
                 "record a current RGB exposure set first");
         }
-        auto replay = holography::replayRgbThinTransmissionToObservation(
-            opticalBenchScene_,
-            *sandboxRgbRecording_,
-            observation->id,
-            replayKind,
-            *detectorFftBackend_);
-        const field::RgbIntensityVisualizationOptions displayOptions {
-            .channelIntensityGains = {
-                static_cast<double>(sandboxRgbDisplayGains_[0]),
-                static_cast<double>(sandboxRgbDisplayGains_[1]),
-                static_cast<double>(sandboxRgbDisplayGains_[2]),
-            },
-            .referenceIntensity = 0.0,
-            .displayGamma = static_cast<double>(sandboxRgbDisplayGamma_),
-        };
-        const auto image = field::renderUncalibratedRgbIntensity(
-            replay.channels[0].fullReplayAtObservation,
-            replay.channels[1].fullReplayAtObservation,
-            replay.channels[2].fullReplayAtObservation,
-            displayOptions);
-        if (!sandboxRgbReplayTexture_
-            || !sandboxRgbReplayTexture_->uploadImage(image)) {
-            throw std::runtime_error(
-                "OpenGL rejected the RGB reconstruction texture");
-        }
-        sandboxRgbReplay_ = std::make_unique<
-            holography::RgbThinPlateReplayResult>(std::move(replay));
-        sandboxRgbReplayViewIndex_ = 0;
-        statusMessage_ = "Reconstructed three independent RGB channels on "
-            + observation->id;
-    } else if (kind
-        == SandboxRecordedExperiment::RgbReflectionDenisyuk) {
+        req.rgbThinRecording = *sandboxRgbRecording_;
+    } else if (kind == SandboxRecordedExperiment::RgbReflectionDenisyuk) {
         if (!sandboxRgbVolumeRecording_
             || sandboxRgbVolumeRecording_->plateComponentId != plate->id
             || sandboxRgbVolumeRecording_->isStaleFor(
@@ -2246,9 +2244,9 @@ void Application::reconstructSelectedPlateExperiment() {
             throw std::invalid_argument(
                 "record a current RGB reflection/Denisyuk volume set first");
         }
-        const auto fields = holography::collectPlateIncidentFields(
+        req.fields = holography::collectPlateIncidentFields(
             opticalBenchScene_, benchTraceGraph_, plate->id);
-        holography::PlateFieldSamplingOptions sampling {
+        req.sampling = {
             .sampleWidth = static_cast<std::size_t>(sandboxPlateSampleSize_),
             .sampleHeight = static_cast<std::size_t>(sandboxPlateSampleSize_),
             .refractiveIndex = 1.0,
@@ -2260,46 +2258,11 @@ void Application::reconstructSelectedPlateExperiment() {
         for (const auto& recipe : benchProject_.recordingRecipes) {
             if (recipe.recipeId == sandboxActiveRecordingRecipeId_
                 && recipe.plateComponentId == plate->id) {
-                sampling = recipe.sampling;
+                req.sampling = recipe.sampling;
                 break;
             }
         }
-        auto replay
-            = holography::replayRgbReflectionVolumeToObservation(
-                opticalBenchScene_,
-                fields,
-                *sandboxRgbVolumeRecording_,
-                observation->id,
-                sampling,
-                *detectorFftBackend_,
-                &realLensPrescriptionCatalog_,
-                &slmResponseCatalog_,
-                &coatingResponseCatalog_,
-                293.15);
-        const field::RgbIntensityVisualizationOptions displayOptions {
-            .channelIntensityGains = {
-                static_cast<double>(sandboxRgbDisplayGains_[0]),
-                static_cast<double>(sandboxRgbDisplayGains_[1]),
-                static_cast<double>(sandboxRgbDisplayGains_[2]),
-            },
-            .referenceIntensity = 0.0,
-            .displayGamma = static_cast<double>(sandboxRgbDisplayGamma_),
-        };
-        const auto image = field::renderUncalibratedRgbIntensity(
-            replay.channels[0].reconstructedAtObservation,
-            replay.channels[1].reconstructedAtObservation,
-            replay.channels[2].reconstructedAtObservation,
-            displayOptions);
-        if (!sandboxRgbReplayTexture_
-            || !sandboxRgbReplayTexture_->uploadImage(image)) {
-            throw std::runtime_error(
-                "OpenGL rejected the RGB Denisyuk reconstruction texture");
-        }
-        sandboxRgbVolumeReplay_ = std::make_unique<
-            holography::RgbVolumePlateReplayResult>(std::move(replay));
-        sandboxRgbReplayViewIndex_ = 0;
-        statusMessage_ = "Reconstructed three independent RGB reflection channels on "
-            + observation->id;
+        req.rgbVolumeRecording = *sandboxRgbVolumeRecording_;
     } else if (kind == SandboxRecordedExperiment::ReflectionDenisyuk) {
         if (!sandboxVolumeRecording_
             || sandboxVolumeRecording_->plateComponentId != plate->id
@@ -2307,9 +2270,9 @@ void Application::reconstructSelectedPlateExperiment() {
             throw std::invalid_argument(
                 "record a current reflection/Denisyuk volume grating first");
         }
-        const auto fields = holography::collectPlateIncidentFields(
+        req.fields = holography::collectPlateIncidentFields(
             opticalBenchScene_, benchTraceGraph_, plate->id);
-        holography::PlateFieldSamplingOptions sampling {
+        req.sampling = {
             .sampleWidth = static_cast<std::size_t>(sandboxPlateSampleSize_),
             .sampleHeight = static_cast<std::size_t>(sandboxPlateSampleSize_),
             .refractiveIndex = 1.0,
@@ -2321,41 +2284,22 @@ void Application::reconstructSelectedPlateExperiment() {
         for (const auto& recipe : benchProject_.recordingRecipes) {
             if (recipe.recipeId == sandboxActiveRecordingRecipeId_
                 && recipe.plateComponentId == plate->id) {
-                sampling = recipe.sampling;
+                req.sampling = recipe.sampling;
                 break;
             }
         }
-        auto replay = holography::replayVolumeReflectionToObservation(
-            opticalBenchScene_,
-            fields,
-            *sandboxVolumeRecording_,
-            sandboxVolumeRecording_->pair.referenceBranchId,
-            observation->id,
-            sampling,
-            *detectorFftBackend_,
-            &realLensPrescriptionCatalog_,
-            &slmResponseCatalog_,
-            &coatingResponseCatalog_,
-            293.15);
-        field::FieldVisualizationOptions viewOptions;
-        viewOptions.colormap = field::ColormapKind::Inferno;
-        const auto image = field::renderLinearIntensity(
-            replay.reconstructedAtObservation, viewOptions);
-        if (!sandboxVolumeReplayTexture_
-            || !sandboxVolumeReplayTexture_->uploadImage(image)) {
-            throw std::runtime_error(
-                "OpenGL rejected the reflection reconstruction texture");
-        }
-        sandboxVolumeObservationReplay_ = std::make_unique<
-            holography::VolumePlateObservationReplayResult>(
-                std::move(replay));
-        statusMessage_ = "Reconstructed reflection/Denisyuk hologram on "
-            + observation->id;
+        req.volumeRecording = *sandboxVolumeRecording_;
     } else {
         throw std::invalid_argument(
             "record the selected plate before reconstruction");
     }
-    errorMessage_.clear();
+
+    hologramExperimentWorker_.submitReconstruct(std::move(req));
+
+    if (glSmokeMode_) {
+        hologramExperimentWorker_.waitForCompletion();
+        pollHologramExperimentWorker();
+    }
 }
 
 LessonEditState Application::captureLessonEditState() const {
@@ -2795,6 +2739,7 @@ void Application::shutdown() noexcept {
         sandboxRgbReplayTexture_->destroy();
     }
     sandboxWaveObservationWorker_.stop();
+    hologramExperimentWorker_.stop();
     if (sandboxWaveTexture_) {
         sandboxWaveTexture_->destroy();
     }
@@ -2898,6 +2843,7 @@ void Application::updateSandboxWaveObservation() {
         || (observation->kind != bench::BenchComponentKind::ScreenDetector
             && observation->kind != bench::BenchComponentKind::FieldProbe)) {
         sandboxWaveObservationWorker_.cancel();
+        hologramExperimentWorker_.cancel();
         sandboxWaveObservations_.clear();
         sandboxWaveChannelIndex_ = 0;
         sandboxWaveObservationDiagnostic_.clear();
@@ -2983,6 +2929,7 @@ void Application::updateSandboxWaveObservation() {
     while (auto stage = sandboxWaveObservationWorker_.pollResult()) {
         applyStage(std::move(*stage));
     }
+    pollHologramExperimentWorker();
 
     // 2. Check if a new calculation request is needed
     const bool preview = sandboxGizmoDragging_;
@@ -2995,6 +2942,7 @@ void Application::updateSandboxWaveObservation() {
 
     if (invalid) {
         sandboxWaveObservationWorker_.cancel();
+        hologramExperimentWorker_.cancel();
         const std::size_t targetLimit = preview
             ? waveSampleLimit(
                 kWavePreviewSampleLimits,
@@ -4387,11 +4335,11 @@ void Application::drawRealLensPanel() {
             if (ImGui::CollapsingHeader("Fields", ImGuiTreeNodeFlags_DefaultOpen)) {
                 if (ImGui::BeginTable(
                         "real_lens_fields", 4,
-                        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
-                    ImGui::TableSetupColumn("Field ID");
-                    ImGui::TableSetupColumn("Angle X (deg)");
-                    ImGui::TableSetupColumn("Angle Y (deg)");
-                    ImGui::TableSetupColumn("Power fraction");
+                        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchSame)) {
+                    ImGui::TableSetupColumn("Field ID", ImGuiTableColumnFlags_WidthFixed, 100.0F);
+                    ImGui::TableSetupColumn("Angle X (deg)", ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableSetupColumn("Angle Y (deg)", ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableSetupColumn("Power fraction", ImGuiTableColumnFlags_WidthStretch);
                     ImGui::TableHeadersRow();
                     for (std::size_t index = 0; index < realLensConfig_.fields.size(); ++index) {
                         auto& field = realLensConfig_.fields[index];
@@ -4401,20 +4349,20 @@ void Application::drawRealLensPanel() {
                         ImGui::TextUnformatted(field.id.c_str());
                         ImGui::TableSetColumnIndex(1);
                         double angleX = field.angleXRadians * 180.0 / std::numbers::pi;
-                        ImGui::SetNextItemWidth(-1.0F);
+                        ImGui::SetNextItemWidth(-FLT_MIN);
                         if (ImGui::InputDouble("##field_x", &angleX, 0.1, 1.0, "%.6f")) {
                             field.angleXRadians = angleX * std::numbers::pi / 180.0;
                             realLensDirty_ = true;
                         }
                         ImGui::TableSetColumnIndex(2);
                         double angleY = field.angleYRadians * 180.0 / std::numbers::pi;
-                        ImGui::SetNextItemWidth(-1.0F);
+                        ImGui::SetNextItemWidth(-FLT_MIN);
                         if (ImGui::InputDouble("##field_y", &angleY, 0.1, 1.0, "%.6f")) {
                             field.angleYRadians = angleY * std::numbers::pi / 180.0;
                             realLensDirty_ = true;
                         }
                         ImGui::TableSetColumnIndex(3);
-                        ImGui::SetNextItemWidth(-1.0F);
+                        ImGui::SetNextItemWidth(-FLT_MIN);
                         if (ImGui::InputDouble("##field_power", &field.powerFraction, 0.01, 0.1, "%.9f")) {
                             realLensDirty_ = true;
                         }
@@ -4681,14 +4629,17 @@ void Application::drawRealLensPanel() {
 
         if (ImGui::BeginTabItem("Ray / Spot Analysis")) {
             if (realLensResult_) {
-                const float available = ImGui::GetContentRegionAvail().x;
-                if (ImGui::BeginTable("real_lens_plots", 2, ImGuiTableFlags_SizingStretchSame)) {
+                if (ImGui::BeginTable("real_lens_plots", 2)) {
+                    ImGui::TableSetupColumn("System", ImGuiTableColumnFlags_WidthStretch, 0.60F);
+                    ImGui::TableSetupColumn("Spot", ImGuiTableColumnFlags_WidthStretch, 0.40F);
                     ImGui::TableNextColumn();
                     drawRealLensSystemPlot(
-                        realLensConfig_, *realLensResult_, ImVec2(available * 0.60F, 280.0F));
+                        realLensConfig_, *realLensResult_,
+                        ImVec2(std::max(160.0F, ImGui::GetContentRegionAvail().x), 280.0F));
                     ImGui::TableNextColumn();
                     drawRealLensSpotPlot(
-                        realLensResult_->spotDiagram, ImVec2(available * 0.38F, 280.0F));
+                        realLensResult_->spotDiagram,
+                        ImVec2(std::max(160.0F, ImGui::GetContentRegionAvail().x), 280.0F));
                     ImGui::EndTable();
                 }
 
@@ -6614,6 +6565,10 @@ void Application::drawSandboxComponentShelf() {
         empty.projectId = "untitled-bench";
         empty.name = "Untitled Optical Bench";
         sandboxExperimentMode_ = SandboxExperimentMode::Auto;
+        sandboxPlateWindowMillimetres_ = 1.0F;
+        sandboxPlateSampleSize_ = 512;
+        sandboxObservationComponentId_.clear();
+        sandboxRecordedExperiment_ = SandboxRecordedExperiment::None;
         selectedBenchComponentId_.clear();
         static_cast<void>(applyDynamicBenchProject(
             std::move(empty), "Created an empty optical bench"));
@@ -6632,8 +6587,8 @@ void Application::drawSandboxComponentShelf() {
     if (ImGui::Button("Single-beam Denisyuk")) {
         sandboxExperimentMode_ = SandboxExperimentMode::ReflectionDenisyuk;
         selectedBenchComponentId_ = "plate-h1";
-        sandboxPlateSampleSize_ = 512;
-        sandboxPlateWindowMillimetres_ = 2.0F;
+        sandboxPlateSampleSize_ = 1024;
+        sandboxPlateWindowMillimetres_ = 1.5F;
         sandboxObservationComponentId_ = "reflection-reconstruction-probe";
         static_cast<void>(applyDynamicBenchProject(makeSingleBeamDenisyukPreset(),
             "Single-beam Denisyuk: align laser through plate onto the passive object, then Record"));
@@ -6662,6 +6617,12 @@ void Application::drawSandboxComponentShelf() {
             = SandboxExperimentMode::RgbReflectionDenisyuk;
         selectedBenchComponentId_ = "plate-h1";
         sandboxObservationComponentId_ = "plate-h1";
+        sandboxPlateSampleSize_ = 512;
+        sandboxPlateWindowMillimetres_ = 40.0F;
+        sandboxVolumeRecording_.reset();
+        sandboxPlateRecording_.reset();
+        sandboxRgbRecording_.reset();
+        sandboxRgbVolumeRecording_.reset();
         static_cast<void>(applyDynamicBenchProject(
             makeRgbDenisyukHolographyPreset(),
             "Loaded editable RGB reflection / Denisyuk bench"));
@@ -7307,6 +7268,8 @@ void Application::drawSandboxExperimentBar() {
         if (sandboxExperimentMode_
             == SandboxExperimentMode::RgbReflectionDenisyuk) {
             sandboxObservationComponentId_ = selected->id;
+            sandboxPlateSampleSize_ = 512;
+            sandboxPlateWindowMillimetres_ = 40.0F;
         }
     }
     ImGui::SameLine();
@@ -7414,6 +7377,19 @@ void Application::drawSandboxExperimentBar() {
             ImVec4(0.35F, 0.9F, 0.45F, 1.0F),
             "reconstructed on %s",
             reconstructedOn);
+    }
+    if (hologramExperimentWorker_.isBusy()) {
+        const auto prog = hologramExperimentWorker_.progress();
+        ImGui::SameLine();
+        ImGui::TextColored(
+            ImVec4(0.2F, 0.8F, 1.0F, 1.0F),
+            "Computing: %s (%.0f%%)",
+            prog.stageText.c_str(),
+            prog.fraction * 100.0F);
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel##HoloCancel")) {
+            cancelHologramExperimentWorker();
+        }
     }
     ImGui::EndChild();
 }
@@ -7837,8 +7813,8 @@ void Application::drawSandboxInspector() {
     if (ImGui::Button("Single-beam Denisyuk")) {
         sandboxExperimentMode_ = SandboxExperimentMode::ReflectionDenisyuk;
         selectedBenchComponentId_ = "plate-h1";
-        sandboxPlateSampleSize_ = 512;
-        sandboxPlateWindowMillimetres_ = 2.0F;
+        sandboxPlateSampleSize_ = 1024;
+        sandboxPlateWindowMillimetres_ = 1.5F;
         sandboxObservationComponentId_ = "reflection-reconstruction-probe";
         static_cast<void>(applyDynamicBenchProject(makeSingleBeamDenisyukPreset(),
             "Single-beam Denisyuk: align laser through plate onto the passive object, then Record"));
@@ -7857,6 +7833,22 @@ void Application::drawSandboxInspector() {
         static_cast<void>(applyDynamicBenchProject(
             makeRgbHolographyPreset(),
             "Loaded editable RGB full-colour holography bench"));
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("RGB Denisyuk")) {
+        sandboxExperimentMode_
+            = SandboxExperimentMode::RgbReflectionDenisyuk;
+        selectedBenchComponentId_ = "plate-h1";
+        sandboxObservationComponentId_ = "plate-h1";
+        sandboxPlateSampleSize_ = 512;
+        sandboxPlateWindowMillimetres_ = 40.0F;
+        sandboxVolumeRecording_.reset();
+        sandboxPlateRecording_.reset();
+        sandboxRgbRecording_.reset();
+        sandboxRgbVolumeRecording_.reset();
+        static_cast<void>(applyDynamicBenchProject(
+            makeRgbDenisyukHolographyPreset(),
+            "Loaded editable RGB reflection / Denisyuk bench"));
     }
     if (ImGui::Button("Canonical CHIMERA-like Bench")) {
         buildChimeraBench(
@@ -8839,6 +8831,8 @@ void Application::drawSandboxInspector() {
                             return "Sphere";
                         case bench::ObjectSourceGeometry::Tetrahedron:
                             return "Triangular pyramid (tetrahedron)";
+                        case bench::ObjectSourceGeometry::CornellBox:
+                            return "Cornell Box (Cube + Sphere + Pyramid)";
                         }
                         return "Unknown";
                     };
@@ -8848,6 +8842,7 @@ void Application::drawSandboxInspector() {
                             bench::ObjectSourceGeometry::Cube,
                             bench::ObjectSourceGeometry::Sphere,
                             bench::ObjectSourceGeometry::Tetrahedron,
+                            bench::ObjectSourceGeometry::CornellBox,
                         };
                         for (const auto geometry : geometries) {
                             const bool geometrySelected
@@ -9861,31 +9856,6 @@ void Application::drawSandboxInspector() {
                                             = static_cast<double>(
                                                 sandboxPlateRelativeReferenceKilowattsPerSquareMetre_)
                                             * 1e3;
-                                        if (!detectorFftBackend_) {
-                                            throw std::runtime_error(
-                                                "CPU FFT backend is unavailable");
-                                        }
-                                        auto recording
-                                            = optics::holography::recordThinTransmissionPlate(
-                                                opticalBenchScene_,
-                                                fields,
-                                                pair.objectBranchId,
-                                                pair.referenceBranchId,
-                                                recordingOptions,
-                                                *detectorFftBackend_,
-                                                &realLensPrescriptionCatalog_,
-                                                &slmResponseCatalog_,
-                                                293.15);
-                                        field::FieldVisualizationOptions viewOptions;
-                                        viewOptions.colormap = field::ColormapKind::Inferno;
-                                        const auto image = field::renderLinearIntensity(
-                                            recording.hologram.recordedRelativeIntensity,
-                                            viewOptions);
-                                        if (!sandboxPlateTexture_
-                                            || !sandboxPlateTexture_->uploadImage(image)) {
-                                            throw std::runtime_error(
-                                                "OpenGL rejected the sampled plate exposure texture");
-                                        }
                                         const std::array recipeChannels {
                                             optics::holography::
                                                 PlateBranchPairSelection {
@@ -9895,29 +9865,18 @@ void Application::drawSandboxInspector() {
                                                         = pair.referenceBranchId,
                                                 },
                                         };
+                                        auto recipe = makeThinRecordingRecipe(
+                                            "thin-" + selected->id,
+                                            fields,
+                                            recipeChannels,
+                                            recordingOptions);
                                         upsertRecordingRecipe(
                                             benchProject_,
-                                            makeThinRecordingRecipe(
-                                                "thin-" + selected->id,
-                                                fields,
-                                                recipeChannels,
-                                                recordingOptions));
+                                            recipe);
                                         recordBenchEdit();
-                                        sandboxPlateRecording_ = std::make_unique<
-                                            optics::holography::ThinPlateRecordingResult>(
-                                                std::move(recording));
-                                        sandboxRecordedExperiment_
-                                            = SandboxRecordedExperiment::ThinTransmission;
                                         sandboxActiveRecordingRecipeId_
                                             = "thin-" + selected->id;
-                                        sandboxPlateReplay_.reset();
-                                        if (sandboxReplayTexture_) {
-                                            sandboxReplayTexture_->destroy();
-                                        }
-                                        errorMessage_.clear();
-                                        statusMessage_
-                                            = "Recorded thin transmission exposure on plate "
-                                            + selected->id;
+                                        recomputeRecordingRecipe(fields, recipe);
                                     } catch (const std::exception& error) {
                                         errorMessage_
                                             = "Plate recording failed: "
@@ -9963,35 +9922,20 @@ void Application::drawSandboxInspector() {
                                                     .extentHeightMetres
                                                         = extentMetres,
                                                 };
-                                            const optics::holography::VolumePlateMaterial
-                                                material {
-                                                    .averageRefractiveIndex
-                                                        = static_cast<double>(
-                                                            sandboxVolumeAverageRefractiveIndex_),
-                                                    .refractiveIndexModulation
-                                                        = static_cast<double>(
-                                                            sandboxVolumeIndexModulation_),
-                                                    .isotropicLinearShrinkageFraction
-                                                        = static_cast<double>(
-                                                            sandboxVolumeShrinkagePercent_)
-                                                        * 0.01,
-                                                };
-                                            auto recording
-                                                = optics::holography::recordVolumePlate(
-                                                    opticalBenchScene_,
-                                                    fields,
-                                                    pair.objectBranchId,
-                                                    pair.referenceBranchId,
-                                                    material,
-                                                    sampling,
-                                                    *detectorFftBackend_,
-                                                    {},
-                                                    &realLensPrescriptionCatalog_,
-                                                    &slmResponseCatalog_,
-                                                    293.15);
-                                            upsertRecordingRecipe(
-                                                benchProject_,
-                                                makeVolumeRecordingRecipe(
+                                                const optics::holography::VolumePlateMaterial
+                                                    material {
+                                                        .averageRefractiveIndex
+                                                            = static_cast<double>(
+                                                                sandboxVolumeAverageRefractiveIndex_),
+                                                        .refractiveIndexModulation
+                                                            = static_cast<double>(
+                                                                sandboxVolumeIndexModulation_),
+                                                        .isotropicLinearShrinkageFraction
+                                                            = static_cast<double>(
+                                                                sandboxVolumeShrinkagePercent_)
+                                                            * 0.01,
+                                                    };
+                                                const auto recipe = makeVolumeRecordingRecipe(
                                                     "volume-" + selected->id,
                                                     fields,
                                                     {
@@ -10001,40 +9945,20 @@ void Application::drawSandboxInspector() {
                                                             = pair.referenceBranchId,
                                                     },
                                                     sampling,
-                                                    material));
-                                            recordBenchEdit();
-                                            sandboxVolumeReplayWavelengthNanometres_
-                                                = static_cast<float>(
-                                                    recording.pair.wavelengthMetres
-                                                    * 1e9);
-                                            sandboxVolumeReplayAngleDegrees_
-                                                = static_cast<float>(
-                                                    recording
-                                                        .equivalentSymmetricBraggAngleInMediumRadians
-                                                    * 180.0
-                                                    / std::numbers::pi_v<double>);
-                                            sandboxVolumeRecording_ = std::make_unique<
-                                                optics::holography::VolumePlateRecordingResult>(
-                                                    std::move(recording));
-                                            sandboxRecordedExperiment_
-                                                = SandboxRecordedExperiment::ReflectionDenisyuk;
-                                            sandboxActiveRecordingRecipeId_
-                                                = "volume-" + selected->id;
-                                            sandboxVolumeReplay_.reset();
-                                            sandboxVolumeObservationReplay_.reset();
-                                            if (sandboxVolumeReplayTexture_) {
-                                                sandboxVolumeReplayTexture_->destroy();
+                                                    material);
+                                                upsertRecordingRecipe(
+                                                    benchProject_,
+                                                    recipe);
+                                                recordBenchEdit();
+                                                sandboxActiveRecordingRecipeId_
+                                                    = "volume-" + selected->id;
+                                                recomputeRecordingRecipe(fields, recipe);
+                                            } catch (const std::exception& error) {
+                                                errorMessage_
+                                                    = "Volume recording failed: "
+                                                    + std::string(error.what());
+                                                statusMessage_.clear();
                                             }
-                                            errorMessage_.clear();
-                                            statusMessage_
-                                                = "Recorded volume reflection grating on plate "
-                                                + selected->id;
-                                        } catch (const std::exception& error) {
-                                            errorMessage_
-                                                = "Volume recording failed: "
-                                                + std::string(error.what());
-                                            statusMessage_.clear();
-                                        }
                                     }
                                 }
                                 ImGui::PopID();
@@ -11322,17 +11246,28 @@ void Application::openRecordedPlateShowroom() {
     try {
         if (!showroom_) showroom_ = std::make_unique<HologramShowroom>();
         const auto* selected = benchProject_.scene.find(selectedBenchComponentId_);
-        if (sandboxVolumeRecording_ && selected
-            && sandboxVolumeRecording_->plateComponentId == selected->id) {
-            showroom_->open(optics::holography::freezeReflectionRecording(
-                opticalBenchScene_, *sandboxVolumeRecording_));
-        } else if (sandboxRgbVolumeRecording_ && selected
-            && sandboxRgbVolumeRecording_->plateComponentId == selected->id) {
+        const bool selectedIsPlate = selected && selected->kind == optics::scene::BenchComponentKind::HolographicPlate;
+        if (sandboxRecordedExperiment_ == SandboxRecordedExperiment::RgbReflectionDenisyuk
+            && sandboxRgbVolumeRecording_
+            && (!selectedIsPlate || sandboxRgbVolumeRecording_->plateComponentId == selected->id)) {
             std::vector<optics::holography::RecordedHologram> channels;
             for (const auto& channel : sandboxRgbVolumeRecording_->channels)
-                channels.push_back(optics::holography::freezeReflectionRecording(opticalBenchScene_, channel));
+                channels.push_back(optics::holography::freezePlateRecording(opticalBenchScene_, channel));
             showroom_->open(std::move(channels));
-        } else if (chimeraWorkflow_ && selected && selected->id == "chimera-plate") {
+        } else if (sandboxRecordedExperiment_ == SandboxRecordedExperiment::ReflectionDenisyuk
+            && sandboxVolumeRecording_
+            && (!selectedIsPlate || sandboxVolumeRecording_->plateComponentId == selected->id)) {
+            showroom_->open(optics::holography::freezePlateRecording(
+                opticalBenchScene_, *sandboxVolumeRecording_));
+        } else if (sandboxRgbVolumeRecording_ && (!selectedIsPlate || sandboxRgbVolumeRecording_->plateComponentId == selected->id)) {
+            std::vector<optics::holography::RecordedHologram> channels;
+            for (const auto& channel : sandboxRgbVolumeRecording_->channels)
+                channels.push_back(optics::holography::freezePlateRecording(opticalBenchScene_, channel));
+            showroom_->open(std::move(channels));
+        } else if (sandboxVolumeRecording_ && (!selectedIsPlate || sandboxVolumeRecording_->plateComponentId == selected->id)) {
+            showroom_->open(optics::holography::freezePlateRecording(
+                opticalBenchScene_, *sandboxVolumeRecording_));
+        } else if (chimeraWorkflow_ && (!selectedIsPlate || (selected && selected->id == "chimera-plate"))) {
             showroom_->open(chimera::selectedHogelRecordings(*chimeraWorkflow_,
                 static_cast<std::size_t>(std::max(0, chimeraHogelX_)),
                 static_cast<std::size_t>(std::max(0, chimeraHogelY_))));
@@ -13076,6 +13011,10 @@ void Application::runSandboxInteractionSmoke() {
         if (key != ImGuiKey_None && keyState >= 0) {
             io.AddKeyEvent(key, keyState != 0);
         }
+        if (hologramExperimentWorker_.isBusy()) {
+            hologramExperimentWorker_.waitForCompletion();
+        }
+        pollHologramExperimentWorker();
         ImGui::NewFrame();
         ImGui::SetWindowFocus(
             docking::DockLayoutConfig::kOpticalBenchWindowName);
@@ -13568,6 +13507,10 @@ void Application::runSandboxInteractionSmoke() {
         camera_.setPresetView(render::CameraPresetView::TopXZ);
         camera_.setTarget({0.0F, 0.0F, 0.0F});
         camera_.setDistance(0.55F);
+        sandboxPlateWindowMillimetres_ = 1.0F;
+        sandboxPlateSampleSize_ = 512;
+        sandboxObservationComponentId_.clear();
+        sandboxRecordedExperiment_ = SandboxRecordedExperiment::None;
         drawInputFrame({-1000.0F, -1000.0F}, 0);
         if (!benchProject_.scene.components().empty()
             || sandboxExperimentMode_ != SandboxExperimentMode::Auto) {
@@ -14077,9 +14020,10 @@ void Application::runShowroomSmoke() {
         else reference = branch.beam.provenance.branchId;
     }
     compute::fft::CpuFftBackend fft;
-    h::PlateFieldSamplingOptions sampling;
-    sampling.sampleWidth = sampling.sampleHeight = 256;
-    sampling.extentWidthMetres = sampling.extentHeightMetres = 0.002;
+    h::PlateFieldSamplingOptions requestedSampling;
+    requestedSampling.sampleWidth = requestedSampling.sampleHeight = 512;
+    requestedSampling.extentWidthMetres = requestedSampling.extentHeightMetres = 0.0015;
+    const auto sampling = h::reconstructionSampling(project.scene, fields, object, reference, requestedSampling);
     const auto recording = h::recordVolumePlate(project.scene, fields, object, reference, {}, sampling, fft);
     const auto originalRevision = project.scene.revision();
     showroom_ = std::make_unique<HologramShowroom>();
@@ -14106,6 +14050,24 @@ void Application::runShowroomSmoke() {
     frame(-100, -100, false);
     frame(-100, -100, false);
     if (!showroom_->hasCurrentImage()) throw std::runtime_error(showroom_->diagnostic());
+    const auto saveFrame = [&](const char* path) {
+        int width = 0, height = 0;
+        SDL_GetWindowSizeInPixels(window_, &width, &height);
+        const auto stride = static_cast<std::size_t>(width) * 4U;
+        std::vector<std::uint8_t> pixels(stride * static_cast<std::size_t>(height));
+        glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+        for (int y = 0; y < height / 2; ++y)
+            for (std::size_t x = 0; x < stride; ++x)
+                std::swap(pixels[static_cast<std::size_t>(y)*stride+x],
+                    pixels[static_cast<std::size_t>(height-1-y)*stride+x]);
+        auto* surface = SDL_CreateSurfaceFrom(width, height, SDL_PIXELFORMAT_RGBA32, pixels.data(), width*4);
+        const bool saved = SDL_SaveBMP(surface, path);
+        SDL_Log("SDL_SaveBMP to %s: %s (error: %s)", path, saved ? "OK" : "FAILED", SDL_GetError());
+        SDL_DestroySurface(surface);
+        if (!saved) throw std::runtime_error("Smoke image save failed");
+    };
+    std::filesystem::create_directories("out");
+    saveFrame("out/showroom-aligned.bmp");
     const auto serial = showroom_->requestSerial();
     const auto centre = showroom_->canvasCentre;
     frame(centre[0], centre[1], false);
@@ -14118,23 +14080,6 @@ void Application::runShowroomSmoke() {
     if (!showroom_->hasCurrentImage()) throw std::runtime_error(showroom_->diagnostic());
     if (project.scene.revision() != originalRevision || recording.isStaleFor(project.scene))
         throw std::runtime_error("Showroom drag mutated the recorded bench");
-    const auto saveFrame = [&](const char* path) {
-        int width = 0, height = 0;
-        SDL_GetWindowSizeInPixels(window_, &width, &height);
-        const auto stride = static_cast<std::size_t>(width) * 4U;
-        std::vector<std::uint8_t> pixels(stride * static_cast<std::size_t>(height));
-        glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-        for (int y = 0; y < height / 2; ++y)
-            for (std::size_t x = 0; x < stride; ++x)
-                std::swap(pixels[static_cast<std::size_t>(y)*stride+x],
-                    pixels[static_cast<std::size_t>(height-1-y)*stride+x]);
-        auto* surface = SDL_CreateSurfaceFrom(width, height, SDL_PIXELFORMAT_RGBA32, pixels.data(), width*4);
-        if (!surface) throw std::runtime_error("Smoke readback surface failed");
-        const bool saved = SDL_SaveBMP(surface, path);
-        SDL_DestroySurface(surface);
-        if (!saved) throw std::runtime_error("Smoke image save failed");
-    };
-    std::filesystem::create_directories("out");
     saveFrame("out/showroom-recorded-smoke.bmp");
     const auto referenceButton = showroom_->referenceButtonCentre;
     frame(referenceButton[0], referenceButton[1], false);
@@ -14177,8 +14122,142 @@ void Application::runShowroomSmoke() {
     frame(-100, -100, false);
     if (!showroom_->hasCurrentImage() || showroom_->requestSerial() <= previousChannelRequest)
         throw std::runtime_error("Recorded wavelength mouse selection did not reconstruct a new view");
-    if (glGetError() != GL_NO_ERROR) throw std::runtime_error("Showroom produced an OpenGL error");
-    SDL_Log("Showroom smoke passed: single-beam Denisyuk, observer texture, mouse plate rotation, immutable recording, return to Bench, 2D lens profile, CHIMERA RGB hogel exposure to showroom");
+    if (const auto err = glGetError(); err != GL_NO_ERROR) throw std::runtime_error("Showroom produced an OpenGL error: " + std::to_string(err));
+
+    // RGB Denisyuk Cornell Box compound scene in Showroom
+    SDL_Log("Starting RGB Cornell Box test...");
+    auto rgbProject = makeRgbDenisyukHolographyPreset();
+    const auto rgbTrace = optics::ray::traceDynamicBench(rgbProject.scene);
+    const auto rgbFields = h::collectPlateIncidentFields(rgbProject.scene, rgbTrace, "plate-h1");
+    const auto rgbSelections = h::selectRgbReflectionPairs(rgbFields);
+    SDL_Log("RGB selections count: %zu", rgbSelections.size());
+    std::vector<h::RecordedHologram> rgbChannels;
+    for (std::size_t i = 0; i < rgbSelections.size(); ++i) {
+        const auto& sel = rgbSelections[i];
+        h::PlateFieldSamplingOptions rgbSampling {
+            .sampleWidth = 512U,
+            .sampleHeight = 512U,
+            .refractiveIndex = 1.0,
+            .extentWidthMetres = 0.04,
+            .extentHeightMetres = 0.04,
+            .demodulateCarrier = true,
+        };
+        SDL_Log("Recording channel %zu: obj=%lu, ref=%lu...", i, sel.objectBranchId, sel.referenceBranchId);
+        auto rec = h::recordVolumePlate(rgbProject.scene, rgbFields, sel.objectBranchId, sel.referenceBranchId, {}, rgbSampling, fft);
+        SDL_Log("Channel %zu: nominalObjectDepthMetres = %f", i, rec.nominalObjectDepthMetres);
+        rgbChannels.push_back(h::freezeReflectionRecording(rgbProject.scene, rec));
+    }
+    SDL_Log("Opening showroom with %zu channels...", rgbChannels.size());
+    showroom_->open(std::move(rgbChannels));
+    showroom_->waitForObservation();
+    frame(-100, -100, false);
+    frame(-100, -100, false);
+    saveFrame("out/showroom-cornell-rgb.bmp");
+    SDL_Log("Saved out/showroom-cornell-rgb.bmp");
+    {
+        const auto ch0Btn = showroom_->channelButtonCentres[0];
+        frame(ch0Btn[0], ch0Btn[1], false);
+        frame(ch0Btn[0], ch0Btn[1], true);
+        frame(ch0Btn[0], ch0Btn[1], false);
+        showroom_->waitForObservation();
+        frame(-100, -100, false);
+        saveFrame("out/showroom-cornell-red.bmp");
+
+        const auto ch1Btn = showroom_->channelButtonCentres[1];
+        frame(ch1Btn[0], ch1Btn[1], false);
+        frame(ch1Btn[0], ch1Btn[1], true);
+        frame(ch1Btn[0], ch1Btn[1], false);
+        showroom_->waitForObservation();
+        frame(-100, -100, false);
+        saveFrame("out/showroom-cornell-green.bmp");
+
+        const auto ch2Btn = showroom_->channelButtonCentres[2];
+        frame(ch2Btn[0], ch2Btn[1], false);
+        frame(ch2Btn[0], ch2Btn[1], true);
+        frame(ch2Btn[0], ch2Btn[1], false);
+        showroom_->waitForObservation();
+        frame(-100, -100, false);
+        saveFrame("out/showroom-cornell-blue.bmp");
+
+        // Switch back to White light and drag canvas to test 3D perspective rotation
+        const auto rgbBtn = showroom_->rgbButtonCentre;
+        frame(rgbBtn[0], rgbBtn[1], false);
+        frame(rgbBtn[0], rgbBtn[1], true);
+        frame(rgbBtn[0], rgbBtn[1], false);
+        showroom_->waitForObservation();
+        frame(-100, -100, false);
+        saveFrame("out/showroom-cornell-aligned.bmp");
+
+        const auto canvas = showroom_->canvasCentre;
+        // Drag +15 pixels (approx +4.3 deg yaw, +2.3 deg pitch)
+        frame(canvas[0], canvas[1], false);
+        frame(canvas[0], canvas[1], true);
+        frame(canvas[0] + 15.0F, canvas[1] + 8.0F, true);
+        frame(canvas[0] + 15.0F, canvas[1] + 8.0F, false);
+        showroom_->waitForObservation();
+        frame(-100, -100, false);
+        saveFrame("out/showroom-cornell-perspective.bmp");
+
+        // Drag back and to the left -30 pixels (approx -4.3 deg yaw)
+        frame(canvas[0] + 15.0F, canvas[1] + 8.0F, false);
+        frame(canvas[0] + 15.0F, canvas[1] + 8.0F, true);
+        frame(canvas[0] - 15.0F, canvas[1] + 8.0F, true);
+        frame(canvas[0] - 15.0F, canvas[1] + 8.0F, false);
+        showroom_->waitForObservation();
+        saveFrame("out/showroom-cornell-perspective-left.bmp");
+        SDL_Log("Saved out/showroom-cornell-perspective-left.bmp");
+
+        // Generate 5-frame smooth parallax sweep across horizontal angles (-5.7 deg to +5.7 deg)
+        for (int step = 0; step < 5; ++step) {
+            const float yaw = -0.10F + static_cast<float>(step) * 0.05F;
+            showroom_->setYawPitch(yaw, 0.0F);
+            showroom_->waitForObservation();
+            frame(-100, -100, false);
+            const std::string path = "out/showroom-cornell-sweep-" + std::to_string(step) + ".bmp";
+            saveFrame(path.c_str());
+        }
+        showroom_->setYawPitch(0.0F, 0.0F);
+        showroom_->waitForObservation();
+
+        // Test Diffraction Fringes display mode
+        showroom_->setShowFringes(true);
+        frame(-100, -100, false);
+        saveFrame("out/showroom-cornell-fringes.bmp");
+        showroom_->setShowFringes(false);
+    }
+
+    // Test the exact end-to-end UI Record & Showroom flow for RGB Denisyuk:
+    {
+        SDL_Log("Testing full UI workflow: apply preset -> recordSelectedPlateExperiment -> openRecordedPlateShowroom...");
+        sandboxExperimentMode_ = SandboxExperimentMode::RgbReflectionDenisyuk;
+        selectedBenchComponentId_ = "plate-h1";
+        sandboxObservationComponentId_ = "plate-h1";
+        sandboxPlateSampleSize_ = 512;
+        sandboxPlateWindowMillimetres_ = 40.0F;
+        sandboxVolumeRecording_.reset();
+        sandboxPlateRecording_.reset();
+        sandboxRgbRecording_.reset();
+        sandboxRgbVolumeRecording_.reset();
+        if (!applyDynamicBenchProject(makeRgbDenisyukHolographyPreset(), "RGB Denisyuk Preset", false)) {
+            throw std::runtime_error("Could not load RGB Denisyuk preset in UI workflow test");
+        }
+        recordSelectedPlateExperiment(false);
+        hologramExperimentWorker_.waitForCompletion();
+        pollHologramExperimentWorker();
+        if (!sandboxRgbVolumeRecording_) {
+            throw std::runtime_error("recordSelectedPlateExperiment did not produce sandboxRgbVolumeRecording_");
+        }
+        openRecordedPlateShowroom();
+        showroom_->waitForObservation();
+        frame(-100, -100, false);
+        if (!showroom_->hasCurrentImage()) {
+            throw std::runtime_error("Showroom has no image after full UI record flow: " + showroom_->diagnostic());
+        }
+        saveFrame("out/showroom-ui-flow-rgb.bmp");
+        SDL_Log("Full UI workflow test passed, saved out/showroom-ui-flow-rgb.bmp");
+    }
+
+    SDL_Log("Showroom smoke passed: single-beam Denisyuk, observer texture, mouse plate rotation, immutable recording, return to Bench, 2D lens profile, CHIMERA RGB hogel exposure to showroom, RGB Denisyuk Cornell Box, Full UI workflow");
 }
 
 int Application::run(const RunOptions& options) {
@@ -14578,6 +14657,10 @@ int Application::run(const RunOptions& options) {
                 = optics::scene::makeDefaultBenchComponent(
                     optics::scene::BenchComponentKind::FieldProbe,
                     "rgb-volume-reconstruction-probe");
+            auto& rgbProbeParams = std::get<optics::scene::FieldProbeParameters>(
+                rgbVolumeProbe.parameters);
+            rgbProbeParams.widthMetres = 0.04;
+            rgbProbeParams.heightMetres = 0.04;
             rgbVolumeProbe.transform = {
                 .translationMetres = {0.0, 0.0, -0.03},
                 .localXAxisInWorld = {-1.0, 0.0, 0.0},
@@ -14600,7 +14683,10 @@ int Application::run(const RunOptions& options) {
                 || !sandboxRgbReplayTexture_
                 || !sandboxRgbReplayTexture_->isValid()) {
                 throw std::runtime_error(
-                    "RGB Denisyuk Record/Reconstruct did not target the placed Probe");
+                    "RGB Denisyuk Record/Reconstruct did not target the placed Probe (rec="
+                    + std::to_string(bool(sandboxRgbVolumeRecording_))
+                    + ", rep=" + std::to_string(bool(sandboxRgbVolumeReplay_))
+                    + ", err=" + errorMessage_ + ", stat=" + statusMessage_ + ")");
             }
             for (const auto& channel : sandboxRgbVolumeReplay_->channels) {
                 if (field::computeIntegratedIntensity(

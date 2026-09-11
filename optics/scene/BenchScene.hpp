@@ -65,6 +65,7 @@ enum class ObjectSourceGeometry {
     Cube,
     Sphere,
     Tetrahedron,
+    CornellBox,
 };
 
 struct ObjectWavefrontSourceParameters final {

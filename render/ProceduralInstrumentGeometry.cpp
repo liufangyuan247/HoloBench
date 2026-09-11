@@ -414,6 +414,53 @@ void addDiffuseObjectPrimitive(
     const float hx = 0.5F * static_cast<float>(parameters.widthMetres);
     const float hy = 0.5F * static_cast<float>(parameters.heightMetres);
     const float hz = 0.5F * static_cast<float>(parameters.depthMetres);
+    if (parameters.geometry == bench::ObjectSourceGeometry::CornellBox) {
+        const double subW = 0.22 * parameters.widthMetres;
+        const double subH = 0.60 * parameters.heightMetres;
+        const double subD = 0.60 * parameters.depthMetres;
+
+        bench::ObjectWavefrontSourceParameters cubeP = parameters;
+        cubeP.geometry = bench::ObjectSourceGeometry::Cube;
+        cubeP.widthMetres = subW;
+        cubeP.heightMetres = subH;
+        cubeP.depthMetres = subD;
+        cubeP.primitiveYawRadians = 0.35;
+        cubeP.primitivePitchRadians = -0.20;
+
+        bench::ObjectWavefrontSourceParameters sphereP = parameters;
+        sphereP.geometry = bench::ObjectSourceGeometry::Sphere;
+        sphereP.widthMetres = subW;
+        sphereP.heightMetres = subH;
+        sphereP.depthMetres = subD;
+        sphereP.primitiveYawRadians = 0.0;
+        sphereP.primitivePitchRadians = 0.0;
+
+        bench::ObjectWavefrontSourceParameters tetraP = parameters;
+        tetraP.geometry = bench::ObjectSourceGeometry::Tetrahedron;
+        tetraP.widthMetres = subW;
+        tetraP.heightMetres = subH;
+        tetraP.depthMetres = subD;
+        tetraP.primitiveYawRadians = -0.30;
+        tetraP.primitivePitchRadians = 0.15;
+
+        bench::BenchComponent compCube = component;
+        compCube.transform.translationMetres = compCube.transform.translationMetres
+            + compCube.transform.localXAxisInWorld * (-0.35 * parameters.widthMetres)
+            + compCube.transform.localZAxisInWorld * (-0.15 * parameters.depthMetres);
+        addDiffuseObjectPrimitive(mesh, compCube, cubeP, radialSegments, color);
+
+        bench::BenchComponent compSphere = component;
+        compSphere.transform.translationMetres = compSphere.transform.translationMetres
+            + compSphere.transform.localZAxisInWorld * (-0.08 * parameters.depthMetres);
+        addDiffuseObjectPrimitive(mesh, compSphere, sphereP, radialSegments, color);
+
+        bench::BenchComponent compTetra = component;
+        compTetra.transform.translationMetres = compTetra.transform.translationMetres
+            + compTetra.transform.localXAxisInWorld * (0.35 * parameters.widthMetres)
+            + compTetra.transform.localZAxisInWorld * (0.05 * parameters.depthMetres);
+        addDiffuseObjectPrimitive(mesh, compTetra, tetraP, radialSegments, color);
+        return;
+    }
     if (parameters.geometry == bench::ObjectSourceGeometry::Cube) {
         const std::array corners {
             at({-hx, -hy, -hz}), at({hx, -hy, -hz}),

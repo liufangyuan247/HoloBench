@@ -505,6 +505,7 @@ std::string_view objectGeometryName(
     case scene::ObjectSourceGeometry::Cube: return "cube";
     case scene::ObjectSourceGeometry::Sphere: return "sphere";
     case scene::ObjectSourceGeometry::Tetrahedron: return "tetrahedron";
+    case scene::ObjectSourceGeometry::CornellBox: return "cornell_box";
     }
     return "unknown";
 }
@@ -517,6 +518,9 @@ scene::ObjectSourceGeometry objectGeometryFromName(std::string_view name) {
     if (name == "sphere") return scene::ObjectSourceGeometry::Sphere;
     if (name == "tetrahedron") {
         return scene::ObjectSourceGeometry::Tetrahedron;
+    }
+    if (name == "cornell_box") {
+        return scene::ObjectSourceGeometry::CornellBox;
     }
     throw std::runtime_error(
         "unsupported object geometry: " + std::string(name));
